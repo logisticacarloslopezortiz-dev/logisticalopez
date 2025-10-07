@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="description" content="Solicita servicios de transporte, logística y carga con TLC" />
+  <title>Transporte Logístico Carlos López — Solicitar Servicio</title>
+
+  <!-- PWA Support -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="TLC" />
+  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png" />
+
+<!-- ✅ Favicon -->
+<link rel="icon" type="image/x-icon" href="/img/favicon.ico" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+
+  <!-- Google Maps API -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dOWTgHz-TRU6Qw&libraries=places&loading=async"></script>
+
+  <!-- Modal de Mudanza -->
+  <div id="movingModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-2xl flex items-center justify-center">
+      <div class="w-full bg-white rounded-xl shadow-2xl p-6 animate-fade-in-up">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-semibold text-gray-900">Detalles de Mudanza</h3>
+          <button id="closeMovingModal" class="text-gray-500 hover:text-gray-700">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+        
+        <form id="movingForm" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Muebles y Electrodomésticos</label>
+            </div>
+            
+            <!-- Muebles -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-gray-600">Camas</label>
+                <input type="number" name="beds" min="0" class="form-input w-20 text-right" value="0">
+              </div>
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-gray-600">Mesas</label>
+                <input type="number" name="tables" min="0" class="form-input w-20 text-right" value="0">
+              </div>
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-gray-600">Sillas</label>
+                <input type="number" name="chairs" min="0" class="form-input w-20 text-right" value="0">
+              </div>
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-gray-600">Sofás</label>
+                <input type="number" name="sofas" min="0" class="form-input w-20 text-right" value="0">
+              </div>
+            </div>
+            
+            <!-- Electrodomésticos -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-gray-600">Refrigerador</label>
+                <input type="number" name="fridge" min="0" class="form-input w-20 text-right" value="0">
+              </div>
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-gray-600">Lavadora</label>
+                <input type="number" name="washer" min="0" class="form-input w-20 text-right" value="0">
+              </div>
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-gray-600">Estufa</label>
+                <input type="number" name="stove" min="0" class="form-input w-20 text-right" value="0">
+              </div>
+              <div class="flex items-center justify-between">
+                <label class="text-sm text-gray-600">Tanque de Gas</label>
+                <input type="number" name="gasTank" min="0" class="form-input w-20 text-right" value="0">
+              </div>
+            </div>
+          </div>
+          
+          <!-- Peso Total Estimado -->
+          <div class="pt-4 border-t border-gray-200">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-gray-900">Peso Total Estimado</span>
+              <span id="totalWeight" class="text-lg font-semibold text-blue-600">0 kg</span>
+            </div>
+          </div>
+
+          <!-- Objetos Frágiles -->
+          <div class="pt-4 border-t border-gray-200 space-y-4">
+            <div class="flex items-center gap-4">
+              <label class="text-sm font-medium text-gray-700">¿Tiene objetos frágiles?</label>
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="hasFragileItems" value="yes" class="text-blue-600 focus:ring-blue-500">
+                  <span class="text-sm text-gray-700">Sí</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="hasFragileItems" value="no" class="text-blue-600 focus:ring-blue-500" checked>
+                  <span class="text-sm text-gray-700">No</span>
+                </label>
+              </div>
+            </div>
+            <div id="fragileItemsSection" class="hidden">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Descripción de objetos frágiles</label>
+              <textarea id="fragileItemsDesc" rows="3" class="form-input w-full rounded-lg px-3 py-2" placeholder="Describa los objetos frágiles que necesitan cuidado especial..."></textarea>
+            </div>
+          </div>
+          
+          <div class="flex justify-end gap-3 pt-4">
+            <button type="button" id="cancelMoving" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+              Confirmar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --brand-blue: #2563eb;
+      --brand-blue-light: #3b82f6;
+      --brand-black: #0b0b0b;
+      --gradient-primary: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      --gradient-secondary: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    }
+    
+    * {
+      font-family: 'Inter', sans-serif;
+    }
+    
+    body {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      min-height: 100vh;
+    }
+    
+    .service-card, .vehicle-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+      border: 2px solid transparent;
+    }
+    
+    .service-card:hover, .vehicle-card:hover {
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+      border-color: var(--brand-blue);
+    }
+    
+    input:checked + .peer-label {
+      border-color: var(--brand-blue);
+      background: var(--gradient-primary);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);
+    }
+    
+    .form-input {
+      transition: all 0.2s ease;
+      border: 2px solid #e5e7eb;
+    }
+    
+    .form-input:focus {
+      border-color: var(--brand-blue);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      outline: none;
+    }
+    
+    .btn-primary {
+      background: var(--gradient-primary);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+    }
+    
+    .glass-effect {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .animate-fade-in-up {
+      animation: fadeInUp 0.6s ease-out;
+    }
+    
+    .loading-spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid var(--brand-blue);
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .service-card:hover,
+      .vehicle-card:hover,
+      .btn-primary:hover {
+        transform: none;
+      }
+      
+      input:checked + .peer-label {
+        transform: none;
+      }
+      
+      .glass-effect {
+        backdrop-filter: blur(5px);
+      }
+      
+      .max-w-6xl {
+        max-width: 100%;
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      
+      .text-4xl {
+        font-size: 2rem;
+        line-height: 1.2;
+      }
+      
+      .text-2xl {
+        font-size: 1.5rem;
+      }
+      
+      .text-xl {
+        font-size: 1.125rem;
+      }
+      
+      .grid-cols-3 {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+      
+      .grid-cols-4 {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+      }
+      
+      .grid-cols-2 {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+      
+      .space-y-8 > * + * {
+        margin-top: 1.5rem;
+      }
+      
+      .space-y-6 > * + * {
+        margin-top: 1rem;
+      }
+      
+      .px-8 {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      
+      .py-12 {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+      }
+      
+      .vehicle-card {
+        padding: 1rem;
+      }
+      
+      .service-card {
+        padding: 1.5rem;
+      }
+      
+      .flex.items-center.justify-between {
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+      }
+      
+      .flex.items-center.gap-3 {
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+      }
+      
+      .flex.items-center.gap-3 > * {
+        width: 100%;
+        text-align: center;
+      }
+    }
+    
+    @media (max-width: 640px) {
+      .text-4xl {
+        font-size: 1.875rem;
+      }
+      
+      .px-6 {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
+      
+      .py-3 {
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+      }
+      
+      .grid-cols-4 {
+        grid-template-columns: 1fr;
+      }
+      
+      .w-14.h-14 {
+        width: 3rem;
+        height: 3rem;
+      }
+      
+      .text-lg {
+        font-size: 1rem;
+      }
+      
+      .form-input {
+        font-size: 16px; /* Prevent zoom on iOS */
+      }
+      
+      .fixed.inset-0 {
+        padding: 1rem;
+      }
+      
+      .max-w-md {
+        max-width: calc(100vw - 2rem);
+      }
+    }
+    
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .grid-cols-3 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .grid-cols-4 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    
+    /* Touch-friendly improvements */
+    @media (hover: none) and (pointer: coarse) {
+      .service-card,
+      .vehicle-card,
+      .btn-primary {
+        min-height: 44px;
+      }
+      
+      .form-input {
+        min-height: 44px;
+        padding: 0.75rem;
+      }
+      
+      button {
+        min-height: 44px;
+        padding: 0.75rem 1rem;
+      }
+    }
+  </style>
+</head>
+<body class="text-gray-800 antialiased">
+
+  <header class="glass-effect border-b border-gray-200 sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-40 h-16 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+          <img src="/img/1horizontal (1).png" width="800" height="200" class="w-full h-full object-cover rounded-xl">
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+            Transporte Logístico Carlos López
+          </h1>
+          <p class="text-sm text-gray-600 font-medium">Solicita tu servicio de mudanza y transporte en línea</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="#form" class="btn-primary px-6 py-2 text-white rounded-lg text-sm font-semibold">
+          Solicitar servicio
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-12">
+    <div class="text-center mb-12 animate-fade-in-up">
+      <h2 class="text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent mb-4">
+        Solicita tu servicio
+      </h2>
+      <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+        Completa el formulario y recibe una cotización personalizada para tu mudanza o transporte
+      </p>
+    </div>
+    
+    <section id="form" class="glass-effect p-8 rounded-2xl shadow-xl animate-fade-in-up">
+      <form id="orderForm" class="space-y-8">
+
+        <!-- Datos del cliente -->
+        <div class="space-y-6">
+          <h3 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <i data-lucide="user" class="w-5 h-5 text-blue-600"></i>
+            Información del cliente
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">Nombre completo *</label>
+              <input id="clientName" type="text" required class="form-input mt-1 block w-full rounded-xl px-4 py-3 text-gray-900 placeholder-gray-500" placeholder="Ingresa tu nombre completo" />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">Teléfono *</label>
+              <input id="clientPhone" type="tel" required class="form-input mt-1 block w-full rounded-xl px-4 py-3 text-gray-900 placeholder-gray-500" placeholder="Ej: +809 300 1238" />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">Correo electrónico *</label>
+              <input id="clientEmail" type="email" required class="form-input mt-1 block w-full rounded-xl px-4 py-3 text-gray-900 placeholder-gray-500" placeholder="tu@email.com" />
+            </div>
+          </div>
+        </div>
+
+        <!-- RNC Question -->
+        <div class="space-y-6">
+          <h3 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <i data-lucide="file-text" class="w-5 h-5 text-blue-600"></i>
+            Información fiscal
+          </h3>
+          <div class="flex items-center gap-4">
+            <label class="text-sm font-medium text-gray-700">¿Desea incluir RNC en su solicitud?</label>
+            <div class="flex items-center gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="needsRNC" value="yes" class="text-blue-600 focus:ring-blue-500" id="rncYes">
+                <span class="text-sm text-gray-700">Sí</span>
+                <button type="button" id="openRNCModal" class="ml-2 text-blue-600 hover:text-blue-800">
+                  <i data-lucide="edit" class="w-4 h-4"></i>
+                </button>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="needsRNC" value="no" class="text-blue-600 focus:ring-blue-500" checked>
+                <span class="text-sm text-gray-700">No</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tipo de servicio -->
+        <div class="space-y-6">
+          <h3 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <i data-lucide="truck" class="w-5 h-5 text-blue-600"></i>
+            Tipo de servicio *
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div>
+              <input type="radio" id="srvMudanza" name="serviceType" value="Mudanza" required class="hidden peer" />
+              <label for="srvMudanza" class="peer-label service-card flex flex-col items-center gap-4 rounded-2xl p-6 cursor-pointer">
+                <i data-lucide="home" class="w-12 h-12 text-white"></i>
+                <div class="text-center">
+                  <span class="text-lg font-semibold text-white block">Mudanza</span>
+                  <span class="text-sm text-gray-300">Residencial completa</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="srvComercial" name="serviceType" value="Transporte Comercial" required class="hidden peer" />
+              <label for="srvComercial" class="peer-label service-card flex flex-col items-center gap-4 rounded-2xl p-6 cursor-pointer">
+                <i data-lucide="package" class="w-12 h-12 text-white"></i>
+                <div class="text-center">
+                  <span class="text-lg font-semibold text-white block">Transporte Comercial</span>
+                  <span class="text-sm text-gray-300">Mercancía y productos</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="srvCarga" name="serviceType" value="Carga Pesada" required class="hidden peer" />
+              <label for="srvCarga" class="peer-label service-card flex flex-col items-center gap-4 rounded-2xl p-6 cursor-pointer">
+                <i data-lucide="weight" class="w-12 h-12 text-white"></i>
+                <div class="text-center">
+                  <span class="text-lg font-semibold text-white block">Carga Pesada</span>
+                  <span class="text-sm text-gray-300">Equipos y maquinaria</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="srvFletes" name="serviceType" value="Fletes" required class="hidden peer" />
+              <label for="srvFletes" class="peer-label service-card flex flex-col items-center gap-4 rounded-2xl p-6 cursor-pointer">
+                <i data-lucide="truck" class="w-12 h-12 text-white"></i>
+                <div class="text-center">
+                  <span class="text-lg font-semibold text-white block">Fletes</span>
+                  <span class="text-sm text-gray-300">Transporte de carga</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="srvBotes" name="serviceType" value="Botes Aduanero" required class="hidden peer" />
+              <label for="srvBotes" class="peer-label service-card flex flex-col items-center gap-4 rounded-2xl p-6 cursor-pointer">
+                <i data-lucide="ship" class="w-12 h-12 text-white"></i>
+                <div class="text-center">
+                  <span class="text-lg font-semibold text-white block">Botes Aduanero</span>
+                  <span class="text-sm text-gray-300">Transporte marítimo</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="srvGruas" name="serviceType" value="Grúas" required class="hidden peer" />
+              <label for="srvGruas" class="peer-label service-card flex flex-col items-center gap-4 rounded-2xl p-6 cursor-pointer">
+                <i data-lucide="crane" class="w-12 h-12 text-white"></i>
+                <div class="text-center">
+                  <span class="text-lg font-semibold text-white block">Grúas</span>
+                  <span class="text-sm text-gray-300">Servicio de grúa</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="srvPaqueteria" name="serviceType" value="Paquetería" required class="hidden peer" />
+              <label for="srvPaqueteria" class="peer-label service-card flex flex-col items-center gap-4 rounded-2xl p-6 cursor-pointer">
+                <i data-lucide="box" class="w-12 h-12 text-white"></i>
+                <div class="text-center">
+                  <span class="text-lg font-semibold text-white block">Paquetería</span>
+                  <span class="text-sm text-gray-300">Envío de paquetes</span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tipo de vehículo -->
+        <div class="space-y-6">
+          <h3 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <i data-lucide="car" class="w-5 h-5 text-blue-600"></i>
+            Tipo de vehículo *
+          </h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <input type="radio" id="vehPequeno" name="vehicleType" value="Camión Pequeño" required class="hidden peer" />
+              <label for="vehPequeno" class="peer-label vehicle-card flex flex-col items-center gap-3 rounded-xl p-4 cursor-pointer">
+                <i data-lucide="truck" class="w-10 h-10 text-white"></i>
+                <div class="text-center">
+                  <span class="text-sm font-semibold text-white block">Camión Pequeño</span>
+                  <span class="text-xs text-gray-300">Hasta 3 toneladas</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="vehCamioneta" name="vehicleType" value="Camioneta" required class="hidden peer" />
+              <label for="vehCamioneta" class="peer-label vehicle-card flex flex-col items-center gap-3 rounded-xl p-4 cursor-pointer">
+                <i data-lucide="car" class="w-10 h-10 text-white"></i>
+                <div class="text-center">
+                  <span class="text-sm font-semibold text-white block">Camioneta</span>
+                  <span class="text-xs text-gray-300">Hasta 1 tonelada</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="vehFurgon" name="vehicleType" value="Furgón" required class="hidden peer" />
+              <label for="vehFurgon" class="peer-label vehicle-card flex flex-col items-center gap-3 rounded-xl p-4 cursor-pointer">
+                <i data-lucide="bus" class="w-10 h-10 text-white"></i>
+                <div class="text-center">
+                  <span class="text-sm font-semibold text-white block">Furgón</span>
+                  <span class="text-xs text-gray-300">Hasta 2 toneladas</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="vehGrande" name="vehicleType" value="Camión Grande" required class="hidden peer" />
+              <label for="vehGrande" class="peer-label vehicle-card flex flex-col items-center gap-3 rounded-xl p-4 cursor-pointer">
+                <i data-lucide="truck" class="w-10 h-10 text-white"></i>
+                <div class="text-center">
+                  <span class="text-sm font-semibold text-white block">Camión Grande</span>
+                  <span class="text-xs text-gray-300">Más de 5 toneladas</span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Descripción de artículos -->
+        <div class="space-y-6">
+          <h3 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <i data-lucide="package-2" class="w-5 h-5 text-blue-600"></i>
+            Detalles del servicio
+          </h3>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Descripción de artículos</label>
+            <textarea id="itemsDesc" rows="4" class="form-input mt-1 block w-full rounded-xl px-4 py-3 text-gray-900 placeholder-gray-500 resize-none" placeholder="Describe los artículos a transportar: muebles, electrodomésticos, cajas, etc."></textarea>
+          </div>
+        </div>
+
+        <!-- Direcciones -->
+        <div class="space-y-6">
+          <h3 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
+            Direcciones
+          </h3>
+          <div class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Dirección de recogida *</label>
+                <input id="pickupAddress" type="text" required class="form-input mt-1 block w-full rounded-xl px-4 py-3 text-gray-900 placeholder-gray-500" placeholder="Dirección completa de recogida" />
+                <button type="button" id="pickupMapBtn" class="mt-2 text-blue-600 text-sm flex items-center gap-1">
+                  <i data-lucide="map-pin" class="w-4 h-4"></i> Seleccionar en mapa
+                </button>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Dirección de entrega *</label>
+                <input id="deliveryAddress" type="text" required class="form-input mt-1 block w-full rounded-xl px-4 py-3 text-gray-900 placeholder-gray-500" placeholder="Dirección completa de entrega" />
+                <button type="button" id="deliveryMapBtn" class="mt-2 text-blue-600 text-sm flex items-center gap-1">
+                  <i data-lucide="map-pin" class="w-4 h-4"></i> Seleccionar en mapa
+                </button>
+              </div>
+            </div>
+            <div id="mapContainer" class="hidden rounded-xl overflow-hidden border border-gray-200 h-[300px] shadow-md">
+              <div id="googleMap" class="w-full h-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fecha y hora -->
+        <div class="space-y-6">
+          <h3 class="text-xl font-semibold text-gray-800 flex items-center gap-2">
+            <i data-lucide="calendar" class="w-5 h-5 text-blue-600"></i>
+            Programación
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">Fecha *</label>
+              <input id="date" type="date" required class="form-input mt-1 block w-full rounded-xl px-4 py-3 text-gray-900" />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">Hora *</label>
+              <input id="time" type="time" required class="form-input mt-1 block w-full rounded-xl px-4 py-3 text-gray-900" />
+              <p class="text-xs text-gray-500 mt-1 italic">La hora seleccionada podría no estar disponible. Se le notificará sobre su preferencia horaria y se confirmará la hora definitiva.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cotización estimada -->
+        <div id="quoteSection" class="hidden space-y-4 p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200">
+          <h3 class="text-lg font-semibold text-green-800 flex items-center gap-2">
+            <i data-lucide="calculator" class="w-5 h-5"></i>
+            Cotización estimada
+          </h3>
+          <div class="text-2xl font-bold text-green-700" id="estimatedPrice">$0</div>
+          <p class="text-sm text-green-600">*Precio estimado sujeto a confirmación</p>
+        </div>
+
+        <div class="flex justify-center pt-4">
+          <button type="submit" class="btn-primary px-8 py-4 rounded-xl text-white font-semibold text-lg flex items-center gap-2 min-w-[200px] justify-center">
+            <span id="submitText">Enviar solicitud</span>
+            <div id="submitSpinner" class="loading-spinner hidden"></div>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Modal de confirmación -->
+    <div id="confirmModal" class="hidden fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
+      <div class="glass-effect rounded-2xl p-8 max-w-md w-full text-center animate-fade-in-up">
+        <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
+          <i data-lucide="check" class="w-8 h-8 text-white"></i>
+        </div>
+        <h3 class="text-2xl font-bold text-gray-800 mb-4">¡Solicitud enviada!</h3>
+        <p class="text-gray-600 mb-2">Tu pedido ha sido registrado exitosamente.</p>
+        <p class="text-sm text-gray-500 mb-2">Número de orden: <span id="orderNumber" class="font-semibold text-blue-600"></span></p>
+        <p class="text-sm text-gray-500 mb-4">Recibirás confirmación y detalles del servicio pronto.</p>
+        
+        <!-- Sección de instalación de PWA -->
+        <div class="bg-blue-50 p-4 rounded-xl mb-6">
+          <h4 class="font-semibold text-blue-800 mb-2">¿Quieres dar seguimiento a tu pedido?</h4>
+          <p class="text-sm text-blue-700 mb-3">Descarga nuestra app para saber el estado de tu pedido en tiempo real.</p>
+          <button id="installApp" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 mx-auto">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            Instalar App
+          </button>
+        </div>
+        
+        <button id="closeConfirm" class="btn-primary px-6 py-3 text-white rounded-xl font-semibold">Entendido</button>
+      </div>
+    </div>
+
+    <!-- Modal de seguimiento -->
+    <div id="trackingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
+      <div class="glass-effect rounded-2xl p-8 max-w-md w-full">
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-xl font-bold text-gray-800">Seguimiento de pedido</h3>
+          <button id="closeTracking" class="text-gray-500 hover:text-gray-700">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <input id="trackingInput" type="text" placeholder="Ingresa tu número de orden" class="form-input w-full rounded-xl px-4 py-3">
+          <button id="trackOrder" class="btn-primary w-full py-3 rounded-xl font-semibold">Buscar pedido</button>
+        </div>
+        <div id="trackingResult" class="hidden mt-6 p-4 bg-gray-50 rounded-xl">
+          <!-- Resultado del seguimiento -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de RNC -->
+    <div id="rncModal" class="hidden fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
+      <div class="glass-effect rounded-2xl p-8 max-w-md w-full">
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-xl font-bold text-gray-800">Información RNC</h3>
+          <button id="closeRNC" class="text-gray-500 hover:text-gray-700">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">RNC *</label>
+            <input id="rncNumber" type="text" placeholder="Ingrese su RNC" class="form-input w-full rounded-xl px-4 py-3" maxlength="11">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Razón Social *</label>
+            <input id="companyName" type="text" placeholder="Nombre de la empresa" class="form-input w-full rounded-xl px-4 py-3">
+          </div>
+          <div class="flex justify-end gap-3">
+            <button id="cancelRNC" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button id="saveRNC" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="js/notifications.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/index.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

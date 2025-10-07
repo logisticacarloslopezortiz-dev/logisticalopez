@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TLC - Solicitud Móvil</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* Animaciones simples */
+  .fade-in { animation: fadeIn 0.5s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body class="bg-white text-gray-800 font-sans">
+
+<!-- Pantalla de bienvenida -->
+<div id="welcomeScreen" class="flex flex-col items-center justify-center min-h-screen p-6">
+  <div class="text-center">
+    <h1 class="text-3xl font-bold text-blue-600 mb-4">Transporte Logístico Carlos López (TLC)</h1>
+    <p class="text-gray-600 mb-6">Solicita tu servicio de mudanza o transporte de manera rápida y sencilla.</p>
+    <button id="startBtn" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition">Comenzar solicitud</button>
+  </div>
+</div>
+
+<!-- Formulario por pasos -->
+<div id="formContainer" class="hidden min-h-screen p-6 fade-in">
+
+  <!-- Barra de progreso -->
+  <div class="mb-6">
+    <div class="w-full bg-gray-200 h-2 rounded">
+      <div id="progressBar" class="bg-blue-600 h-2 rounded w-0"></div>
+    </div>
+    <p id="stepText" class="text-sm text-gray-500 mt-2 text-center">Paso 1 de 4</p>
+  </div>
+
+  <form id="multiStepForm" class="space-y-6">
+
+    <!-- Paso 1: Datos del cliente -->
+    <div class="step">
+      <h2 class="text-xl font-semibold text-blue-600 mb-4">Datos del cliente</h2>
+      <input type="text" id="clientName" placeholder="Nombre completo" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
+      <input type="tel" id="clientPhone" placeholder="Teléfono" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
+      <input type="email" id="clientEmail" placeholder="Correo electrónico" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
+    </div>
+
+    <!-- Paso 2: Tipo de servicio y vehículo -->
+    <div class="step hidden">
+      <h2 class="text-xl font-semibold text-blue-600 mb-4">Detalles del servicio</h2>
+      <select id="serviceType" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
+        <option value="" disabled selected>Selecciona tipo de servicio</option>
+        <option>Mudanza</option>
+        <option>Transporte Comercial</option>
+        <option>Carga Pesada</option>
+        <option>Fletes</option>
+        <option>Botes Aduanero</option>
+        <option>Grúas</option>
+        <option>Paquetería</option>
+      </select>
+      <select id="vehicleType" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200">
+        <option value="" disabled selected>Selecciona tipo de vehículo</option>
+        <option>Camión Pequeño</option>
+        <option>Camioneta</option>
+        <option>Furgón</option>
+        <option>Camión Grande</option>
+      </select>
+    </div>
+
+    <!-- Paso 3: Direcciones y horario -->
+    <div class="step hidden">
+      <h2 class="text-xl font-semibold text-blue-600 mb-4">Direcciones y horario</h2>
+      <input type="text" id="pickupAddress" placeholder="Dirección de recogida" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
+      <input type="text" id="deliveryAddress" placeholder="Dirección de entrega" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
+      <input type="date" id="date" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
+      <input type="time" id="time" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200">
+    </div>
+
+    <!-- Paso 4: Resumen y confirmación -->
+    <div class="step hidden">
+      <h2 class="text-xl font-semibold text-blue-600 mb-4">Resumen de tu solicitud</h2>
+      <div class="bg-blue-50 p-4 rounded-xl space-y-2">
+        <p><strong>Nombre:</strong> <span id="summaryName"></span></p>
+        <p><strong>Teléfono:</strong> <span id="summaryPhone"></span></p>
+        <p><strong>Correo:</strong> <span id="summaryEmail"></span></p>
+        <p><strong>Servicio:</strong> <span id="summaryService"></span></p>
+        <p><strong>Vehículo:</strong> <span id="summaryVehicle"></span></p>
+        <p><strong>Recogida:</strong> <span id="summaryPickup"></span></p>
+        <p><strong>Entrega:</strong> <span id="summaryDelivery"></span></p>
+        <p><strong>Fecha y hora:</strong> <span id="summaryDateTime"></span></p>
+      </div>
+      <p class="text-sm text-gray-500 mt-4">*Este es un resumen visual. Los datos no se envían aún.</p>
+    </div>
+
+    <!-- Botones de navegación -->
+    <div class="flex justify-between mt-6">
+      <button type="button" id="prevBtn" class="px-6 py-3 bg-gray-300 text-gray-700 rounded-xl font-semibold hidden hover:bg-gray-400 transition">Atrás</button>
+      <button type="button" id="nextBtn" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition">Siguiente</button>
+    </div>
+
+  </form>
+</div>
+
+<script>
+const startBtn = document.getElementById('startBtn');
+const welcomeScreen = document.getElementById('welcomeScreen');
+const formContainer = document.getElementById('formContainer');
+
+const steps = document.querySelectorAll('.step');
+const nextBtn = document.getElementById('nextBtn');
+const prevBtn = document.getElementById('prevBtn');
+const progressBar = document.getElementById('progressBar');
+const stepText = document.getElementById('stepText');
+
+let currentStep = 0;
+
+// Iniciar formulario
+startBtn.addEventListener('click', () => {
+  welcomeScreen.classList.add('hidden');
+  formContainer.classList.remove('hidden');
+  updateStep();
+});
+
+// Botones siguiente y atrás
+nextBtn.addEventListener('click', () => {
+  if (currentStep < steps.length - 1) {
+    if(currentStep === steps.length - 2) fillSummary();
+    steps[currentStep].classList.add('hidden');
+    currentStep++;
+    steps[currentStep].classList.remove('hidden');
+    updateStep();
+  }
+});
+
+prevBtn.addEventListener('click', () => {
+  if (currentStep > 0) {
+    steps[currentStep].classList.add('hidden');
+    currentStep--;
+    steps[currentStep].classList.remove('hidden');
+    updateStep();
+  }
+});
+
+function updateStep() {
+  stepText.textContent = `Paso ${currentStep + 1} de ${steps.length}`;
+  progressBar.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
+  prevBtn.style.display = currentStep === 0 ? 'none' : 'inline-block';
+  nextBtn.textContent = currentStep === steps.length -1 ? 'Finalizar' : 'Siguiente';
+}
+
+// Llenar resumen
+function fillSummary() {
+  document.getElementById('summaryName').textContent = document.getElementById('clientName').value;
+  document.getElementById('summaryPhone').textContent = document.getElementById('clientPhone').value;
+  document.getElementById('summaryEmail').textContent = document.getElementById('clientEmail').value;
+  document.getElementById('summaryService').textContent = document.getElementById('serviceType').value;
+  document.getElementById('summaryVehicle').textContent = document.getElementById('vehicleType').value;
+  document.getElementById('summaryPickup').textContent = document.getElementById('pickupAddress').value;
+  document.getElementById('summaryDelivery').textContent = document.getElementById('deliveryAddress').value;
+  document.getElementById('summaryDateTime').textContent = document.getElementById('date').value + ' ' + document.getElementById('time').value;
+}
+</script>
+
+</body>
+</html>
