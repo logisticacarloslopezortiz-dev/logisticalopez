@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Servicios — Panel del Dueño</title>
+  <!-- ✅ Favicon -->
+  <link rel="icon" type="imag/x-icon" href="/img/favicon.ico" />
+  <link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
+  <link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
+  <link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>     
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 flex"
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white shadow-md min-h-screen p-6 flex flex-col">
+    <h2 class="text-xl font-bold mb-6 text-blue-700"> TLC Admin</h2>
+    <nav class="flex flex-col gap-3">
+      <a href="inicio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="home"></i> Inicio</a>
+      <a href="servicios.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="box"></i> Servicios</a>
+      <a href="ganancias.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="dollar-sign"></i> Ganancia</a>
+      <a href="mi-negocio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="briefcase"></i> Mi negocio</a>
+      <a href="colaboradores.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="users"></i> Colaboradores</a>
+      <a href="cierre.html" class="flex items-center gap-2 mt-auto p-2 rounded hover:bg-gray-100 text-red-700"><i data-lucide="log-out"></i> Cerrar sesión</a>
+    </nav>
+  </aside>
+
+  <!-- Contenido principal -->
+  <main class="flex-1 p-8 space-y-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Gestión de Servicios</h1>
+        <p class="text-gray-600">Administra servicios y vehículos. Visualiza estadísticas en tiempo real.</p>
+      </div>
+      <div class="flex items-center gap-2 bg-red-50 px-4 py-2 rounded-lg border border-red-200">
+        <i data-lucide="trending-up" class="w-5 h-5 text-red-600"></i>
+        <span class="text-red-700 font-medium">Datos actualizados</span>
+      </div>
+    </div>
+
+    <!-- Resumen de estadísticas -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div class="bg-gradient-to-r from-red-500 to-red-600 p-6 rounded-xl shadow-lg text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-red-100 text-sm font-medium">Total Servicios</p>
+            <p class="text-3xl font-bold" id="totalServices">0</p>
+          </div>
+          <i data-lucide="box" class="w-8 h-8 text-red-200"></i>
+        </div>
+      </div>
+      <div class="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-xl shadow-lg text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-blue-100 text-sm font-medium">Total Vehículos</p>
+            <p class="text-3xl font-bold" id="totalVehicles">0</p>
+          </div>
+          <i data-lucide="car" class="w-8 h-8 text-blue-200"></i>
+        </div>
+      </div>
+      <div class="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-xl shadow-lg text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-green-100 text-sm font-medium">Servicio Top</p>
+            <p class="text-lg font-bold truncate" id="mostRequestedService">N/A</p>
+          </div>
+          <i data-lucide="star" class="w-8 h-8 text-green-200"></i>
+        </div>
+      </div>
+      <div class="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-xl shadow-lg text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-purple-100 text-sm font-medium">Vehículo Top</p>
+            <p class="text-lg font-bold truncate" id="mostUsedVehicle">N/A</p>
+          </div>
+          <i data-lucide="award" class="w-8 h-8 text-purple-200"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos de estadísticas -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+            <i data-lucide="bar-chart-3" class="w-5 h-5 text-red-600"></i>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-gray-900">Servicios Más Solicitados</h3>
+            <p class="text-gray-500 text-sm">Distribución de pedidos por servicio</p>
+          </div>
+        </div>
+        <div class="h-80">
+          <canvas id="serviceChart"></canvas>
+        </div>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+            <i data-lucide="pie-chart" class="w-5 h-5 text-blue-600"></i>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-gray-900">Vehículos Más Utilizados</h3>
+            <p class="text-gray-500 text-sm">Distribución por tipo de vehículo</p>
+          </div>
+        </div>
+        <div class="h-80">
+          <canvas id="vehicleChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección Servicios Activos -->
+    <section class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+          <i data-lucide="settings" class="w-5 h-5 text-red-600"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-gray-900">Servicios Activos</h2>
+          <p class="text-gray-500 text-sm">Gestiona los servicios disponibles</p>
+        </div>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input type="text" id="newService" placeholder="Nombre del nuevo servicio" 
+               class="flex-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors">
+        <button id="addServiceBtn" 
+                class="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 font-medium">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          Agregar Servicio
+        </button>
+      </div>
+      <ul id="serviceList" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></ul>
+    </section>
+
+    <!-- Sección Vehículos -->
+    <section class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+          <i data-lucide="car" class="w-5 h-5 text-blue-600"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-gray-900">Tipos de Vehículos</h2>
+          <p class="text-gray-500 text-sm">Gestiona los tipos de vehículos disponibles</p>
+        </div>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input type="text" id="newVehicle" placeholder="Tipo de vehículo nuevo" 
+               class="flex-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+        <button id="addVehicleBtn" 
+                class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          Agregar Vehículo
+        </button>
+      </div>
+      <ul id="vehicleList" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></ul>
+    </section>
+  </main>
+
+  <script src="js/servicios.js"></script>
+</body>
+</html>

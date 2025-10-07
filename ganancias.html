@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ganancia — Panel del Dueño</title>
+
+<!-- ✅ Favicon -->
+<link rel="icon" type="imag/x-icon" href="/img/favicon.ico" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-100 flex">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white shadow-md min-h-screen p-6 flex flex-col">
+    <h2 class="text-xl font-bold mb-6 text-red-700">TLC Admin</h2>
+    <nav class="flex flex-col gap-3">
+      <a href="inicio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="home"></i> Inicio</a>
+      <a href="servicios.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="box"></i> Servicios</a>
+      <a href="ganancias.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="dollar-sign"></i> Ganancia</a>
+      <a href="mi-negocio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="briefcase"></i> Mi negocio</a>
+      <a href="colaboradores.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="users"></i> Colaboradores</a>
+      <a href="cierre.html" class="flex items-center gap-2 mt-auto p-2 rounded hover:bg-gray-100 text-red-700"><i data-lucide="log-out"></i> Cerrar sesión</a>
+    </nav>
+  </aside>
+
+  <!-- Contenido principal -->
+  <main class="flex-1 p-8 space-y-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Análisis de Ganancias</h1>
+        <p class="text-gray-600">Visualiza ingresos, estadísticas por período y genera reportes detallados.</p>
+      </div>
+      <div class="flex items-center gap-2 bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+        <i data-lucide="trending-up" class="w-5 h-5 text-green-600"></i>
+        <span class="text-green-700 font-medium">Datos en tiempo real</span>
+      </div>
+    </div>
+
+    <!-- Resumen de ganancias -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div class="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-xl shadow-lg text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-green-100 text-sm font-medium">Ganancias Totales</p>
+            <p class="text-3xl font-bold" id="totalEarnings">$0.00</p>
+          </div>
+          <i data-lucide="dollar-sign" class="w-8 h-8 text-green-200"></i>
+        </div>
+      </div>
+      <div class="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-xl shadow-lg text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-blue-100 text-sm font-medium">Ganancias Hoy</p>
+            <p class="text-3xl font-bold" id="todayEarnings">$0.00</p>
+          </div>
+          <i data-lucide="calendar-days" class="w-8 h-8 text-blue-200"></i>
+        </div>
+      </div>
+      <div class="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-xl shadow-lg text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-purple-100 text-sm font-medium">Este Mes</p>
+            <p class="text-3xl font-bold" id="monthEarnings">$0.00</p>
+          </div>
+          <i data-lucide="calendar" class="w-8 h-8 text-purple-200"></i>
+        </div>
+      </div>
+      <div class="bg-gradient-to-r from-orange-500 to-orange-600 p-6 rounded-xl shadow-lg text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-orange-100 text-sm font-medium">Promedio por Orden</p>
+            <p class="text-3xl font-bold" id="avgOrderValue">$0.00</p>
+          </div>
+          <i data-lucide="bar-chart-3" class="w-8 h-8 text-orange-200"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel de Gráfico de Ganancias -->
+    <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div class="flex items-center gap-3 mb-4 sm:mb-0">
+          <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+            <i data-lucide="line-chart" class="w-5 h-5 text-green-600"></i>
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">Evolución de Ingresos</h2>
+            <p class="text-gray-500 text-sm">Análisis temporal de ganancias</p>
+          </div>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm font-medium text-gray-700">Período:</label>
+            <select id="filterPeriod" class="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors">
+              <option value="day">Por Día</option>
+              <option value="week">Por Semana</option>
+              <option value="month">Por Mes</option>
+            </select>
+          </div>
+          <button id="exportExcel" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 font-medium">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            Exportar Excel
+          </button>
+        </div>
+      </div>
+      <div class="h-96">
+        <canvas id="gananciaChart"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/ganancias.js"></script>
+
+</body>
+</html>

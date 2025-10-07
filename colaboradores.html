@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Colaboradores — Panel del Dueño</title>
+
+<!-- ✅ Favicon -->
+<link rel="icon" type="imag/x-icon" href="/img/favicon.ico" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-100 flex">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white shadow-md min-h-screen p-6 flex flex-col">
+    <h2 class="text-xl font-bold mb-6 text-red-700">TLC Admin</h2>
+    <nav class="flex flex-col gap-3">
+      <a href="inicio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="home"></i> Inicio</a>
+      <a href="servicios.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="box"></i> Servicios</a>
+      <a href="ganancias.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="dollar-sign"></i> Ganancia</a>
+      <a href="mi-negocio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="briefcase"></i> Mi negocio</a>
+      <a href="colaboradores.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="users"></i> Colaboradores</a>
+      <a href="cierre.html" class="flex items-center gap-2 mt-auto p-2 rounded hover:bg-gray-100 text-red-700"><i data-lucide="log-out"></i> Cerrar sesión</a>
+    </nav>
+  </aside>
+
+  <!-- Contenido principal -->
+  <main class="flex-1 p-6">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 mb-2">Gestión de Colaboradores</h1>
+      <p class="text-gray-600">Administra el equipo de trabajo y sus permisos</p>
+    </div>
+    
+    <!-- Tarjetas de resumen -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-blue-100 text-sm font-medium">Total Colaboradores</p>
+            <p class="text-3xl font-bold" id="totalColaboradores">0</p>
+          </div>
+          <div class="bg-white bg-opacity-20 rounded-lg p-3">
+            <i data-lucide="users" class="w-8 h-8"></i>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-green-100 text-sm font-medium">Colaboradores Activos</p>
+            <p class="text-3xl font-bold" id="colaboradoresActivos">0</p>
+          </div>
+          <div class="bg-white bg-opacity-20 rounded-lg p-3">
+            <i data-lucide="user-check" class="w-8 h-8"></i>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-purple-100 text-sm font-medium">Administradores</p>
+            <p class="text-3xl font-bold" id="totalAdministradores">0</p>
+          </div>
+          <div class="bg-white bg-opacity-20 rounded-lg p-3">
+            <i data-lucide="crown" class="w-8 h-8"></i>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-orange-100 text-sm font-medium">Choferes</p>
+            <p class="text-3xl font-bold" id="totalChoferes">0</p>
+          </div>
+          <div class="bg-white bg-opacity-20 rounded-lg p-3">
+            <i data-lucide="car" class="w-8 h-8"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Formulario para agregar colaborador -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="bg-blue-100 rounded-lg p-2">
+          <i data-lucide="user-plus" class="w-6 h-6 text-blue-600"></i>
+        </div>
+        <h2 class="text-xl font-semibold text-gray-900">Agregar Nuevo Colaborador</h2>
+      </div>
+      <form id="colaboradorForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700">Nombre Completo</label>
+          <input type="text" id="colaboradorName" placeholder="Ej: Juan Pérez" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700">Correo Electrónico</label>
+          <input type="email" id="colaboradorEmail" placeholder="correo@ejemplo.com" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700">Contraseña</label>
+          <input type="password" id="colaboradorPassword" placeholder="Mínimo 6 caracteres" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700">Rol</label>
+          <select id="colaboradorRole" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+            <option value="">Seleccionar rol</option>
+            <option value="administrador">Administrador</option>
+            <option value="chofer">Chofer</option>
+            <option value="operador">Operador</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium flex items-center justify-center gap-2">
+            <i data-lucide="user-plus" class="w-5 h-5"></i>
+            Agregar Colaborador
+          </button>
+        </div>
+      </form>
+      <div id="colabMsg" class="text-sm mt-4"></div>
+      <p class="text-xs text-gray-500 mt-3">Los colaboradores podrán iniciar sesión en login-colaborador.html con su correo y contraseña.</p>
+    </div>
+    
+    <!-- Filtros y búsqueda -->
+    <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="bg-gray-100 rounded-lg p-2">
+          <i data-lucide="filter" class="w-6 h-6 text-gray-600"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900">Filtros y Búsqueda</h3>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700">Buscar</label>
+          <div class="relative">
+            <input type="text" id="searchInput" placeholder="Buscar por nombre o email..." class="w-full border border-gray-300 rounded-lg px-4 py-3 pl-10 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+            <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"></i>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700">Filtrar por Rol</label>
+          <select id="roleFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+            <option value="">Todos los roles</option>
+            <option value="administrador">Administrador</option>
+            <option value="chofer">Chofer</option>
+            <option value="operador">Operador</option>
+          </select>
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700">Filtrar por Estado</label>
+          <select id="statusFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+            <option value="">Todos los estados</option>
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button id="clearFilters" class="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center justify-center gap-2">
+            <i data-lucide="x" class="w-5 h-5"></i>
+            Limpiar Filtros
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Lista de colaboradores -->
+    <div class="bg-white rounded-xl shadow-lg">
+      <div class="p-6 border-b border-gray-200">
+        <div class="flex items-center gap-3">
+          <div class="bg-blue-100 rounded-lg p-2">
+            <i data-lucide="users" class="w-6 h-6 text-blue-600"></i>
+          </div>
+          <h2 class="text-xl font-semibold text-gray-900">Lista de Colaboradores</h2>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="text-left py-4 px-6 font-semibold text-gray-700">Colaborador</th>
+              <th class="text-left py-4 px-6 font-semibold text-gray-700">Email</th>
+              <th class="text-left py-4 px-6 font-semibold text-gray-700">Rol</th>
+              <th class="text-left py-4 px-6 font-semibold text-gray-700">Estado</th>
+              <th class="text-left py-4 px-6 font-semibold text-gray-700">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="colaboradoresTable">
+            <!-- Los colaboradores se cargarán aquí -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal de Métricas -->
+  <div id="metricsModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-6xl flex items-center justify-center">
+      <div class="w-full bg-white rounded-xl shadow-2xl p-6 animate-fade-in-up">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-3">
+            <div id="modalCollabAvatar" class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg">C</div>
+            <div>
+              <h3 id="modalCollabName" class="text-xl font-semibold text-gray-900">Nombre del Colaborador</h3>
+              <p id="modalCollabEmail" class="text-gray-600">correo@ejemplo.com</p>
+            </div>
+          </div>
+          <button id="closeMetricsModal" class="text-gray-500 hover:text-gray-700">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+
+        <!-- Métricas Principales -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
+            <p class="text-green-100 text-sm font-medium">Servicios Completados</p>
+            <p id="modalCompletedCount" class="text-3xl font-bold">0</p>
+          </div>
+          <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
+            <p class="text-blue-100 text-sm font-medium">Servicios Activos</p>
+            <p id="modalActiveCount" class="text-3xl font-bold">0</p>
+          </div>
+          <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white">
+            <p class="text-purple-100 text-sm font-medium">Tasa de Éxito</p>
+            <p id="modalSuccessRate" class="text-3xl font-bold">0%</p>
+          </div>
+          <div class="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 text-white">
+            <p class="text-orange-100 text-sm font-medium">Tiempo Promedio</p>
+            <p id="modalAvgTime" class="text-3xl font-bold">0h</p>
+          </div>
+        </div>
+
+        <!-- Gráficos y Estadísticas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <!-- Actividad Semanal -->
+          <div class="bg-white p-6 rounded-xl shadow-lg">
+            <h4 class="text-lg font-semibold text-gray-800 mb-4">Actividad Semanal</h4>
+            <div class="h-64">
+              <canvas id="modalWeeklyChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Distribución de Servicios -->
+          <div class="bg-white p-6 rounded-xl shadow-lg">
+            <h4 class="text-lg font-semibold text-gray-800 mb-4">Distribución de Servicios</h4>
+            <div class="h-64">
+              <canvas id="modalServicesChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Horario y Vehículos -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Horario Activo -->
+          <div class="bg-white p-6 rounded-xl shadow-lg">
+            <h4 class="text-lg font-semibold text-gray-800 mb-4">Horario Activo</h4>
+            <div id="modalTimeStats" class="space-y-3">
+              <!-- Se llenará dinámicamente -->
+            </div>
+          </div>
+
+          <!-- Estadísticas de Vehículos -->
+          <div class="bg-white p-6 rounded-xl shadow-lg">
+            <h4 class="text-lg font-semibold text-gray-800 mb-4">Uso de Vehículos</h4>
+            <div id="modalVehicleStats" class="space-y-3">
+              <!-- Se llenará dinámicamente -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="js/colaboradores.js"></script>
+</body>
+</html>

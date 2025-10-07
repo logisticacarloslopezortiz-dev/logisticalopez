@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Panel — Colaborador</title>
+  <!-- ✅ Favicon -->
+<link rel="icon" type="image/x-icon" href="/img/favicon.ico" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-100 flex flex-col md:flex-row">
+  <!-- Sidebar -->
+  <aside class="w-full md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl min-h-screen flex flex-col">
+    <!-- Header del Sidebar -->
+    <div class="p-6 border-b border-gray-700">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+          TLC
+        </div>
+        <div>
+          <h2 class="text-lg font-bold text-white">TLC Colaborador</h2>
+          <p class="text-xs text-gray-400">Panel de Control</p>
+        </div>
+      </div>
+      
+      <!-- Perfil del Colaborador -->
+      <div class="bg-blue-800/50 rounded-xl p-4 border border-blue-700">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar">
+            C
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-white font-semibold text-sm truncate" id="collabName">Colaborador</h3>
+            <p class="text-gray-400 text-xs truncate" id="collabEmail"></p>
+          </div>
+          <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="En línea"></div>
+        </div>
+        
+        <!-- Estadísticas rápidas -->
+        <div class="mt-3 pt-3 border-t border-blue-700">
+          <div class="grid grid-cols-2 gap-3 text-center">
+            <div>
+              <div class="text-lg font-bold text-white" id="collabActiveJobs">0</div>
+              <div class="text-xs text-gray-400">Activos</div>
+            </div>
+            <div>
+              <div class="text-lg font-bold text-blue-400" id="collabCompletedJobs">0</div>
+              <div class="text-xs text-gray-400">Completados</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Navegación -->
+    <nav class="flex-1 p-6">
+      <div class="space-y-2">
+        <a href="panel-colaborador.html" class="flex items-center gap-3 p-3 rounded-xl text-white hover:bg-blue-700/50 transition-all duration-200 group">
+          <i data-lucide="list" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
+          <span class="font-medium">Solicitudes</span>
+          <span class="ml-auto bg-blue-600 text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount">0</span>
+        </a>
+        
+        <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-blue-700/50 hover:text-white transition-all duration-200 group">
+          <i data-lucide="bar-chart-3" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
+          <span class="font-medium">Rendimiento</span>
+        </a>
+      </div>
+    </nav>
+    
+    <!-- Footer del Sidebar -->
+    <div class="p-6 border-t border-gray-700">
+      <!-- Botón de cambio de tema -->
+      <button id="themeToggle" class="w-full flex items-center justify-center gap-2 p-3 mb-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
+        <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
+        <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
+        <span class="font-medium theme-text">Modo oscuro</span>
+      </button>
+      <!-- Cerrar sesión -->
+      <button id="logoutBtn" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        <span class="font-medium">Cerrar Sesión</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Contenido principal -->
+  <main class="flex-1 p-4 md:p-8">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Solicitudes asignadas</h1>
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+        <div class="relative w-full sm:w-auto">
+          <input id="searchInput" type="text" placeholder="Buscar por cliente, ID o servicio" class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full">
+          <div class="absolute left-3 top-2.5">
+            <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
+          </div>
+        </div>
+        <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto">
+          <option value="">Todos</option>
+          <option value="en_camino_recoger">En camino a recoger</option>
+          <option value="cargando">Cargando pedido</option>
+          <option value="en_camino_entregar">En camino a entregar</option>
+          <option value="retraso_tapon">Retraso por tapón</option>
+          <option value="entregado">Pedido finalizado</option>
+          <option value="Pendiente">Pendiente</option>
+          <option value="En proceso">En proceso</option>
+          <option value="Completado">Completado</option>
+        </select>
+        <button id="clearFilters" class="px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 self-end"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="text-lg font-semibold text-gray-800">Solicitudes de clientes <span class="ml-2 hidden sm:inline text-xs font-normal text-gray-400">(disponibles y asignadas a ti)</span></h3>
+        <span class="text-sm text-gray-500">Mostrando <span id="showingCount">0</span> de <span id="totalCount">0</span></span>
+      </div>
+      <div class="overflow-x-auto -mx-4 sm:mx-0">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Cliente</th>
+              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Servicio</th>
+              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Ruta</th>
+              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Fecha/Hora</th>
+              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="activeJobSection" class="mt-8 hidden">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold flex items-center gap-2"><i data-lucide="briefcase"></i> Trabajo activo</h2>
+          <span id="activeJobStatus" class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">En camino a recoger pedido</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div id="activeJobInfo"></div>
+          <div>
+            <div class="aspect-video w-full rounded-lg overflow-hidden border">
+              <iframe id="activeJobMap" src="about:blank" class="w-full h-full border-0" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            </div>
+            <div class="mt-2 text-sm text-gray-500" id="activeJobMapHint">Dirígete a la dirección de recogida</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="acceptModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+      <div class="bg-white w-full max-w-md rounded-lg p-6 shadow-xl">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="help-circle" class="w-5 h-5 text-blue-600"></i>
+          <h3 class="text-lg font-semibold">¿Deseas trabajar esta solicitud?</h3>
+        </div>
+        <div id="acceptModalBody" class="text-gray-600 text-sm mb-6"></div>
+        <div class="flex justify-end gap-3">
+          <button id="cancelAcceptBtn" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300">Cancelar</button>
+          <button id="confirmAcceptBtn" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Aceptar</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/panel-colaborador.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/theme.js"></script>
+  <!-- Scripts -->
+  <script src="js/notifications.js"></script>
+  <script src="js/rating-system.js"></script>
+  <script src="js/panel-colaborador.js"></script>
+  <script>
+    // Inicializar iconos
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

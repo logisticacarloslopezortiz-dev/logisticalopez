@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login — Panel del Dueño</title>
+  <!-- ✅ Favicon -->
+<link rel="icon" type="imag/x-icon" href="/img/favicon.ico" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/> 
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-100 flex justify-center items-center h-screen">
+
+  <main class="bg-white p-8 rounded shadow w-full max-w-md">
+    <h1 class="text-2xl font-bold mb-6 text-center text-red-700">Panel TLC - Login</h1>
+
+    <form id="loginForm" class="flex flex-col gap-4">
+      <div>
+        <label class="block font-semibold mb-1">Usuario:</label>
+        <input type="text" id="username" class="border p-2 rounded w-full" placeholder="admin">
+      </div>
+      <div>
+        <label class="block font-semibold mb-1">Contraseña:</label>
+        <input type="password" id="password" class="border p-2 rounded w-full" placeholder="********">
+      </div>
+      <button type="submit" class="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800 transition">Ingresar</button>
+    </form>
+
+    <p id="loginError" class="text-red-600 mt-4 text-center hidden">Usuario o contraseña incorrectos.</p>
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    // Datos de acceso (ejemplo)
+    const validUser = {
+      username: 'admin',
+      password: '123456'
+    };
+
+    const form = document.getElementById('loginForm');
+    const errorMsg = document.getElementById('loginError');
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+
+      if(user === validUser.username && pass === validUser.password) {
+        // Guardar estado de sesión
+        localStorage.setItem('loggedIn', 'true');
+        window.location.href = 'inicio.html'; // Redirigir al panel
+      } else {
+        errorMsg.classList.remove('hidden');
+      }
+    });
+
+    // Redirigir al panel si ya está logueado
+    window.onload = () => {
+      if(localStorage.getItem('loggedIn') === 'true') {
+        window.location.href = 'inicio.html';
+      }
+    }
+  </script>
+
+</body>
+</html>

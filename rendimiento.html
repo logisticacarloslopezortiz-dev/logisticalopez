@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+    <title>Rendimiento - TLC</title>
+    <!-- ✅ Favicon -->
+    <link rel="icon" type="imag/x-icon" href="/img/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
+    <link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
+    <link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>     
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .metric-card.blue {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .metric-card.green {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        .metric-card.orange {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.35s;
+            transform-origin: 50% 50%;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 flex flex-col md:flex-row">
+    <!-- Sidebar -->
+     <aside class="w-full md:w-72 bg-gradient-to-b from-gray-900 to-gray-800 shadow-2xl min-h-screen flex flex-col">
+        <!-- Header del Sidebar -->
+        <div class="p-6 border-b border-gray-700">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-red-600 to-red-700 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                    TLC
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">TLC Colaborador</h2>
+                    <p class="text-xs text-gray-400">Panel de Control</p>
+                </div>
+            </div>
+            
+            <!-- Perfil del Colaborador -->
+            <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar">
+                        C
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-white font-semibold text-sm truncate" id="collabName">Cargando...</h3>
+                        <p class="text-gray-400 text-xs truncate" id="collabEmail">-</p>
+                    </div>
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="En línea"></div>
+                </div>
+                
+                <!-- Estadísticas rápidas -->
+                <div class="mt-3 pt-3 border-t border-gray-700">
+                    <div class="grid grid-cols-2 gap-3 text-center">
+                        <div>
+                            <div class="text-lg font-bold text-white" id="collabActiveJobs">0</div>
+                            <div class="text-xs text-gray-400">Activos</div>
+                        </div>
+                        <div>
+                            <div class="text-lg font-bold text-green-400" id="collabCompletedJobs">0</div>
+                            <div class="text-xs text-gray-400">Completados</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Navegación -->
+        <nav class="flex-1 p-6">
+            <div class="space-y-2">
+                <a href="panel-colaborador.html" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-gray-700/50 hover:text-white transition-all duration-200 group">
+                    <i data-lucide="list" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
+                    <span class="font-medium">Solicitudes</span>
+                    <span class="ml-auto bg-red-600 text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount">0</span>
+                </a>
+                
+                <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-white bg-gray-700/50 transition-all duration-200 group">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
+                    <span class="font-medium">Rendimiento</span>
+                </a>
+            </div>
+        </nav>
+        
+        <!-- Footer del Sidebar -->
+        <div class="p-6 border-t border-gray-700">
+            <!-- Botón de cambio de tema -->
+            <button id="themeToggle" class="w-full flex items-center justify-center gap-2 p-3 mb-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
+                <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
+                <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
+                <span class="font-medium theme-text">Modo oscuro</span>
+            </button>
+            <!-- Cerrar sesión -->
+            <button id="logoutBtn" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-red-600/10 text-red-400 hover:bg-red-600/20 hover:text-red-300 transition-all duration-200 group">
+                <i data-lucide="log-out" class="w-4 h-4"></i>
+                <span class="font-medium">Cerrar Sesión</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8">
+        <!-- Métricas Principales -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="metric-card text-white p-6 rounded-xl card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm">Solicitudes Completadas</p>
+                        <p class="text-3xl font-bold" id="completedCount">0</p>
+                    </div>
+                    <i data-lucide="check-circle" class="w-12 h-12 text-white/60"></i>
+                </div>
+            </div>
+            
+            <div class="metric-card blue text-white p-6 rounded-xl card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm">Trabajos Activos</p>
+                        <p class="text-3xl font-bold" id="activeCount">0</p>
+                    </div>
+                    <i data-lucide="truck" class="w-12 h-12 text-white/60"></i>
+                </div>
+            </div>
+            
+            <div class="metric-card green text-white p-6 rounded-xl card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm">Tasa de Éxito</p>
+                        <p class="text-3xl font-bold" id="successRate">0%</p>
+                    </div>
+                    <i data-lucide="trending-up" class="w-12 h-12 text-white/60"></i>
+                </div>
+            </div>
+            
+            <div class="metric-card orange text-white p-6 rounded-xl card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm">Tiempo Promedio</p>
+                        <p class="text-3xl font-bold" id="avgTime">0h</p>
+                    </div>
+                    <i data-lucide="clock" class="w-12 h-12 text-white/60"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráficos -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Gráfico de Rendimiento Semanal -->
+            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 mr-2 text-blue-600"></i>
+                    Rendimiento Semanal
+                </h3>
+                <div class="chart-container">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico de Distribución de Servicios -->
+            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i data-lucide="pie-chart" class="w-5 h-5 mr-2 text-green-600"></i>
+                    Distribución de Servicios
+                </h3>
+                <div class="chart-container">
+                    <canvas id="servicesChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progreso Circular y Estadísticas Detalladas -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <!-- Progreso Circular -->
+            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i data-lucide="target" class="w-5 h-5 mr-2 text-purple-600"></i>
+                    Meta Mensual
+                </h3>
+                <div class="flex items-center justify-center">
+                    <div class="relative w-32 h-32">
+                        <svg class="progress-ring w-32 h-32">
+                            <circle class="progress-ring-circle stroke-gray-200" stroke-width="8" fill="transparent" r="56" cx="64" cy="64"/>
+                            <circle class="progress-ring-circle stroke-purple-600" stroke-width="8" fill="transparent" r="56" cx="64" cy="64" id="progressCircle"/>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <span class="text-2xl font-bold text-gray-800" id="progressPercent">0%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center mt-4">
+                    <p class="text-sm text-gray-600">Meta: <span id="monthlyGoal">50</span> solicitudes</p>
+                    <p class="text-sm text-gray-600">Completadas: <span id="monthlyCompleted">0</span></p>
+                </div>
+            </div>
+
+            <!-- Estadísticas por Tipo de Vehículo -->
+            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i data-lucide="truck" class="w-5 h-5 mr-2 text-orange-600"></i>
+                    Por Tipo de Vehículo
+                </h3>
+                <div class="space-y-3" id="vehicleStats">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Horarios de Mayor Actividad -->
+            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i data-lucide="clock" class="w-5 h-5 mr-2 text-indigo-600"></i>
+                    Horarios Activos
+                </h3>
+                <div class="space-y-3" id="timeStats">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Historial Reciente -->
+        <div class="bg-white rounded-xl shadow-lg card-hover">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i data-lucide="history" class="w-5 h-5 mr-2 text-gray-600"></i>
+                    Historial Reciente
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="overflow-x-auto -mx-4 sm:mx-0">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="text-left text-sm text-gray-600 border-b">
+                                <th class="pb-3 px-2 md:px-3">Fecha</th>
+                                <th class="pb-3 px-2 md:px-3 hidden sm:table-cell">Servicio</th>
+                                <th class="pb-3 px-2 md:px-3 hidden md:table-cell">Vehículo</th>
+                                <th class="pb-3 px-2 md:px-3">Estado</th>
+                                <th class="pb-3 px-2 md:px-3 hidden sm:table-cell">Tiempo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentHistory" class="text-sm">
+                            <!-- Se llenará dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Horarios -->
+    <div id="scheduleModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black bg-opacity-50"></div>
+        <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-2xl flex items-center justify-center">
+            <div class="w-full bg-white rounded-xl shadow-2xl p-6 animate-fade-in-up">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-semibold text-gray-900">Configurar Horario</h3>
+                    <button id="closeScheduleModal" class="text-gray-500 hover:text-gray-700">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                
+                <form id="scheduleForm" class="space-y-4">
+                    <!-- Horario de Entrada y Salida -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Hora de Entrada</label>
+                            <input type="time" name="startTime" class="form-input w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Hora de Salida</label>
+                            <input type="time" name="endTime" class="form-input w-full" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Días Laborables -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Días Laborables</label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" name="workDays" value="Lun" class="form-checkbox">
+                                <span class="text-sm">Lun</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" name="workDays" value="Mar" class="form-checkbox">
+                                <span class="text-sm">Mar</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" name="workDays" value="Mié" class="form-checkbox">
+                                <span class="text-sm">Mié</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" name="workDays" value="Jue" class="form-checkbox">
+                                <span class="text-sm">Jue</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" name="workDays" value="Vie" class="form-checkbox">
+                                <span class="text-sm">Vie</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" name="workDays" value="Sáb" class="form-checkbox">
+                                <span class="text-sm">Sáb</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" name="workDays" value="Dom" class="form-checkbox">
+                                <span class="text-sm">Dom</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end gap-3 pt-4">
+                        <button type="button" id="cancelSchedule" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                            Guardar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/notifications.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/rendimiento.js"></script>
+</body>
+</html>

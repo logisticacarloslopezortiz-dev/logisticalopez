@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cerrar sesión — Panel del Dueño</title>
+
+  <!-- ✅ Favicon -->
+<link rel="icon" type="imag/x-icon" href="/img/favicon.ico" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-100 flex justify-center items-center h-screen">
+
+  <main class="text-center">
+    <h1 class="text-2xl font-bold mb-4">Has cerrado sesión</h1>
+    <p class="mb-4">Gracias por usar el panel de Transporte Logístico Carlos López.</p>
+    <a href="login.html" class="px-4 py-2 bg-red-700 text-white rounded hover:bg-red-800 transition">Volver al login</a>
+  </main>
+
+  <script>
+    lucide.createIcons();
+    // Opcional: Limpiar datos de sesión
+    localStorage.removeItem('tlc_orders');
+    localStorage.removeItem('colaboradores');
+    localStorage.removeItem('businessData');
+  </script>
+
+</body>
+</html>
