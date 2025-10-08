@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Glass Effect */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Buttons */
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200;
+}
+
+/* Animations */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Progress Steps */
+.progress-step {
+  @apply w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium;
+}
+
+.progress-step.active {
+  @apply bg-blue-600 text-white;
+}
+
+.progress-step.completed {
+  @apply bg-green-500 text-white;
+}
+
+/* Form Inputs */
+.form-input {
+  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+/* Service Cards */
+.service-card {
+  @apply cursor-pointer hover:border-blue-500 transition duration-200;
+}
+
+.service-card.selected {
+  @apply border-blue-500 bg-blue-50;
+}

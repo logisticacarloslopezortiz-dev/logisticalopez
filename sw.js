@@ -17,7 +17,7 @@ const urlsToCache = [
   '/img/favicon-32x32.png',
   '/img/android-chrome-192x192.png',
   '/img/android-chrome-512x512.png',
-  'https://cdn.tailwindcss.com',
+  // No cachear Tailwind CSS CDN debido a restricciones de CORS
   'https://unpkg.com/lucide@latest',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
 ];
@@ -49,8 +49,13 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Estrategia de caché: Cache first, then network
+// Estrategia de caché: Network first para CDN, Cache first para recursos locales
 self.addEventListener('fetch', event => {
+  // No interceptar solicitudes a CDN de Tailwind
+  if (event.request.url.includes('cdn.tailwindcss.com')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {
@@ -58,6 +63,7 @@ self.addEventListener('fetch', event => {
         if (response) {
           return response;
         }
+
         return fetch(event.request).then(
           response => {
             // Check if we received a valid response
@@ -65,13 +71,14 @@ self.addEventListener('fetch', event => {
               return response;
             }
 
-            // Clone the response
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
+            // Solo cachear recursos locales
+            if (event.request.url.startsWith(self.location.origin)) {
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME)
+                .then(cache => {
+                  cache.put(event.request, responseToCache);
+                });
+            }
 
             return response;
           }

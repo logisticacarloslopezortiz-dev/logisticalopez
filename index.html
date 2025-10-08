@@ -8,95 +8,230 @@
   <title>Transporte Logístico Carlos López — Solicitar Servicio</title>
 
   <!-- PWA Support -->
-  <link rel="manifest" href="/manifest.json" />
+  <link rel="manifest" href="manifest.json" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <meta name="apple-mobile-web-app-title" content="TLC" />
-  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png" />
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
 
   <!-- Favicon -->
-  <link rel="icon" type="image/x-icon" href="/img/favicon.ico" />
-  <link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
-  <link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
-  <link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <link rel="icon" type="image/x-icon" href="img/favicon-16x16.png" sizes="16x16" />
+  <link rel="icon" type="image/x-icon" href="img/favicon-32x32.png" sizes="32x32" />
+  <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
 
   <!-- Google Maps API -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dOWTgHz-TRU6Qw&libraries=places&loading=async"></script>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
+<!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
-    .glass-effect {
+    /* Glass Effect */
+    .glass {
+      background: rgba(255, 255, 255, 0.7);
       backdrop-filter: blur(10px);
-      background: rgba(255, 255, 255, 0.9);
+      -webkit-backdrop-filter: blur(10px);
     }
-    
+
+    /* Buttons */
     .btn-primary {
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-      transition: all 0.3s ease;
+      @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200;
     }
-    
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+
+    .btn-secondary {
+      @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200;
     }
-    
-    .animate-fade-in {
-      animation: fadeIn 0.5s ease-in-out;
+
+    /* Animations */
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
     }
-    
-    .animate-slide-in {
-      animation: slideIn 0.5s ease-out;
-    }
-    
+
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
     }
-    
-    @keyframes slideIn {
-      from { transform: translateX(20px); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-    
+
+    /* Progress Steps */
     .progress-step {
-      transition: all 0.3s ease;
+      @apply w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium;
     }
-    
+
     .progress-step.active {
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-      color: white;
+      @apply bg-blue-600 text-white;
     }
-    
+
     .progress-step.completed {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: white;
+      @apply bg-green-500 text-white;
     }
-    
+
+    /* Form Inputs */
     .form-input {
-      @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200;
+      @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
     }
-    
+
+    /* Service Cards */
     .service-card {
-      transition: all 0.3s ease;
-      cursor: pointer;
+      @apply cursor-pointer hover:border-blue-500 transition duration-200;
     }
-    
-    .service-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-    }
-    
+
     .service-card.selected {
-      border-color: #2563eb;
-      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      @apply border-blue-500 bg-blue-50;
+    }
+    
+    /* Utility classes */
+    .hidden {
+      display: none !important;
     }
   </style>
+  
+  <script>
+  // Script de inicialización independiente
+  document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar iconos
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons();
+    }
+    
+    // Variables globales
+    let currentStep = 1;
+    const totalSteps = 5;
+    
+    // Elementos principales
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    const wizardApp = document.getElementById('wizardApp');
+    const startButton = document.getElementById('startButton');
+    const backToWelcome = document.querySelector('header button#backToWelcome');
+    const prevButton = document.getElementById('prevButton');
+    const nextButton = document.getElementById('nextButton');
+    
+    // Inicializar pantalla de bienvenida
+    if (welcomeScreen) welcomeScreen.classList.remove('hidden');
+    if (wizardApp) wizardApp.classList.add('hidden');
+    
+    // Configurar botón de inicio
+    if (startButton) {
+      startButton.addEventListener('click', function() {
+        welcomeScreen.classList.add('hidden');
+        wizardApp.classList.remove('hidden');
+      });
+    }
+    
+    // Configurar botón de regreso
+    if (backToWelcome) {
+      backToWelcome.addEventListener('click', function() {
+        wizardApp.classList.add('hidden');
+        welcomeScreen.classList.remove('hidden');
+      });
+    }
+    
+    // Configurar navegación del wizard
+    function updateUI() {
+      // Ocultar todos los pasos
+      document.querySelectorAll('.wizard-step').forEach(step => {
+        step.classList.add('hidden');
+      });
+      
+      // Mostrar paso actual
+      const currentStepElement = document.getElementById(`step${currentStep}`);
+      if (currentStepElement) {
+        currentStepElement.classList.remove('hidden');
+      }
+      
+      // Actualizar botones
+      if (prevButton) {
+        if (currentStep > 1) {
+          prevButton.classList.remove('hidden');
+        } else {
+          prevButton.classList.add('hidden');
+        }
+      }
+      
+      // Actualizar barra de progreso
+      const progressBar = document.getElementById('progressBar');
+      if (progressBar) {
+        const progressPercentage = ((currentStep - 1) / (totalSteps - 1)) * 100;
+        progressBar.style.width = `${progressPercentage}%`;
+      }
+      
+      // Actualizar indicadores de paso
+      document.querySelectorAll('.progress-step').forEach((step, index) => {
+        const stepNumber = index + 1;
+        
+        if (stepNumber < currentStep) {
+          step.classList.remove('active');
+          step.classList.add('completed');
+          step.classList.remove('bg-gray-200', 'text-gray-500');
+          step.classList.add('bg-green-500', 'text-white');
+        } else if (stepNumber === currentStep) {
+          step.classList.add('active');
+          step.classList.remove('completed');
+          step.classList.remove('bg-gray-200', 'text-gray-500');
+          step.classList.add('bg-blue-600', 'text-white');
+        } else {
+          step.classList.remove('active');
+          step.classList.remove('completed');
+          step.classList.remove('bg-green-500', 'bg-blue-600', 'text-white');
+          step.classList.add('bg-gray-200', 'text-gray-500');
+        }
+      });
+    }
+    
+    // Configurar botones de navegación
+    if (prevButton) {
+      prevButton.addEventListener('click', function() {
+        if (currentStep > 1) {
+          currentStep--;
+          updateUI();
+        }
+      });
+    }
+    
+    if (nextButton) {
+      nextButton.addEventListener('click', function() {
+        if (currentStep < totalSteps) {
+          currentStep++;
+          updateUI();
+        }
+      });
+    }
+    
+    // Inicializar manejo de RNC
+    const rncYesRadio = document.getElementById('rncYesRadio');
+    const rncInfo = document.getElementById('rncInfo');
+    const editRNCInfo = document.getElementById('editRNCInfo');
+    
+    if (rncYesRadio && rncInfo) {
+      document.querySelectorAll('input[name="needsRNC"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+          if (this.value === 'yes') {
+            rncInfo.classList.remove('hidden');
+          } else {
+            rncInfo.classList.add('hidden');
+          }
+        });
+      });
+    }
+    
+    if (editRNCInfo) {
+      editRNCInfo.addEventListener('click', function() {
+        const rncForm = document.getElementById('rncForm');
+        if (rncForm && rncInfo) {
+          rncInfo.classList.add('hidden');
+          rncForm.classList.remove('hidden');
+        }
+      });
+    }
+    
+    // Inicializar UI
+    updateUI();
+  });
+  </script>
 </head>
 
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
@@ -106,7 +241,7 @@
     <div class="text-center max-w-md mx-auto animate-fade-in">
       <!-- Logo -->
       <div class="mb-8">
-        <img src="/img/1horizontal (1).png" alt="TLC Logo" class="w-64 h-auto mx-auto rounded-xl shadow-lg">
+        <img src="/img/1vertical.png" alt="TLC Logo" class="w-64 h-auto mx-auto rounded-xl shadow-lg">
       </div>
       
       <!-- Frase -->
@@ -143,13 +278,15 @@
           <div class="flex items-center space-x-2 w-full">
             <div class="progress-step active w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold" data-step="1">1</div>
             <div class="flex-1 h-2 bg-gray-200 rounded-full mx-2">
-              <div id="progressBar" class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500" style="width: 25%"></div>
+              <div id="progressBar" class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500" style="width: 20%"></div>
             </div>
             <div class="progress-step w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-200 text-gray-500" data-step="2">2</div>
             <div class="flex-1 h-2 bg-gray-200 rounded-full mx-2"></div>
             <div class="progress-step w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-200 text-gray-500" data-step="3">3</div>
             <div class="flex-1 h-2 bg-gray-200 rounded-full mx-2"></div>
             <div class="progress-step w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-200 text-gray-500" data-step="4">4</div>
+            <div class="flex-1 h-2 bg-gray-200 rounded-full mx-2"></div>
+            <div class="progress-step w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-200 text-gray-500" data-step="5">5</div>
           </div>
         </div>
         
@@ -157,6 +294,7 @@
         <div class="flex justify-between mt-2 text-xs text-gray-600">
           <span>Datos</span>
           <span>Servicio</span>
+          <span>Vehículo</span>
           <span>Ubicación</span>
           <span>Confirmar</span>
         </div>
@@ -197,22 +335,27 @@
                   <span>No</span>
                 </label>
                 <label class="flex items-center">
-                  <input type="radio" name="needsRNC" value="yes" class="mr-2">
+                  <input type="radio" name="needsRNC" value="yes" class="mr-2" id="rncYesRadio">
                   <span>Sí</span>
-                  <button id="openRNCModal" class="ml-2 text-blue-600 hover:text-blue-800">
+                </label>
+              </div>
+              <div id="rncInfo" class="hidden mt-3 p-3 bg-blue-50 rounded-lg">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-blue-800">Información fiscal guardada</span>
+                  <button id="editRNCInfo" class="text-blue-600 hover:text-blue-800">
                     <i data-lucide="edit-2" class="w-4 h-4"></i>
                   </button>
-                </label>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Paso 2: Detalles del Servicio -->
-      <div id="step2" class="wizard-step hidden">
+      <!-- Paso 2A: Selección de Servicio -->
+      <div id="step2a" class="wizard-step hidden">
         <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
-          <h2 class="text-2xl font-bold text-gray-800 mb-2">Detalles del Servicio</h2>
+          <h2 class="text-2xl font-bold text-gray-800 mb-2">Tipo de Servicio</h2>
           <p class="text-gray-600 mb-6">Selecciona el tipo de servicio que necesitas</p>
           
           <!-- Tipo de Servicio -->
@@ -245,7 +388,7 @@
                 <p class="text-sm text-gray-600">Transporte marítimo</p>
               </div>
               <div class="service-card border-2 border-gray-200 rounded-lg p-4 text-center" data-service="Grúas">
-                <i data-lucide="crane" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
+                <i data-lucide="construction-crane" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
                 <h3 class="font-semibold">Grúas</h3>
                 <p class="text-sm text-gray-600">Servicio de grúas</p>
               </div>
@@ -256,7 +399,15 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
+      <!-- Paso 2B: Vehículo y Descripción -->
+      <div id="step2b" class="wizard-step hidden">
+        <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+          <h2 class="text-2xl font-bold text-gray-800 mb-2">Detalles del Servicio</h2>
+          <p class="text-gray-600 mb-6">Selecciona el vehículo y describe tu carga</p>
+          
           <!-- Tipo de Vehículo -->
           <div class="mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-3">Tipo de Vehículo *</label>
@@ -287,13 +438,14 @@
           <!-- Descripción -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Descripción del Servicio</label>
-            <textarea id="serviceDescription" class="form-input h-24 resize-none" placeholder="Describe brevemente lo que necesitas transportar..."></textarea>
+            <textarea id="serviceDescription" class="form-input h-32 resize-none" placeholder="Describe brevemente lo que necesitas transportar (peso aproximado, dimensiones, tipo de carga, etc.)..."></textarea>
+            <p class="text-xs text-gray-500 mt-1">Máximo 500 caracteres</p>
           </div>
         </div>
       </div>
 
-      <!-- Paso 3: Dirección y Horario -->
-      <div id="step3" class="wizard-step hidden">
+      <!-- Paso 4: Dirección y Horario -->
+      <div id="step4" class="wizard-step hidden">
         <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
           <h2 class="text-2xl font-bold text-gray-800 mb-2">Dirección y Horario</h2>
           <p class="text-gray-600 mb-6">Indica dónde y cuándo necesitas el servicio</p>
@@ -338,8 +490,8 @@
         </div>
       </div>
 
-      <!-- Paso 4: Resumen y Confirmación -->
-      <div id="step4" class="wizard-step hidden">
+      <!-- Paso 5: Resumen y Confirmación -->
+      <div id="step5" class="wizard-step hidden">
         <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
           <h2 class="text-2xl font-bold text-gray-800 mb-2">Confirmar Solicitud</h2>
           <p class="text-gray-600 mb-6">Revisa los datos antes de enviar tu solicitud</p>
@@ -359,14 +511,13 @@
 
       <!-- Botones de Navegación -->
       <div class="flex justify-between mt-8">
-        <button id="prevButton" class="hidden px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-          <i data-lucide="arrow-left" class="w-4 h-4 inline mr-2"></i>
+        <button id="prevButton" class="btn-secondary hidden">
+          <i data-lucide="chevron-left" class="w-4 h-4 inline mr-2"></i>
           Anterior
         </button>
-        <div class="flex-1"></div>
-        <button id="nextButton" class="btn-primary text-white px-6 py-3 rounded-lg font-semibold">
+        <button id="nextButton" class="btn-primary">
           Siguiente
-          <i data-lucide="arrow-right" class="w-4 h-4 inline ml-2"></i>
+          <i data-lucide="chevron-right" class="w-4 h-4 inline ml-2"></i>
         </button>
       </div>
     </main>
@@ -379,7 +530,7 @@
       <div class="w-full bg-white rounded-xl shadow-2xl p-6">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold text-gray-900">Información Fiscal</h3>
-          <button id="closeRNC" class="text-gray-500 hover:text-gray-700">
+          <button id="closeRNCModal" class="text-gray-500 hover:text-gray-700">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
@@ -393,13 +544,17 @@
             <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de la Empresa</label>
             <input type="text" id="companyName" class="form-input" placeholder="Ej: Mi Empresa S.R.L.">
           </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Dirección Fiscal (Opcional)</label>
+            <input type="text" id="fiscalAddress" class="form-input" placeholder="Dirección de la empresa">
+          </div>
         </div>
         
         <div class="flex gap-3 mt-6">
           <button id="cancelRNC" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
             Cancelar
           </button>
-          <button id="saveRNC" class="flex-1 btn-primary text-white px-4 py-2 rounded-lg">
+          <button id="saveRNCData" class="flex-1 btn-primary text-white px-4 py-2 rounded-lg">
             Guardar
           </button>
         </div>
@@ -408,7 +563,7 @@
   </div>
 
   <!-- Modal de Confirmación -->
-  <div id="confirmModal" class="fixed inset-0 z-50 hidden">
+  <div id="confirmationModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black bg-opacity-50"></div>
     <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-md flex items-center justify-center">
       <div class="w-full bg-white rounded-xl shadow-2xl p-6 text-center">
@@ -416,14 +571,91 @@
           <i data-lucide="check" class="w-8 h-8 text-green-600"></i>
         </div>
         <h3 class="text-xl font-semibold text-gray-900 mb-2">¡Solicitud Enviada!</h3>
-        <p class="text-gray-600 mb-6">Tu solicitud ha sido enviada exitosamente. Te contactaremos pronto.</p>
-        <button id="closeConfirm" class="btn-primary text-white px-6 py-3 rounded-lg w-full">
+        <p class="text-gray-600">Tu solicitud ha sido enviada exitosamente.</p>
+        <p class="text-gray-600 mb-2">Tu número de orden es: <span id="orderIdDisplay" class="font-semibold text-blue-600"></span></p>
+        <p class="text-gray-600 mb-6">Te contactaremos pronto para confirmar los detalles.</p>
+        <button id="closeConfirmationModal" class="btn-primary text-white px-6 py-3 rounded-lg w-full">
           Entendido
         </button>
       </div>
     </div>
   </div>
 
-  <script src="/js/index.js"></script>
+  <!-- Modal PWA -->
+  <div id="pwaModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-md flex items-center justify-center">
+      <div class="w-full bg-white rounded-xl shadow-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">Instalar Aplicación</h3>
+          <button id="cancelPWA" class="text-gray-500 hover:text-gray-700">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+        <p class="text-gray-600 mb-6">¿Deseas instalar la aplicación para dar seguimiento a tu solicitud?</p>
+        <div class="flex gap-3">
+          <button id="cancelPWA" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+            No, gracias
+          </button>
+          <button id="installPWA" class="flex-1 btn-primary text-white px-4 py-2 rounded-lg">
+            Instalar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Botón de Seguimiento -->
+  <button id="trackOrder" class="fixed bottom-4 right-4 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 hidden">
+    <i data-lucide="truck" class="w-6 h-6"></i>
+  </button>
+
+  <script>
+// Función temporal para evitar errores fatales
+window.addEventListener('DOMContentLoaded', () => {
+  // Inicializar iconos si Lucide está disponible
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
+  
+  // Mostrar la pantalla de bienvenida
+  const welcomeScreen = document.getElementById('welcomeScreen');
+  const wizardApp = document.getElementById('wizardApp');
+  
+  if (welcomeScreen) {
+    welcomeScreen.classList.remove('hidden');
+  }
+  
+  if (wizardApp) {
+    wizardApp.classList.add('hidden');
+  }
+  
+  // Inicializar botón de inicio si existe
+  const startButton = document.getElementById('startButton');
+  if (startButton) {
+    startButton.addEventListener('click', () => {
+      if (welcomeScreen) welcomeScreen.classList.add('hidden');
+      if (wizardApp) wizardApp.classList.remove('hidden');
+    });
+  }
+  
+  // Inicializar botones de navegación
+  const prevButton = document.getElementById('prevButton');
+  const nextButton = document.getElementById('nextButton');
+  
+  if (prevButton) {
+    prevButton.addEventListener('click', () => {
+      console.log('Botón anterior clickeado');
+    });
+  }
+  
+  if (nextButton) {
+    nextButton.addEventListener('click', () => {
+      console.log('Botón siguiente clickeado');
+    });
+  }
+});
+</script>
+<!-- Script de index.js eliminado para evitar conflictos -->
 </body>
 </html>
