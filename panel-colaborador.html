@@ -4,11 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Panel — Colaborador</title>
-  <!-- ✅ Favicon -->
-<link rel="icon" type="image/x-icon" href="/img/favicon.ico" />
-<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
-<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
-<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1e3a8a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="TLC Colaborador">
+  <meta name="description" content="Panel de colaborador para gestión de servicios TLC">
+  
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="img/icon-512x512.png">
+  <link rel="apple-touch-icon" href="img/icon-192x192.png">
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <link rel="icon" type="image/x-icon" href="img/favicon-16x16.png" sizes="16x16" />
+  <link rel="icon" type="image/x-icon" href="img/favicon-32x32.png" sizes="32x32" />
+  <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -178,6 +190,52 @@
   <script src="js/notifications.js"></script>
   <script src="js/rating-system.js"></script>
   <script src="js/panel-colaborador.js"></script>
+  
+  <!-- PWA Service Worker -->
+  <script>
+    // Registrar Service Worker para PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js')
+          .then(function(registration) {
+            console.log('ServiceWorker registrado exitosamente:', registration.scope);
+          })
+          .catch(function(error) {
+            console.log('Error al registrar ServiceWorker:', error);
+          });
+      });
+    }
+
+    // Manejar instalación PWA
+    let deferredPrompt;
+    const installButton = document.createElement('button');
+    installButton.textContent = 'Instalar App';
+    installButton.className = 'fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 transition-colors z-50';
+    installButton.style.display = 'none';
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installButton.style.display = 'block';
+      document.body.appendChild(installButton);
+    });
+
+    installButton.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to the install prompt: ${outcome}`);
+        deferredPrompt = null;
+        installButton.style.display = 'none';
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      console.log('PWA instalada exitosamente');
+      installButton.style.display = 'none';
+    });
+  </script>
+  
   <script>
     // Inicializar iconos
     document.addEventListener('DOMContentLoaded', () => {

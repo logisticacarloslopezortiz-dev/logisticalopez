@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Solicitudes - TLC Transporte</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a365d">
+    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="img/icon-512x512.png">
+    <style>
+        .history-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .filter-group input, .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .requests-table {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .table-header {
+            background: #1a365d;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .table-content {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        th {
+            background: #f7fafc;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-completado {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        .status-cancelado {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+        
+        .status-en-proceso {
+            background: #fef5e7;
+            color: #744210;
+        }
+        
+        .order-type-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .type-regular {
+            background: #e6fffa;
+            color: #234e52;
+        }
+        
+        .type-fiscal {
+            background: #fef5e7;
+            color: #744210;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-view {
+            padding: 6px 12px;
+            background: #3182ce;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .btn-view:hover {
+            background: #2c5282;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            padding: 20px;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .pagination button:hover {
+            background: #f7fafc;
+        }
+        
+        .pagination button.active {
+            background: #3182ce;
+            color: white;
+            border-color: #3182ce;
+        }
+        
+        .no-requests {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+        
+        .detail-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+        
+        .detail-section h4 {
+            margin: 0 0 10px 0;
+            color: #2d3748;
+            border-bottom: 2px solid #3182ce;
+            padding-bottom: 5px;
+        }
+        
+        .detail-section p {
+            margin: 5px 0;
+            color: #4a5568;
+        }
+        
+        .service-details {
+            background: #edf2f7;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        @media (max-width: 768px) {
+            .filter-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .table-content {
+                font-size: 14px;
+            }
+            
+            th, td {
+                padding: 8px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <img src="img/logo.png" alt="TLC Logo" class="logo">
+                <span>TLC Transporte</span>
+            </div>
+            <div class="nav-links">
+                <a href="inicio.html">Inicio</a>
+                <a href="mi-negocio.html">Mi Negocio</a>
+                <a href="historial-solicitudes.html" class="active">Historial</a>
+                <a href="panel-colaborador.html">Colaboradores</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="history-container">
+        <h1>Historial de Solicitudes</h1>
+        
+        <div class="filters">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="filterDate">Fecha</label>
+                    <input type="date" id="filterDate">
+                </div>
+                <div class="filter-group">
+                    <label for="filterStatus">Estado</label>
+                    <select id="filterStatus">
+                        <option value="">Todos</option>
+                        <option value="Completado">Completado</option>
+                        <option value="Cancelado">Cancelado</option>
+                        <option value="En Proceso">En Proceso</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterService">Servicio</label>
+                    <select id="filterService">
+                        <option value="">Todos</option>
+                        <option value="Mudanza">Mudanza</option>
+                        <option value="Transporte Comercial">Transporte Comercial</option>
+                        <option value="Paquetería">Paquetería</option>
+                        <option value="Botes Mineros">Botes Mineros</option>
+                        <option value="Grúas">Grúas</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="searchId">Buscar ID</label>
+                    <input type="text" id="searchId" placeholder="TLC-01">
+                </div>
+                <button onclick="applyFilters()" class="btn-primary">Filtrar</button>
+                <button onclick="clearFilters()" class="btn-secondary">Limpiar</button>
+            </div>
+        </div>
+
+        <div class="requests-table">
+            <div class="table-header">
+                <h3>Solicitudes Procesadas</h3>
+                <span id="totalRequests">Total: 0</span>
+            </div>
+            <div class="table-content">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fecha</th>
+                            <th>Cliente</th>
+                            <th>Servicio</th>
+                            <th>Tipo</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requestsTableBody">
+                        <!-- Las solicitudes se cargarán aquí dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination" id="pagination">
+                <!-- La paginación se generará dinámicamente -->
+            </div>
+        </div>
+
+        <div class="no-requests" id="noRequests" style="display: none;">
+            <h3>No hay solicitudes en el historial</h3>
+            <p>Las solicitudes completadas o canceladas aparecerán aquí.</p>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalles de solicitud -->
+    <div id="requestDetailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Detalles de la Solicitud</h3>
+                <span class="close" onclick="closeRequestDetail()">&times;</span>
+            </div>
+            <div class="modal-body" id="requestDetailContent">
+                <!-- Los detalles se cargarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allRequests = [];
+        let filteredRequests = [];
+        let currentPage = 1;
+        const requestsPerPage = 10;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadHistoryRequests();
+        });
+
+        function loadHistoryRequests() {
+            // Cargar desde localStorage (solicitudes completadas/canceladas)
+            const historyRequests = JSON.parse(localStorage.getItem('historyRequests') || '[]');
+            
+            // Si hay Supabase configurado, también cargar desde allí
+            if (typeof supabaseConfig !== 'undefined') {
+                loadFromSupabase();
+            } else {
+                allRequests = historyRequests;
+                filteredRequests = [...allRequests];
+                displayRequests();
+            }
+        }
+
+        async function loadFromSupabase() {
+            try {
+                const requests = await supabaseConfig.getHistoryRequests();
+                allRequests = requests;
+                filteredRequests = [...allRequests];
+                displayRequests();
+            } catch (error) {
+                console.error('Error cargando desde Supabase:', error);
+                // Fallback a localStorage
+                const historyRequests = JSON.parse(localStorage.getItem('historyRequests') || '[]');
+                allRequests = historyRequests;
+                filteredRequests = [...allRequests];
+                displayRequests();
+            }
+        }
+
+        function displayRequests() {
+            const tbody = document.getElementById('requestsTableBody');
+            const totalElement = document.getElementById('totalRequests');
+            const noRequestsElement = document.getElementById('noRequests');
+            
+            if (filteredRequests.length === 0) {
+                tbody.innerHTML = '';
+                noRequestsElement.style.display = 'block';
+                document.querySelector('.requests-table').style.display = 'none';
+                return;
+            }
+
+            noRequestsElement.style.display = 'none';
+            document.querySelector('.requests-table').style.display = 'block';
+
+            const startIndex = (currentPage - 1) * requestsPerPage;
+            const endIndex = startIndex + requestsPerPage;
+            const pageRequests = filteredRequests.slice(startIndex, endIndex);
+
+            tbody.innerHTML = pageRequests.map(request => `
+                <tr>
+                    <td><strong>${request.id}</strong></td>
+                    <td>${new Date(request.createdAt).toLocaleDateString()}</td>
+                    <td>${request.clientName}</td>
+                    <td>${request.service}</td>
+                    <td>
+                        <span class="order-type-badge ${request.orderType === 'COMPROBANTE FISCAL FIJO' ? 'type-fiscal' : 'type-regular'}">
+                            ${request.orderType === 'COMPROBANTE FISCAL FIJO' ? 'FISCAL' : 'REGULAR'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge status-${request.status.toLowerCase().replace(' ', '-')}">
+                            ${request.status}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-view" onclick="viewRequestDetail('${request.id}')">Ver</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+
+            totalElement.textContent = `Total: ${filteredRequests.length}`;
+            generatePagination();
+        }
+
+        function generatePagination() {
+            const totalPages = Math.ceil(filteredRequests.length / requestsPerPage);
+            const paginationElement = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                paginationElement.innerHTML = '';
+                return;
+            }
+
+            let paginationHTML = '';
+            
+            // Botón anterior
+            if (currentPage > 1) {
+                paginationHTML += `<button onclick="changePage(${currentPage - 1})">Anterior</button>`;
+            }
+
+            // Números de página
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === currentPage) {
+                    paginationHTML += `<button class="active">${i}</button>`;
+                } else {
+                    paginationHTML += `<button onclick="changePage(${i})">${i}</button>`;
+                }
+            }
+
+            // Botón siguiente
+            if (currentPage < totalPages) {
+                paginationHTML += `<button onclick="changePage(${currentPage + 1})">Siguiente</button>`;
+            }
+
+            paginationElement.innerHTML = paginationHTML;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            displayRequests();
+        }
+
+        function applyFilters() {
+            const dateFilter = document.getElementById('filterDate').value;
+            const statusFilter = document.getElementById('filterStatus').value;
+            const serviceFilter = document.getElementById('filterService').value;
+            const idFilter = document.getElementById('searchId').value.toLowerCase();
+
+            filteredRequests = allRequests.filter(request => {
+                const matchDate = !dateFilter || request.createdAt.startsWith(dateFilter);
+                const matchStatus = !statusFilter || request.status === statusFilter;
+                const matchService = !serviceFilter || request.service === serviceFilter;
+                const matchId = !idFilter || request.id.toLowerCase().includes(idFilter);
+
+                return matchDate && matchStatus && matchService && matchId;
+            });
+
+            currentPage = 1;
+            displayRequests();
+        }
+
+        function clearFilters() {
+            document.getElementById('filterDate').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterService').value = '';
+            document.getElementById('searchId').value = '';
+            
+            filteredRequests = [...allRequests];
+            currentPage = 1;
+            displayRequests();
+        }
+
+        function viewRequestDetail(requestId) {
+            const request = allRequests.find(r => r.id === requestId);
+            if (!request) return;
+
+            const modal = document.getElementById('requestDetailModal');
+            const content = document.getElementById('requestDetailContent');
+
+            let detailHTML = `
+                <div class="request-detail">
+                    <div class="detail-section">
+                        <h4>Información General</h4>
+                        <p><strong>ID:</strong> ${request.id}</p>
+                        <p><strong>Tipo:</strong> ${request.orderType}</p>
+                        <p><strong>Estado:</strong> ${request.status}</p>
+                        <p><strong>Fecha:</strong> ${new Date(request.createdAt).toLocaleString()}</p>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4>Cliente</h4>
+                        <p><strong>Nombre:</strong> ${request.clientName}</p>
+                        <p><strong>Teléfono:</strong> ${request.clientPhone}</p>
+                        <p><strong>Email:</strong> ${request.clientEmail || 'No proporcionado'}</p>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Servicio</h4>
+                        <p><strong>Tipo:</strong> ${request.service}</p>
+                        <p><strong>Vehículo:</strong> ${request.vehicle}</p>
+                        <p><strong>Descripción:</strong> ${request.serviceDescription || 'No proporcionada'}</p>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Ubicaciones</h4>
+                        <p><strong>Recogida:</strong> ${request.pickupAddress}</p>
+                        <p><strong>Entrega:</strong> ${request.deliveryAddress}</p>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Programación</h4>
+                        <p><strong>Fecha:</strong> ${request.serviceDate}</p>
+                        <p><strong>Hora:</strong> ${request.serviceTime}</p>
+                    </div>
+            `;
+
+            // Agregar datos RNC si existen
+            if (request.rncData) {
+                detailHTML += `
+                    <div class="detail-section">
+                        <h4>Datos Fiscales</h4>
+                        <p><strong>RNC:</strong> ${request.rncData.rncNumber}</p>
+                        <p><strong>Empresa:</strong> ${request.rncData.companyName}</p>
+                    </div>
+                `;
+            }
+
+            // Agregar detalles específicos del servicio si existen
+            if (request.serviceDetails) {
+                detailHTML += `
+                    <div class="detail-section">
+                        <h4>Detalles Específicos del Servicio</h4>
+                        <div class="service-details">${formatServiceDetails(request.serviceDetails, request.service)}</div>
+                    </div>
+                `;
+            }
+
+            detailHTML += '</div>';
+            content.innerHTML = detailHTML;
+            modal.style.display = 'block';
+        }
+
+        function formatServiceDetails(details, serviceName) {
+            if (!details) return 'No hay detalles específicos';
+            
+            let formatted = '';
+            
+            switch(serviceName) {
+                case 'Mudanza':
+                    formatted += `Cantidad de camas: ${details.camas || 0}\n`;
+                    formatted += `Lavadoras: ${details.lavadoras || 0}\n`;
+                    formatted += `Estufas: ${details.estufas || 0}\n`;
+                    formatted += `Mesas: ${details.mesas || 0}\n`;
+                    formatted += `TVs: ${details.tvs || 0}\n`;
+                    formatted += `Bases: ${details.bases || 0}\n`;
+                    formatted += `Sillas de comedor: ${details.sillasComedor || 0}\n`;
+                    formatted += `Sillones individuales: ${details.sillonesIndividuales || 0}\n`;
+                    formatted += `Objetos delicados: ${details.objetosDelicados || 'No'}\n`;
+                    if (details.descripcionDelicados) {
+                        formatted += `Descripción de objetos delicados: ${details.descripcionDelicados}\n`;
+                    }
+                    break;
+                case 'Transporte Comercial':
+                    formatted += `Tipo de mercancía: ${details.tipoMercancia || 'No especificado'}\n`;
+                    formatted += `Carga frágil: ${details.cargaFragil || 'No'}\n`;
+                    formatted += `Peso estimado: ${details.pesoEstimado || 'No especificado'}\n`;
+                    formatted += `Formato de empaque: ${details.formatoEmpaque || 'No especificado'}\n`;
+                    formatted += `Requiere refrigeración: ${details.requiereRefrigeracion || 'No'}\n`;
+                    if (details.descripcion) {
+                        formatted += `Descripción: ${details.descripcion}\n`;
+                    }
+                    break;
+                case 'Paquetería':
+                    formatted += `Es una compra: ${details.esCompra || 'No'}\n`;
+                    formatted += `Es para recoger pedido: ${details.esRecogerPedido || 'No'}\n`;
+                    formatted += `Tipo de paquete: ${details.tipoPaquete || 'No especificado'}\n`;
+                    formatted += `Requiere embalaje adicional: ${details.requiereEmbalaje || 'No'}\n`;
+                    break;
+                case 'Botes Mineros':
+                    formatted += `Material a transportar: ${details.materialTransportar || 'No especificado'}\n`;
+                    formatted += `Volumen/Cantidad: ${details.volumenCantidad || 'No especificado'}\n`;
+                    formatted += `Tipo de camión: ${details.tipoCamion || 'No especificado'}\n`;
+                    formatted += `Acceso fácil con camión: ${details.accesoFacil || 'No especificado'}\n`;
+                    break;
+                case 'Grúas':
+                    formatted += `Tipo de servicio: ${details.tipoServicio || 'No especificado'}\n`;
+                    break;
+                default:
+                    formatted = JSON.stringify(details, null, 2);
+            }
+            
+            return formatted;
+        }
+
+        function closeRequestDetail() {
+            document.getElementById('requestDetailModal').style.display = 'none';
+        }
+
+        // Cerrar modal al hacer clic fuera
+        window.onclick = function(event) {
+            const modal = document.getElementById('requestDetailModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

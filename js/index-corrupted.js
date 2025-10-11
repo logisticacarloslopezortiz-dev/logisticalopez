@@ -1512,7 +1512,7 @@
   <!-- Modales de Servicios -->
   
   <!-- Modal Mudanza -->
-  <div id="mudanzaModalUnique" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50"></div>
+  <div id="mudanzaModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
       <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6">
@@ -1840,6 +1840,88 @@
             <h3 class="text-xl font-bold text-gray-800">Detalles de Servicio de Grúa</h3>
             <button onclick="closeServiceModal('gruasModal')" class="text-gray-500 hover:text-gray-700">
               <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+          </div>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de servicio de grúa</label>
+              <div class="space-y-2">
+                <label class="flex items-center">
+                  <input type="radio" name="gruas_tipo" value="remolque_vehiculos" class="mr-2">
+                  Remolque de vehículos averiados o accidentados 🚗
+                </label>
+                <label class="flex items-center">
+                  <input type="radio" name="gruas_tipo" value="maquinaria_pesada" class="mr-2">
+                  Traslado de maquinaria pesada 🏗️
+                </label>
+              </div>
+            </div>
+            
+            <div id="gruas_vehiculo_details" class="hidden space-y-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de vehículo</label>
+                <select id="gruas_tipo_vehiculo" class="w-full p-2 border rounded-lg">
+                  <option value="">Seleccionar...</option>
+                  <option value="auto">Automóvil</option>
+                  <option value="suv">SUV</option>
+                  <option value="pickup">Pickup</option>
+                  <option value="camion">Camión</option>
+                  <option value="motocicleta">Motocicleta</option>
+                </select>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Estado del vehículo</label>
+                <select id="gruas_estado_vehiculo" class="w-full p-2 border rounded-lg">
+                  <option value="">Seleccionar...</option>
+                  <option value="averiado">Averiado (no enciende)</option>
+                  <option value="accidentado">Accidentado</option>
+                  <option value="sin_llantas">Sin llantas</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+            </div>
+            
+            <div id="gruas_maquinaria_details" class="hidden space-y-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de maquinaria</label>
+                <input type="text" id="gruas_tipo_maquinaria" class="w-full p-2 border rounded-lg" placeholder="Ej: Excavadora, Bulldozer, etc.">
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Peso estimado (toneladas)</label>
+                <input type="number" id="gruas_peso_maquinaria" min="0" step="0.1" class="w-full p-2 border rounded-lg" placeholder="Ej: 15.5">
+              </div>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Descripción adicional</label>
+              <textarea id="gruas_descripcion" class="w-full p-2 border rounded-lg" rows="3" placeholder="Detalles sobre la situación, ubicación o requerimientos especiales..."></textarea>
+            </div>
+          </div>
+          
+          <div class="flex justify-end gap-3 mt-6">
+            <button onclick="closeServiceModal('gruasModal')" class="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button onclick="saveServiceDetails('gruas')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/google-sheets.js"></script>
+
+</body>
+</html>
+
   <!-- Modal Grúas -->
   <div id="gruasModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">

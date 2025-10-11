@@ -1,56 +1,109 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
-/* Glass Effect */
-.glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+@layer base {
+  /* Glass Effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
 }
 
-/* Buttons */
-.btn-primary {
-  @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200;
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.2s ease-in-out;
+  }
+  .btn-primary:hover {
+    background-color: #1d4ed8;
+  }
+
+  .btn-secondary {
+    background: #e5e7eb;
+    color: #374151;
+    font-weight: 600;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.2s ease-in-out;
+  }
+  .btn-secondary:hover {
+    background-color: #d1d5db;
+  }
+
+  /* Progress Steps */
+  .progress-step {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid #d1d5db;
+  }
+
+  .progress-step.active {
+    background-color: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+  }
+
+  .progress-step.completed {
+    background-color: #10b981;
+    color: #ffffff;
+    border-color: #10b981;
+  }
+
+  /* Form Inputs */
+  .form-input {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    transition: color 0.2s ease-in-out;
+  }
+  .form-input:focus {
+    outline: none;
+    border-color: transparent;
+    box-shadow: 0 0 0 2px #3b82f6;
+  }
+
+  /* Service Cards */
+  .service-card {
+    cursor: pointer;
+    border-width: 2px;
+    border-color: transparent;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
+  }
+  .service-card:hover {
+    border-color: #3b82f6;
+  }
+  .service-card.selected {
+    border-color: #3b82f6;
+    background-color: #eff6ff;
+  }
 }
 
-.btn-secondary {
-  @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200;
-}
-
-/* Animations */
-.fade-in {
-  animation: fadeIn 0.5s ease-in;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* Progress Steps */
-.progress-step {
-  @apply w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium;
-}
-
-.progress-step.active {
-  @apply bg-blue-600 text-white;
-}
-
-.progress-step.completed {
-  @apply bg-green-500 text-white;
-}
-
-/* Form Inputs */
-.form-input {
-  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
-}
-
-/* Service Cards */
-.service-card {
-  @apply cursor-pointer hover:border-blue-500 transition duration-200;
-}
-
-.service-card.selected {
-  @apply border-blue-500 bg-blue-50;
+@layer utilities {
+  .fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
 }

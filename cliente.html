@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TLC - Solicitud de Servicio</title>
+    <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- Header -->
+    <header class="glass border-b border-white/20 p-4">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <img src="img/1horizontal (1).png" alt="TLC Logo" class="h-10">
+                <h1 class="text-xl font-bold text-gray-800">Solicitud de Servicio</h1>
+            </div>
+            <div class="text-sm text-gray-600">
+                Paso <span id="currentStepNumber">1</span> de 6
+            </div>
+        </div>
+    </header>
+
+    <!-- Progress Bar -->
+    <div class="max-w-4xl mx-auto p-4">
+        <div class="glass rounded-lg p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="progress-step active" id="step-1">1</div>
+                <div class="flex-1 h-1 bg-gray-200 mx-2">
+                    <div class="h-full bg-blue-600 transition-all duration-300" id="progress-bar" style="width: 16.66%"></div>
+                </div>
+                <div class="progress-step" id="step-2">2</div>
+                <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
+                <div class="progress-step" id="step-3">3</div>
+                <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
+                <div class="progress-step" id="step-4">4</div>
+                <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
+                <div class="progress-step" id="step-5">5</div>
+                <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
+                <div class="progress-step" id="step-6">6</div>
+            </div>
+            <div class="text-center">
+                <h2 id="stepTitle" class="text-lg font-semibold text-gray-800">Datos Personales</h2>
+                <p id="stepDescription" class="text-sm text-gray-600">Ingrese sus datos personales para continuar</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto p-4">
+        <div class="glass rounded-lg p-8">
+            <!-- Paso 1: Datos Personales -->
+            <div id="step1" class="step-content fade-in">
+                <div class="space-y-6">
+                    <div>
+                        <label for="fullName" class="block text-sm font-medium text-gray-700 mb-2">
+                            Nombre Completo *
+                        </label>
+                        <input type="text" id="fullName" class="form-input" placeholder="Ingrese su nombre completo" required>
+                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                    </div>
+                    
+                    <div>
+                        <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">
+                            Teléfono *
+                        </label>
+                        <input type="tel" id="phone" class="form-input" placeholder="(000) 000-0000" required>
+                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                    </div>
+                    
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700 mb-2">
+                            Correo Electrónico *
+                        </label>
+                        <input type="email" id="email" class="form-input" placeholder="correo@ejemplo.com" required>
+                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <input type="checkbox" id="rncCheckbox" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="rncCheckbox" class="text-sm font-medium text-gray-700">
+                            ¿Desea solicitar con RNC?
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Paso 2: Selección de Servicio -->
+            <div id="step2" class="step-content hidden">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div class="service-card" data-service="Mudanza">
+                        <i data-lucide="home" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
+                        <h3 class="font-semibold text-center">Mudanza</h3>
+                        <p class="text-sm text-gray-600 text-center">Servicio de mudanza</p>
+                    </div>
+                    
+                    <div class="service-card" data-service="Paquetería">
+                        <i data-lucide="package" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
+                        <h3 class="font-semibold text-center">Paquetería</h3>
+                        <p class="text-sm text-gray-600 text-center">Envío de paquetes</p>
+                    </div>
+                    
+                    <div class="service-card" data-service="Transporte Comercial">
+                        <i data-lucide="truck" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
+                        <h3 class="font-semibold text-center">Transporte Comercial</h3>
+                        <p class="text-sm text-gray-600 text-center">Transporte de mercancías</p>
+                    </div>
+                    
+                    <div class="service-card" data-service="Carga pesada">
+                        <i data-lucide="weight" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
+                        <h3 class="font-semibold text-center">Carga Pesada</h3>
+                        <p class="text-sm text-gray-600 text-center">Transporte pesado</p>
+                    </div>
+                    
+                    <div class="service-card" data-service="Fletes">
+                        <i data-lucide="truck" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
+                        <h3 class="font-semibold text-center">Fletes</h3>
+                        <p class="text-sm text-gray-600 text-center">Servicio de fletes</p>
+                    </div>
+                    
+                    <div class="service-card" data-service="Botes Aduanero">
+                        <i data-lucide="anchor" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
+                        <h3 class="font-semibold text-center">Botes Aduanero</h3>
+                        <p class="text-sm text-gray-600 text-center">Transporte marítimo</p>
+                    </div>
+                    
+                    <div class="service-card" data-service="Grúas">
+                        <i data-lucide="wrench" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
+                        <h3 class="font-semibold text-center">Grúas</h3>
+                        <p class="text-sm text-gray-600 text-center">Servicio de grúas</p>
+                    </div>
+                </div>
+                <div class="error-message hidden text-red-500 text-sm mt-4 text-center"></div>
+            </div>
+
+   <!-- Paso 3: Tipo de Vehículo -->
+<div id="step3" class="step-content hidden">
+  <h2 class="text-xl font-semibold mb-6 text-center text-gray-800">
+    Selecciona el tipo de vehículo
+  </h2>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+    <!-- 🚚 Camión Pequeño -->
+    <div
+      class="vehicle-card group border-2 border-transparent rounded-2xl bg-white/70 backdrop-blur-sm cursor-pointer hover:border-blue-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden"
+      data-vehicle="Camión Pequeño"
+    >
+      <div class="relative overflow-hidden rounded-t-2xl aspect-[16/9]">
+        <img
+          src="img-vehiculo/camion-pequeño.jpg"
+          alt="Camión Pequeño"
+          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-hover:opacity-90"
+        />
+      </div>
+      <div class="p-4 text-center">
+        <h3 class="font-semibold text-xl text-gray-800 mb-1">Camión Pequeño</h3>
+        <p class="text-sm text-gray-600">Ideal para mudanzas pequeñas o paquetería ligera.</p>
+      </div>
+    </div>
+
+    
+    <!-- 🚚 Camión Grande -->
+    <div
+      class="vehicle-card group border-2 border-transparent rounded-2xl bg-white/70 backdrop-blur-sm cursor-pointer hover:border-blue-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden"
+      data-vehicle="Camión Grande"
+    >
+      <div class="relative overflow-hidden rounded-t-2xl aspect-[16/9]">
+        <img
+          src="img-vehiculo/camion-grande.jpg"
+          alt="Camión Grande"
+          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-hover:opacity-90"
+        />
+      </div>
+      <div class="p-4 text-center">
+        <h3 class="font-semibold text-xl text-gray-800 mb-1">Camión Grande</h3>
+        <p class="text-sm text-gray-600">Ideal para mudanzas grandes o transporte pesado.</p>
+      </div>
+    </div>
+
+    <!-- 🚐 Furgoneta -->
+    <div
+      class="vehicle-card group border-2 border-transparent rounded-2xl bg-white/70 backdrop-blur-sm cursor-pointer hover:border-blue-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden"
+      data-vehicle="Furgoneta"
+    >
+      <div class="relative overflow-hidden rounded-t-2xl aspect-[16/9]">
+        <img
+          src="img-vehiculo/furgoneta.jpg"
+          alt="Furgoneta"
+          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-hover:opacity-90"
+        />
+      </div>
+      <div class="p-4 text-center">
+        <h3 class="font-semibold text-xl text-gray-800 mb-1">Furgoneta</h3>
+        <p class="text-sm text-gray-600">Ideal para transporte de paquetes o servicios express.</p>
+      </div>
+    </div>
+
+    <!-- 🏍️ Motocicleta -->
+    <div
+      class="vehicle-card group border-2 border-transparent rounded-2xl bg-white/70 backdrop-blur-sm cursor-pointer hover:border-blue-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden"
+      data-vehicle="Motocicleta"
+    >
+      <div class="relative overflow-hidden rounded-t-2xl aspect-[16/9]">
+        <img
+          src="img-vehiculo/motor.jpg"
+          alt="Motocicleta"
+          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-hover:opacity-90"
+        />
+      </div>
+      <div class="p-4 text-center">
+        <h3 class="font-semibold text-xl text-gray-800 mb-1">Motocicleta</h3>
+        <p class="text-sm text-gray-600">Perfecta para entregas rápidas y transporte urbano.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-6 text-center">
+    <button
+      id="nextStep3"
+      class="px-8 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+    >
+      Continuar
+    </button>
+  </div>
+
+  <div class="error-message hidden text-red-500 text-sm mt-4 text-center"></div>
+</div>
+
+
+
+            <!-- Paso 4: Ubicación -->
+            <div id="step4" class="step-content hidden">
+                <div class="space-y-6">
+                    <div>
+                        <label for="pickupAddress" class="block text-sm font-medium text-gray-700 mb-2">
+                            Dirección de Recogida *
+                        </label>
+                        <input type="text" id="pickupAddress" class="form-input" placeholder="Ingrese la dirección de recogida" required>
+                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                    </div>
+                    
+                    <div>
+                        <label for="deliveryAddress" class="block text-sm font-medium text-gray-700 mb-2">
+                            Dirección de Entrega *
+                        </label>
+                        <input type="text" id="deliveryAddress" class="form-input" placeholder="Ingrese la dirección de entrega" required>
+                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                    </div>
+                    
+                    <div id="map" class="w-full h-64 bg-gray-200 rounded-lg border border-gray-300 flex items-center justify-center">
+                        <div class="text-center text-gray-500">
+                            <i data-lucide="map-pin" class="w-8 h-8 mx-auto mb-2"></i>
+                            <p>Mapa se cargará aquí</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Paso 5: Fecha y Hora -->
+            <div id="step5" class="step-content hidden">
+                <div class="space-y-6">
+                    <div>
+                        <label for="serviceDate" class="block text-sm font-medium text-gray-700 mb-2">
+                            Fecha del Servicio *
+                        </label>
+                        <input type="date" id="serviceDate" class="form-input" required>
+                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                    </div>
+                    
+                    <div>
+                        <label for="serviceTime" class="block text-sm font-medium text-gray-700 mb-2">
+                            Hora del Servicio *
+                        </label>
+                        <select id="serviceTime" class="form-input" required>
+                            <option value="">Seleccione una hora</option>
+                            <option value="08:00">8:00 AM</option>
+                            <option value="09:00">9:00 AM</option>
+                            <option value="10:00">10:00 AM</option>
+                            <option value="11:00">11:00 AM</option>
+                            <option value="12:00">12:00 PM</option>
+                            <option value="13:00">1:00 PM</option>
+                            <option value="14:00">2:00 PM</option>
+                            <option value="15:00">3:00 PM</option>
+                            <option value="16:00">4:00 PM</option>
+                            <option value="17:00">5:00 PM</option>
+                            <option value="18:00">6:00 PM</option>
+                        </select>
+                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Paso 6: Confirmación -->
+            <div id="step6" class="step-content hidden">
+                <div class="space-y-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Resumen de su Solicitud</h3>
+                    
+                    <div class="glass rounded-lg p-4 space-y-3">
+                        <h4 class="font-semibold text-gray-700">Datos del Cliente</h4>
+                        <div class="text-sm text-gray-600">
+                            <p><strong>Nombre:</strong> <span id="summaryName"></span></p>
+                            <p><strong>Teléfono:</strong> <span id="summaryPhone"></span></p>
+                            <p><strong>Email:</strong> <span id="summaryEmail"></span></p>
+                            <div id="summaryRNC" class="hidden">
+                                <p><strong>Empresa:</strong> <span id="summaryCompany"></span></p>
+                                <p><strong>RNC:</strong> <span id="summaryRNCNumber"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass rounded-lg p-4 space-y-3">
+                        <h4 class="font-semibold text-gray-700">Detalles del Servicio</h4>
+                        <div class="text-sm text-gray-600">
+                            <p><strong>Servicio:</strong> <span id="summaryService"></span></p>
+                            <p><strong>Vehículo:</strong> <span id="summaryVehicle"></span></p>
+                            <p><strong>Fecha:</strong> <span id="summaryDate"></span></p>
+                            <p><strong>Hora:</strong> <span id="summaryTime"></span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="glass rounded-lg p-4 space-y-3">
+                        <h4 class="font-semibold text-gray-700">Ubicaciones</h4>
+                        <div class="text-sm text-gray-600">
+                            <p><strong>Recogida:</strong> <span id="summaryPickup"></span></p>
+                            <p><strong>Entrega:</strong> <span id="summaryDelivery"></span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div class="flex justify-between mt-8">
+                <button id="prevBtn" class="btn-secondary hidden">
+                    <i data-lucide="chevron-left" class="w-4 h-4 mr-2"></i>
+                    Anterior
+                </button>
+                <div class="flex-1"></div>
+                <button id="nextBtn" class="btn-primary">
+                    Siguiente
+                    <i data-lucide="chevron-right" class="w-4 h-4 ml-2"></i>
+                </button>
+                <button id="submitBtn" class="btn-primary hidden">
+                    <i data-lucide="send" class="w-4 h-4 mr-2"></i>
+                    Enviar Solicitud
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal RNC -->
+    <div id="rncModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="glass rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Datos de la Empresa</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="companyName" class="block text-sm font-medium text-gray-700 mb-2">
+                        Nombre de la Empresa *
+                    </label>
+                    <input type="text" id="companyName" class="form-input" placeholder="Nombre de la empresa" required>
+                    <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                </div>
+                
+                <div>
+                    <label for="rncNumber" class="block text-sm font-medium text-gray-700 mb-2">
+                        RNC (9 dígitos) *
+                    </label>
+                    <input type="text" id="rncNumber" class="form-input" placeholder="000000000" maxlength="9" required>
+                    <div class="error-message hidden text-red-500 text-sm mt-1"></div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 mt-6">
+                <button id="cancelRNC" class="btn-secondary">Cancelar</button>
+                <button id="saveRNC" class="btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Éxito -->
+    <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="glass rounded-lg p-8 w-full max-w-md mx-4 text-center">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="check" class="w-8 h-8 text-green-600"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-800 mb-2">¡Solicitud Enviada!</h3>
+            <p class="text-gray-600 mb-6">Su solicitud ha sido enviada exitosamente. Nos pondremos en contacto con usted pronto.</p>
+            
+            <div class="space-y-3">
+                <button id="downloadApp" class="btn-primary w-full">
+                    <i data-lucide="smartphone" class="w-4 h-4 mr-2"></i>
+                    📱 Descargar nuestra app para seguimiento
+                </button>
+                <button id="closeSuccess" class="btn-secondary w-full">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/cliente.js" defer></script>
+    <script>
+        // Inicializar iconos de Lucide
+        document.addEventListener('DOMContentLoaded', function() {
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

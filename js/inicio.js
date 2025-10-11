@@ -10,7 +10,52 @@ const NOTIFICATION_DURATION = 5000; // 5 segundos por defecto
 
 // Funciones utilitarias
 function loadOrders() {
-  return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+  // Cargar desde localStorage y desde supabase si está disponible
+  let orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+  
+  // Si hay configuración de Supabase, intentar cargar desde allí también
+  if (typeof supabaseConfig !== 'undefined' && supabaseConfig.url) {
+    loadOrdersFromSupabase().then(supabaseOrders => {
+      if (supabaseOrders && supabaseOrders.length > 0) {
+        // Combinar órdenes locales y de Supabase, evitando duplicados
+        const combinedOrders = [...orders];
+        supabaseOrders.forEach(supabaseOrder => {
+          if (!combinedOrders.find(order => order.id === supabaseOrder.id)) {
+            combinedOrders.push(supabaseOrder);
+          }
+        });
+        allOrders = combinedOrders;
+        saveOrders(allOrders);
+        updateDashboard();
+        renderOrders();
+      }
+    }).catch(error => {
+      console.log('Error loading from Supabase:', error);
+    });
+  }
+  
+  return orders;
+}
+
+async function loadOrdersFromSupabase() {
+  try {
+    if (typeof supabaseConfig === 'undefined') return [];
+    
+    const response = await fetch(`${supabaseConfig.url}/rest/v1/orders`, {
+      headers: {
+        'apikey': supabaseConfig.key,
+        'Authorization': `Bearer ${supabaseConfig.key}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (error) {
+    console.log('Error fetching from Supabase:', error);
+  }
+  return [];
 }
 
 function saveOrders(orders) {

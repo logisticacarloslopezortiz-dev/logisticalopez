@@ -53,7 +53,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   // No interceptar solicitudes a CDN de Tailwind
   if (event.request.url.includes('cdn.tailwindcss.com')) {
-    return;
+    return fetch(event.request);
   }
 
   event.respondWith(
