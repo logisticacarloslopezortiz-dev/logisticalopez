@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
 const webpush = require('web-push');
@@ -21,6 +21,10 @@ webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 // Endpoint para obtener la clave pública
 app.get('/api/vapidPublicKey', (_req, res) => {
   res.json({ key: VAPID_PUBLIC_KEY });
+});
+
+app.get('/api/maps-key', (req, res) => {
+    res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
 // Endpoint para enviar push a una suscripción

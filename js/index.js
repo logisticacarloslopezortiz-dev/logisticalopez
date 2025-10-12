@@ -64,6 +64,40 @@ function setupEventListeners() {
   if (orderForm) {
     orderForm.addEventListener('submit', submitOrder);
   }
+
+  // RNC radio buttons
+  const rncRadios = document.querySelectorAll('input[name="needsRNC"]');
+  rncRadios.forEach(radio => {
+    radio.addEventListener('change', toggleRNCFields);
+  });
+
+  // Service modal buttons
+  const serviceModal = document.getElementById('serviceModal');
+  if (serviceModal) {
+    const closeButton = document.getElementById('closeServiceModal');
+    if (closeButton) {
+      closeButton.addEventListener('click', () => closeServiceModal('serviceModal'));
+    }
+    const cancelButton = document.getElementById('cancelServiceModal');
+    if (cancelButton) {
+      cancelButton.addEventListener('click', () => closeServiceModal('serviceModal'));
+    }
+    const saveButton = document.getElementById('saveServiceModal');
+    if (saveButton) {
+      saveButton.addEventListener('click', () => {
+        saveServiceDetails(selectedService);
+        closeServiceModal('serviceModal');
+      });
+    }
+  }
+}
+
+function toggleRNCFields() {
+  const rncFields = document.getElementById('rncFields');
+  const rncYesRadio = document.querySelector('input[name="needsRNC"][value="yes"]');
+  if (rncFields && rncYesRadio) {
+    rncFields.classList.toggle('hidden', !rncYesRadio.checked);
+  }
 }
 
 // Initialize Google Maps
@@ -253,19 +287,19 @@ function updateNavigationButtons() {
 
 // Select service
 function selectService(service) {
-  selectedService = service;
-  
-  // Update UI
-  const serviceCards = document.querySelectorAll('.service-card');
-  serviceCards.forEach(card => {
-    card.classList.remove('selected');
-    if (card.dataset.service === service) {
-      card.classList.add('selected');
+    selectedService = service;
+
+    const serviceCards = document.querySelectorAll('.service-card');
+    serviceCards.forEach(card => {
+        card.classList.remove('border-blue-500', 'bg-blue-50');
+        if (card.dataset.service === service) {
+            card.classList.add('border-blue-500', 'bg-blue-50');
+        }
+    });
+
+    if (service === 'Mudanza' || service === 'Transporte Comercial' || service === 'Paquetería' || service === 'Botes Mineros' || service === 'Grúas') {
+        openServiceModal(service);
     }
-  });
-  
-  // Clear error if any
-  hideError();
 }
 
 // Select vehicle
@@ -431,11 +465,270 @@ function resetWizard() {
 }
 
 // Service modal functions
-function openServiceModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (modal) {
-    modal.classList.remove('hidden');
-  }
+function openServiceModal(serviceType) {
+    const modal = document.getElementById('serviceModal');
+    const title = document.getElementById('serviceModalTitle');
+    const content = document.getElementById('serviceModalContent');
+
+    if (modal && title && content) {
+        title.textContent = `Detalles de ${serviceType}`;
+        content.innerHTML = generateServiceModalContent(serviceType);
+        modal.classList.remove('hidden');
+    }
+}
+
+function generateServiceModalContent(serviceType) {
+    switch (serviceType) {
+        case 'Mudanza':
+            return `
+                <h4 class="font-medium text-gray-800">Inventario de artículos:</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Camas</label>
+                        <input type="number" id="camas" min="0" class="form-input" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Lavadoras</label>
+                        <input type="number" id="lavadoras" min="0" class="form-input" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Estufas</label>
+                        <input type="number" id="estufas" min="0" class="form-input" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mesas</label>
+                        <input type="number" id="mesas" min="0" class="form-input" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Televisores</label>
+                        <input type="number" id="televisores" min="0" class="form-input" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Bases/Cómodas</label>
+                        <input type="number" id="bases" min="0" class="form-input" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Sillas de Comedor</label>
+                        <input type="number" id="sillasComedor" min="0" class="form-input" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Sillones Individuales</label>
+                        <input type="number" id="sillonesIndividuales" min="0" class="form-input" placeholder="0">
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">¿Tienes objetos delicados?</label>
+                    <div class="flex gap-4 mb-3">
+                        <label class="flex items-center">
+                            <input type="radio" name="objetosDelicados" value="si" class="mr-2">
+                            Sí
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="objetosDelicados" value="no" class="mr-2">
+                            No
+                        </label>
+                    </div>
+                    <div id="descripcionDelicados" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700">Descripción de objetos delicados</label>
+                        <textarea id="descripcionObjetosDelicados" class="form-input" rows="3" placeholder="Describe los objetos delicados que requieren cuidado especial..."></textarea>
+                    </div>
+                </div>
+            `;
+        case 'Transporte Comercial':
+            return `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿Qué tipo de mercancía desea transportar?</label>
+                        <select id="tipoMercancia" class="form-input">
+                            <option value="">Seleccionar...</option>
+                            <option value="alimentos">Alimentos</option>
+                            <option value="electrodomesticos">Electrodomésticos</option>
+                            <option value="ropa">Ropa</option>
+                            <option value="materiales-construccion">Materiales de construcción</option>
+                            <option value="otros">Otros</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿La carga es frágil o requiere manejo especial?</label>
+                        <div class="flex gap-4 mt-2">
+                            <label class="flex items-center">
+                                <input type="radio" name="cargaFragil" value="si" class="mr-2">
+                                Sí
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="cargaFragil" value="no" class="mr-2">
+                                No
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿Cuál es el peso total estimado de la carga?</label>
+                        <input type="text" id="pesoEstimado" class="form-input" placeholder="Ej: 500 kg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿La carga está empacada en cajas, pallets, bultos sueltos u otro formato?</label>
+                        <select id="formatoEmpaque" class="form-input">
+                            <option value="">Seleccionar...</option>
+                            <option value="cajas">Cajas</option>
+                            <option value="pallets">Pallets</option>
+                            <option value="bultos-sueltos">Bultos sueltos</option>
+                            <option value="otro">Otro formato</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿Requiere refrigeración o temperatura controlada?</label>
+                        <div class="flex gap-4 mt-2">
+                            <label class="flex items-center">
+                                <input type="radio" name="refrigeracion" value="si" class="mr-2">
+                                Sí
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="refrigeracion" value="no" class="mr-2">
+                                No
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Descripción adicional</label>
+                        <textarea id="descripcionCargaComercial" class="form-input" rows="3" placeholder="Proporciona detalles adicionales sobre la carga..."></textarea>
+                    </div>
+                </div>
+            `;
+        case 'Paquetería':
+            return `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tipo de servicio</label>
+                        <div class="flex gap-4 mt-2">
+                            <label class="flex items-center">
+                                <input type="radio" name="tipoServicioPaqueteria" value="compra" class="mr-2">
+                                Es una compra
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="tipoServicioPaqueteria" value="recoger" class="mr-2">
+                                Es para recoger un pedido
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿Qué tipo de paquete desea enviar?</label>
+                        <select id="tipoPaquete" class="form-input">
+                            <option value="">Seleccionar...</option>
+                            <option value="caja">Caja</option>
+                            <option value="sobre">Sobre</option>
+                            <option value="bolsa">Bolsa</option>
+                            <option value="paquete-fragil">Paquete frágil</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿Requiere embalaje adicional?</label>
+                        <div class="flex gap-4 mt-2">
+                            <label class="flex items-center">
+                                <input type="radio" name="embalajeAdicional" value="si" class="mr-2">
+                                Sí
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="embalajeAdicional" value="no" class="mr-2">
+                                No
+                            </label>
+                        </div>
+                        <div id="tipoEmbalaje" class="hidden mt-2">
+                            <select id="tipoEmbalajeSelect" class="form-input">
+                                <option value="">Tipo de embalaje...</option>
+                                <option value="caja-reforzada">Caja reforzada</option>
+                                <option value="burbuja">Protección con burbuja</option>
+                                <option value="proteccion-especial">Protección especial</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Descripción del paquete</label>
+                        <textarea id="descripcionPaqueteria" class="form-input" rows="3" placeholder="Describe el contenido del paquete..."></textarea>
+                    </div>
+                </div>
+            `;
+        case 'Botes Mineros':
+            return `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿Qué material se transportará?</label>
+                        <select id="tipoMaterial" class="form-input">
+                            <option value="">Seleccionar material...</option>
+                            <option value="arena-procesada">Arena procesada 🏖️</option>
+                            <option value="grava-gravilla">Grava y gravilla 🪨</option>
+                            <option value="arena-rio">Arena de río o de construcción</option>
+                            <option value="bloques-escombros">Bloques y escombros de demolición 🧱</option>
+                            <option value="desperdicios-construccion">Desperdicios de construcción</option>
+                            <option value="tierra-relleno">Tierra y relleno</option>
+                            <option value="materiales-pesados">Materiales pesados a granel</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Volumen de cantidad</label>
+                        <input type="text" id="volumenCantidad" class="form-input" placeholder="Ej: 10 metros cúbicos">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tipo de camión requerido</label>
+                        <select id="tipoCamion" class="form-input">
+                            <option value="">Seleccionar tipo...</option>
+                            <option value="abierto">Camión abierto</option>
+                            <option value="cerrado">Camión cerrado</option>
+                            <option value="plataforma">Plataforma</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">¿Se puede acceder fácilmente con camión?</label>
+                        <div class="flex gap-4 mt-2">
+                            <label class="flex items-center">
+                                <input type="radio" name="accesoFacil" value="si" class="mr-2">
+                                Sí
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="accesoFacil" value="no" class="mr-2">
+                                No
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Descripción adicional</label>
+                        <textarea id="descripcionBotesMinero" class="form-input" rows="3" placeholder="Proporciona detalles adicionales sobre el material y ubicación..."></textarea>
+                    </div>
+                </div>
+            `;
+        case 'Grúas':
+            return `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tipo de servicio de grúa</label>
+                        <div class="space-y-2 mt-2">
+                            <label class="flex items-center">
+                                <input type="radio" name="tipoServicioGrua" value="remolque-vehiculos" class="mr-2">
+                                Remolque de vehículos averiados o accidentados 🚗
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="tipoServicioGrua" value="maquinaria-pesada" class="mr-2">
+                                Traslado de maquinaria pesada 🏗️
+                            </label>
+                        </div>
+                    </div>
+                    <div id="detallesVehiculo" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700">Detalles del vehículo</label>
+                        <input type="text" id="detallesVehiculoInput" class="form-input" placeholder="Marca, modelo, año del vehículo">
+                    </div>
+                    <div id="detallesMaquinaria" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700">Detalles de la maquinaria</label>
+                        <input type="text" id="detallesMaquinariaInput" class="form-input" placeholder="Tipo de maquinaria, peso aproximado">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Descripción del servicio</label>
+                        <textarea id="descripcionGrua" class="form-input" rows="3" placeholder="Describe la situación y cualquier detalle importante..."></textarea>
+                    </div>
+                </div>
+            `;
+        default:
+            return '<p>No hay detalles adicionales para este servicio.</p>';
+    }
 }
 
 function closeServiceModal(modalId) {

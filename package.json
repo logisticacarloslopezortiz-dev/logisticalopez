@@ -5,7 +5,8 @@
   "main": "sw.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tailwindcss -i ./css/styles.css -o ./css/output.css --watch"
+    "build": "tailwindcss -i ./css/styles.css -o ./css/output.css --minify",
+    "dev": "tailwindcss -i ./css/styles.css -o ./css/output.css --watch"
   },
   "repository": {
     "type": "git",
