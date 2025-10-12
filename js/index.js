@@ -749,63 +749,6 @@ function saveServiceDetails(serviceType) {
   });
 }
 
-// PWA Installation functions
-async function installApp() {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response to the install prompt: ${outcome}`);
-    deferredPrompt = null;
-    
-    // Hide install buttons after installation attempt
-    const installButtons = document.querySelectorAll('#installAppWelcome, .install-app-btn, #installAppFooter');
-    installButtons.forEach(btn => {
-      if (btn && outcome === 'accepted') btn.style.display = 'none';
-    });
-  } else {
-    // Fallback for iOS or when prompt is not available
-    const userAgent = navigator.userAgent.toLowerCase();
-    let instructions = '';
-    
-    if (userAgent.includes('iphone') || userAgent.includes('ipad')) {
-      instructions = 'Para instalar en iOS:\n1. Toca el botón "Compartir" (⬆️)\n2. Selecciona "Agregar a pantalla de inicio"\n3. Confirma la instalación';
-    } else if (userAgent.includes('android')) {
-      instructions = 'Para instalar en Android:\n1. Abre el menú del navegador (⋮)\n2. Selecciona "Instalar app" o "Agregar a pantalla de inicio"\n3. Confirma la instalación';
-    } else {
-      instructions = 'Para instalar la app:\n\niOS: Toca "Compartir" → "Agregar a pantalla de inicio"\nAndroid: Menú del navegador → "Instalar app"';
-    }
-    
-    alert(instructions);
-  }
-}
-
-// PWA variables
-let deferredPrompt;
-
-// PWA Installation
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  
-  // Show install buttons
-  const installButtons = document.querySelectorAll('#installAppWelcome, .install-app-btn, #installAppFooter');
-  installButtons.forEach(btn => {
-    if (btn) btn.style.display = 'flex';
-  });
-});
-
-// Register service worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('SW registered: ', registration);
-      })
-      .catch((registrationError) => {
-        console.log('SW registration failed: ', registrationError);
-      });
-  });
-}
 
 // Export functions for global access
 window.startWizard = startWizard;
