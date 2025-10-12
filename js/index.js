@@ -250,18 +250,25 @@ function showStep(step) {
 
 // Update progress steps
 function updateProgressSteps() {
-  for (let i = 1; i <= 4; i++) {
-    const progressStep = document.querySelector(`[data-step="${i}"]`);
-    if (progressStep) {
-      progressStep.classList.remove('active', 'completed');
-      
-      if (i < currentStep) {
-        progressStep.classList.add('completed');
-      } else if (i === currentStep) {
-        progressStep.classList.add('active');
-      }
-    }
-  }
+    const progressSteps = document.querySelectorAll('.progress-step');
+    const progressBar = document.getElementById('progressBar');
+
+    progressSteps.forEach((step, index) => {
+        const stepNumber = index + 1;
+        if (stepNumber < currentStep) {
+            step.classList.add('completed');
+            step.classList.remove('active');
+        } else if (stepNumber === currentStep) {
+            step.classList.add('active');
+            step.classList.remove('completed');
+        } else {
+            step.classList.remove('active', 'completed');
+        }
+    });
+
+    const totalSteps = progressSteps.length;
+    const progressPercentage = ((currentStep - 1) / (totalSteps - 1)) * 100;
+    progressBar.style.width = `${progressPercentage}%`;
 }
 
 // Update navigation buttons
@@ -478,256 +485,128 @@ function openServiceModal(serviceType) {
 }
 
 function generateServiceModalContent(serviceType) {
+    let content = '';
     switch (serviceType) {
-        case 'Mudanza':
-            return `
-                <h4 class="font-medium text-gray-800">Inventario de artículos:</h4>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Camas</label>
-                        <input type="number" id="camas" min="0" class="form-input" placeholder="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Lavadoras</label>
-                        <input type="number" id="lavadoras" min="0" class="form-input" placeholder="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Estufas</label>
-                        <input type="number" id="estufas" min="0" class="form-input" placeholder="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Mesas</label>
-                        <input type="number" id="mesas" min="0" class="form-input" placeholder="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Televisores</label>
-                        <input type="number" id="televisores" min="0" class="form-input" placeholder="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Bases/Cómodas</label>
-                        <input type="number" id="bases" min="0" class="form-input" placeholder="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Sillas de Comedor</label>
-                        <input type="number" id="sillasComedor" min="0" class="form-input" placeholder="0">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Sillones Individuales</label>
-                        <input type="number" id="sillonesIndividuales" min="0" class="form-input" placeholder="0">
-                    </div>
-                </div>
-                <div class="mt-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">¿Tienes objetos delicados?</label>
-                    <div class="flex gap-4 mb-3">
-                        <label class="flex items-center">
-                            <input type="radio" name="objetosDelicados" value="si" class="mr-2">
-                            Sí
-                        </label>
-                        <label class="flex items-center">
-                            <input type="radio" name="objetosDelicados" value="no" class="mr-2">
-                            No
-                        </label>
-                    </div>
-                    <div id="descripcionDelicados" class="hidden">
-                        <label class="block text-sm font-medium text-gray-700">Descripción de objetos delicados</label>
-                        <textarea id="descripcionObjetosDelicados" class="form-input" rows="3" placeholder="Describe los objetos delicados que requieren cuidado especial..."></textarea>
-                    </div>
-                </div>
-            `;
-        case 'Transporte Comercial':
-            return `
+        case 'Carga Pesada':
+            content = `
                 <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿Qué tipo de mercancía desea transportar?</label>
-                        <select id="tipoMercancia" class="form-input">
-                            <option value="">Seleccionar...</option>
-                            <option value="alimentos">Alimentos</option>
-                            <option value="electrodomesticos">Electrodomésticos</option>
-                            <option value="ropa">Ropa</option>
-                            <option value="materiales-construccion">Materiales de construcción</option>
-                            <option value="otros">Otros</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿La carga es frágil o requiere manejo especial?</label>
-                        <div class="flex gap-4 mt-2">
-                            <label class="flex items-center">
-                                <input type="radio" name="cargaFragil" value="si" class="mr-2">
-                                Sí
-                            </label>
-                            <label class="flex items-center">
-                                <input type="radio" name="cargaFragil" value="no" class="mr-2">
-                                No
-                            </label>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿Cuál es el peso total estimado de la carga?</label>
-                        <input type="text" id="pesoEstimado" class="form-input" placeholder="Ej: 500 kg">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿La carga está empacada en cajas, pallets, bultos sueltos u otro formato?</label>
-                        <select id="formatoEmpaque" class="form-input">
-                            <option value="">Seleccionar...</option>
-                            <option value="cajas">Cajas</option>
-                            <option value="pallets">Pallets</option>
-                            <option value="bultos-sueltos">Bultos sueltos</option>
-                            <option value="otro">Otro formato</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿Requiere refrigeración o temperatura controlada?</label>
-                        <div class="flex gap-4 mt-2">
-                            <label class="flex items-center">
-                                <input type="radio" name="refrigeracion" value="si" class="mr-2">
-                                Sí
-                            </label>
-                            <label class="flex items-center">
-                                <input type="radio" name="refrigeracion" value="no" class="mr-2">
-                                No
-                            </label>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Descripción adicional</label>
-                        <textarea id="descripcionCargaComercial" class="form-input" rows="3" placeholder="Proporciona detalles adicionales sobre la carga..."></textarea>
-                    </div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Qué tipo de carga se va a transportar? (maquinaria, materiales de construcción, productos industriales, etc.)</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Cuál es el peso total aproximado de la carga?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Cuáles son las dimensiones aproximadas (largo, ancho y alto)?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Se necesita montacargas, grúa o brazo hidráulico para subir o bajar la carga?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿La carga requiere equipos especiales? (paletas, estibas, correas, cadenas, carretillas, etc.)</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿La empresa dispone de personal o montacargas en el punto de carga?</label><input type="text" class="form-input"></div>
                 </div>
             `;
+            break;
         case 'Paquetería':
-            return `
+            content = `
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">¿Qué tipo de artículo desea enviar?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Es un solo paquete o varios bultos?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Los paquetes están debidamente empacados o sellados?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿El paquete debe ser transportado en vehículo cerrado o en moto?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Habrá alguien disponible para entregar y recibir el paquete en ambos puntos?</label><input type="text" class="form-input"></div>
+                </div>
+            `;
+            break;
+        case 'Fletes':
+            content = `
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">¿Qué tipo de carga desea transportar?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Cuál es el peso aproximado total?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Cuántas unidades o bultos son en total?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Requiere ayudantes para cargar o descargar la mercancía?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Se necesita montacargas, grúa, rampa o polea para subir o bajar la carga?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿La empresa dispone de personal o montacargas en el punto de carga?</label><input type="text" class="form-input"></div>
+                </div>
+            `;
+            break;
+        case 'Transporte Comercial':
+            content = `
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">¿Qué tipo de productos o mercancía desea transportar?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿La carga es propia de la empresa o de un cliente?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Cuántas unidades, cajas o paletas serán transportadas?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Cuál es el peso total aproximado?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Requiere ayudantes adicionales para carga y descarga?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿La empresa dispone de personal o montacargas en el punto de carga?</label><input type="text" class="form-input"></div>
+                </div>
+            `;
+            break;
+        case 'Mudanza':
+            content = `
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium text-gray-700">¿Qué tipo de objetos necesita trasladar? (muebles, electrodomésticos, cajas, cama, estufa, lavadora, sillones, mesas, etc.)</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Hay objetos frágiles o de valor que necesiten un trato especial? Describa.</label><textarea class="form-input" rows="3"></textarea></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿En qué tipo de vivienda o local se encuentra actualmente? (casa, apartamento, oficina, etc.)</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿En qué piso se encuentra el punto de origen y el de destino?</label><input type="text" class="form-input"></div>
+                    <div><label class="block text-sm font-medium text-gray-700">¿Hay ascensor o solo escaleras?</label><input type="text" class="form-input"></div>
+                </div>
+            `;
+            break;
+        case 'Grúas':
+            content = `
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Tipo de servicio</label>
-                        <div class="flex gap-4 mt-2">
-                            <label class="flex items-center">
-                                <input type="radio" name="tipoServicioPaqueteria" value="compra" class="mr-2">
-                                Es una compra
-                            </label>
-                            <label class="flex items-center">
-                                <input type="radio" name="tipoServicioPaqueteria" value="recoger" class="mr-2">
-                                Es para recoger un pedido
-                            </label>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿Qué tipo de paquete desea enviar?</label>
-                        <select id="tipoPaquete" class="form-input">
+                        <label class="block text-sm font-medium text-gray-700">¿Qué tipo de servicio de grúa necesita?</label>
+                        <select class="form-input" onchange="toggleGruaFields(this.value)">
                             <option value="">Seleccionar...</option>
-                            <option value="caja">Caja</option>
-                            <option value="sobre">Sobre</option>
-                            <option value="bolsa">Bolsa</option>
-                            <option value="paquete-fragil">Paquete frágil</option>
-                            <option value="otro">Otro</option>
+                            <option value="vehiculo">Grúa de Vehículo</option>
+                            <option value="carga">Grúa de Carga</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿Requiere embalaje adicional?</label>
-                        <div class="flex gap-4 mt-2">
-                            <label class="flex items-center">
-                                <input type="radio" name="embalajeAdicional" value="si" class="mr-2">
-                                Sí
-                            </label>
-                            <label class="flex items-center">
-                                <input type="radio" name="embalajeAdicional" value="no" class="mr-2">
-                                No
-                            </label>
-                        </div>
-                        <div id="tipoEmbalaje" class="hidden mt-2">
-                            <select id="tipoEmbalajeSelect" class="form-input">
-                                <option value="">Tipo de embalaje...</option>
-                                <option value="caja-reforzada">Caja reforzada</option>
-                                <option value="burbuja">Protección con burbuja</option>
-                                <option value="proteccion-especial">Protección especial</option>
+                    <div id="gruaVehiculoFields" class="hidden space-y-4">
+                        <div><label class="block text-sm font-medium text-gray-700">¿Qué tipo de vehículo es? (carro, jeepeta, camioneta, camión, motor, etc.)</label><input type="text" class="form-input"></div>
+                        <div><label class="block text-sm font-medium text-gray-700">¿Cuál es la marca, modelo y color del vehículo?</label><input type="text" class="form-input"></div>
+                        <div><label class="block text-sm font-medium text-gray-700">¿El vehículo tiene tracción delantera, trasera o es 4x4?</label><input type="text" class="form-input"></div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">¿Qué tipo de servicio necesita?</label>
+                            <select class="form-input">
+                                <option value="">Seleccionar...</option>
+                                <option value="averia">Remolque por avería</option>
+                                <option value="accidente">Accidente de tránsito</option>
+                                <option value="traslado">Traslado preventivo</option>
+                                <option value="retiro_entrega">Retiro del taller o entrega a domicilio</option>
                             </select>
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Descripción del paquete</label>
-                        <textarea id="descripcionPaqueteria" class="form-input" rows="3" placeholder="Describe el contenido del paquete..."></textarea>
-                    </div>
-                </div>
-            `;
-        case 'Botes Mineros':
-            return `
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿Qué material se transportará?</label>
-                        <select id="tipoMaterial" class="form-input">
-                            <option value="">Seleccionar material...</option>
-                            <option value="arena-procesada">Arena procesada 🏖️</option>
-                            <option value="grava-gravilla">Grava y gravilla 🪨</option>
-                            <option value="arena-rio">Arena de río o de construcción</option>
-                            <option value="bloques-escombros">Bloques y escombros de demolición 🧱</option>
-                            <option value="desperdicios-construccion">Desperdicios de construcción</option>
-                            <option value="tierra-relleno">Tierra y relleno</option>
-                            <option value="materiales-pesados">Materiales pesados a granel</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Volumen de cantidad</label>
-                        <input type="text" id="volumenCantidad" class="form-input" placeholder="Ej: 10 metros cúbicos">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Tipo de camión requerido</label>
-                        <select id="tipoCamion" class="form-input">
-                            <option value="">Seleccionar tipo...</option>
-                            <option value="abierto">Camión abierto</option>
-                            <option value="cerrado">Camión cerrado</option>
-                            <option value="plataforma">Plataforma</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">¿Se puede acceder fácilmente con camión?</label>
-                        <div class="flex gap-4 mt-2">
-                            <label class="flex items-center">
-                                <input type="radio" name="accesoFacil" value="si" class="mr-2">
-                                Sí
-                            </label>
-                            <label class="flex items-center">
-                                <input type="radio" name="accesoFacil" value="no" class="mr-2">
-                                No
-                            </label>
+                    <div id="gruaCargaFields" class="hidden space-y-4">
+                        <div><label class="block text-sm font-medium text-gray-700">¿Qué tipo de carga necesita mover o levantar? (contenedor, maquinaria, estructura metálica, generador, camión, etc.)</label><input type="text" class="form-input"></div>
+                        <div><label class="block text-sm font-medium text-gray-700">¿Cuál es el peso aproximado de la carga?</label><input type="text" class="form-input"></div>
+                        <div><label class="block text-sm font-medium text-gray-700">¿Cuenta con puntos de anclaje o enganche para izar la carga de forma segura?</label><input type="text" class="form-input"></div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">¿Qué tipo de maniobra se realizará?</label>
+                            <select class="form-input">
+                                <option value="">Seleccionar...</option>
+                                <option value="izado">Izado vertical</option>
+                                <option value="carga_transporte">Carga y transporte</option>
+                                <option value="descarga_reubicacion">Descarga o reubicación en el mismo sitio</option>
+                            </select>
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Descripción adicional</label>
-                        <textarea id="descripcionBotesMinero" class="form-input" rows="3" placeholder="Proporciona detalles adicionales sobre el material y ubicación..."></textarea>
-                    </div>
                 </div>
             `;
-        case 'Grúas':
-            return `
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Tipo de servicio de grúa</label>
-                        <div class="space-y-2 mt-2">
-                            <label class="flex items-center">
-                                <input type="radio" name="tipoServicioGrua" value="remolque-vehiculos" class="mr-2">
-                                Remolque de vehículos averiados o accidentados 🚗
-                            </label>
-                            <label class="flex items-center">
-                                <input type="radio" name="tipoServicioGrua" value="maquinaria-pesada" class="mr-2">
-                                Traslado de maquinaria pesada 🏗️
-                            </label>
-                        </div>
-                    </div>
-                    <div id="detallesVehiculo" class="hidden">
-                        <label class="block text-sm font-medium text-gray-700">Detalles del vehículo</label>
-                        <input type="text" id="detallesVehiculoInput" class="form-input" placeholder="Marca, modelo, año del vehículo">
-                    </div>
-                    <div id="detallesMaquinaria" class="hidden">
-                        <label class="block text-sm font-medium text-gray-700">Detalles de la maquinaria</label>
-                        <input type="text" id="detallesMaquinariaInput" class="form-input" placeholder="Tipo de maquinaria, peso aproximado">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Descripción del servicio</label>
-                        <textarea id="descripcionGrua" class="form-input" rows="3" placeholder="Describe la situación y cualquier detalle importante..."></textarea>
-                    </div>
-                </div>
-            `;
+            break;
         default:
-            return '<p>No hay detalles adicionales para este servicio.</p>';
+            content = '<p>No hay detalles adicionales para este servicio.</p>';
+            break;
+    }
+    return content;
+}
+
+function toggleGruaFields(value) {
+    const vehiculoFields = document.getElementById('gruaVehiculoFields');
+    const cargaFields = document.getElementById('gruaCargaFields');
+    if (value === 'vehiculo') {
+        vehiculoFields.classList.remove('hidden');
+        cargaFields.classList.add('hidden');
+    } else if (value === 'carga') {
+        vehiculoFields.classList.add('hidden');
+        cargaFields.classList.remove('hidden');
+    } else {
+        vehiculoFields.classList.add('hidden');
+        cargaFields.classList.add('hidden');
     }
 }
 
