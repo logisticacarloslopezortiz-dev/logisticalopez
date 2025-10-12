@@ -45,96 +45,144 @@
   <script src="js/index.js?v=dev" defer></script>
 </head>
 
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+<body class="bg-gray-50">
+
+  <!-- Header -->
+  <header class="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-20">
+        <div class="flex items-center">
+          <img class="h-12 w-auto" src="img/1horizontal%20(1).png" alt="Logistica Lopez Ortiz">
+          <span class="ml-4 text-xl font-bold text-gray-800">Logistica Lopez Ortiz</span>
+        </div>
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="#nosotros" class="text-gray-600 hover:text-blue-600 font-medium">Nosotros</a>
+          <a href="#servicios" class="text-gray-600 hover:text-blue-600 font-medium">Servicios</a>
+          <button id="headerStartButton" class="btn-primary text-white px-6 py-2 rounded-lg font-semibold">Comenzar Solicitud</button>
+          <a href="seguimiento.html" class="text-gray-600 hover:text-blue-600 font-medium">Ver Estado</a>
+        </div>
+      </div>
+    </div>
+  </header>
 
   <!-- Pantalla de Bienvenida -->
-  <div id="welcomeScreen" class="min-h-screen flex flex-col justify-between px-4 page-load-animation">
+  <div id="welcomeScreen" class="pt-20">
     <!-- Contenido Principal -->
-    <div class="flex-1 flex items-center justify-center">
-      <div class="text-center max-w-md mx-auto animate-fade-in">
-        <!-- Promo App -->
-        <div class="mb-6 glass p-4 rounded-xl text-left animate-scale-in">
-          <div class="flex items-center gap-3 mb-2">
-            <img src="img/2vertical.png" alt="TLC App" class="h-10 w-auto">
-            <div class="text-gray-800 font-semibold">Descarga nuestra app</div>
-          </div>
-          <p class="text-sm text-gray-600 mb-3">Mejor experiencia y seguimiento en tiempo real.</p>
-          <div class="flex items-center gap-3">
-            <button id="installAppWelcome" class="btn-primary px-4 py-2 flex items-center gap-2 transition-all duration-300 hover:scale-105">
-              <i data-lucide="smartphone" class="w-4 h-4"></i>
-              Instalar App
-            </button>
-            <div class="flex items-center gap-2 text-gray-600">
-              <button class="install-app-btn hover:text-blue-600 transition-all duration-300 hover:scale-110" title="Instalar en iOS">
-                <i data-lucide="apple" class="w-5 h-5"></i>
-              </button>
-              <button class="install-app-btn hover:text-blue-600 transition-all duration-300 hover:scale-110" title="Instalar en Android">
-                <i data-lucide="smartphone" class="w-5 h-5"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-        <!-- Logo -->
-        <div class="mb-8">
-          <img src="img/1vertical.png" alt="TLC Logo" class="w-80 h-auto mx-auto rounded-xl shadow-lg logo-animate">
-        </div>
-        
-        <!-- Frase -->
-        <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">
-          Tu solución de transporte y logística
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center py-16">
+        <h1 class="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
+          Logistica Lopez Ortiz
         </h1>
-        <p class="text-gray-600 mb-8 text-lg">
-          Solicita tu servicio de manera rápida y sencilla
+        <p class="mt-4 max-w-2xl mx-auto text-xl text-gray-600">
+          Tu solución de transporte y logística de forma segura y confiable.
         </p>
-        
-        <!-- Our Services Section -->
-        <div class="mt-16">
-          <h2 class="text-3xl font-bold text-gray-800 mb-8">Nuestros Servicios</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <!-- Service Card -->
-            <div class="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center text-center">
-              <i data-lucide="truck" class="w-12 h-12 text-blue-600 mb-4"></i>
-              <h3 class="text-xl font-semibold text-gray-800 mb-2">Carga Pesada</h3>
-              <p class="text-gray-600">Transporte de maquinaria, materiales de construcción y más.</p>
+        <div class="mt-8 flex justify-center">
+          <button id="installAppWelcome" class="btn-primary text-white px-8 py-3 rounded-lg font-semibold text-lg shadow-lg">
+            <i data-lucide="smartphone" class="w-5 h-5 inline mr-2"></i>
+            Descarga nuestra app
+          </button>
+        </div>
+      </div>
+
+      <div id="nosotros" class="py-16 bg-white rounded-lg shadow-lg px-8">
+        <h2 class="text-3xl font-bold text-gray-800 mb-4 text-center">Nosotros</h2>
+        <p class="text-lg text-gray-600 text-center max-w-3xl mx-auto">
+          Aquí en Logistica Lopez Ortiz somos una empresa de transporte y logística de forma segura. Nos dedicamos a ofrecer un servicio de calidad, garantizando la entrega puntual y el cuidado de tu mercancía.
+        </p>
+      </div>
+
+      <!-- Servicios Section -->
+      <section id="servicios" class="py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center">
+            <h2 class="text-3xl font-extrabold text-gray-900">Nuestros Servicios</h2>
+            <p class="mt-4 max-w-2xl mx-auto text-xl text-gray-600">
+              Ofrecemos una amplia gama de soluciones de transporte para satisfacer tus necesidades.
+            </p>
+          </div>
+          <div class="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            <div class="bg-white rounded-lg shadow-lg p-8">
+              <div class="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white">
+                <i data-lucide="home"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-bold text-gray-900">Mudanza</h3>
+              <p class="mt-4 text-base text-gray-600">Traslados residenciales y de oficina, manejados con el máximo cuidado.</p>
             </div>
-            <!-- Service Card -->
-            <div class="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center text-center">
-              <i data-lucide="package" class="w-12 h-12 text-blue-600 mb-4"></i>
-              <h3 class="text-xl font-semibold text-gray-800 mb-2">Paquetería</h3>
-              <p class="text-gray-600">Envío rápido y seguro de paquetes y documentos.</p>
+            <div class="bg-white rounded-lg shadow-lg p-8">
+              <div class="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white">
+                <i data-lucide="package"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-bold text-gray-900">Paquetería</h3>
+              <p class="mt-4 text-base text-gray-600">Envíos rápidos y seguros para tus paquetes y documentos importantes.</p>
             </div>
-            <!-- Service Card -->
-            <div class="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center text-center">
-              <i data-lucide="home" class="w-12 h-12 text-blue-600 mb-4"></i>
-              <h3 class="text-xl font-semibold text-gray-800 mb-2">Mudanzas</h3>
-              <p class="text-gray-600">Traslado de muebles y electrodomésticos para tu hogar u oficina.</p>
+            <div class="bg-white rounded-lg shadow-lg p-8">
+              <div class="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white">
+                <i data-lucide="truck"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-bold text-gray-900">Botes Mineros</h3>
+              <p class="mt-4 text-base text-gray-600">Transporte especializado de materiales y agregados para la construcción.</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-8">
+              <div class="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white">
+                <i data-lucide="truck"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-bold text-gray-900">Transporte de Carga Comercial</h3>
+              <p class="mt-4 text-base text-gray-600">Soluciones logísticas para el transporte de mercancías de tu negocio.</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-8">
+              <div class="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white">
+                <i data-lucide="car"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-bold text-gray-900">Grúa de Vehículo</h3>
+              <p class="mt-4 text-base text-gray-600">Asistencia y remolque para vehículos varados o accidentados.</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-8">
+              <div class="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white">
+                <i data-lucide="anchor"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-bold text-gray-900">Transporte de Flete</h3>
+              <p class="mt-4 text-base text-gray-600">Movimiento de grandes volúmenes de carga a nivel nacional.</p>
+            </div>
+             <div class="bg-white rounded-lg shadow-lg p-8">
+              <div class="flex items-center justify-center h-12 w-12 rounded-md bg-blue-600 text-white">
+                <i data-lucide="crane"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-bold text-gray-900">Grúa de Carga</h3>
+              <p class="mt-4 text-base text-gray-600">Izado y movilización de cargas pesadas y de gran tamaño.</p>
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- Botones -->
-        <div class="mt-16 flex flex-col sm:flex-row gap-4 justify-center">
-          <button id="startButton" class="btn-primary text-white px-8 py-4 rounded-xl font-semibold text-lg shadow-lg w-full sm:w-auto">
-            <i data-lucide="arrow-right" class="w-5 h-5 inline mr-2"></i>
-            Comenzar Solicitud
-          </button>
-          <a href="seguimiento.html" id="viewServicesBtn" class="btn-secondary inline-flex items-center justify-center px-6 py-4 rounded-xl font-semibold text-lg shadow w-full sm:w-auto">
-            <i data-lucide="search" class="w-5 h-5 inline mr-2"></i>
-            Ver Estado
-          </a>
-        </div>
+      <!-- Botones -->
+      <div class="mt-16 flex flex-col sm:flex-row gap-4 justify-center">
+        <button id="startButton" class="btn-primary text-white px-8 py-4 rounded-xl font-semibold text-lg shadow-lg w-full sm:w-auto">
+          <i data-lucide="arrow-right" class="w-5 h-5 inline mr-2"></i>
+          Comenzar Solicitud
+        </button>
+        <a href="seguimiento.html" id="viewServicesBtn" class="btn-secondary inline-flex items-center justify-center px-6 py-4 rounded-xl font-semibold text-lg shadow w-full sm:w-auto">
+          <i data-lucide="search" class="w-5 h-5 inline mr-2"></i>
+          Ver Estado
+        </a>
       </div>
     </div>
 
     <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200 py-8 mt-16">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-600">
-        <p>&copy; 2024 Transporte Logístico Carlos López. Todos los derechos reservados.</p>
-        <div class="flex justify-center gap-4 mt-4">
-          <a href="https://wa.me/18095550123" target="_blank" class="text-gray-600 hover:text-blue-600"><i data-lucide="message-circle" class="w-6 h-6"></i></a>
-          <a href="mailto:example@example.com" class="text-gray-600 hover:text-blue-600"><i data-lucide="mail" class="w-6 h-6"></i></a>
+    <footer class="bg-gray-800 text-white py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p>&copy; 2024 Logistica Lopez Ortiz. Todos los derechos reservados.</p>
+            <div class="flex justify-center gap-6 mt-4">
+                <a href="https://wa.me/18095550123" target="_blank" class="hover:text-blue-400 transition-colors">
+                    <i data-lucide="message-circle" class="w-7 h-7"></i>
+                </a>
+                <a href="mailto:example@example.com" class="hover:text-blue-400 transition-colors">
+                    <i data-lucide="mail" class="w-7 h-7"></i>
+                </a>
+                <a href="#" class="hover:text-blue-400 transition-colors">
+                    <i data-lucide="instagram" class="w-7 h-7"></i>
+                </a>
+            </div>
         </div>
-      </div>
     </footer>
   </div>
 

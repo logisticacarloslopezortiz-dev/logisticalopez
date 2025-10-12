@@ -34,10 +34,16 @@ function initializeApp() {
 
 // Setup event listeners
 function setupEventListeners() {
-  // Start button
-  const startButton = document.getElementById('startButton');
-  if (startButton) {
-    startButton.addEventListener('click', startWizard);
+  console.log('Setting up event listeners...');
+  // Start buttons
+  const startButtons = document.querySelectorAll('#startButton, #headerStartButton');
+  if (startButtons.length > 0) {
+    console.log('Start buttons found, adding event listeners.');
+    startButtons.forEach(button => {
+      button.addEventListener('click', startWizard);
+    });
+  } else {
+    console.error('Start buttons not found!');
   }
   
   // Next/Previous buttons
@@ -140,11 +146,17 @@ function showWelcomeScreen() {
 
 // Start the wizard
 function startWizard() {
+  console.log('startWizard function called.');
   const welcomeScreen = document.getElementById('welcomeScreen');
-  const wizardScreen = document.getElementById('wizardScreen');
+  const wizardScreen = document.getElementById('wizardApp');
   
-  if (welcomeScreen) welcomeScreen.classList.add('hidden');
-  if (wizardScreen) wizardScreen.classList.remove('hidden');
+  if (welcomeScreen && wizardScreen) {
+    console.log('Hiding welcome screen and showing wizard.');
+    welcomeScreen.classList.add('hidden');
+    wizardScreen.classList.remove('hidden');
+  } else {
+    console.error('Welcome screen or wizard app not found!');
+  }
   
   currentStep = 1;
   updateProgressSteps();
