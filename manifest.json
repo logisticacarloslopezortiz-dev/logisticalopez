@@ -2,7 +2,7 @@
   "name": "TLC - Transporte y Logística Carlos López",
   "short_name": "TLC",
   "description": "Solicita servicios de transporte y logística con TLC",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",

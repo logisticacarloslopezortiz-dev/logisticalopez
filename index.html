@@ -6,13 +6,13 @@
   <title>Logística López Ortiz - Transporte Profesional</title>
 
 <!-- ✅ Favicon -->
-<link rel="icon" type="image/x-icon" href="/img/favicon.ico" />
-<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
-<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
-<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+<link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+<link rel="icon" type="image/x-icon" href="img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/x-icon" href="img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
 
   <!-- PWA Manifest -->
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="manifest.json">
 
 
   <script src="https://cdn.tailwindcss.com"></script>
@@ -144,7 +144,7 @@
     // Registrar el Service Worker para la PWA
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(registration => {
+        navigator.serviceWorker.register('sw.js').then(registration => {
           console.log('ServiceWorker registrado con éxito:', registration.scope);
         }).catch(error => {
           console.log('Fallo en el registro del ServiceWorker:', error);
