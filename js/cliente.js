@@ -172,42 +172,6 @@ document.addEventListener('DOMContentLoaded', function() {
     rncCheckbox.addEventListener('change', toggleRNCField);
   }
   
-  // Cargar servicios y vehículos dinámicamente
-  loadServices();
-  loadVehicles();
-
-  // Manejar selección de vehículos (se añade después de cargar)
-  function addVehicleCardListeners() {
-      document.querySelectorAll('.vehicle-card').forEach(card => {
-        card.addEventListener('click', function() {
-          document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
-          this.classList.add('border-azulClaro', 'bg-blue-50');
-        });
-      });
-  }
-
-  // Manejar selección de servicios (se añade después de cargar)
-  function addServiceCardListeners() {
-      document.querySelectorAll('.service-card').forEach(card => {
-        card.addEventListener('click', function() {
-          document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
-          this.classList.add('border-azulClaro', 'bg-blue-50');
-          
-          selectedService = {
-              id: this.dataset.serviceId,
-              name: this.dataset.serviceName
-          };
-
-          // Normalizar nombre para buscar modal
-          const modalName = selectedService.name.toLowerCase().replace(/ /g, '-');
-          const modal = document.getElementById(`modal-${modalName}`);
-          if (modal) {
-            modal.classList.remove('hidden');
-          }
-        });
-      });
-  }
-
   // Manejar cierre de modales
   document.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -312,6 +276,42 @@ document.addEventListener('DOMContentLoaded', function() {
       window.location.href = 'index.html';
     });
   }
+
+  // --- Funciones para añadir listeners a las tarjetas ---
+  // Estas funciones deben estar definidas antes de ser llamadas por loadServices/loadVehicles
+
+  function addVehicleCardListeners() {
+    document.querySelectorAll('.vehicle-card').forEach(card => {
+      card.addEventListener('click', function() {
+        document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+        this.classList.add('border-azulClaro', 'bg-blue-50');
+      });
+    });
+  }
+
+  function addServiceCardListeners() {
+    document.querySelectorAll('.service-card').forEach(card => {
+      card.addEventListener('click', function() {
+        document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+        this.classList.add('border-azulClaro', 'bg-blue-50');
+        
+        selectedService = {
+            id: this.dataset.serviceId,
+            name: this.dataset.serviceName
+        };
+
+        const modalName = selectedService.name.toLowerCase().replace(/ /g, '-');
+        const modal = document.getElementById(`modal-${modalName}`);
+        if (modal) {
+          modal.classList.remove('hidden');
+        }
+      });
+    });
+  }
+
+  // Cargar servicios y vehículos dinámicamente
+  loadServices();
+  loadVehicles();
 
   // Mostrar primer paso
   if (steps && steps.length > 0) {
