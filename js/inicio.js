@@ -37,6 +37,15 @@ function loadOrders() {
   return orders;
 }
 
+// Función para recargar órdenes desde localStorage (útil para actualizaciones en tiempo real)
+function reloadOrdersFromStorage() {
+  const orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+  allOrders = orders;
+  filteredOrders = [...allOrders];
+  updateDashboard();
+  renderOrders();
+}
+
 async function loadOrdersFromSupabase() {
   try {
     if (typeof supabaseConfig === 'undefined') return [];
@@ -684,6 +693,21 @@ document.addEventListener('DOMContentLoaded', function() {
   window.sortTable = sortTable;
   window.changeOrderStatus = changeOrderStatus;
   window.generateAndSendInvoice = generateAndSendInvoice;
+
+  // Escuchar cambios en localStorage para actualizar automáticamente
+  window.addEventListener('storage', function(e) {
+    if (e.key === 'tlc_orders') {
+      reloadOrdersFromStorage();
+    }
+  });
+
+  // Verificar periódicamente si hay nuevas órdenes (para cuando se actualiza en la misma pestaña)
+  setInterval(() => {
+    const currentOrders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+    if (currentOrders.length !== allOrders.length) {
+      reloadOrdersFromStorage();
+    }
+  }, 2000); // Verificar cada 2 segundos
 
   // Función para actualizar los paneles de resumen
   function updateSummaryPanels() {

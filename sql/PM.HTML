@@ -1,163 +1,215 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TLC - Solicitud Móvil</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-  /* Animaciones simples */
-  .fade-in { animation: fadeIn 0.5s ease-in; }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logística López Ortiz - Solicitud de Servicio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            azulOscuro: '#0C375D',
+            azulClaro: '#117D8B',
+            acento: '#FBBF24'
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(20px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
+            }
+          },
+          animation: {
+            fadeInUp: 'fadeInUp 0.5s ease-out'
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="bg-white text-gray-800 font-sans">
+<body class="bg-gray-100">
 
-<!-- Pantalla de bienvenida -->
-<div id="welcomeScreen" class="flex flex-col items-center justify-center min-h-screen p-6">
-  <div class="text-center">
-    <h1 class="text-3xl font-bold text-blue-600 mb-4">Transporte Logístico Carlos López (TLC)</h1>
-    <p class="text-gray-600 mb-6">Solicita tu servicio de mudanza o transporte de manera rápida y sencilla.</p>
-    <button id="startBtn" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition">Comenzar solicitud</button>
-  </div>
-</div>
+  <!-- Hero / Solicitud -->
+  <section class="pt-16 pb-16 flex justify-center items-start min-h-screen">
+    <div class="w-full max-w-5xl px-4">
 
-<!-- Formulario por pasos -->
-<div id="formContainer" class="hidden min-h-screen p-6 fade-in">
+      <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fadeInUp">
+        <h3 class="text-3xl font-bold text-azulOscuro mb-6 text-center">Solicitud de Servicio</h3>
+        <p class="text-gray-600 mb-8 text-center">Completa los 6 pasos para solicitar tu servicio de manera rápida y segura.</p>
 
-  <!-- Barra de progreso -->
-  <div class="mb-6">
-    <div class="w-full bg-gray-200 h-2 rounded">
-      <div id="progressBar" class="bg-blue-600 h-2 rounded w-0"></div>
-    </div>
-    <p id="stepText" class="text-sm text-gray-500 mt-2 text-center">Paso 1 de 4</p>
-  </div>
+        <!-- Progress -->
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex-1 h-2 bg-gray-200 rounded-full relative">
+            <div id="progress-bar" class="h-2 bg-azulClaro rounded-full w-0 transition-all duration-500"></div>
+          </div>
+        </div>
 
-  <form id="multiStepForm" class="space-y-6">
+        <!-- Formulario pasos -->
+        <form id="serviceForm" class="space-y-6">
 
-    <!-- Paso 1: Datos del cliente -->
-    <div class="step">
-      <h2 class="text-xl font-semibold text-blue-600 mb-4">Datos del cliente</h2>
-      <input type="text" id="clientName" placeholder="Nombre completo" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
-      <input type="tel" id="clientPhone" placeholder="Teléfono" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
-      <input type="email" id="clientEmail" placeholder="Correo electrónico" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
-    </div>
+          <!-- Paso 1: Datos Personales -->
+          <div class="step p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="1">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 1: Datos Personales</h4>
+            <input type="text" placeholder="Nombre completo" class="w-full border p-2 rounded mb-4">
+            <input type="tel" placeholder="Teléfono" class="w-full border p-2 rounded mb-4">
+            <input type="email" placeholder="Correo" class="w-full border p-2 rounded mb-4">
 
-    <!-- Paso 2: Tipo de servicio y vehículo -->
-    <div class="step hidden">
-      <h2 class="text-xl font-semibold text-blue-600 mb-4">Detalles del servicio</h2>
-      <select id="serviceType" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
-        <option value="" disabled selected>Selecciona tipo de servicio</option>
-        <option>Mudanza</option>
-        <option>Transporte Comercial</option>
-        <option>Carga Pesada</option>
-        <option>Fletes</option>
-        <option>Botes Aduanero</option>
-        <option>Grúas</option>
-        <option>Paquetería</option>
-      </select>
-      <select id="vehicleType" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200">
-        <option value="" disabled selected>Selecciona tipo de vehículo</option>
-        <option>Camión Pequeño</option>
-        <option>Camioneta</option>
-        <option>Furgón</option>
-        <option>Camión Grande</option>
-      </select>
-    </div>
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
 
-    <!-- Paso 3: Direcciones y horario -->
-    <div class="step hidden">
-      <h2 class="text-xl font-semibold text-blue-600 mb-4">Direcciones y horario</h2>
-      <input type="text" id="pickupAddress" placeholder="Dirección de recogida" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
-      <input type="text" id="deliveryAddress" placeholder="Dirección de entrega" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
-      <input type="date" id="date" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200 mb-4">
-      <input type="time" id="time" class="form-input w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-600 focus:ring focus:ring-blue-200">
-    </div>
+          <!-- Paso 2: Servicio -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="2">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 2: Selecciona Servicio</h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/mudanza.png" alt="Mudanza" class="mx-auto h-16 mb-2">
+                <span>Mudanza</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/carga_comercial.png" alt="Carga Comercial" class="mx-auto h-16 mb-2">
+                <span>Carga Comercial</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/carga_pesada.png" alt="Carga Pesada" class="mx-auto h-16 mb-2">
+                <span>Carga Pesada</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/flete.png" alt="Flete" class="mx-auto h-16 mb-2">
+                <span>Flete</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/grua.png" alt="Grúa" class="mx-auto h-16 mb-2">
+                <span>Grúa</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/paqueteria.png" alt="Paquetería" class="mx-auto h-16 mb-2">
+                <span>Paquetería</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/otro.png" alt="Otro" class="mx-auto h-16 mb-2">
+                <span>Otro</span>
+              </div>
+            </div>
 
-    <!-- Paso 4: Resumen y confirmación -->
-    <div class="step hidden">
-      <h2 class="text-xl font-semibold text-blue-600 mb-4">Resumen de tu solicitud</h2>
-      <div class="bg-blue-50 p-4 rounded-xl space-y-2">
-        <p><strong>Nombre:</strong> <span id="summaryName"></span></p>
-        <p><strong>Teléfono:</strong> <span id="summaryPhone"></span></p>
-        <p><strong>Correo:</strong> <span id="summaryEmail"></span></p>
-        <p><strong>Servicio:</strong> <span id="summaryService"></span></p>
-        <p><strong>Vehículo:</strong> <span id="summaryVehicle"></span></p>
-        <p><strong>Recogida:</strong> <span id="summaryPickup"></span></p>
-        <p><strong>Entrega:</strong> <span id="summaryDelivery"></span></p>
-        <p><strong>Fecha y hora:</strong> <span id="summaryDateTime"></span></p>
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Paso 3: Vehículo -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="3">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 3: Selecciona Vehículo</h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/camion_peque.png" alt="Camión Pequeño" class="mx-auto h-16 mb-2">
+                <span>Camión Pequeño</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/furgoneta.png" alt="Furgoneta" class="mx-auto h-16 mb-2">
+                <span>Furgoneta</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/camion_medio.png" alt="Camión Medio" class="mx-auto h-16 mb-2">
+                <span>Camión Medio</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/camion_grande.png" alt="Camión Grande" class="mx-auto h-16 mb-2">
+                <span>Camión Grande</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/camion_especial.png" alt="Camión Especial" class="mx-auto h-16 mb-2">
+                <span>Camión Especial</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/grua_pequena.png" alt="Grúa Pequeña" class="mx-auto h-16 mb-2">
+                <span>Grúa Pequeña</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="./img/otro_vehiculo.png" alt="Otro Vehículo" class="mx-auto h-16 mb-2">
+                <span>Otro</span>
+              </div>
+            </div>
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Paso 4: Ubicación -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="4">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 4: Dirección de Origen y Destino</h4>
+            <input type="text" placeholder="Dirección de origen" class="w-full border p-2 rounded mb-4">
+            <input type="text" placeholder="Dirección de destino" class="w-full border p-2 rounded mb-4">
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Paso 5: Fecha y Hora -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="5">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 5: Fecha y Hora</h4>
+            <input type="date" class="w-full border p-2 rounded mb-4">
+            <input type="time" class="w-full border p-2 rounded mb-4">
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Paso 6: Confirmación -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="6">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 6: Confirmación</h4>
+            <p class="text-gray-600 mb-4 text-center">Revisa tus datos y confirma la solicitud.</p>
+            <button type="submit" class="w-full bg-azulClaro text-white py-3 rounded-lg font-bold hover:bg-azulOscuro transition">Enviar Solicitud</button>
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Botones de navegación -->
+          <div class="flex justify-between mt-6">
+            <button type="button" id="prevBtn" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition hidden">Anterior</button>
+            <div class="flex-1"></div>
+            <button type="button" id="nextBtn" class="bg-azulClaro text-white px-6 py-2 rounded-lg font-medium hover:bg-azulOscuro transition">Siguiente</button>
+          </div>
+
+        </form>
       </div>
-      <p class="text-sm text-gray-500 mt-4">*Este es un resumen visual. Los datos no se envían aún.</p>
     </div>
+  </section>
 
-    <!-- Botones de navegación -->
-    <div class="flex justify-between mt-6">
-      <button type="button" id="prevBtn" class="px-6 py-3 bg-gray-300 text-gray-700 rounded-xl font-semibold hidden hover:bg-gray-400 transition">Atrás</button>
-      <button type="button" id="nextBtn" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition">Siguiente</button>
-    </div>
+  <script>
+    let currentStep = 1;
+    const steps = document.querySelectorAll('.step');
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const progressBar = document.getElementById('progress-bar');
 
-  </form>
-</div>
+    function showStep(step) {
+      steps.forEach(s => s.classList.add('hidden'));
+      document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
+      prevBtn.classList.toggle('hidden', step === 1);
+      nextBtn.classList.toggle('hidden', step === steps.length);
+      progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
+    }
 
-<script>
-const startBtn = document.getElementById('startBtn');
-const welcomeScreen = document.getElementById('welcomeScreen');
-const formContainer = document.getElementById('formContainer');
+    nextBtn.addEventListener('click', () => {
+      if(currentStep < steps.length) currentStep++;
+      showStep(currentStep);
+    });
 
-const steps = document.querySelectorAll('.step');
-const nextBtn = document.getElementById('nextBtn');
-const prevBtn = document.getElementById('prevBtn');
-const progressBar = document.getElementById('progressBar');
-const stepText = document.getElementById('stepText');
+    prevBtn.addEventListener('click', () => {
+      if(currentStep > 1) currentStep--;
+      showStep(currentStep);
+    });
 
-let currentStep = 0;
-
-// Iniciar formulario
-startBtn.addEventListener('click', () => {
-  welcomeScreen.classList.add('hidden');
-  formContainer.classList.remove('hidden');
-  updateStep();
-});
-
-// Botones siguiente y atrás
-nextBtn.addEventListener('click', () => {
-  if (currentStep < steps.length - 1) {
-    if(currentStep === steps.length - 2) fillSummary();
-    steps[currentStep].classList.add('hidden');
-    currentStep++;
-    steps[currentStep].classList.remove('hidden');
-    updateStep();
-  }
-});
-
-prevBtn.addEventListener('click', () => {
-  if (currentStep > 0) {
-    steps[currentStep].classList.add('hidden');
-    currentStep--;
-    steps[currentStep].classList.remove('hidden');
-    updateStep();
-  }
-});
-
-function updateStep() {
-  stepText.textContent = `Paso ${currentStep + 1} de ${steps.length}`;
-  progressBar.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
-  prevBtn.style.display = currentStep === 0 ? 'none' : 'inline-block';
-  nextBtn.textContent = currentStep === steps.length -1 ? 'Finalizar' : 'Siguiente';
-}
-
-// Llenar resumen
-function fillSummary() {
-  document.getElementById('summaryName').textContent = document.getElementById('clientName').value;
-  document.getElementById('summaryPhone').textContent = document.getElementById('clientPhone').value;
-  document.getElementById('summaryEmail').textContent = document.getElementById('clientEmail').value;
-  document.getElementById('summaryService').textContent = document.getElementById('serviceType').value;
-  document.getElementById('summaryVehicle').textContent = document.getElementById('vehicleType').value;
-  document.getElementById('summaryPickup').textContent = document.getElementById('pickupAddress').value;
-  document.getElementById('summaryDelivery').textContent = document.getElementById('deliveryAddress').value;
-  document.getElementById('summaryDateTime').textContent = document.getElementById('date').value + ' ' + document.getElementById('time').value;
-}
-</script>
-
+    showStep(currentStep);
+  </script>
 </body>
 </html>

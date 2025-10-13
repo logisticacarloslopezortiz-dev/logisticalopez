@@ -13,7 +13,7 @@
  */
 
 // Configuration
-const SHEET_ID = 'YOUR_GOOGLE_SHEET_ID_HERE'; // Replace with your actual Google Sheet ID
+const SHEET_ID = '1022684582341-6sjgfrurg8gujjda7m7m61fh2is6otnh.apps.googleusercontent.com'; // Replace with your actual Google Sheet ID
 const SHEET_NAME = 'TLC Orders'; // Name of the sheet tab
 
 /**

@@ -1,425 +1,716 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TLC - Solicitud de Servicio</title>
-    <link rel="icon" type="image/x-icon" href="img/favicon.ico">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    <link rel="stylesheet" href="css/styles.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    animation: {
-                        'fade-in': 'fadeIn 0.5s ease-in-out'
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' }
-                        }
-                    }
-                }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logística López Ortiz - Solicitud de Servicio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            azulOscuro: '#0C375D',
+            azulClaro: '#117D8B',
+            acento: '#FBBF24'
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(20px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
             }
+          },
+          animation: {
+            fadeInUp: 'fadeInUp 0.5s ease-out'
+          }
         }
-    </script>
+      }
+    }
+  </script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
-    <!-- Header -->
-    <header class="glass border-b border-white/20 p-4">
-        <div class="max-w-4xl mx-auto flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <img src="img/1horizontal (1).png" alt="TLC Logo" class="h-10">
-                <h1 class="text-xl font-bold text-gray-800">Solicitud de Servicio</h1>
-            </div>
-            <div class="text-sm text-gray-600">
-                Paso <span id="currentStepNumber">1</span> de 6
-            </div>
+<body class="bg-gray-100">
+
+  <!-- Hero / Solicitud -->
+  <section class="pt-16 pb-16 flex justify-center items-start min-h-screen">
+    <div class="w-full max-w-5xl px-4">
+
+      <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fadeInUp">
+        <h3 class="text-3xl font-bold text-azulOscuro mb-6 text-center">Solicitud de Servicio</h3>
+        <p class="text-gray-600 mb-8 text-center">Completa los 6 pasos para solicitar tu servicio de manera rápida y segura.</p>
+
+        <!-- Progress -->
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex-1 h-2 bg-gray-200 rounded-full relative">
+            <div id="progress-bar" class="h-2 bg-azulClaro rounded-full w-0 transition-all duration-500"></div>
+          </div>
         </div>
-    </header>
 
-    <!-- Progress Bar -->
-    <div class="max-w-4xl mx-auto p-4">
-        <div class="glass rounded-lg p-6 mb-6">
-            <div class="flex items-center justify-between mb-4">
-                <div class="progress-step active" id="step-1">1</div>
-                <div class="flex-1 h-1 bg-gray-200 mx-2">
-                    <div class="h-full bg-blue-600 transition-all duration-300" id="progress-bar" style="width: 16.66%"></div>
-                </div>
-                <div class="progress-step" id="step-2">2</div>
-                <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
-                <div class="progress-step" id="step-3">3</div>
-                <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
-                <div class="progress-step" id="step-4">4</div>
-                <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
-                <div class="progress-step" id="step-5">5</div>
-                <div class="flex-1 h-1 bg-gray-200 mx-2"></div>
-                <div class="progress-step" id="step-6">6</div>
+        <!-- Formulario pasos -->
+        <form id="serviceForm" class="space-y-6">
+
+          <!-- Paso 1: Datos Personales -->
+          <div class="step p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="1">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 1: Datos Personales</h4>
+            <input type="text" placeholder="Nombre completo" class="w-full border p-2 rounded mb-4">
+            <input type="tel" placeholder="Teléfono" class="w-full border p-2 rounded mb-4">
+            <input type="email" placeholder="Correo" class="w-full border p-2 rounded mb-4">
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
             </div>
-            <div class="text-center">
-                <h2 id="stepTitle" class="text-lg font-semibold text-gray-800">Datos Personales</h2>
-                <p id="stepDescription" class="text-sm text-gray-600">Ingrese sus datos personales para continuar</p>
+          </div>
+
+          <!-- Paso 2: Servicio -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="2">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 2: Selecciona Servicio</h4>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="mudanza">
+                <img src="img-servicio/mudanza.png" alt="Mudanza" class="mx-auto h-16 mb-2">
+                <span class="font-medium">🏠 Mudanza</span>
+              </div>
+              <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="transporte-comercial">
+                <img src="img-servicio/carga-comercial.png" alt="Transporte Comercial" class="mx-auto h-16 mb-2">
+                <span class="font-medium">🏢 Transporte Comercial</span>
+              </div>
+              <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="carga-pesada">
+                <img src="img-servicio/carga-pesada.png" alt="Carga Pesada" class="mx-auto h-16 mb-2">
+                <span class="font-medium">🏗️ Carga Pesada</span>
+              </div>
+              <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="flete">
+                <img src="img-servicio/flete.png" alt="Flete" class="mx-auto h-16 mb-2">
+                <span class="font-medium">🚚 Flete</span>
+              </div>
+              <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="grua-vehiculo">
+                <img src="img-servicio/grua-planta.png" alt="Grúa Vehículo" class="mx-auto h-16 mb-2">
+                <span class="font-medium">🚗 Grúa Vehículo</span>
+              </div>
+              <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="paqueteria">
+                <img src="img-servicio/paqueteria.png" alt="Paquetería" class="mx-auto h-16 mb-2">
+                <span class="font-medium">📦 Paquetería</span>
+              </div>
+              <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="grua-carga">
+                <img src="img-servicio/grua-planta.png" alt="Grúa Carga" class="mx-auto h-16 mb-2">
+                <span class="font-medium">🏋️ Grúa Carga</span>
+              </div>
             </div>
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Paso 3: Vehículo -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="3">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 3: Selecciona Vehículo</h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="/img-vehiculo/camion-pequeño.jpg" alt="Camión Pequeño" class="mx-auto h-16 mb-2">
+                <span>Camión Pequeño <br> 14 pie </span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="/img-vehiculo/furgoneta.jpg" alt="Furgoneta" class="mx-auto h-16 mb-2">
+                <span>Furgoneta</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="/img-vehiculo/grua-auto.jpg" alt="Camión Medio" class="mx-auto h-16 mb-2">
+                <span>Grua Vehicular</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="/img-vehiculo/camion-grande.jpg" alt="Camión Grande" class="mx-auto h-16 mb-2">
+                <span>Camión Grande <br> 22 a 28 pie</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="/img-vehiculo/camion-pequeño.jpg" alt="Camión Especial" class="mx-auto h-16 mb-2">
+                <span>Camión Especial</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="img-vehiculo/grua-pesada.jpg" alt="Grúa Pequeña" class="mx-auto h-16 mb-2">
+                <span>Grúa de carga</span>
+              </div>
+              <div class="p-2 border rounded-lg text-center cursor-pointer">
+                <img src="/img-vehiculo/motor.jpg" alt="Otro Vehículo" class="mx-auto h-16 mb-2">
+                <span>Paquetería</span>
+              </div>
+            </div>
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Paso 4: Ubicación -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="4">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 4: Dirección de Origen y Destino</h4>
+            <input type="text" placeholder="Dirección de origen" class="w-full border p-2 rounded mb-4">
+            <input type="text" placeholder="Dirección de destino" class="w-full border p-2 rounded mb-4">
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Paso 5: Fecha y Hora -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="5">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 5: Fecha y Hora</h4>
+            <input type="date" class="w-full border p-2 rounded mb-4">
+            <input type="time" class="w-full border p-2 rounded mb-4">
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Paso 6: Confirmación -->
+          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="6">
+            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 6: Confirmación</h4>
+            <p class="text-gray-600 mb-4 text-center">Revisa tus datos y confirma la solicitud.</p>
+            <button type="submit" class="w-full bg-azulClaro text-white py-3 rounded-lg font-bold hover:bg-azulOscuro transition">Enviar Solicitud</button>
+
+            <div class="mt-6 border-t pt-4 text-center space-y-2">
+              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
+            </div>
+          </div>
+
+          <!-- Botones de navegación -->
+          <div class="flex justify-between mt-6">
+            <button type="button" id="prevBtn" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition hidden">Anterior</button>
+            <div class="flex-1"></div>
+            <button type="button" id="nextBtn" class="bg-azulClaro text-white px-6 py-2 rounded-lg font-medium hover:bg-azulOscuro transition">Siguiente</button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modales para preguntas específicas de cada servicio -->
+  
+  <!-- Modal Carga Pesada -->
+  <div id="modal-carga-pesada" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-azulOscuro">🏗️ Servicio de Carga Pesada</h3>
+            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <form id="form-carga-pesada" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de carga se va a transportar?</label>
+              <input type="text" name="tipo_carga" placeholder="maquinaria, materiales de construcción, productos industriales, etc." class="w-full border p-2 rounded" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuál es el peso total aproximado de la carga?</label>
+              <input type="text" name="peso_total" placeholder="Ej: 5 toneladas" class="w-full border p-2 rounded" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuáles son las dimensiones aproximadas (largo, ancho y alto)?</label>
+              <input type="text" name="dimensiones" placeholder="Ej: 5m x 2m x 3m" class="w-full border p-2 rounded" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Se necesita montacargas, grúa o brazo hidráulico para subir o bajar la carga?</label>
+              <select name="equipo_carga" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="montacargas">Montacargas</option>
+                <option value="grua">Grúa</option>
+                <option value="brazo_hidraulico">Brazo hidráulico</option>
+                <option value="no_necesita">No necesita</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿La carga requiere equipos especiales?</label>
+              <input type="text" name="equipos_especiales" placeholder="paletas, estibas, correas, cadenas, carretillas, etc." class="w-full border p-2 rounded">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
+              <select name="personal_disponible" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="si_personal">Sí, tenemos personal</option>
+                <option value="si_montacargas">Sí, tenemos montacargas</option>
+                <option value="si_ambos">Sí, tenemos ambos</option>
+                <option value="no">No disponemos</option>
+              </select>
+            </div>
+            <div class="flex justify-end space-x-2 pt-4">
+              <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Continuar</button>
+            </div>
+          </form>
         </div>
-    </div>
-
-    <!-- Main Content -->
-    <main class="max-w-4xl mx-auto p-4">
-        <div class="glass rounded-lg p-8">
-            <!-- Paso 1: Datos Personales -->
-            <div id="step1" class="step-content fade-in">
-                <div class="space-y-6">
-                    <div>
-                        <label for="fullName" class="block text-sm font-medium text-gray-700 mb-2">
-                            Nombre Completo *
-                        </label>
-                        <input type="text" id="fullName" class="form-input" placeholder="Ingrese su nombre completo" required>
-                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                    </div>
-                    
-                    <div>
-                        <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">
-                            Teléfono *
-                        </label>
-                        <input type="tel" id="phone" class="form-input" placeholder="(000) 000-0000" required>
-                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                    </div>
-                    
-                    <div>
-                        <label for="email" class="block text-sm font-medium text-gray-700 mb-2">
-                            Correo Electrónico *
-                        </label>
-                        <input type="email" id="email" class="form-input" placeholder="correo@ejemplo.com" required>
-                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                    </div>
-                    
-                    <div class="flex items-center space-x-3">
-                        <input type="checkbox" id="rncCheckbox" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-                        <label for="rncCheckbox" class="text-sm font-medium text-gray-700">
-                            ¿Desea solicitar con RNC?
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Paso 2: Selección de Servicio -->
-            <div id="step2" class="step-content hidden">
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    <div class="service-card" data-service="Mudanza">
-                        <i data-lucide="home" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
-                        <h3 class="font-semibold text-center">Mudanza</h3>
-                        <p class="text-sm text-gray-600 text-center">Servicio de mudanza</p>
-                    </div>
-                    
-                    <div class="service-card" data-service="Paquetería">
-                        <i data-lucide="package" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
-                        <h3 class="font-semibold text-center">Paquetería</h3>
-                        <p class="text-sm text-gray-600 text-center">Envío de paquetes</p>
-                    </div>
-                    
-                    <div class="service-card" data-service="Transporte Comercial">
-                        <i data-lucide="truck" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
-                        <h3 class="font-semibold text-center">Transporte Comercial</h3>
-                        <p class="text-sm text-gray-600 text-center">Transporte de mercancías</p>
-                    </div>
-                    
-                    <div class="service-card" data-service="Carga pesada">
-                        <i data-lucide="weight" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
-                        <h3 class="font-semibold text-center">Carga Pesada</h3>
-                        <p class="text-sm text-gray-600 text-center">Transporte pesado</p>
-                    </div>
-                    
-                    <div class="service-card" data-service="Fletes">
-                        <i data-lucide="truck" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
-                        <h3 class="font-semibold text-center">Fletes</h3>
-                        <p class="text-sm text-gray-600 text-center">Servicio de fletes</p>
-                    </div>
-                    
-                    <div class="service-card" data-service="Botes Aduanero">
-                        <i data-lucide="anchor" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
-                        <h3 class="font-semibold text-center">Botes Aduanero</h3>
-                        <p class="text-sm text-gray-600 text-center">Transporte marítimo</p>
-                    </div>
-                    
-                    <div class="service-card" data-service="Grúas">
-                        <i data-lucide="wrench" class="w-8 h-8 mx-auto mb-2 text-blue-600"></i>
-                        <h3 class="font-semibold text-center">Grúas</h3>
-                        <p class="text-sm text-gray-600 text-center">Servicio de grúas</p>
-                    </div>
-                </div>
-                <div class="error-message hidden text-red-500 text-sm mt-4 text-center"></div>
-            </div>
-
-   <!-- Paso 3: Tipo de Vehículo -->
-<div id="step3" class="step-content hidden">
-  <h2 class="text-xl font-semibold mb-6 text-center text-gray-800">
-    Selecciona el tipo de vehículo
-  </h2>
-
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-    <!-- 🚚 Camión Pequeño -->
-    <div
-      class="vehicle-card group border-2 border-transparent rounded-2xl bg-white/70 backdrop-blur-sm cursor-pointer hover:border-blue-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden"
-      data-vehicle="Camión Pequeño"
-    >
-      <div class="relative overflow-hidden rounded-t-2xl aspect-[16/9]">
-        <img
-          src="img-vehiculo/camion-pequeño.jpg"
-          alt="Camión Pequeño"
-          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-hover:opacity-90"
-        />
-      </div>
-      <div class="p-4 text-center">
-        <h3 class="font-semibold text-xl text-gray-800 mb-1">Camión Pequeño</h3>
-        <p class="text-sm text-gray-600">Ideal para mudanzas pequeñas o paquetería ligera.</p>
-      </div>
-    </div>
-
-    
-    <!-- 🚚 Camión Grande -->
-    <div
-      class="vehicle-card group border-2 border-transparent rounded-2xl bg-white/70 backdrop-blur-sm cursor-pointer hover:border-blue-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden"
-      data-vehicle="Camión Grande"
-    >
-      <div class="relative overflow-hidden rounded-t-2xl aspect-[16/9]">
-        <img
-          src="img-vehiculo/camion-grande.jpg"
-          alt="Camión Grande"
-          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-hover:opacity-90"
-        />
-      </div>
-      <div class="p-4 text-center">
-        <h3 class="font-semibold text-xl text-gray-800 mb-1">Camión Grande</h3>
-        <p class="text-sm text-gray-600">Ideal para mudanzas grandes o transporte pesado.</p>
-      </div>
-    </div>
-
-    <!-- 🚐 Furgoneta -->
-    <div
-      class="vehicle-card group border-2 border-transparent rounded-2xl bg-white/70 backdrop-blur-sm cursor-pointer hover:border-blue-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden"
-      data-vehicle="Furgoneta"
-    >
-      <div class="relative overflow-hidden rounded-t-2xl aspect-[16/9]">
-        <img
-          src="img-vehiculo/furgoneta.jpg"
-          alt="Furgoneta"
-          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-hover:opacity-90"
-        />
-      </div>
-      <div class="p-4 text-center">
-        <h3 class="font-semibold text-xl text-gray-800 mb-1">Furgoneta</h3>
-        <p class="text-sm text-gray-600">Ideal para transporte de paquetes o servicios express.</p>
-      </div>
-    </div>
-
-    <!-- 🏍️ Motocicleta -->
-    <div
-      class="vehicle-card group border-2 border-transparent rounded-2xl bg-white/70 backdrop-blur-sm cursor-pointer hover:border-blue-400 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden"
-      data-vehicle="Motocicleta"
-    >
-      <div class="relative overflow-hidden rounded-t-2xl aspect-[16/9]">
-        <img
-          src="img-vehiculo/motor.jpg"
-          alt="Motocicleta"
-          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 group-hover:opacity-90"
-        />
-      </div>
-      <div class="p-4 text-center">
-        <h3 class="font-semibold text-xl text-gray-800 mb-1">Motocicleta</h3>
-        <p class="text-sm text-gray-600">Perfecta para entregas rápidas y transporte urbano.</p>
       </div>
     </div>
   </div>
 
-  <div class="mt-6 text-center">
-    <button
-      id="nextStep3"
-      class="px-8 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
-    >
-      Continuar
-    </button>
+  <!-- Modal Paquetería -->
+  <div id="modal-paqueteria" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-azulOscuro">📦 Servicio de Paquetería</h3>
+            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <form id="form-paqueteria" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de artículo desea enviar?</label>
+              <input type="text" name="tipo_articulo" placeholder="Documentos, productos, regalos, etc." class="w-full border p-2 rounded" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Es un solo paquete o varios bultos?</label>
+              <select name="cantidad_paquetes" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="uno">Un solo paquete</option>
+                <option value="varios">Varios bultos</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Los paquetes están debidamente empacados o sellados?</label>
+              <select name="empacado" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="si">Sí, están empacados</option>
+                <option value="no">No, necesitan empaque</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿El paquete debe ser transportado en vehículo cerrado o en moto?</label>
+              <select name="tipo_vehiculo" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="vehiculo_cerrado">Vehículo cerrado</option>
+                <option value="moto">Moto</option>
+                <option value="cualquiera">Cualquiera</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Habrá alguien disponible para entregar y recibir el paquete en ambos puntos?</label>
+              <select name="persona_disponible" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="si_ambos">Sí, en ambos puntos</option>
+                <option value="solo_origen">Solo en origen</option>
+                <option value="solo_destino">Solo en destino</option>
+                <option value="no">No habrá nadie</option>
+              </select>
+            </div>
+            <div class="flex justify-end space-x-2 pt-4">
+              <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Continuar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div class="error-message hidden text-red-500 text-sm mt-4 text-center"></div>
-</div>
-
-
-
-            <!-- Paso 4: Ubicación -->
-            <div id="step4" class="step-content hidden">
-                <div class="space-y-6">
-                    <div>
-                        <label for="pickupAddress" class="block text-sm font-medium text-gray-700 mb-2">
-                            Dirección de Recogida *
-                        </label>
-                        <input type="text" id="pickupAddress" class="form-input" placeholder="Ingrese la dirección de recogida" required>
-                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                    </div>
-                    
-                    <div>
-                        <label for="deliveryAddress" class="block text-sm font-medium text-gray-700 mb-2">
-                            Dirección de Entrega *
-                        </label>
-                        <input type="text" id="deliveryAddress" class="form-input" placeholder="Ingrese la dirección de entrega" required>
-                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                    </div>
-                    
-                    <div id="map" class="w-full h-64 bg-gray-200 rounded-lg border border-gray-300 flex items-center justify-center">
-                        <div class="text-center text-gray-500">
-                            <i data-lucide="map-pin" class="w-8 h-8 mx-auto mb-2"></i>
-                            <p>Mapa se cargará aquí</p>
-                        </div>
-                    </div>
-                </div>
+  <!-- Modal Fletes -->
+  <div id="modal-flete" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-azulOscuro">🚚 Servicio de Fletes</h3>
+            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <form id="form-flete" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de carga desea transportar?</label>
+              <input type="text" name="tipo_carga" placeholder="Mercancía general, productos, materiales, etc." class="w-full border p-2 rounded" required>
             </div>
-
-            <!-- Paso 5: Fecha y Hora -->
-            <div id="step5" class="step-content hidden">
-                <div class="space-y-6">
-                    <div>
-                        <label for="serviceDate" class="block text-sm font-medium text-gray-700 mb-2">
-                            Fecha del Servicio *
-                        </label>
-                        <input type="date" id="serviceDate" class="form-input" required>
-                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                    </div>
-                    
-                    <div>
-                        <label for="serviceTime" class="block text-sm font-medium text-gray-700 mb-2">
-                            Hora del Servicio *
-                        </label>
-                        <select id="serviceTime" class="form-input" required>
-                            <option value="">Seleccione una hora</option>
-                            <option value="08:00">8:00 AM</option>
-                            <option value="09:00">9:00 AM</option>
-                            <option value="10:00">10:00 AM</option>
-                            <option value="11:00">11:00 AM</option>
-                            <option value="12:00">12:00 PM</option>
-                            <option value="13:00">1:00 PM</option>
-                            <option value="14:00">2:00 PM</option>
-                            <option value="15:00">3:00 PM</option>
-                            <option value="16:00">4:00 PM</option>
-                            <option value="17:00">5:00 PM</option>
-                            <option value="18:00">6:00 PM</option>
-                        </select>
-                        <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                    </div>
-                </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuál es el peso aproximado total?</label>
+              <input type="text" name="peso_total" placeholder="Ej: 2 toneladas" class="w-full border p-2 rounded" required>
             </div>
-
-            <!-- Paso 6: Confirmación -->
-            <div id="step6" class="step-content hidden">
-                <div class="space-y-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Resumen de su Solicitud</h3>
-                    
-                    <div class="glass rounded-lg p-4 space-y-3">
-                        <h4 class="font-semibold text-gray-700">Datos del Cliente</h4>
-                        <div class="text-sm text-gray-600">
-                            <p><strong>Nombre:</strong> <span id="summaryName"></span></p>
-                            <p><strong>Teléfono:</strong> <span id="summaryPhone"></span></p>
-                            <p><strong>Email:</strong> <span id="summaryEmail"></span></p>
-                            <div id="summaryRNC" class="hidden">
-                                <p><strong>Empresa:</strong> <span id="summaryCompany"></span></p>
-                                <p><strong>RNC:</strong> <span id="summaryRNCNumber"></span></p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="glass rounded-lg p-4 space-y-3">
-                        <h4 class="font-semibold text-gray-700">Detalles del Servicio</h4>
-                        <div class="text-sm text-gray-600">
-                            <p><strong>Servicio:</strong> <span id="summaryService"></span></p>
-                            <p><strong>Vehículo:</strong> <span id="summaryVehicle"></span></p>
-                            <p><strong>Fecha:</strong> <span id="summaryDate"></span></p>
-                            <p><strong>Hora:</strong> <span id="summaryTime"></span></p>
-                        </div>
-                    </div>
-                    
-                    <div class="glass rounded-lg p-4 space-y-3">
-                        <h4 class="font-semibold text-gray-700">Ubicaciones</h4>
-                        <div class="text-sm text-gray-600">
-                            <p><strong>Recogida:</strong> <span id="summaryPickup"></span></p>
-                            <p><strong>Entrega:</strong> <span id="summaryDelivery"></span></p>
-                        </div>
-                    </div>
-                </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuántas unidades o bultos son en total?</label>
+              <input type="number" name="cantidad_bultos" placeholder="Número de bultos" class="w-full border p-2 rounded" required>
             </div>
-
-            <!-- Navigation Buttons -->
-            <div class="flex justify-between mt-8">
-                <button id="prevBtn" class="btn-secondary hidden">
-                    <i data-lucide="chevron-left" class="w-4 h-4 mr-2"></i>
-                    Anterior
-                </button>
-                <div class="flex-1"></div>
-                <button id="nextBtn" class="btn-primary">
-                    Siguiente
-                    <i data-lucide="chevron-right" class="w-4 h-4 ml-2"></i>
-                </button>
-                <button id="submitBtn" class="btn-primary hidden">
-                    <i data-lucide="send" class="w-4 h-4 mr-2"></i>
-                    Enviar Solicitud
-                </button>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Requiere ayudantes para cargar o descargar la mercancía?</label>
+              <select name="ayudantes" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="si">Sí, necesito ayudantes</option>
+                <option value="no">No, no necesito</option>
+              </select>
             </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Se necesita montacargas, grúa, rampa o polea para subir o bajar la carga?</label>
+              <select name="equipo_necesario" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="montacargas">Montacargas</option>
+                <option value="grua">Grúa</option>
+                <option value="rampa">Rampa</option>
+                <option value="polea">Polea</option>
+                <option value="no_necesita">No necesita</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
+              <select name="personal_disponible" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="si_personal">Sí, tenemos personal</option>
+                <option value="si_montacargas">Sí, tenemos montacargas</option>
+                <option value="si_ambos">Sí, tenemos ambos</option>
+                <option value="no">No disponemos</option>
+              </select>
+            </div>
+            <div class="flex justify-end space-x-2 pt-4">
+              <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Continuar</button>
+            </div>
+          </form>
         </div>
-    </main>
-
-    <!-- Modal RNC -->
-    <div id="rncModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="glass rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 class="text-lg font-semibold text-gray-800 mb-4">Datos de la Empresa</h3>
-            <div class="space-y-4">
-                <div>
-                    <label for="companyName" class="block text-sm font-medium text-gray-700 mb-2">
-                        Nombre de la Empresa *
-                    </label>
-                    <input type="text" id="companyName" class="form-input" placeholder="Nombre de la empresa" required>
-                    <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                </div>
-                
-                <div>
-                    <label for="rncNumber" class="block text-sm font-medium text-gray-700 mb-2">
-                        RNC (9 dígitos) *
-                    </label>
-                    <input type="text" id="rncNumber" class="form-input" placeholder="000000000" maxlength="9" required>
-                    <div class="error-message hidden text-red-500 text-sm mt-1"></div>
-                </div>
-            </div>
-            
-            <div class="flex justify-end space-x-3 mt-6">
-                <button id="cancelRNC" class="btn-secondary">Cancelar</button>
-                <button id="saveRNC" class="btn-primary">Guardar</button>
-            </div>
-        </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Modal de Éxito -->
-    <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="glass rounded-lg p-8 w-full max-w-md mx-4 text-center">
-            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i data-lucide="check" class="w-8 h-8 text-green-600"></i>
+  <!-- Modal Transporte Comercial -->
+  <div id="modal-transporte-comercial" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-azulOscuro">🏢 Servicio de Transporte Comercial</h3>
+            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <form id="form-transporte-comercial" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de productos o mercancía desea transportar?</label>
+              <input type="text" name="tipo_productos" placeholder="Productos comerciales, mercancía, etc." class="w-full border p-2 rounded" required>
             </div>
-            <h3 class="text-xl font-semibold text-gray-800 mb-2">¡Solicitud Enviada!</h3>
-            <p class="text-gray-600 mb-6">Su solicitud ha sido enviada exitosamente. Nos pondremos en contacto con usted pronto.</p>
-            
-            <div class="space-y-3">
-                <button id="downloadApp" class="btn-primary w-full">
-                    <i data-lucide="smartphone" class="w-4 h-4 mr-2"></i>
-                    📱 Descargar nuestra app para seguimiento
-                </button>
-                <button id="closeSuccess" class="btn-secondary w-full">Cerrar</button>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿La carga es propia de la empresa o de un cliente?</label>
+              <select name="propiedad_carga" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="propia">Propia de la empresa</option>
+                <option value="cliente">De un cliente</option>
+              </select>
             </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuántas unidades, cajas o paletas serán transportadas?</label>
+              <input type="number" name="cantidad_unidades" placeholder="Número de unidades" class="w-full border p-2 rounded" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuál es el peso total aproximado?</label>
+              <input type="text" name="peso_total" placeholder="Ej: 1.5 toneladas" class="w-full border p-2 rounded" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Requiere ayudantes adicionales para carga y descarga?</label>
+              <select name="ayudantes_adicionales" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="si">Sí, necesito ayudantes</option>
+                <option value="no">No, no necesito</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
+              <select name="personal_disponible" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="si_personal">Sí, tenemos personal</option>
+                <option value="si_montacargas">Sí, tenemos montacargas</option>
+                <option value="si_ambos">Sí, tenemos ambos</option>
+                <option value="no">No disponemos</option>
+              </select>
+            </div>
+            <div class="flex justify-end space-x-2 pt-4">
+              <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Continuar</button>
+            </div>
+          </form>
         </div>
+      </div>
     </div>
+  </div>
 
-    <script src="js/cliente.js" defer></script>
-    <script>
-        // Inicializar iconos de Lucide
-        document.addEventListener('DOMContentLoaded', function() {
-            lucide.createIcons();
-        });
-    </script>
+  <!-- Modal Mudanza -->
+  <div id="modal-mudanza" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-azulOscuro">🏠 Servicio de Mudanza</h3>
+            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <form id="form-mudanza" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de objetos necesita trasladar?</label>
+              <textarea name="objetos_trasladar" placeholder="muebles, electrodomésticos, cajas, cama, estufa, lavadora, sillones, mesas, etc." class="w-full border p-2 rounded h-20" required></textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Hay objetos frágiles o de valor que necesiten un trato especial? Describa.</label>
+              <textarea name="objetos_fragiles" placeholder="Describa los objetos frágiles o de valor" class="w-full border p-2 rounded h-20"></textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿En qué tipo de vivienda o local se encuentra actualmente?</label>
+              <select name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="casa">Casa</option>
+                <option value="apartamento">Apartamento</option>
+                <option value="oficina">Oficina</option>
+                <option value="local_comercial">Local comercial</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿En qué piso se encuentra el punto de origen y el de destino?</label>
+              <div class="grid grid-cols-2 gap-4">
+                <input type="text" name="piso_origen" placeholder="Piso origen" class="border p-2 rounded" required>
+                <input type="text" name="piso_destino" placeholder="Piso destino" class="border p-2 rounded" required>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Hay ascensor o solo escaleras?</label>
+              <div class="grid grid-cols-2 gap-4">
+                <select name="acceso_origen" class="border p-2 rounded" required>
+                  <option value="">Origen</option>
+                  <option value="ascensor">Ascensor</option>
+                  <option value="escaleras">Solo escaleras</option>
+                  <option value="ambos">Ambos</option>
+                </select>
+                <select name="acceso_destino" class="border p-2 rounded" required>
+                  <option value="">Destino</option>
+                  <option value="ascensor">Ascensor</option>
+                  <option value="escaleras">Solo escaleras</option>
+                  <option value="ambos">Ambos</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-4">
+              <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Continuar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Grúa Vehículo -->
+  <div id="modal-grua-vehiculo" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-azulOscuro">🚗 Servicio de Grúa de Vehículo</h3>
+            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <form id="form-grua-vehiculo" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de vehículo es?</label>
+              <select name="tipo_vehiculo" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="carro">Carro</option>
+                <option value="jeepeta">Jeepeta</option>
+                <option value="camioneta">Camioneta</option>
+                <option value="camion">Camión</option>
+                <option value="motor">Motor</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuál es la marca, modelo y color del vehículo?</label>
+              <div class="grid grid-cols-3 gap-2">
+                <input type="text" name="marca" placeholder="Marca" class="border p-2 rounded" required>
+                <input type="text" name="modelo" placeholder="Modelo" class="border p-2 rounded" required>
+                <input type="text" name="color" placeholder="Color" class="border p-2 rounded" required>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿El vehículo tiene tracción delantera, trasera o es 4x4?</label>
+              <select name="traccion" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="delantera">Tracción delantera</option>
+                <option value="trasera">Tracción trasera</option>
+                <option value="4x4">4x4</option>
+                <option value="no_se">No sé</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de servicio necesita?</label>
+              <select name="tipo_servicio" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="remolque_averia">Remolque por avería</option>
+                <option value="accidente_transito">Accidente de tránsito</option>
+                <option value="traslado_preventivo">Traslado preventivo</option>
+                <option value="retiro_taller">Retiro del taller o entrega a domicilio</option>
+              </select>
+            </div>
+            <div class="flex justify-end space-x-2 pt-4">
+              <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Continuar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Grúa Carga -->
+  <div id="modal-grua-carga" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-azulOscuro">🏋️ Servicio de Grúa de Carga</h3>
+            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <form id="form-grua-carga" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de carga necesita mover o levantar?</label>
+              <input type="text" name="tipo_carga" placeholder="contenedor, maquinaria, estructura metálica, generador, camión, etc." class="w-full border p-2 rounded" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuál es el peso aproximado de la carga?</label>
+              <input type="text" name="peso_carga" placeholder="Ej: 10 toneladas" class="w-full border p-2 rounded" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Cuenta con puntos de anclaje o enganche para izar la carga de forma segura?</label>
+              <select name="puntos_anclaje" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="si">Sí, cuenta con puntos de anclaje</option>
+                <option value="no">No, necesita evaluación</option>
+                <option value="no_se">No estoy seguro</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">¿Qué tipo de maniobra se realizará?</label>
+              <select name="tipo_maniobra" class="w-full border p-2 rounded" required>
+                <option value="">Seleccione una opción</option>
+                <option value="izado_vertical">Izado vertical</option>
+                <option value="carga_transporte">Carga y transporte</option>
+                <option value="descarga_reubicacion">Descarga o reubicación en el mismo sitio</option>
+              </select>
+            </div>
+            <div class="flex justify-end space-x-2 pt-4">
+              <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Continuar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    let selectedService = '';
+    let serviceQuestions = {};
+    const steps = document.querySelectorAll('.step');
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const progressBar = document.getElementById('progress-bar');
+
+    function showStep(step) {
+      steps.forEach(s => s.classList.add('hidden'));
+      document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
+      prevBtn.classList.toggle('hidden', step === 1);
+      nextBtn.classList.toggle('hidden', step === steps.length);
+      progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
+    }
+
+    // Manejar selección de servicios
+    document.querySelectorAll('.service-card').forEach(card => {
+      card.addEventListener('click', function() {
+        // Remover selección anterior
+        document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+        
+        // Seleccionar actual
+        this.classList.add('border-azulClaro', 'bg-blue-50');
+        selectedService = this.dataset.service;
+        
+        // Mostrar modal correspondiente
+        const modalId = `modal-${selectedService}`;
+        const modal = document.getElementById(modalId);
+        if (modal) {
+          modal.classList.remove('hidden');
+        }
+      });
+    });
+
+    // Manejar cierre de modales
+    document.querySelectorAll('.close-modal').forEach(btn => {
+      btn.addEventListener('click', function() {
+        this.closest('.fixed').classList.add('hidden');
+      });
+    });
+
+    // Manejar envío de formularios de modales
+    document.querySelectorAll('[id^="form-"]').forEach(form => {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Guardar respuestas del servicio
+        const formData = new FormData(this);
+        const serviceType = this.id.replace('form-', '');
+        serviceQuestions[serviceType] = {};
+        
+        for (let [key, value] of formData.entries()) {
+          serviceQuestions[serviceType][key] = value;
+        }
+        
+        // Cerrar modal y continuar al siguiente paso
+        this.closest('.fixed').classList.add('hidden');
+        if (currentStep < steps.length) {
+          currentStep++;
+          showStep(currentStep);
+        }
+      });
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (currentStep === 2 && !selectedService) {
+        alert('Por favor seleccione un servicio');
+        return;
+      }
+      
+      if(currentStep < steps.length) currentStep++;
+      showStep(currentStep);
+    });
+
+    prevBtn.addEventListener('click', () => {
+      if(currentStep > 1) currentStep--;
+      showStep(currentStep);
+    });
+
+    // Manejar envío final del formulario
+    document.getElementById('serviceForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      // Recopilar todos los datos del formulario
+      const formData = new FormData(this);
+      const orderData = {
+        personalData: {},
+        service: selectedService,
+        serviceQuestions: serviceQuestions[selectedService] || {},
+        vehicle: '',
+        addresses: {},
+        datetime: {},
+        timestamp: new Date().toISOString()
+      };
+      
+      // Datos personales
+      orderData.personalData.nombre = formData.get('nombre') || document.querySelector('input[placeholder="Nombre completo"]').value;
+      orderData.personalData.telefono = formData.get('telefono') || document.querySelector('input[placeholder="Teléfono"]').value;
+      orderData.personalData.email = formData.get('email') || document.querySelector('input[placeholder="Correo"]').value;
+      
+      // Generar ID consecutivo
+      let orderCount = localStorage.getItem('orderCount') || 0;
+      orderCount = parseInt(orderCount) + 1;
+      localStorage.setItem('orderCount', orderCount);
+      
+      const orderId = `TLC-${orderCount.toString().padStart(2, '0')}`;
+      orderData.id = orderId;
+      
+      // Guardar en localStorage
+      let orders = JSON.parse(localStorage.getItem('orders') || '[]');
+      orders.push(orderData);
+      localStorage.setItem('orders', JSON.stringify(orders));
+      
+      alert(`¡Solicitud enviada exitosamente! Su número de orden es: ${orderId}`);
+      
+      // Redirigir o limpiar formulario
+      window.location.href = 'index.html';
+    });
+
+    showStep(currentStep);
+  </script>
 </body>
 </html>
