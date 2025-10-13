@@ -144,7 +144,7 @@ async function loadVehicles() {
         const vehicleCard = document.createElement('div');
         vehicleCard.className = 'vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
         
-        const imageName = vehicle.name.toLowerCase().replace(/ /g, '-') + '.jpg';
+        const imageName = vehicle.name.toLowerCase().replace(/ /g, '-').replace('ú', 'u') + '.jpg';
 
         vehicleCard.innerHTML = `
             <img src="img-vehiculo/${imageName}" alt="${vehicle.name}" class="mx-auto w-16 h-16 object-contain mb-2" onerror="this.src='img/1vertical.png'">
@@ -175,6 +175,38 @@ document.addEventListener('DOMContentLoaded', function() {
   // Cargar servicios y vehículos dinámicamente
   loadServices();
   loadVehicles();
+
+  // Manejar selección de vehículos (se añade después de cargar)
+  function addVehicleCardListeners() {
+      document.querySelectorAll('.vehicle-card').forEach(card => {
+        card.addEventListener('click', function() {
+          document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+          this.classList.add('border-azulClaro', 'bg-blue-50');
+        });
+      });
+  }
+
+  // Manejar selección de servicios (se añade después de cargar)
+  function addServiceCardListeners() {
+      document.querySelectorAll('.service-card').forEach(card => {
+        card.addEventListener('click', function() {
+          document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+          this.classList.add('border-azulClaro', 'bg-blue-50');
+          
+          selectedService = {
+              id: this.dataset.serviceId,
+              name: this.dataset.serviceName
+          };
+
+          // Normalizar nombre para buscar modal
+          const modalName = selectedService.name.toLowerCase().replace(/ /g, '-');
+          const modal = document.getElementById(`modal-${modalName}`);
+          if (modal) {
+            modal.classList.remove('hidden');
+          }
+        });
+      });
+  }
 
   // Manejar cierre de modales
   document.querySelectorAll('.close-modal').forEach(btn => {

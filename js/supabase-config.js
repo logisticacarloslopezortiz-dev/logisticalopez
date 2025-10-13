@@ -159,7 +159,7 @@ class SupabaseConfig {
         try {
             const { data, error } = await this.client
                 .from('services')
-                .select('*')
+                .select('*') // Asegurarse de que se seleccionan todas las columnas
                 .eq('is_active', true)
                 .order('name');
             
@@ -179,7 +179,7 @@ class SupabaseConfig {
         try {
             const { data, error } = await this.client
                 .from('vehicles')
-                .select('*')
+                .select('*') // Asegurarse de que se seleccionan todas las columnas
                 .eq('is_active', true)
                 .order('name');
             
