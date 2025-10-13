@@ -6,65 +6,23 @@ let sortDirection = 'asc';
 let selectedOrderIdForAssign = null;
 
 // Configuración de notificaciones
-const NOTIFICATION_DURATION = 5000; // 5 segundos por defecto
+const NOTIFICATION_DURATION = 5000;
 
 // Funciones utilitarias
-function loadOrders() {
-  // Cargar desde localStorage y desde supabase si está disponible
-  let orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-  
-  // Si hay configuración de Supabase, intentar cargar desde allí también
-  if (typeof supabaseConfig !== 'undefined' && supabaseConfig.url) {
-    loadOrdersFromSupabase().then(supabaseOrders => {
-      if (supabaseOrders && supabaseOrders.length > 0) {
-        // Combinar órdenes locales y de Supabase, evitando duplicados
-        const combinedOrders = [...orders];
-        supabaseOrders.forEach(supabaseOrder => {
-          if (!combinedOrders.find(order => order.id === supabaseOrder.id)) {
-            combinedOrders.push(supabaseOrder);
-          }
-        });
-        allOrders = combinedOrders;
-        saveOrders(allOrders);
-        updateDashboard();
-        renderOrders();
-      }
-    }).catch(error => {
-      console.log('Error loading from Supabase:', error);
-    });
-  }
-  
-  return orders;
+async function loadOrders() {
+  // Usar siempre la clase SupabaseConfig como única fuente de verdad
+  allOrders = await supabaseConfig.getOrders();
+  filteredOrders = [...allOrders];
+  renderOrders();
+  updateResumen();
 }
 
 // Función para recargar órdenes desde localStorage (útil para actualizaciones en tiempo real)
-function reloadOrdersFromStorage() {
-  const orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-  allOrders = orders;
+async function reloadOrdersFromStorage() {
+  allOrders = await supabaseConfig.getOrders();
   filteredOrders = [...allOrders];
-  updateDashboard();
+  updateResumen();
   renderOrders();
-}
-
-async function loadOrdersFromSupabase() {
-  try {
-    if (typeof supabaseConfig === 'undefined') return [];
-    
-    const response = await fetch(`${supabaseConfig.url}/rest/v1/orders`, {
-      headers: {
-        'apikey': supabaseConfig.key,
-        'Authorization': `Bearer ${supabaseConfig.key}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (response.ok) {
-      return await response.json();
-    }
-  } catch (error) {
-    console.log('Error fetching from Supabase:', error);
-  }
-  return [];
 }
 
 function saveOrders(orders) {
@@ -317,14 +275,17 @@ function renderOrders(){
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-sm font-medium text-gray-900">${o.name}</div>
         <div class="text-sm text-gray-500">${o.phone}</div>
-        ${o.email ? `<div class="text-sm text-gray-500">${o.email}</div>` : ''}
-        ${o.rnc ? `<div class="text-xs text-blue-600 font-medium">RNC: ${o.rnc}</div>` : ''}
-        ${o.empresa ? `<div class="text-xs text-blue-600">${o.empresa}</div>` : ''}
+        ${o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.email}">${o.email}</div>` : ''}
+        ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block">RNC: ${o.rnc} (${o.empresa || 'N/A'})</div>` : ''}
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-sm text-gray-900">${o.service}</div>
-        ${o.serviceQuestions && Object.keys(o.serviceQuestions).length > 0 ? 
-          `<button onclick="showServiceDetails('${o.id}')" class="text-xs text-blue-600 hover:text-blue-800 underline mt-1">Ver detalles</button>` : ''}
+        ${o.serviceQuestions && Object.keys(o.serviceQuestions).length > 0 ?
+          `<button onclick="showServiceDetails('${o.id}')" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">
+            <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>Ver detalles
+          </button>`
+          : ''
+        }
       </td>
       <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle}</td>
       <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">
@@ -379,6 +340,43 @@ function renderOrders(){
   } catch (error) {
     console.warn('Error al actualizar gráficos o alertas:', error.message);
   }
+}
+
+// Función para mostrar detalles del servicio
+function showServiceDetails(orderId) {
+  const order = allOrders.find(o => o.id === orderId);
+  if (!order || !order.serviceQuestions || Object.keys(order.serviceQuestions).length === 0) {
+    showError('Sin detalles', 'Esta orden no tiene detalles adicionales de servicio.');
+    return;
+  }
+
+  let detailsHtml = `<h3 class="text-lg font-semibold mb-4 text-gray-800">Detalles del Servicio: ${order.service}</h3>`;
+  detailsHtml += '<div class="space-y-3 text-sm">';
+
+  for (const [question, answer] of Object.entries(order.serviceQuestions)) {
+    // Formatear la pregunta para que sea más legible
+    const formattedQuestion = question.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    detailsHtml += `
+      <div>
+        <p class="font-medium text-gray-600">${formattedQuestion}</p>
+        <p class="text-gray-900 pl-2">${answer || 'No especificado'}</p>
+      </div>
+    `;
+  }
+  detailsHtml += '</div>';
+
+  // Crear y mostrar el modal
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4';
+  modal.innerHTML = `
+    <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto shadow-xl">
+      ${detailsHtml}
+      <button onclick="this.closest('.fixed').remove()" class="mt-6 w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+        Cerrar
+      </button>
+    </div>
+  `;
+  document.body.appendChild(modal);
 }
 
 // Función para actualizar resumen
@@ -701,6 +699,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.changeOrderStatus = changeOrderStatus;
   window.generateAndSendInvoice = generateAndSendInvoice;
 
+
   // Escuchar cambios en localStorage para actualizar automáticamente
   window.addEventListener('storage', function(e) {
     if (e.key === 'tlc_orders') {
@@ -757,47 +756,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (urgentes) urgentes.textContent = urgentesCount;
   }
   
-  // Función para actualizar los paneles de resumen
-  function updateSummaryPanels() {
-    // Actualizar contadores en los paneles de resumen
-    const totalPedidos = document.getElementById('totalPedidos');
-    const pedidosCompletados = document.getElementById('pedidosCompletados');
-    const pedidosPendientes = document.getElementById('pedidosPendientes');
-    const pedidosHoy = document.getElementById('pedidosHoy');
-    const porcentajeCompletados = document.getElementById('porcentajeCompletados');
-    const urgentes = document.getElementById('urgentes');
-    
-    if (totalPedidos) totalPedidos.textContent = allOrders.length;
-    
-    // Contar pedidos completados
-    const completados = allOrders.filter(o => o.status === 'Completado').length;
-    if (pedidosCompletados) pedidosCompletados.textContent = completados;
-    
-    // Calcular porcentaje de completados
-    const porcentaje = allOrders.length > 0 ? Math.round((completados / allOrders.length) * 100) : 0;
-    if (porcentajeCompletados) porcentajeCompletados.textContent = porcentaje;
-    
-    // Contar pedidos pendientes
-    const pendientes = allOrders.filter(o => o.status !== 'Completado').length;
-    if (pedidosPendientes) pedidosPendientes.textContent = pendientes;
-    
-    // Contar pedidos de hoy
-    const hoy = new Date().toISOString().split('T')[0];
-    const pedidosDeHoy = allOrders.filter(o => o.date === hoy).length;
-    if (pedidosHoy) pedidosHoy.textContent = pedidosDeHoy;
-    
-    // Contar urgentes (pedidos para hoy o mañana que no están completados)
-    const manana = new Date();
-    manana.setDate(manana.getDate() + 1);
-    const mananaStr = manana.toISOString().split('T')[0];
-    
-    const urgentesCount = allOrders.filter(o => 
-      (o.date === hoy || o.date === mananaStr) && o.status !== 'Completado'
-    ).length;
-    
-    if (urgentes) urgentes.textContent = urgentesCount;
-  }
-
   // Función para editar precio
   function editPrice(orderId, element) {
     const currentPrice = element.textContent.trim();
@@ -908,37 +866,6 @@ Email: info@tlc-transporte.com
     }
   }
   
-  // Función para mostrar detalles del servicio
-  function showServiceDetails(orderId) {
-    const order = allOrders.find(o => o.id === orderId);
-    if (!order || !order.serviceQuestions) return;
-    
-    let detailsHtml = `<h3 class="text-lg font-semibold mb-3">Detalles del Servicio - ${order.service}</h3>`;
-    
-    for (const [question, answer] of Object.entries(order.serviceQuestions)) {
-      detailsHtml += `
-        <div class="mb-2">
-          <span class="font-medium text-gray-700">${question}:</span>
-          <span class="text-gray-900 ml-2">${answer}</span>
-        </div>
-      `;
-    }
-    
-    // Crear modal
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-    modal.innerHTML = `
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto">
-        ${detailsHtml}
-        <button onclick="this.closest('.fixed').remove()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-          Cerrar
-        </button>
-      </div>
-    `;
-    
-    document.body.appendChild(modal);
-  }
-  
   // Hacer las funciones globales
   window.editPrice = editPrice;
   window.generateAndSendInvoice = generateAndSendInvoice;
@@ -946,14 +873,13 @@ Email: info@tlc-transporte.com
 
   // Inicialización
   function init() {
-    // Cargar datos de prueba si no hay pedidos
-    allOrders = loadOrders();
-    if (allOrders.length === 0 && typeof loadTestData === 'function') {
-      allOrders = loadTestData();
-    }
-    filteredOrders = [...allOrders];
-    renderOrders();
-    console.log('Sistema inicializado con', allOrders.length, 'pedidos');
+    loadOrders().then(() => {
+      if (allOrders.length === 0 && typeof loadTestData === 'function') {
+        allOrders = loadTestData(); // Cargar datos de prueba si Supabase está vacío
+        saveOrders(allOrders); // Guardarlos para que otras partes los vean
+      }
+      console.log('Sistema inicializado con', allOrders.length, 'pedidos.');
+    });
   }
 
   init();

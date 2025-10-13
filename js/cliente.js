@@ -1,11 +1,13 @@
 // Variables globales
 let currentStep = 1;
-let selectedService = '';
+let selectedService = null; // Ahora será un objeto {id, name}
 let serviceQuestions = {};
 
 // Elementos del DOM
 let steps, nextBtn, prevBtn, progressBar;
 
+const serviceContainer = document.querySelector('.step[data-step="2"] .grid');
+const vehicleContainer = document.querySelector('.step[data-step="3"] .grid');
 // Función para mostrar paso específico
 function showStep(step) {
   steps.forEach(s => s.classList.add('hidden'));
@@ -60,7 +62,7 @@ function validateCurrentStep() {
     }
   }
   
-  if (currentStep === 2 && !selectedService) {
+  if (currentStep === 2 && (!selectedService || !selectedService.name)) {
     alert('Por favor seleccione un servicio');
     return false;
   }
@@ -113,6 +115,48 @@ function toggleRNCField() {
   }
 }
 
+// --- Carga dinámica de servicios y vehículos ---
+async function loadServices() {
+    const services = await supabaseConfig.getServices();
+    serviceContainer.innerHTML = ''; // Limpiar contenido estático
+    services.forEach(service => {
+        const serviceCard = document.createElement('div');
+        serviceCard.className = 'service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
+        serviceCard.dataset.serviceName = service.name; // Usar el nombre para el modal
+        serviceCard.dataset.serviceId = service.id;
+
+        // Normalizar nombre para buscar imagen
+        const imageName = service.name.toLowerCase().replace(/ /g, '-') + '.png';
+
+        serviceCard.innerHTML = `
+            <img src="img-servicio/${imageName}" alt="${service.name}" class="mx-auto w-16 h-16 object-contain mb-2" onerror="this.src='img/1vertical.png'">
+            <span class="font-medium">${service.name}</span>
+        `;
+        serviceContainer.appendChild(serviceCard);
+    });
+    addServiceCardListeners();
+}
+
+async function loadVehicles() {
+    const vehicles = await supabaseConfig.getVehicles();
+    vehicleContainer.innerHTML = ''; // Limpiar contenido estático
+    vehicles.forEach(vehicle => {
+        const vehicleCard = document.createElement('div');
+        vehicleCard.className = 'vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
+        
+        const imageName = vehicle.name.toLowerCase().replace(/ /g, '-') + '.jpg';
+
+        vehicleCard.innerHTML = `
+            <img src="img-vehiculo/${imageName}" alt="${vehicle.name}" class="mx-auto w-16 h-16 object-contain mb-2" onerror="this.src='img/1vertical.png'">
+            <h4 class="font-medium">${vehicle.name}</h4>
+            ${vehicle.description ? `<span class="text-sm text-gray-600">${vehicle.description}</span>` : ''}
+        `;
+        vehicleContainer.appendChild(vehicleCard);
+    });
+    addVehicleCardListeners();
+}
+
+
 // Inicialización cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', function() {
   
@@ -128,35 +172,41 @@ document.addEventListener('DOMContentLoaded', function() {
     rncCheckbox.addEventListener('change', toggleRNCField);
   }
   
-  // Manejar selección de servicios
-  document.querySelectorAll('.service-card').forEach(card => {
-    card.addEventListener('click', function() {
-      // Remover selección anterior
-      document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
-      
-      // Seleccionar actual
-      this.classList.add('border-azulClaro', 'bg-blue-50');
-      selectedService = this.dataset.service;
-      
-      // Mostrar modal correspondiente
-      const modalId = `modal-${selectedService}`;
-      const modal = document.getElementById(modalId);
-      if (modal) {
-        modal.classList.remove('hidden');
-      }
-    });
-  });
+  // Cargar servicios y vehículos dinámicamente
+  loadServices();
+  loadVehicles();
 
-  // Manejar selección de vehículos
-  document.querySelectorAll('.vehicle-card').forEach(card => {
-    card.addEventListener('click', function() {
-      // Remover selección anterior
-      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
-      
-      // Seleccionar actual
-      this.classList.add('border-azulClaro', 'bg-blue-50');
-    });
-  });
+  // Manejar selección de vehículos (se añade después de cargar)
+  function addVehicleCardListeners() {
+      document.querySelectorAll('.vehicle-card').forEach(card => {
+        card.addEventListener('click', function() {
+          document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+          this.classList.add('border-azulClaro', 'bg-blue-50');
+        });
+      });
+  }
+
+  // Manejar selección de servicios (se añade después de cargar)
+  function addServiceCardListeners() {
+      document.querySelectorAll('.service-card').forEach(card => {
+        card.addEventListener('click', function() {
+          document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+          this.classList.add('border-azulClaro', 'bg-blue-50');
+          
+          selectedService = {
+              id: this.dataset.serviceId,
+              name: this.dataset.serviceName
+          };
+
+          // Normalizar nombre para buscar modal
+          const modalName = selectedService.name.toLowerCase().replace(/ /g, '-');
+          const modal = document.getElementById(`modal-${modalName}`);
+          if (modal) {
+            modal.classList.remove('hidden');
+          }
+        });
+      });
+  }
 
   // Manejar cierre de modales
   document.querySelectorAll('.close-modal').forEach(btn => {
@@ -172,11 +222,10 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Guardar respuestas del servicio
       const formData = new FormData(this);
-      const serviceType = this.id.replace('form-', '');
-      serviceQuestions[serviceType] = {};
+      serviceQuestions = {}; // Reiniciar por si el usuario cambia de opinión
       
       for (let [key, value] of formData.entries()) {
-        serviceQuestions[serviceType][key] = value;
+        serviceQuestions[key] = value;
       }
       
       // Cerrar modal y continuar al siguiente paso
@@ -241,8 +290,8 @@ document.addEventListener('DOMContentLoaded', function() {
         email: email,
         rnc: rnc,
         empresa: empresa,
-        service: selectedService,
-        serviceQuestions: serviceQuestions[selectedService] || {},
+        service: selectedService.name,
+        serviceQuestions: serviceQuestions,
         vehicle: vehiculo,
         pickup: origen,
         delivery: destino,

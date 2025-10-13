@@ -192,6 +192,22 @@ function showActiveJob(order){
             <div class="text-green-700 font-bold">${order.estimatedPrice || 'Por confirmar'}</div>
           </div>
         </div>
+        
+        ${order.serviceQuestions && Object.keys(order.serviceQuestions).length > 0 ? `
+        <div class="sm:col-span-2 border-t pt-4 mt-4">
+          <div class="flex items-start gap-3">
+            <i data-lucide="clipboard-list" class="w-5 h-5 text-gray-500 mt-0.5"></i>
+            <div>
+              <div class="font-semibold text-gray-800 mb-2">Detalles Adicionales del Servicio</div>
+              <div class="space-y-2 text-sm">
+                ${Object.entries(order.serviceQuestions).map(([key, value]) => `
+                  <div class="text-gray-600"><span class="font-medium text-gray-700">${key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}:</span> ${value}</div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        </div>` : ''}
+
       </div>
     </div>
   `;
@@ -605,39 +621,7 @@ async function sendPushToClient(order, statusKey) {
 
 // Cambiar estado de la orden (colaborador)
 async function changeStatus(orderId, newStatusKey) {
-  const idx = all.findIndex(o => o.id === orderId);
-  if (idx === -1) return;
-  all[idx].lastCollabStatus = newStatusKey;
-
-  // Si se finaliza el pedido, actualizar estado global y fecha de finalización
-  if (newStatusKey === 'entregado') {
-    all[idx].status = 'Completado';
-    all[idx].completedAt = new Date().toISOString();
-  }
-
-  const links = notifyClient(all[idx], newStatusKey);
-
-  const pushed = await sendPushToClient(all[idx], newStatusKey);
-  if (!pushed) await showBrowserNotification(all[idx], newStatusKey);
-
-  if (newStatusKey === 'entregado' && activeJobId === orderId) {
-    activeJobId = null;
-    localStorage.removeItem('tlc_collab_active_job');
-    document.getElementById('activeJobSection').classList.add('hidden');
-  }
-
-  saveOrders(all);
-  filterAndRender();
-  if (activeJobId === orderId) updateActiveJobView();
-
-  try { window.open(links.wa, '_blank'); } catch(e) {}
-
-  const t = document.createElement('div');
-  t.className = 'fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-2 rounded shadow';
-  t.innerHTML = `<div class="flex items-center gap-2"><i data-lucide="bell" class="w-4 h-4"></i><span>Estado actualizado y cliente notificado</span><a class="underline ml-2" target="_blank" href="${links.mailto}">Email</a><a class="underline ml-2" target="_blank" href="${links.wa}">WhatsApp</a></div>`;
-  document.body.appendChild(t);
-  setTimeout(()=>{ t.remove(); }, 4000);
-  if (window.lucide) lucide.createIcons();
+  await handleStatusChange(orderId, newStatusKey);
 }
 
 filterAndRender();

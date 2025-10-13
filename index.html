@@ -70,6 +70,11 @@
       <a href="seguimiento.html" class="border border-white px-8 py-4 rounded-lg font-bold hover:bg-white hover:text-azulOscuro transition">Ver Estado</a>
     </div>
     <p class="mt-6 text-lg">📲 ¡Descarga nuestra app para seguimiento en tiempo real!</p>
+    <div class="mt-4 flex justify-center">
+      <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2">
+        <i class="fas fa-download"></i> Instalar App
+      </button>
+    </div>
   </section>
 
   <!-- Nosotros -->
@@ -134,6 +139,30 @@
     const mobileBtn = document.getElementById('mobile-menu-btn');
     const mobileMenu = document.getElementById('mobile-menu');
     mobileBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+
+    // Lógica para la instalación de la PWA
+    let deferredPrompt;
+    const installButton = document.getElementById('install-app-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevenir que Chrome 67 y anteriores muestren el prompt automáticamente
+      e.preventDefault();
+      // Guardar el evento para que pueda ser disparado más tarde
+      deferredPrompt = e;
+      // Mostrar el botón de instalación
+      if (installButton) {
+        installButton.classList.remove('hidden');
+      }
+    });
+
+    if (installButton) {
+      installButton.addEventListener('click', async () => {
+        if (deferredPrompt) {
+          // Mostrar el prompt de instalación
+          deferredPrompt.prompt();
+        }
+      });
+    }
   </script>
 </body>
 </html>

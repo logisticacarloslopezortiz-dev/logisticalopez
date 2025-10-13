@@ -2,9 +2,9 @@
 class SupabaseConfig {
     constructor() {
         // Cargar variables de entorno desde .env o usar valores por defecto
-        this.supabaseUrl = this.getEnvVar('SUPABASE_URL') || 'https://fkprllkxyjtosjhtikxy.supabase.co';
+        this.supabaseUrl = this.getEnvVar('SUPABASE_URL');
         this.supabaseKey = this.getEnvVar('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ';
-        this.useLocalStorage = this.getEnvVar('USE_LOCAL_STORAGE') === 'true' || true;
+        this.useLocalStorage = this.getEnvVar('USE_LOCAL_STORAGE') === 'true';
         
         // Inicializar cliente de Supabase si está disponible
         if (typeof supabase !== 'undefined' && !this.useLocalStorage) {
@@ -18,10 +18,10 @@ class SupabaseConfig {
     // Método para obtener variables de entorno (simulado para frontend)
     getEnvVar(name) {
         // En un entorno real, esto vendría de process.env o configuración del servidor
-        const envVars = {
+        const envVars = { // Cambia 'USE_LOCAL_STORAGE' a 'false' para conectar a Supabase
             'SUPABASE_URL': 'https://fkprllkxyjtosjhtikxy.supabase.co',
             'SUPABASE_ANON_KEY': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ',
-            'USE_LOCAL_STORAGE': 'true',
+            'USE_LOCAL_STORAGE': 'false',
             'GOOGLE_MAPS_API_KEY': 'tu-clave-de-google-maps'
         };
         return envVars[name];
@@ -34,6 +34,10 @@ class SupabaseConfig {
         }
         
         try {
+            // Si el cliente de Supabase no está inicializado, usar localStorage directamente.
+            if (!this.client) {
+                return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+            }
             const { data, error } = await this.client
                 .from('orders')
                 .select('*')
@@ -148,50 +152,67 @@ class SupabaseConfig {
     // Métodos para servicios y vehículos
     async getServices() {
         if (this.useLocalStorage) {
-            return JSON.parse(localStorage.getItem('servicesData') || '{}');
+            // Simular la estructura de Supabase para consistencia
+            return JSON.parse(localStorage.getItem('tlc_services') || '[]');
         }
 
         try {
             const { data, error } = await this.client
                 .from('services')
-                .select('*');
+                .select('*')
+                .eq('is_active', true)
+                .order('name');
             
             if (error) throw error;
-            
-            const servicesObj = {};
-            data.forEach(service => {
-                servicesObj[service.name] = service.count || 0;
-            });
-            
-            return servicesObj;
+            return data || [];
         } catch (error) {
             console.error('Error al obtener servicios:', error);
-            return JSON.parse(localStorage.getItem('servicesData') || '{}');
+            return JSON.parse(localStorage.getItem('tlc_services') || '[]');
         }
     }
 
     async getVehicles() {
         if (this.useLocalStorage) {
-            return JSON.parse(localStorage.getItem('vehiclesData') || '{}');
+            return JSON.parse(localStorage.getItem('tlc_vehicles') || '[]');
         }
 
         try {
             const { data, error } = await this.client
                 .from('vehicles')
-                .select('*');
+                .select('*')
+                .eq('is_active', true)
+                .order('name');
             
             if (error) throw error;
-            
-            const vehiclesObj = {};
-            data.forEach(vehicle => {
-                vehiclesObj[vehicle.name] = vehicle.count || 0;
-            });
-            
-            return vehiclesObj;
+            return data || [];
         } catch (error) {
             console.error('Error al obtener vehículos:', error);
-            return JSON.parse(localStorage.getItem('vehiclesData') || '{}');
+            return JSON.parse(localStorage.getItem('tlc_vehicles') || '[]');
         }
+    }
+
+    async addService(serviceData) {
+        if (this.useLocalStorage) return null; // No soportado en modo local por ahora
+        const { data, error } = await this.client.from('services').insert([serviceData]).select();
+        if (error) throw error;
+        return data[0];
+    }
+
+    async addVehicle(vehicleData) {
+        if (this.useLocalStorage) return null;
+        const { data, error } = await this.client.from('vehicles').insert([vehicleData]).select();
+        if (error) throw error;
+        return data[0];
+    }
+
+    async deleteService(serviceId) {
+        const { error } = await this.client.from('services').delete().eq('id', serviceId);
+        if (error) throw error;
+    }
+
+    async deleteVehicle(vehicleId) {
+        const { error } = await this.client.from('vehicles').delete().eq('id', vehicleId);
+        if (error) throw error;
     }
 
     // Método para sincronizar datos locales con Supabase
