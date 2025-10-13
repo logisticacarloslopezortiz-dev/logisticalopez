@@ -317,8 +317,15 @@ function renderOrders(){
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-sm font-medium text-gray-900">${o.name}</div>
         <div class="text-sm text-gray-500">${o.phone}</div>
+        ${o.email ? `<div class="text-sm text-gray-500">${o.email}</div>` : ''}
+        ${o.rnc ? `<div class="text-xs text-blue-600 font-medium">RNC: ${o.rnc}</div>` : ''}
+        ${o.empresa ? `<div class="text-xs text-blue-600">${o.empresa}</div>` : ''}
       </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.service}</td>
+      <td class="px-6 py-4 whitespace-nowrap">
+        <div class="text-sm text-gray-900">${o.service}</div>
+        ${o.serviceQuestions && Object.keys(o.serviceQuestions).length > 0 ? 
+          `<button onclick="showServiceDetails('${o.id}')" class="text-xs text-blue-600 hover:text-blue-800 underline mt-1">Ver detalles</button>` : ''}
+      </td>
       <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle}</td>
       <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">
         ${o.pickup} → ${o.delivery}
@@ -901,9 +908,41 @@ Email: info@tlc-transporte.com
     }
   }
   
+  // Función para mostrar detalles del servicio
+  function showServiceDetails(orderId) {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order || !order.serviceQuestions) return;
+    
+    let detailsHtml = `<h3 class="text-lg font-semibold mb-3">Detalles del Servicio - ${order.service}</h3>`;
+    
+    for (const [question, answer] of Object.entries(order.serviceQuestions)) {
+      detailsHtml += `
+        <div class="mb-2">
+          <span class="font-medium text-gray-700">${question}:</span>
+          <span class="text-gray-900 ml-2">${answer}</span>
+        </div>
+      `;
+    }
+    
+    // Crear modal
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto">
+        ${detailsHtml}
+        <button onclick="this.closest('.fixed').remove()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+          Cerrar
+        </button>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+  }
+  
   // Hacer las funciones globales
   window.editPrice = editPrice;
   window.generateAndSendInvoice = generateAndSendInvoice;
+  window.showServiceDetails = showServiceDetails;
 
   // Inicialización
   function init() {

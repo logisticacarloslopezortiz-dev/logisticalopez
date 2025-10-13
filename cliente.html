@@ -56,6 +56,20 @@
             <input type="tel" placeholder="Teléfono" class="w-full border p-2 rounded mb-4">
             <input type="email" placeholder="Correo" class="w-full border p-2 rounded mb-4">
 
+            <!-- Campo RNC opcional -->
+            <div class="mb-4">
+              <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="hasRNC" class="form-checkbox h-4 w-4 text-azulClaro">
+                <span class="text-gray-700">¿Tiene RNC? (Registro Nacional de Contribuyentes)</span>
+              </label>
+            </div>
+
+            <!-- Campos RNC (ocultos por defecto) -->
+            <div id="rncFields" class="hidden space-y-4">
+              <input type="text" name="rnc" placeholder="Número de RNC" class="w-full border p-2 rounded">
+              <input type="text" name="empresa" placeholder="Nombre de la empresa" class="w-full border p-2 rounded">
+            </div>
+
             <div class="mt-6 border-t pt-4 text-center space-y-2">
               <p class="text-gray-600">© 2025 Logística López Ortiz</p>
             </div>
@@ -66,32 +80,32 @@
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 2: Selecciona Servicio</h4>
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="mudanza">
-                <img src="img-servicio/mudanza.png" alt="Mudanza" class="mx-auto h-16 mb-2">
+                <img src="img-servicio/mudanza.png" alt="Mudanza" class="mx-auto w-16 h-16 object-contain mb-2">
                 <span class="font-medium">🏠 Mudanza</span>
               </div>
               <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="transporte-comercial">
-                <img src="img-servicio/carga-comercial.png" alt="Transporte Comercial" class="mx-auto h-16 mb-2">
+                <img src="img-servicio/carga-comercial.png" alt="Transporte Comercial" class="mx-auto w-16 h-16 object-contain mb-2">
                 <span class="font-medium">🏢 Transporte Comercial</span>
               </div>
               <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="carga-pesada">
-                <img src="img-servicio/carga-pesada.png" alt="Carga Pesada" class="mx-auto h-16 mb-2">
+                <img src="img-servicio/carga-pesada.png" alt="Carga Pesada" class="mx-auto w-16 h-16 object-contain mb-2">
                 <span class="font-medium">🏗️ Carga Pesada</span>
               </div>
               <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="flete">
-                <img src="img-servicio/flete.png" alt="Flete" class="mx-auto h-16 mb-2">
+                <img src="img-servicio/flete.png" alt="Flete" class="mx-auto w-16 h-16 object-contain mb-2">
                 <span class="font-medium">🚚 Flete</span>
               </div>
               <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="grua-vehiculo">
-                <img src="img-servicio/grua-planta.png" alt="Grúa Vehículo" class="mx-auto h-16 mb-2">
+                <img src="img-vehiculo/grua-auto.jpg" alt="Grúa Vehículo" class="mx-auto w-16 h-16 object-contain mb-2">
                 <span class="font-medium">🚗 Grúa Vehículo</span>
               </div>
               <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="paqueteria">
-                <img src="img-servicio/paqueteria.png" alt="Paquetería" class="mx-auto h-16 mb-2">
+                <img src="img-servicio/paqueteria.png" alt="Paquetería" class="mx-auto w-16 h-16 object-contain mb-2">
                 <span class="font-medium">📦 Paquetería</span>
               </div>
               <div class="service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service="grua-carga">
-                <img src="img-servicio/grua-planta.png" alt="Grúa Carga" class="mx-auto h-16 mb-2">
-                <span class="font-medium">🏋️ Grúa Carga</span>
+                <img src="img-vehiculo/grua-carga.jpg" alt="Grúa de Carga" class="mx-auto w-16 h-16 object-contain mb-2">
+                <span class="font-medium">🏗️ Grúa de Carga</span>
               </div>
             </div>
 
@@ -104,33 +118,35 @@
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="3">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 3: Selecciona Vehículo</h4>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="/img-vehiculo/camion-pequeño.jpg" alt="Camión Pequeño" class="mx-auto h-16 mb-2">
-                <span>Camión Pequeño <br> 14 pie </span>
+              <div class="vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition">
+                <img src="img-vehiculo/camion-pequeño.jpg" alt="Camión Pequeño" class="mx-auto w-16 h-16 object-contain mb-2">
+                <h4 class="font-medium">Camión Pequeño</h4>
+                <span class="text-sm text-gray-600">14 pie</span>
               </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="/img-vehiculo/furgoneta.jpg" alt="Furgoneta" class="mx-auto h-16 mb-2">
-                <span>Furgoneta</span>
+              <div class="vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition">
+                <img src="img-vehiculo/furgoneta.jpg" alt="Furgoneta" class="mx-auto w-16 h-16 object-contain mb-2">
+                <h4 class="font-medium">Furgoneta</h4>
               </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="/img-vehiculo/grua-auto.jpg" alt="Camión Medio" class="mx-auto h-16 mb-2">
-                <span>Grua Vehicular</span>
+              <div class="vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition">
+                <img src="img-vehiculo/grua-auto.jpg" alt="Grúa Vehicular" class="mx-auto w-16 h-16 object-contain mb-2">
+                <h4 class="font-medium">Grúa Vehicular</h4>
               </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="/img-vehiculo/camion-grande.jpg" alt="Camión Grande" class="mx-auto h-16 mb-2">
-                <span>Camión Grande <br> 22 a 28 pie</span>
+              <div class="vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition">
+                <img src="img-vehiculo/camion-grande.jpg" alt="Camión Grande" class="mx-auto w-16 h-16 object-contain mb-2">
+                <h4 class="font-medium">Camión Grande</h4>
+                <span class="text-sm text-gray-600">22 a 28 pie</span>
               </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="/img-vehiculo/camion-pequeño.jpg" alt="Camión Especial" class="mx-auto h-16 mb-2">
-                <span>Camión Especial</span>
+              <div class="vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition">
+                <img src="img-vehiculo/camion-pequeño.jpg" alt="Camión Especial" class="mx-auto w-16 h-16 object-contain mb-2">
+                <h4 class="font-medium">Camión Especial</h4>
               </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="img-vehiculo/grua-pesada.jpg" alt="Grúa Pequeña" class="mx-auto h-16 mb-2">
-                <span>Grúa de carga</span>
+              <div class="vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition">
+                <img src="img-vehiculo/grua-pesada.jpg" alt="Grúa de Carga" class="mx-auto w-16 h-16 object-contain mb-2">
+                <h4 class="font-medium">Grúa de Carga</h4>
               </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="/img-vehiculo/motor.jpg" alt="Otro Vehículo" class="mx-auto h-16 mb-2">
-                <span>Paquetería</span>
+              <div class="vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition">
+                <img src="img-vehiculo/motor.jpg" alt="Paquetería" class="mx-auto w-16 h-16 object-contain mb-2">
+                <h4 class="font-medium">Paquetería</h4>
               </div>
             </div>
 
@@ -589,128 +605,8 @@
     </div>
   </div>
 
-  <script>
-    let currentStep = 1;
-    let selectedService = '';
-    let serviceQuestions = {};
-    const steps = document.querySelectorAll('.step');
-    const nextBtn = document.getElementById('nextBtn');
-    const prevBtn = document.getElementById('prevBtn');
-    const progressBar = document.getElementById('progress-bar');
-
-    function showStep(step) {
-      steps.forEach(s => s.classList.add('hidden'));
-      document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
-      prevBtn.classList.toggle('hidden', step === 1);
-      nextBtn.classList.toggle('hidden', step === steps.length);
-      progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
-    }
-
-    // Manejar selección de servicios
-    document.querySelectorAll('.service-card').forEach(card => {
-      card.addEventListener('click', function() {
-        // Remover selección anterior
-        document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
-        
-        // Seleccionar actual
-        this.classList.add('border-azulClaro', 'bg-blue-50');
-        selectedService = this.dataset.service;
-        
-        // Mostrar modal correspondiente
-        const modalId = `modal-${selectedService}`;
-        const modal = document.getElementById(modalId);
-        if (modal) {
-          modal.classList.remove('hidden');
-        }
-      });
-    });
-
-    // Manejar cierre de modales
-    document.querySelectorAll('.close-modal').forEach(btn => {
-      btn.addEventListener('click', function() {
-        this.closest('.fixed').classList.add('hidden');
-      });
-    });
-
-    // Manejar envío de formularios de modales
-    document.querySelectorAll('[id^="form-"]').forEach(form => {
-      form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // Guardar respuestas del servicio
-        const formData = new FormData(this);
-        const serviceType = this.id.replace('form-', '');
-        serviceQuestions[serviceType] = {};
-        
-        for (let [key, value] of formData.entries()) {
-          serviceQuestions[serviceType][key] = value;
-        }
-        
-        // Cerrar modal y continuar al siguiente paso
-        this.closest('.fixed').classList.add('hidden');
-        if (currentStep < steps.length) {
-          currentStep++;
-          showStep(currentStep);
-        }
-      });
-    });
-
-    nextBtn.addEventListener('click', () => {
-      if (currentStep === 2 && !selectedService) {
-        alert('Por favor seleccione un servicio');
-        return;
-      }
-      
-      if(currentStep < steps.length) currentStep++;
-      showStep(currentStep);
-    });
-
-    prevBtn.addEventListener('click', () => {
-      if(currentStep > 1) currentStep--;
-      showStep(currentStep);
-    });
-
-    // Manejar envío final del formulario
-    document.getElementById('serviceForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      
-      // Recopilar todos los datos del formulario
-      const formData = new FormData(this);
-      const orderData = {
-        personalData: {},
-        service: selectedService,
-        serviceQuestions: serviceQuestions[selectedService] || {},
-        vehicle: '',
-        addresses: {},
-        datetime: {},
-        timestamp: new Date().toISOString()
-      };
-      
-      // Datos personales
-      orderData.personalData.nombre = formData.get('nombre') || document.querySelector('input[placeholder="Nombre completo"]').value;
-      orderData.personalData.telefono = formData.get('telefono') || document.querySelector('input[placeholder="Teléfono"]').value;
-      orderData.personalData.email = formData.get('email') || document.querySelector('input[placeholder="Correo"]').value;
-      
-      // Generar ID consecutivo
-      let orderCount = localStorage.getItem('orderCount') || 0;
-      orderCount = parseInt(orderCount) + 1;
-      localStorage.setItem('orderCount', orderCount);
-      
-      const orderId = `TLC-${orderCount.toString().padStart(2, '0')}`;
-      orderData.id = orderId;
-      
-      // Guardar en localStorage
-      let orders = JSON.parse(localStorage.getItem('orders') || '[]');
-      orders.push(orderData);
-      localStorage.setItem('orders', JSON.stringify(orders));
-      
-      alert(`¡Solicitud enviada exitosamente! Su número de orden es: ${orderId}`);
-      
-      // Redirigir o limpiar formulario
-      window.location.href = 'index.html';
-    });
-
-    showStep(currentStep);
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/cliente.js"></script>
 </body>
 </html>
