@@ -425,8 +425,10 @@ function updateCollaboratorProfile(session) {
 }
 
 // Función para cargar órdenes
-function loadOrders() {
-  return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+
+async function loadOrders() {
+  // Usar siempre la clase SupabaseConfig como única fuente de verdad
+  return await supabaseConfig.getOrders();
 }
 
 function updateCollaboratorStats(email) {

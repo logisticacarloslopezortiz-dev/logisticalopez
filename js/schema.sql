@@ -103,12 +103,6 @@ COMMENT ON COLUMN public.business_settings.quotation_config IS 'Almacena un obje
 -- Insertar la fila de configuración inicial
 INSERT INTO public.business_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
-
-
-
-COMMENT ON TABLE public.collaborators IS 'Almacena los usuarios internos del sistema (dueños, chóferes, etc.).';
-
-
 -- -------------------------------------------------------------
 -- Tabla: services
 -- Almacena los servicios que ofrece el negocio.
@@ -170,3 +164,22 @@ ON CONFLICT (name) DO NOTHING; -- No insertar si ya existen
 -- -------------------------------------------------------------
 -- Tabla: business_settings
 -- Almacena la configuración general del negocio.
+
+-- Esquema de Base de Datos para TLC Admin v2.0
+-- Este esquema está diseñado para coincidir con la estructura de datos
+-- utilizada en los archivos JavaScript del proyecto.
+
+CREATE TABLE public.orders (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT,
+    rnc TEXT,
+    empresa TEXT,
+    service TEXT,
+    vehicle TEXT,
+    service_questions JSONB,
+    -- ... y las demás columnas que ya tienes
+);
+-- ... (resto de las tablas services, vehicles, etc.)

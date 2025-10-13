@@ -2,16 +2,18 @@
 const CACHE_NAME = 'tlc-cache-v1';
 const urlsToCache = [
   '/',
-  '/index.html',
-  '/inicio.html',
-  '/panel-colaborador.html',
-  '/rendimiento.html',
-  '/js/index.js',
-  '/js/inicio.js',
-  '/js/notifications.js',
-  '/js/backup.js',
-  '/js/theme.js',
-  '/js/rendimiento.js',
+  'index.html',
+  'cliente.html',
+  'inicio.html',
+  'servicios.html',
+  'colaboradores.html',
+  'panel-colaborador.html',
+  'js/cliente.js',
+  'js/inicio.js',
+  'js/servicios.js',
+  'js/colaboradores.js',
+  'js/panel-colaborador.js',
+  'js/supabase-config.js',
   '/img/favicon.ico',
   '/img/favicon-16x16.png',
   '/img/favicon-32x32.png',
@@ -19,7 +21,6 @@ const urlsToCache = [
   '/img/android-chrome-512x512.png',
   // No cachear Tailwind CSS CDN debido a restricciones de CORS
   'https://unpkg.com/lucide@latest',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
 ];
 
 // Instalación del Service Worker
