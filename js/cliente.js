@@ -9,6 +9,35 @@ let steps, nextBtn, prevBtn, progressBar;
 const serviceContainer = document.querySelector('.step[data-step="2"] .grid');
 const vehicleContainer = document.querySelector('.step[data-step="3"] .grid');
 // Función para mostrar paso específico
+
+function addVehicleCardListeners() {
+  document.querySelectorAll('.vehicle-card').forEach(card => {
+    card.addEventListener('click', function() {
+      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+      this.classList.add('border-azulClaro', 'bg-blue-50');
+    });
+  });
+}
+
+function addServiceCardListeners() {
+  document.querySelectorAll('.service-card').forEach(card => {
+    card.addEventListener('click', function() {
+      document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+      this.classList.add('border-azulClaro', 'bg-blue-50');
+      
+      selectedService = {
+          id: this.dataset.serviceId,
+          name: this.dataset.serviceName
+      };
+
+      const modalName = selectedService.name.toLowerCase().replace(/ /g, '-');
+      const modal = document.getElementById(`modal-${modalName}`);
+      if (modal) {
+        modal.classList.remove('hidden');
+      }
+    });
+  });
+}
 function showStep(step) {
   steps.forEach(s => s.classList.add('hidden'));
   document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
@@ -52,12 +81,28 @@ async function saveOrder(orderData) {
 // Función para validar paso actual
 function validateCurrentStep() {
   if (currentStep === 1) {
-    const nombre = document.querySelector('input[placeholder="Nombre completo"]').value;
-    const telefono = document.querySelector('input[placeholder="Teléfono"]').value;
-    const email = document.querySelector('input[placeholder="Correo"]').value;
+    const nombreInput = document.querySelector('input[placeholder="Nombre completo"]');
+    const telefonoInput = document.querySelector('input[placeholder="Teléfono"]');
+    const emailInput = document.querySelector('input[placeholder="Correo"]');
     
-    if (!nombre || !telefono || !email) {
-      alert('Por favor complete todos los campos personales');
+    const isNombreValid = /^[a-zA-Z\s]+$/.test(nombreInput.value);
+    const isTelefonoValid = /^[\d\s()-]+$/.test(telefonoInput.value) && telefonoInput.value.length > 6;
+    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value);
+
+    // Actualizar UI de validación
+    nombreInput.classList.toggle('border-red-500', !isNombreValid);
+    nombreInput.classList.toggle('border-green-500', isNombreValid);
+    telefonoInput.classList.toggle('border-red-500', !isTelefonoValid);
+    telefonoInput.classList.toggle('border-green-500', isTelefonoValid);
+    emailInput.classList.toggle('border-red-500', !isEmailValid);
+    emailInput.classList.toggle('border-green-500', isEmailValid);
+
+    if (!isNombreValid || !isTelefonoValid || !isEmailValid) {
+      let errorMessage = 'Por favor, corrija los siguientes campos:\n';
+      if (!isNombreValid) errorMessage += '- Nombre: solo puede contener letras.\n';
+      if (!isTelefonoValid) errorMessage += '- Teléfono: debe ser un número válido.\n';
+      if (!isEmailValid) errorMessage += '- Correo: debe ser un correo electrónico válido.\n';
+      alert(errorMessage);
       return false;
     }
   }
@@ -121,7 +166,7 @@ async function loadServices() {
     serviceContainer.innerHTML = ''; // Limpiar contenido estático
     services.forEach(service => {
         const serviceCard = document.createElement('div');
-        serviceCard.className = 'service-card p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
+        serviceCard.className = 'service-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
         serviceCard.dataset.serviceName = service.name; // Usar el nombre para el modal
         serviceCard.dataset.serviceId = service.id;
 
@@ -129,8 +174,11 @@ async function loadServices() {
         const imageName = service.name.toLowerCase().replace(/ /g, '-') + '.png';
 
         serviceCard.innerHTML = `
-            <img src="img-servicio/${imageName}" alt="${service.name}" class="mx-auto w-16 h-16 object-contain mb-2" onerror="this.src='img/1vertical.png'">
-            <span class="font-medium">${service.name}</span>
+            <img src="img-servicio/${imageName}" alt="${service.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+            <div class="flex flex-col">
+                <span class="font-medium">${service.name}</span>
+                ${service.description ? `<span class="text-sm text-gray-500 mt-1">${service.description}</span>` : ''}
+            </div>
         `;
         serviceContainer.appendChild(serviceCard);
     });
@@ -142,20 +190,21 @@ async function loadVehicles() {
     vehicleContainer.innerHTML = ''; // Limpiar contenido estático
     vehicles.forEach(vehicle => {
         const vehicleCard = document.createElement('div');
-        vehicleCard.className = 'vehicle-card p-2 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
+        vehicleCard.className = 'vehicle-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
         
         const imageName = vehicle.name.toLowerCase().replace(/ /g, '-').replace('ú', 'u') + '.jpg';
 
         vehicleCard.innerHTML = `
-            <img src="img-vehiculo/${imageName}" alt="${vehicle.name}" class="mx-auto w-16 h-16 object-contain mb-2" onerror="this.src='img/1vertical.png'">
-            <h4 class="font-medium">${vehicle.name}</h4>
-            ${vehicle.description ? `<span class="text-sm text-gray-600">${vehicle.description}</span>` : ''}
+            <img src="img-vehiculo/${imageName}" alt="${vehicle.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+            <div class="flex flex-col">
+                <h4 class="font-medium">${vehicle.name}</h4>
+                ${vehicle.description ? `<span class="text-sm text-gray-600 mt-1">${vehicle.description}</span>` : ''}
+            </div>
         `;
         vehicleContainer.appendChild(vehicleCard);
     });
     addVehicleCardListeners();
 }
-
 
 // Inicialización cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', function() {
@@ -171,6 +220,24 @@ document.addEventListener('DOMContentLoaded', function() {
   if (rncCheckbox) {
     rncCheckbox.addEventListener('change', toggleRNCField);
   }
+
+  // Añadir validación en tiempo real para el paso 1
+  const nombreInput = document.querySelector('input[placeholder="Nombre completo"]');
+  const telefonoInput = document.querySelector('input[placeholder="Teléfono"]');
+  const emailInput = document.querySelector('input[placeholder="Correo"]');
+
+  nombreInput?.addEventListener('input', (e) => {
+    const isValid = /^[a-zA-Z\s]*$/.test(e.target.value);
+    e.target.classList.toggle('border-red-500', !isValid);
+  });
+  telefonoInput?.addEventListener('input', (e) => {
+    const isValid = /^[\d\s()-]*$/.test(e.target.value);
+    e.target.classList.toggle('border-red-500', !isValid);
+  });
+  emailInput?.addEventListener('input', (e) => {
+      const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value) || e.target.value === '';
+      e.target.classList.toggle('border-red-500', !isValid && e.target.value !== '');
+  });
   
   // Manejar cierre de modales
   document.querySelectorAll('.close-modal').forEach(btn => {
@@ -274,38 +341,6 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Redirigir
       window.location.href = 'index.html';
-    });
-  }
-
-  // --- Funciones para añadir listeners a las tarjetas ---
-  // Estas funciones deben estar definidas antes de ser llamadas por loadServices/loadVehicles
-
-  function addVehicleCardListeners() {
-    document.querySelectorAll('.vehicle-card').forEach(card => {
-      card.addEventListener('click', function() {
-        document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
-        this.classList.add('border-azulClaro', 'bg-blue-50');
-      });
-    });
-  }
-
-  function addServiceCardListeners() {
-    document.querySelectorAll('.service-card').forEach(card => {
-      card.addEventListener('click', function() {
-        document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
-        this.classList.add('border-azulClaro', 'bg-blue-50');
-        
-        selectedService = {
-            id: this.dataset.serviceId,
-            name: this.dataset.serviceName
-        };
-
-        const modalName = selectedService.name.toLowerCase().replace(/ /g, '-');
-        const modal = document.getElementById(`modal-${modalName}`);
-        if (modal) {
-          modal.classList.remove('hidden');
-        }
-      });
     });
   }
 
