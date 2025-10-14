@@ -148,7 +148,8 @@ INSERT INTO public.services (name, description, is_active) VALUES
 ('Grúa Vehículo', 'Transporte con grúa para vehículos.', true),
 ('Paquetería', 'Envíos de paquetes seguros y rápidos.', true),
 ('Grúa de Carga', 'Servicio de grúa para mover carga pesada.', true)
-ON CONFLICT (name) DO NOTHING; -- No insertar si ya existen
+ON CONFLICT (name) DO NOTHING;
+INSERT INTO public.services (name, description, is_active) VALUES ('Botes Mineros', 'Servicio de alquiler y transporte de botes para desechos.', true) ON CONFLICT (name) DO NOTHING;
 
 -- Insertar vehículos iniciales
 INSERT INTO public.vehicles (name, description, is_active) VALUES

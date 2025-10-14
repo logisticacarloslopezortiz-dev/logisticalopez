@@ -239,6 +239,19 @@ document.addEventListener('DOMContentLoaded', function() {
       e.target.classList.toggle('border-red-500', !isValid && e.target.value !== '');
   });
   
+  // Lógica para el modal de Botes Mineros (mostrar/ocultar campo "otro")
+  const materialSelect = document.querySelector('#form-botes-mineros select[name="tipo_material"]');
+  const materialOtroInput = document.querySelector('#form-botes-mineros input[name="material_otro"]');
+  materialSelect?.addEventListener('change', function() {
+    if (this.value === 'otro') {
+      materialOtroInput.classList.remove('hidden');
+      materialOtroInput.required = true;
+    } else {
+      materialOtroInput.classList.add('hidden');
+      materialOtroInput.required = false;
+    }
+  });
+
   // Manejar cierre de modales
   document.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -315,21 +328,21 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Crear objeto de orden
       const orderData = {
-        id: generateOrderId(),
-        name: nombre,
-        phone: telefono,
-        email: email,
-        rnc: rnc,
-        empresa: empresa,
+        id: generateOrderId(), // e.g., TLC-01
+        clientName: nombre,
+        clientPhone: telefono,
+        clientEmail: email,
+        rncData: rnc ? { rncNumber: rnc, companyName: empresa } : null,
+        orderType: rnc ? 'COMPROBANTE FISCAL FIJO' : 'CONSUMIDOR FINAL',
         service: selectedService.name,
-        serviceQuestions: serviceQuestions,
+        serviceDetails: serviceQuestions,
         vehicle: vehiculo,
-        pickup: origen,
-        delivery: destino,
-        date: fecha,
-        time: hora,
+        pickupAddress: origen,
+        deliveryAddress: destino,
+        serviceDate: fecha,
+        serviceTime: hora,
         status: 'Pendiente',
-        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
         estimatedPrice: 'Por confirmar'
       };
       
