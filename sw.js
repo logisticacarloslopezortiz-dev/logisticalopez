@@ -14,11 +14,11 @@ const urlsToCache = [
   'js/colaboradores.js',
   'js/panel-colaborador.js',
   'js/supabase-config.js',
-  'img/favicon.ico',
-  'img/favicon-16x16.png',
-  'img/favicon-32x32.png',
-  'img/android-chrome-192x192.png',
-  'img/android-chrome-512x512.png',
+  'assets/icons/favicon.ico',
+  'assets/icons/favicon-16x16.png',
+  'assets/icons/favicon-32x32.png',
+  'assets/icons/android-chrome-192x192.png', // Assuming these are also in assets/icons
+  'assets/icons/android-chrome-512x512.png', // Assuming these are also in assets/icons
   // No cachear Tailwind CSS CDN debido a restricciones de CORS
   'https://unpkg.com/lucide@latest',
 ];

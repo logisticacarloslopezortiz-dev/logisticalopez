@@ -169,12 +169,8 @@ async function loadServices() {
         serviceCard.className = 'service-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
         serviceCard.dataset.serviceName = service.name; // Usar el nombre para el modal
         serviceCard.dataset.serviceId = service.id;
-
-        // Normalizar nombre para buscar imagen
-        const imageName = service.name.toLowerCase().replace(/ /g, '-') + '.png';
-
         serviceCard.innerHTML = `
-            <img src="img-servicio/${imageName}" alt="${service.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+            <img src="assets/${service.image_url}" alt="${service.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='assets/icons/1vertical.png'">
             <div class="flex flex-col">
                 <span class="font-medium">${service.name}</span>
                 ${service.description ? `<span class="text-sm text-gray-500 mt-1">${service.description}</span>` : ''}
@@ -191,11 +187,9 @@ async function loadVehicles() {
     vehicles.forEach(vehicle => {
         const vehicleCard = document.createElement('div');
         vehicleCard.className = 'vehicle-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
-        
-        const imageName = vehicle.name.toLowerCase().replace(/ /g, '-').replace('ú', 'u') + '.jpg';
 
         vehicleCard.innerHTML = `
-            <img src="img-vehiculo/${imageName}" alt="${vehicle.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+            <img src="assets/img-vehiculos/${vehicle.image_url}" alt="${vehicle.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='assets/icons/1vertical.png'">
             <div class="flex flex-col">
                 <h4 class="font-medium">${vehicle.name}</h4>
                 ${vehicle.description ? `<span class="text-sm text-gray-600 mt-1">${vehicle.description}</span>` : ''}

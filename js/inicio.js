@@ -11,7 +11,7 @@ const NOTIFICATION_DURATION = 5000;
 // Funciones utilitarias
 async function loadOrders() {
   // Usar siempre la clase SupabaseConfig como única fuente de verdad
-  allOrders = await supabaseConfig.getOrders();
+  allOrders = (await supabaseConfig.getOrders()) || []; // Ensure allOrders is always an array
   filteredOrders = [...allOrders];
   renderOrders();
   updateResumen();
@@ -121,7 +121,7 @@ function filterOrders() {
   const serviceFilter = document.getElementById('serviceFilter').value;
   const dateFilter = document.getElementById('dateFilter').value;
 
-  filteredOrders = allOrders.filter(order => {
+  filteredOrders = (allOrders || []).filter(order => {
     const matchesSearch = !searchTerm || 
       order.name.toLowerCase().includes(searchTerm) ||
       order.phone.includes(searchTerm) ||
@@ -264,14 +264,14 @@ function renderOrders(){
 
     const statusColor = {
       'Pendiente': 'bg-yellow-100 text-yellow-800',
-      'En proceso': 'bg-blue-100 text-blue-800',
+      'En proceso': 'bg-blue-100 text-blue-800', // Corregido
       'Completado': 'bg-green-100 text-green-800'
     }[o.status] || 'bg-gray-100 text-gray-800';
 
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50 transition-colors';
     tr.innerHTML = `
-      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id}</td>
+      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-sm font-medium text-gray-900">${o.name}</div>
         <div class="text-sm text-gray-500">${o.phone}</div>
@@ -873,11 +873,11 @@ Email: info@tlc-transporte.com
 
   // Inicialización
   function init() {
-    loadOrders().then(() => {
-      if (allOrders.length === 0 && typeof loadTestData === 'function') {
-        allOrders = loadTestData(); // Cargar datos de prueba si Supabase está vacío
-        saveOrders(allOrders); // Guardarlos para que otras partes los vean
-      }
+    loadOrders().then((orders) => {
+      allOrders = orders;
+      filteredOrders = [...allOrders];
+      renderOrders();
+      updateResumen();
       console.log('Sistema inicializado con', allOrders.length, 'pedidos.');
     });
   }

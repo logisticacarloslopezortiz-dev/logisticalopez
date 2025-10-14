@@ -140,47 +140,30 @@ COMMENT ON TABLE public.vehicles IS 'Catálogo de vehículos disponibles para lo
 -- -------------------------------------------------------------
 
 -- Insertar servicios iniciales
-INSERT INTO public.services (name, description, is_active) VALUES
-('Mudanza', 'Servicios completos de mudanza residencial y comercial.', true),
-('Transporte Comercial', 'Transporte seguro de mercancías comerciales.', true),
-('Carga Pesada', 'Especialistas en transporte de carga pesada.', true),
-('Flete', 'Servicios de flete nacional e internacional.', true),
-('Grúa Vehículo', 'Transporte con grúa para vehículos.', true),
-('Paquetería', 'Envíos de paquetes seguros y rápidos.', true),
-('Grúa de Carga', 'Servicio de grúa para mover carga pesada.', true)
-ON CONFLICT (name) DO NOTHING;
-INSERT INTO public.services (name, description, is_active) VALUES ('Botes Mineros', 'Servicio de alquiler y transporte de botes para desechos.', true) ON CONFLICT (name) DO NOTHING;
+INSERT INTO public.services (name, description, image_url, is_active) VALUES
+('Mudanza', 'Servicios completos de mudanza residencial y comercial.', 'mudanza.png', true),
+('Transporte Comercial', 'Transporte seguro de mercancías comerciales.', 'transporte-comercial.png', true),
+('Carga Pesada', 'Especialistas en transporte de carga pesada.', 'carga-pesada.png', true),
+('Flete', 'Servicios de flete nacional e internacional.', 'flete.png', true),
+('Grúa Vehículo', 'Transporte con grúa para vehículos.', 'grua-vehiculo.png', true),
+('Paquetería', 'Envíos de paquetes seguros y rápidos.', 'paqueteria.png', true),
+('Grúa de Carga', 'Servicio de grúa para mover carga pesada.', 'grua-carga.png', true),
+('Botes Mineros', 'Servicio de alquiler y transporte de botes para desechos.', 'botes-mineros.png', true)
+ON CONFLICT (name) DO UPDATE SET
+  description = EXCLUDED.description,
+  image_url = EXCLUDED.image_url,
+  is_active = EXCLUDED.is_active;
 
 -- Insertar vehículos iniciales
-INSERT INTO public.vehicles (name, description, is_active) VALUES
-('Camión Pequeño', '14 pies', true),
-('Furgoneta', 'Ideal para paquetería y cargas ligeras', true),
-('Grúa Vehicular', 'Para remolque de autos y jeepetas', true),
-('Camión Grande', '22 a 28 pies', true),
-('Camión Especial', 'Configuración para necesidades específicas', true),
-('Grúa de Carga', 'Para izado y movimiento de carga', true),
-('Motor', 'Para paquetería y entregas rápidas', true)
-ON CONFLICT (name) DO NOTHING; -- No insertar si ya existen
-
--- -------------------------------------------------------------
--- Tabla: business_settings
--- Almacena la configuración general del negocio.
-
--- Esquema de Base de Datos para TLC Admin v2.0
--- Este esquema está diseñado para coincidir con la estructura de datos
--- utilizada en los archivos JavaScript del proyecto.
-
-CREATE TABLE public.orders (
-    id TEXT PRIMARY KEY,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    name TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    email TEXT,
-    rnc TEXT,
-    empresa TEXT,
-    service TEXT,
-    vehicle TEXT,
-    service_questions JSONB,
-    -- ... y las demás columnas que ya tienes
-);
--- ... (resto de las tablas services, vehicles, etc.)
+INSERT INTO public.vehicles (name, description, image_url, is_active) VALUES
+('Camión Pequeño', '14 pies', 'camionpequeño-.jpg', true),
+('Furgoneta', 'Ideal para paquetería y cargas ligeras', 'furgoneta.jpg', true),
+('Grúa Vehicular', 'Para remolque de autos y jeepetas', 'gruaauto.jpg', true),
+('Camión Grande', '22 a 28 pies', 'ccamiongrande.jpg', true),
+('Camión Especial', 'Configuración para necesidades específicas', 'camionpequeño.jpg', true),
+('Grúa de Carga', 'Para izado y movimiento de carga', 'gruacarga.jpg', true),
+('Motor', 'Para paquetería y entregas rápidas', 'motor.jpg', true)
+ON CONFLICT (name) DO UPDATE SET
+  description = EXCLUDED.description,
+  image_url = EXCLUDED.image_url,
+  is_active = EXCLUDED.is_active;

@@ -47,7 +47,7 @@ class SupabaseConfig {
             return data || [];
         } catch (error) {
             console.error('Error al obtener órdenes:', error);
-            return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+            return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); // Return the fallback
         }
     }
 
