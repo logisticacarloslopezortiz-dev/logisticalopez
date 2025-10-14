@@ -14,7 +14,7 @@ const urlsToCache = [
   'js/colaboradores.js',
   'js/panel-colaborador.js',
   'js/supabase-config.js',
-  'img/favicon.ico',
+  'favicon.ico',
   'img/favicon-16x16.png',
   'img/favicon-32x32.png',
   'img/android-chrome-192x192.png',

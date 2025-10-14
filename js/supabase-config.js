@@ -163,11 +163,11 @@ class SupabaseConfig {
                 .eq('is_active', true)
                 .order('name');
             
-            if (error) throw error;
-            return data || [];
+            if (error) console.error('Error en getServices:', error);
+            return { data: data || [], error };
         } catch (error) {
             console.error('Error al obtener servicios:', error);
-            return JSON.parse(localStorage.getItem('tlc_services') || '[]');
+            return { data: JSON.parse(localStorage.getItem('tlc_services') || '[]'), error };
         }
     }
 
@@ -183,11 +183,11 @@ class SupabaseConfig {
                 .eq('is_active', true)
                 .order('name');
             
-            if (error) throw error;
-            return data || [];
+            if (error) console.error('Error en getVehicles:', error);
+            return { data: data || [], error };
         } catch (error) {
             console.error('Error al obtener vehículos:', error);
-            return JSON.parse(localStorage.getItem('tlc_vehicles') || '[]');
+            return { data: JSON.parse(localStorage.getItem('tlc_vehicles') || '[]'), error };
         }
     }
 

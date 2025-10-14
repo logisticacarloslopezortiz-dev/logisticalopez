@@ -13,18 +13,36 @@ let activeMapInputId = null;
 // Elementos del DOM
 let steps, nextBtn, prevBtn, progressBar;
 
-// Función para mostrar paso específico
-
-function addVehicleCardListeners() {
-  document.querySelectorAll('.vehicle-card').forEach(card => {
-    card.addEventListener('click', function() {
-      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
-      this.classList.add('border-azulClaro', 'bg-blue-50');
-    });
-  });
+function showStep(step) {
+  steps.forEach(s => s.classList.add('hidden'));
+  document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
+  prevBtn.classList.toggle('hidden', step === 1);
+  nextBtn.classList.toggle('hidden', step === steps.length);
+  progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
 }
 
-function addServiceCardListeners() {
+// --- Carga dinámica de datos desde Supabase ---
+
+async function loadServices() {
+  const serviceListContainer = document.getElementById('service-list');
+  if (!serviceListContainer) return;
+
+  const { data: services, error } = await supabaseConfig.getServices();
+
+  if (error) {
+    console.error('Error al cargar servicios:', error);
+    serviceListContainer.innerHTML = '<p class="text-red-500 col-span-full">No se pudieron cargar los servicios.</p>';
+    return;
+  }
+
+  serviceListContainer.innerHTML = services.map(service => `
+    <div class="service-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service-name="${service.name}">
+      <img src="assets/${service.image_url || '1vertical.png'}" alt="${service.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+      <span class="font-medium">${service.name}</span>
+    </div>
+  `).join('');
+  
+  // Asignar listeners a los nuevos elementos
   document.querySelectorAll('.service-card').forEach(card => {
     card.addEventListener('click', function() {
       document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
@@ -39,12 +57,33 @@ function addServiceCardListeners() {
     });
   });
 }
-function showStep(step) {
-  steps.forEach(s => s.classList.add('hidden'));
-  document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
-  prevBtn.classList.toggle('hidden', step === 1);
-  nextBtn.classList.toggle('hidden', step === steps.length);
-  progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
+
+async function loadVehicles() {
+  const vehicleListContainer = document.getElementById('vehicle-list');
+  if (!vehicleListContainer) return;
+
+  const { data: vehicles, error } = await supabaseConfig.getVehicles();
+
+  if (error) {
+    console.error('Error al cargar vehículos:', error);
+    vehicleListContainer.innerHTML = '<p class="text-red-500 col-span-full">No se pudieron cargar los vehículos.</p>';
+    return;
+  }
+
+  vehicleListContainer.innerHTML = vehicles.map(vehicle => `
+    <div class="vehicle-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-vehicle-name="${vehicle.name}">
+      <img src="img-vehiculo/${vehicle.image_url || 'camion.png'}" alt="${vehicle.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+      <h4 class="font-medium">${vehicle.name}</h4>
+    </div>
+  `).join('');
+
+  // Asignar listeners a los nuevos elementos
+  document.querySelectorAll('.vehicle-card').forEach(card => {
+    card.addEventListener('click', function() {
+      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+      this.classList.add('border-azulClaro', 'bg-blue-50');
+    });
+  });
 }
 
 // Función para generar ID consecutivo
@@ -167,6 +206,10 @@ document.addEventListener('DOMContentLoaded', function() {
   prevBtn = document.getElementById('prevBtn');
   progressBar = document.getElementById('progress-bar');
   
+  // Cargar datos dinámicos
+  loadServices();
+  loadVehicles();
+
   // Manejar checkbox de RNC
   const rncCheckbox = document.getElementById('hasRNC');
   if (rncCheckbox) {
@@ -348,9 +391,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-
-  addServiceCardListeners();
-  addVehicleCardListeners();
 
   // Mostrar primer paso
   if (steps && steps.length > 0) {

@@ -75,6 +75,12 @@
       <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2">
         <i class="fas fa-download"></i> Instalar App
       </button>
+      <!-- Mensaje para usuarios de iOS -->
+      <div id="ios-install-prompt" class="hidden mt-4 bg-white text-azulOscuro p-4 rounded-lg shadow-md max-w-md mx-auto text-sm">
+        <p class="font-semibold">Para instalar la aplicación en tu iPhone/iPad:</p>
+        <p>1. Toca el botón de Compartir <i class="fas fa-share-square"></i> en la barra de navegación.</p>
+        <p>2. Desliza hacia arriba y selecciona "Agregar a la pantalla de inicio".</p>
+      </div>
     </div>
   </section>
 
@@ -82,7 +88,7 @@
   <section id="nosotros" class="py-16 bg-gray-50 text-center">
     <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-6">¿Quiénes Somos?</h3>
     <p class="max-w-3xl mx-auto text-gray-700 text-lg mb-12">
-      Logística López Ortiz es una empresa de transporte y  logística  que brinda soluciones eficientes y seguras para mudanzas, carga pesada, fletes y paquetería.
+      Logística López Ortiz es una empresa de transporte y  logística  que brinda soluciones eficientes y especializándose en carga pesada, fletes, paquetería y mudanzas.
     </p>
   </section>
 
@@ -158,20 +164,27 @@
     const installButton = document.getElementById('install-app-btn');
 
     window.addEventListener('beforeinstallprompt', (e) => {
-      // Prevenir que Chrome 67 y anteriores muestren el prompt automáticamente
       e.preventDefault();
-      // Guardar el evento para que pueda ser disparado más tarde
       deferredPrompt = e;
-      // Mostrar el botón de instalación
       if (installButton) {
         installButton.classList.remove('hidden');
       }
     });
 
+    // Detectar iOS para mostrar instrucciones de instalación manual
+    const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);
+
+    if (isIOS() && !isInStandaloneMode()) {
+      const iosPrompt = document.getElementById('ios-install-prompt');
+      if (iosPrompt) {
+        iosPrompt.classList.remove('hidden');
+      }
+    }
+
     if (installButton) {
       installButton.addEventListener('click', async () => {
         if (deferredPrompt) {
-          // Mostrar el prompt de instalación
           deferredPrompt.prompt();
         }
       });
