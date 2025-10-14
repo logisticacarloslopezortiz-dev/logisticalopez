@@ -213,6 +213,7 @@ function showActiveJob(order){
   `;
   updateActiveJobView();
   if (window.lucide) lucide.createIcons();
+  renderPhotoGallery(order.photos || []);
 }
 
 function updateActiveJobView(){
@@ -232,6 +233,35 @@ function updateActiveJobView(){
     mapEl.src = gmapEmbed(order.pickup);
     hintEl.textContent = 'Dirígete a la dirección de recogida';
   }
+}
+
+function renderPhotoGallery(photos) {
+  const gallery = document.getElementById('photoGallery');
+  gallery.innerHTML = '';
+  photos.forEach(photoSrc => {
+    const imgContainer = document.createElement('div');
+    imgContainer.className = 'relative aspect-square bg-gray-100 rounded-lg overflow-hidden';
+    imgContainer.innerHTML = `<img src="${photoSrc}" class="w-full h-full object-cover">`;
+    gallery.appendChild(imgContainer);
+  });
+}
+
+function handlePhotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !activeJobId) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const photoSrc = e.target.result;
+    const orderIndex = all.findIndex(o => o.id === activeJobId);
+    if (orderIndex === -1) return;
+
+    all[orderIndex].photos = all[orderIndex].photos || [];
+    all[orderIndex].photos.push(photoSrc);
+    saveOrders(all);
+    renderPhotoGallery(all[orderIndex].photos);
+  };
+  reader.readAsDataURL(file);
 }
 
 function notifyClient(order, statusKey){
@@ -266,11 +296,27 @@ async function changeStatus(orderId, newKey){
   await showBrowserNotification(all[idx], newKey);
 
   // Si se finaliza el pedido, actualizar estado global y fecha de finalización
-  if (newKey === 'entregado') {
+  if (newKey === 'entregado' && all[idx].status !== 'Completado') {
     all[idx].status = 'Completado';
     all[idx].completedAt = new Date().toISOString();
     all[idx].completedBy = collabSession.email;
     
+    // Intentar enviar Web Push mediante la Edge Function
+    if (all[idx].push_subscription) {
+      const payload = {
+        subscription: all[idx].push_subscription,
+        notification: {
+          title: `Tu pedido ${all[idx].id} ha sido completado`,
+          body: '¡Gracias por confiar en nosotros! Toca para ver los detalles.',
+          icon: '/img/android-chrome-192x192.png',
+          badge: '/img/favicon-32x32.png',
+          data: { url: `/seguimiento.html?order=${all[idx].id}` }
+        }
+      };
+      // Llama a tu Edge Function
+      supabaseConfig.client.functions.invoke('send-push', { body: payload });
+    }
+
     // Actualizar métricas de rendimiento
     const collabMetrics = JSON.parse(localStorage.getItem('tlc_collab_metrics') || '{}');
     if (!collabMetrics[collabSession.email]) {
@@ -307,10 +353,6 @@ async function changeStatus(orderId, newKey){
     }, 1000);
   }
 
-  // Intentar enviar Web Push mediante servidor; si falla, usar notificación local
-  const pushed = await sendPushToClient(all[idx], newKey);
-  if (!pushed) await showBrowserNotification(all[idx], newKey);
-  
   // Si el trabajo se marca como entregado, limpiar el trabajo activo
   if (newKey === 'entregado' && activeJobId === orderId) {
     activeJobId = null;
@@ -323,12 +365,7 @@ async function changeStatus(orderId, newKey){
   if (activeJobId === orderId) updateActiveJobView();
 
   // Toast mínimo
-  const t = document.createElement('div');
-  t.className = 'fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-2 rounded shadow';
-  t.innerHTML = `<div class="flex items-center gap-2"><i data-lucide="bell" class="w-4 h-4"></i><span>Estado actualizado y cliente notificado</span></div>`;
-  document.body.appendChild(t);
-  setTimeout(()=>{ t.remove(); }, 4000);
-  if (window.lucide) lucide.createIcons();
+  notifications.info('Estado actualizado y cliente notificado');
 }
 
 let baseVisibleCount = 0;
@@ -412,7 +449,7 @@ function filterAndRender(){
 }
 
 // Funciones para actualizar el sidebar
-function updateCollaboratorProfile(session) {
+async function updateCollaboratorProfile(session) {
   const name = collabDisplayName(session.email);
   const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   
@@ -421,7 +458,7 @@ function updateCollaboratorProfile(session) {
   document.getElementById('collabAvatar').textContent = initials;
   
   // Actualizar estadísticas del colaborador
-  updateCollaboratorStats(session.email);
+  await updateCollaboratorStats(session.email);
 }
 
 // Función para cargar órdenes
@@ -431,8 +468,8 @@ async function loadOrders() {
   return await supabaseConfig.getOrders();
 }
 
-function updateCollaboratorStats(email) {
-  const orders = loadOrders();
+async function updateCollaboratorStats(email) {
+  const orders = await loadOrders();
   const collaboratorOrders = orders.filter(order => order.assignedEmail === email);
   
   const activeJobs = collaboratorOrders.filter(order => 
@@ -453,7 +490,7 @@ function updateCollaboratorStats(email) {
 }
 
 // Inicialización
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const session = requireSession();
   if (!session) return; // redirigido
   
@@ -461,9 +498,9 @@ document.addEventListener('DOMContentLoaded', () => {
   collabSession = session;
   
   // Actualizar perfil del colaborador
-  updateCollaboratorProfile(session);
+  await updateCollaboratorProfile(session);
 
-  all = loadOrders();
+  all = await loadOrders();
   filtered = [...all];
 
   document.getElementById('searchInput').addEventListener('input', filterAndRender);
@@ -537,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Sincronizar cada 30s en caso de que el dueño cree nuevas solicitudes
   setInterval(() => {
-    all = loadOrders();
+    loadOrders().then(orders => { all = orders; });
     filterAndRender();
     updateCollaboratorStats(session.email);
   }, 30000);

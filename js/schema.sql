@@ -46,7 +46,8 @@ CREATE TABLE public.orders (
     -- Finanzas y seguimiento
     estimated_price TEXT DEFAULT 'Por confirmar',
     tracking JSONB, -- Historial de estados para el cliente
-    synced BOOLEAN DEFAULT false -- Para futuras sincronizaciones
+    synced BOOLEAN DEFAULT false, -- Para futuras sincronizaciones
+    push_subscription JSONB -- Almacena el objeto de suscripción para notificaciones push
 );
 
 -- Comentarios sobre la tabla 'orders'
@@ -139,31 +140,34 @@ COMMENT ON TABLE public.vehicles IS 'Catálogo de vehículos disponibles para lo
 -- que actualmente tienes en tu frontend.
 -- -------------------------------------------------------------
 
--- Insertar servicios iniciales
-INSERT INTO public.services (name, description, image_url, is_active) VALUES
-('Mudanza', 'Servicios completos de mudanza residencial y comercial.', 'mudanza.png', true),
-('Transporte Comercial', 'Transporte seguro de mercancías comerciales.', 'transporte-comercial.png', true),
-('Carga Pesada', 'Especialistas en transporte de carga pesada.', 'carga-pesada.png', true),
-('Flete', 'Servicios de flete nacional e internacional.', 'flete.png', true),
-('Grúa Vehículo', 'Transporte con grúa para vehículos.', 'grua-vehiculo.png', true),
-('Paquetería', 'Envíos de paquetes seguros y rápidos.', 'paqueteria.png', true),
-('Grúa de Carga', 'Servicio de grúa para mover carga pesada.', 'grua-carga.png', true),
-('Botes Mineros', 'Servicio de alquiler y transporte de botes para desechos.', 'botes-mineros.png', true)
+
+
+-- Insertar vehículos iniciales
+INSERT INTO public.vehicles (name, description, image_url, is_active) VALUES
+('Camión Pequeño', '14 pies', 'camionpequeno.jpg', true),
+('Furgoneta', 'Ideal para paquetería y cargas ligeras', 'furgoneta.jpg', true),
+('Grúa Vehicular', 'Para remolque de autos y jeepetas', 'gruaauto.jpg', true),
+('Camión Grande', '22 a 28 pies', 'camiongrande.jpg', true),
+('Camión Especial', 'Configuración para necesidades específicas', 'camionespecial.jpg', true),
+('Grúa de Carga', 'Para izado y movimiento de carga', 'gruacarga.jpg', true),
+('Motor', 'Para paquetería y entregas rápidas', 'motor.jpg', true),
+('Camión Abierto', 'Carga y transporte de materiales y mineros', 'camionmineros.jpg', true)
 ON CONFLICT (name) DO UPDATE SET
   description = EXCLUDED.description,
   image_url = EXCLUDED.image_url,
   is_active = EXCLUDED.is_active;
 
--- Insertar vehículos iniciales
-INSERT INTO public.vehicles (name, description, image_url, is_active) VALUES
-('Camión Pequeño', '14 pies', 'camionpequeño-.jpg', true),
-('Furgoneta', 'Ideal para paquetería y cargas ligeras', 'furgoneta.jpg', true),
-('Grúa Vehicular', 'Para remolque de autos y jeepetas', 'gruaauto.jpg', true),
-('Camión Grande', '22 a 28 pies', 'ccamiongrande.jpg', true),
-('Camión Especial', 'Configuración para necesidades específicas', 'camionpequeño.jpg', true),
-('Grúa de Carga', 'Para izado y movimiento de carga', 'gruacarga.jpg', true),
-('Motor', 'Para paquetería y entregas rápidas', 'motor.jpg', true)
+-- Insertar servicios con imágenes
+INSERT INTO public.services (name, description, image_url, is_active) VALUES
+('Mudanza', 'Servicios completos de mudanza residencial y comercial.', 'mudanza.png', true),
+('Transporte Comercial', 'Transporte seguro de mercancías comerciales.', 'transporte-comercial.png', true),
+('Carga Pesada', 'Especialistas en transporte de carga pesada.', 'carga-pesada.png', true),
+('Flete', 'Servicios de flete a todo nivel nacional.', 'flete.png', true),
+('Grúa Vehículo', 'Servicio con grúa para vehículos.', 'grua-vehiculo.png', true),
+('Paquetería', 'Envíos de paquetes seguros y rápidos.', 'paqueteria.png', true),
+('Grúa de Carga', 'Servicio con grúa para mover carga pesada.', 'grua-carga.png', true),
+('Botes Mineros', 'Servicio de alquiler y transporte de botes para desechos.', 'botes-mineros.png', true)
 ON CONFLICT (name) DO UPDATE SET
-  description = EXCLUDED.description,
-  image_url = EXCLUDED.image_url,
-  is_active = EXCLUDED.is_active;
+    description = EXCLUDED.description,
+    image_url = EXCLUDED.image_url,
+    is_active = EXCLUDED.is_active;

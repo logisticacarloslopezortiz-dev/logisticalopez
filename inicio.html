@@ -6,14 +6,33 @@
   <title>Inicio — Panel del Dueño</title>
 
 <!-- ✅ Favicon -->
-<link rel="icon" type="image/x-icon" href="assets/icons/favicon.ico" />
-<link rel="icon" type="image/png" href="assets/icons/favicon-16x16.png" sizes="16x16" />
-<link rel="icon" type="image/png" href="assets/icons/favicon-32x32.png" sizes="32x32" />
-<link rel="shortcut icon" href="assets/icons/favicon.ico" type="image/x-icon"/>
+<link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+<link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
 
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes toast-in {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    .toast-in {
+      animation: toast-in 0.5s ease-out forwards;
+    }
+    .toast-out {
+      animation: toast-out 0.5s ease-in forwards;
+      animation-fill-mode: forwards;
+    }
+  </style>
 </head>
 <body class="bg-gray-100 flex">
 
@@ -24,6 +43,7 @@
       <a href="inicio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="home"></i> Inicio</a>
       <a href="servicios.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="box"></i> Servicios</a>
       <a href="ganancias.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="dollar-sign"></i> Ganancia</a>
+      <a href="historial-solicitudes.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="history"></i> Historial</a>
       <a href="mi-negocio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="briefcase"></i> Mi negocio</a>
       <a href="colaboradores.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="users"></i> Colaboradores</a>
       <a href="cierre.html" class="flex items-center gap-2 mt-auto p-2 rounded hover:bg-gray-100 text-blue-700"><i data-lucide="log-out"></i> Cerrar sesión</a>
@@ -153,6 +173,9 @@
     </div>
   </main>
 
+  <!-- Contenedor para notificaciones Toast -->
+  <div id="toast-container" class="fixed top-5 right-5 z-[100] space-y-3 w-80"></div>
+
   <div id="assignModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
     <div class="bg-white w-full max-w-lg rounded-lg p-6 shadow-xl">
       <div class="flex items-center gap-2 mb-4">
@@ -177,6 +200,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
+  <script src="js/notifications.js"></script>
   <script src="js/inicio.js"></script>
   <script src="js/test-data.js"></script>
 

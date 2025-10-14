@@ -3,11 +3,16 @@ let currentStep = 1;
 let selectedService = null; // Ahora será un objeto {id, name}
 let serviceQuestions = {};
 
+// Variables para el mapa
+let map;
+let marker;
+let geocoder;
+let activeMapInputId = null;
+
+
 // Elementos del DOM
 let steps, nextBtn, prevBtn, progressBar;
 
-const serviceContainer = document.querySelector('.step[data-step="2"] .grid');
-const vehicleContainer = document.querySelector('.step[data-step="3"] .grid');
 // Función para mostrar paso específico
 
 function addVehicleCardListeners() {
@@ -24,11 +29,7 @@ function addServiceCardListeners() {
     card.addEventListener('click', function() {
       document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
       this.classList.add('border-azulClaro', 'bg-blue-50');
-      
-      selectedService = {
-          id: this.dataset.serviceId,
-          name: this.dataset.serviceName
-      };
+      selectedService = { name: this.dataset.serviceName };
 
       const modalName = selectedService.name.toLowerCase().replace(/ /g, '-');
       const modal = document.getElementById(`modal-${modalName}`);
@@ -48,34 +49,8 @@ function showStep(step) {
 
 // Función para generar ID consecutivo
 function generateOrderId() {
-  let orderCount = localStorage.getItem('tlc_orderCount') || 0;
-  orderCount = parseInt(orderCount) + 1;
-  localStorage.setItem('tlc_orderCount', orderCount);
-  return `TLC-${orderCount.toString().padStart(2, '0')}`;
-}
-
-// Función para guardar orden
-async function saveOrder(orderData) {
-  try {
-    // Intentar guardar en Supabase primero
-    if (typeof supabaseConfig !== 'undefined' && !supabaseConfig.useLocalStorage) {
-      const savedOrder = await supabaseConfig.saveOrder(orderData);
-      return savedOrder;
-    } else {
-      // Fallback a localStorage
-      let orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-      orders.push(orderData);
-      localStorage.setItem('tlc_orders', JSON.stringify(orders));
-      return orderData;
-    }
-  } catch (error) {
-    console.error('Error saving order:', error);
-    // Fallback a localStorage en caso de error
-    let orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-    orders.push(orderData);
-    localStorage.setItem('tlc_orders', JSON.stringify(orders));
-    return orderData;
-  }
+  // Genera un ID más único basado en la fecha y un número aleatorio
+  return `TLC-${Date.now().toString().slice(-6)}`;
 }
 
 // Función para validar paso actual
@@ -121,8 +96,8 @@ function validateCurrentStep() {
   }
   
   if (currentStep === 4) {
-    const origen = document.querySelector('input[placeholder="Dirección de origen"]').value;
-    const destino = document.querySelector('input[placeholder="Dirección de destino"]').value;
+    const origen = document.getElementById('pickupAddress').value;
+    const destino = document.getElementById('deliveryAddress').value;
     
     if (!origen || !destino) {
       alert('Por favor complete las direcciones de origen y destino');
@@ -147,12 +122,15 @@ function validateCurrentStep() {
 function toggleRNCField() {
   const rncCheckbox = document.getElementById('hasRNC');
   const rncFields = document.getElementById('rncFields');
+  const itbisMessage = document.getElementById('itbisMessage');
   
   if (rncCheckbox && rncFields) {
     if (rncCheckbox.checked) {
       rncFields.classList.remove('hidden');
+      itbisMessage.classList.remove('hidden');
     } else {
       rncFields.classList.add('hidden');
+      itbisMessage.classList.add('hidden');
       // Limpiar campos cuando se ocultan
       document.querySelector('input[name="rnc"]').value = '';
       document.querySelector('input[name="empresa"]').value = '';
@@ -160,44 +138,24 @@ function toggleRNCField() {
   }
 }
 
-// --- Carga dinámica de servicios y vehículos ---
-async function loadServices() {
-    const services = await supabaseConfig.getServices();
-    serviceContainer.innerHTML = ''; // Limpiar contenido estático
-    services.forEach(service => {
-        const serviceCard = document.createElement('div');
-        serviceCard.className = 'service-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
-        serviceCard.dataset.serviceName = service.name; // Usar el nombre para el modal
-        serviceCard.dataset.serviceId = service.id;
-        serviceCard.innerHTML = `
-            <img src="assets/${service.image_url}" alt="${service.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='assets/icons/1vertical.png'">
-            <div class="flex flex-col">
-                <span class="font-medium">${service.name}</span>
-                ${service.description ? `<span class="text-sm text-gray-500 mt-1">${service.description}</span>` : ''}
-            </div>
-        `;
-        serviceContainer.appendChild(serviceCard);
+// --- Funciones del Mapa de Google ---
+async function initMap(Map, AdvancedMarkerElement) {
+    const santoDomingo = { lat: 18.4861, lng: -69.9312 };
+    map = new Map(document.getElementById("map"), {
+        center: santoDomingo,
+        zoom: 12,
+        mapId: 'TLC_MAP_ID' // ID de mapa requerido para Advanced Markers
     });
-    addServiceCardListeners();
-}
-
-async function loadVehicles() {
-    const vehicles = await supabaseConfig.getVehicles();
-    vehicleContainer.innerHTML = ''; // Limpiar contenido estático
-    vehicles.forEach(vehicle => {
-        const vehicleCard = document.createElement('div');
-        vehicleCard.className = 'vehicle-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition';
-
-        vehicleCard.innerHTML = `
-            <img src="assets/img-vehiculos/${vehicle.image_url}" alt="${vehicle.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='assets/icons/1vertical.png'">
-            <div class="flex flex-col">
-                <h4 class="font-medium">${vehicle.name}</h4>
-                ${vehicle.description ? `<span class="text-sm text-gray-600 mt-1">${vehicle.description}</span>` : ''}
-            </div>
-        `;
-        vehicleContainer.appendChild(vehicleCard);
+    geocoder = new google.maps.Geocoder();
+    marker = new AdvancedMarkerElement({
+        map: map,
+        position: santoDomingo,
+        gmpDraggable: true,
     });
-    addVehicleCardListeners();
+
+    map.addListener('click', (e) => {
+        marker.position = e.latLng;
+    });
 }
 
 // Inicialización cuando el DOM esté listo
@@ -213,6 +171,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const rncCheckbox = document.getElementById('hasRNC');
   if (rncCheckbox) {
     rncCheckbox.addEventListener('change', toggleRNCField);
+  }
+
+  // Manejar mensaje de hora
+  const timeInput = document.querySelector('input[type="time"]');
+  if (timeInput) {
+      timeInput.addEventListener('change', () => document.getElementById('time-message').classList.remove('hidden'));
   }
 
   // Añadir validación en tiempo real para el paso 1
@@ -244,6 +208,37 @@ document.addEventListener('DOMContentLoaded', function() {
       materialOtroInput.classList.add('hidden');
       materialOtroInput.required = false;
     }
+  });
+
+  // --- Lógica del Modal del Mapa ---
+  const mapModal = document.getElementById('mapModal');
+  const closeMapModalBtn = document.getElementById('closeMapModal');
+  const confirmLocationBtn = document.getElementById('confirmLocationBtn');
+
+  document.querySelectorAll('.open-map-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      activeMapInputId = this.dataset.target;
+      mapModal.classList.remove('hidden');
+      mapModal.classList.add('flex');
+      // Forzar al mapa a redibujarse correctamente
+      google.maps.event.trigger(map, 'resize');
+    });
+  });
+
+  closeMapModalBtn.addEventListener('click', () => {
+    mapModal.classList.add('hidden');
+    mapModal.classList.remove('flex');
+  });
+
+  confirmLocationBtn.addEventListener('click', () => {
+    const location = marker.position;
+    geocoder.geocode({ location: location }, (results, status) => {
+      if (status === 'OK' && results[0]) {
+        document.getElementById(activeMapInputId).value = results[0].formatted_address;
+      }
+    });
+    mapModal.classList.add('hidden');
+    mapModal.classList.remove('flex');
   });
 
   // Manejar cierre de modales
@@ -305,55 +300,57 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (!validateCurrentStep()) return;
       
-      // Obtener datos del formulario
-      const nombre = document.querySelector('input[placeholder="Nombre completo"]').value;
-      const telefono = document.querySelector('input[placeholder="Teléfono"]').value;
-      const email = document.querySelector('input[placeholder="Correo"]').value;
-      const rnc = document.querySelector('input[name="rnc"]')?.value || '';
-      const empresa = document.querySelector('input[name="empresa"]')?.value || '';
-      
+      // Construir el objeto de la orden para Supabase
       const selectedVehicleCard = document.querySelector('.vehicle-card.border-azulClaro');
-      const vehiculo = selectedVehicleCard ? selectedVehicleCard.querySelector('h4').textContent : '';
-      
-      const origen = document.querySelector('input[placeholder="Dirección de origen"]').value;
-      const destino = document.querySelector('input[placeholder="Dirección de destino"]').value;
-      const fecha = document.querySelector('input[type="date"]').value;
-      const hora = document.querySelector('input[type="time"]').value;
-      
-      // Crear objeto de orden
       const orderData = {
-        id: generateOrderId(), // e.g., TLC-01
-        clientName: nombre,
-        clientPhone: telefono,
-        clientEmail: email,
-        rncData: rnc ? { rncNumber: rnc, companyName: empresa } : null,
-        orderType: rnc ? 'COMPROBANTE FISCAL FIJO' : 'CONSUMIDOR FINAL',
+        id: generateOrderId(),
+        // Datos del cliente (Paso 1)
+        name: document.querySelector('input[placeholder="Nombre completo"]').value,
+        phone: document.querySelector('input[placeholder="Teléfono"]').value,
+        email: document.querySelector('input[placeholder="Correo"]').value,
+        rnc: document.querySelector('input[name="rnc"]')?.value || null,
+        empresa: document.querySelector('input[name="empresa"]')?.value || null,
+        // Detalles del servicio (Pasos 2 y 3)
         service: selectedService.name,
-        serviceDetails: serviceQuestions,
-        vehicle: vehiculo,
-        pickupAddress: origen,
-        deliveryAddress: destino,
-        serviceDate: fecha,
-        serviceTime: hora,
+        vehicle: selectedVehicleCard ? selectedVehicleCard.querySelector('h4').textContent : null,
+        service_questions: serviceQuestions,
+        // Detalles de la ruta (Paso 4)
+        pickup: document.getElementById('pickupAddress').value,
+        delivery: document.getElementById('deliveryAddress').value,
+        // Fecha y Hora (Paso 5)
+        "date": document.querySelector('input[type="date"]').value,
+        "time": document.querySelector('input[type="time"]').value,
+        // Estado y precio inicial
         status: 'Pendiente',
-        createdAt: new Date().toISOString(),
-        estimatedPrice: 'Por confirmar'
+        estimated_price: 'Por confirmar'
       };
       
-      // Guardar orden
-      saveOrder(orderData);
-      
-      // Mostrar confirmación
-      alert(`¡Solicitud enviada exitosamente! Su número de orden es: ${orderData.id}`);
-      
-      // Redirigir
-      window.location.href = 'index.html';
+      // Guardar orden en Supabase
+      try {
+        const { data, error } = await supabaseConfig.client
+          .from('orders')
+          .insert([orderData])
+          .select();
+
+        if (error) {
+          throw error;
+        }
+
+        // Mostrar confirmación
+        alert(`¡Solicitud enviada exitosamente! Su número de orden es: ${orderData.id}`);
+        
+        // Redirigir
+        window.location.href = 'index.html';
+
+      } catch (error) {
+        console.error('Error al guardar la solicitud:', error);
+        alert(`Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.\n\nError: ${error.message}`);
+      }
     });
   }
 
-  // Cargar servicios y vehículos dinámicamente
-  loadServices();
-  loadVehicles();
+  addServiceCardListeners();
+  addVehicleCardListeners();
 
   // Mostrar primer paso
   if (steps && steps.length > 0) {

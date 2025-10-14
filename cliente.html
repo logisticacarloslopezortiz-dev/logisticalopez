@@ -68,6 +68,11 @@
             <div id="rncFields" class="hidden space-y-4">
               <input type="text" name="rnc" placeholder="Número de RNC" class="w-full border p-2 rounded">
               <input type="text" name="empresa" placeholder="Nombre de la empresa" class="w-full border p-2 rounded">
+              <!-- Mensaje de ITBIS -->
+              <div id="itbisMessage" class="hidden p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                <i class="fas fa-info-circle mr-2"></i>
+                Al solicitar una factura con valor de comprobante fiscal (RNC), se aplicará un cargo adicional del 18% correspondiente al ITBIS.
+              </div>
             </div>
 
             <div class="mt-6 border-t pt-4 text-center space-y-2">
@@ -78,9 +83,8 @@
           <!-- Paso 2: Servicio -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="2">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 2: Selecciona Servicio</h4>
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <!-- El contenido se cargará dinámicamente desde cliente.js -->
-              <p class="col-span-full text-center text-gray-500">Cargando servicios...</p>
+            <div id="service-list" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <!-- Los servicios se cargarán aquí dinámicamente -->
             </div>
             
             <div class="mt-6 border-t pt-4 text-center space-y-2">
@@ -91,9 +95,8 @@
           <!-- Paso 3: Vehículo -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="3">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 3: Selecciona Vehículo</h4>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <!-- El contenido se cargará dinámicamente desde cliente.js -->
-              <p class="col-span-full text-center text-gray-500">Cargando vehículos...</p>
+            <div id="vehicle-list" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- Los vehículos se cargarán aquí dinámicamente -->
             </div>
             
             <div class="mt-6 border-t pt-4 text-center space-y-2">
@@ -104,8 +107,14 @@
           <!-- Paso 4: Ubicación -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="4">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 4: Dirección de Origen y Destino</h4>
-            <input type="text" placeholder="Dirección de origen" class="w-full border p-2 rounded mb-4">
-            <input type="text" placeholder="Dirección de destino" class="w-full border p-2 rounded mb-4">
+            <div class="relative mb-4">
+              <input type="text" id="pickupAddress" placeholder="Dirección de origen" class="w-full border p-2 rounded pr-24">
+              <button type="button" class="open-map-btn absolute right-1 top-1/2 -translate-y-1/2 bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium hover:bg-gray-300" data-target="pickupAddress">Ver Mapa</button>
+            </div>
+            <div class="relative mb-4">
+              <input type="text" id="deliveryAddress" placeholder="Dirección de destino" class="w-full border p-2 rounded pr-24">
+              <button type="button" class="open-map-btn absolute right-1 top-1/2 -translate-y-1/2 bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium hover:bg-gray-300" data-target="deliveryAddress">Ver Mapa</button>
+            </div>
 
             <div class="mt-6 border-t pt-4 text-center space-y-2">
               <p class="text-gray-600">© 2025 Logística López Ortiz</p>
@@ -117,6 +126,10 @@
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 5: Fecha y Hora</h4>
             <input type="date" class="w-full border p-2 rounded mb-4">
             <input type="time" class="w-full border p-2 rounded mb-4">
+            <p id="time-message" class="hidden text-sm text-gray-500 text-center mt-2">
+              <i class="fas fa-info-circle mr-1"></i>
+              Haremos todo lo posible para cumplir con la hora solicitada. Nos pondremos en contacto para confirmar.
+            </p>
 
             <div class="mt-6 border-t pt-4 text-center space-y-2">
               <p class="text-gray-600">© 2025 Logística López Ortiz</p>
@@ -145,6 +158,25 @@
       </div>
     </div>
   </section>
+
+  <!-- Modal para el Mapa -->
+  <div id="mapModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-4xl h-[90vh] flex flex-col">
+      <div class="p-4 border-b flex justify-between items-center">
+        <h3 class="text-lg font-semibold text-azulOscuro">Selecciona la ubicación en el mapa</h3>
+        <button id="closeMapModal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+      </div>
+      <div id="map" class="flex-grow w-full h-full">
+        <!-- El mapa se renderizará aquí -->
+        <p class="text-center p-8 text-gray-500">Cargando mapa...</p>
+      </div>
+      <div class="p-4 border-t bg-gray-50 flex justify-end">
+        <button id="confirmLocationBtn" class="bg-azulClaro text-white px-6 py-2 rounded-lg font-medium hover:bg-azulOscuro transition">
+          Confirmar Ubicación
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modales para preguntas específicas de cada servicio -->
   
@@ -602,6 +634,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
+  <script>(g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r,"places"].join(","));e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>dl)})
+  (async () => {
+      const { Map } = await google.maps.importLibrary("maps");
+      const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+      initMap(Map, AdvancedMarkerElement);
+  })();</script>
   <script src="js/cliente.js"></script>
 </body>
 </html>

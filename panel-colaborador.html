@@ -163,6 +163,21 @@
             </div>
             <div class="mt-2 text-sm text-gray-500" id="activeJobMapHint">Dirígete a la dirección de recogida</div>
           </div>
+          <!-- Sección de Fotos -->
+          <div class="lg:col-span-2 border-t pt-4 mt-4">
+            <h3 class="text-md font-semibold text-gray-800 mb-3">Evidencia Fotográfica</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="photoGallery">
+              <!-- Las fotos subidas aparecerán aquí -->
+            </div>
+            <div class="mt-4">
+              <label for="photoUpload" class="w-full text-center cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg border border-dashed border-gray-400 flex items-center justify-center gap-2">
+                <i data-lucide="camera" class="w-5 h-5"></i>
+                <span>Añadir Foto</span>
+              </label>
+              <input type="file" id="photoUpload" class="hidden" accept="image/*">
+              <p class="text-xs text-gray-500 mt-2">Sube fotos como evidencia (recogida, entrega, etc.).</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -182,12 +197,10 @@
     </div>
   </main>
 
-  <script src="js/panel-colaborador.js"></script>
+  <script src="js/supabase-config.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/theme.js"></script>
-  <!-- Scripts -->
-  <script src="js/notifications.js"></script>
   <script src="js/rating-system.js"></script>
   <script src="js/panel-colaborador.js"></script>
   

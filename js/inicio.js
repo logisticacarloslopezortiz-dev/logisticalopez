@@ -5,113 +5,35 @@ let sortColumn = '';
 let sortDirection = 'asc';
 let selectedOrderIdForAssign = null;
 
-// Configuración de notificaciones
-const NOTIFICATION_DURATION = 5000;
-
 // Funciones utilitarias
+
+// Carga inicial de órdenes
 async function loadOrders() {
-  // Usar siempre la clase SupabaseConfig como única fuente de verdad
-  allOrders = (await supabaseConfig.getOrders()) || []; // Ensure allOrders is always an array
-  filteredOrders = [...allOrders];
-  renderOrders();
-  updateResumen();
-}
-
-// Función para recargar órdenes desde localStorage (útil para actualizaciones en tiempo real)
-async function reloadOrdersFromStorage() {
-  allOrders = await supabaseConfig.getOrders();
-  filteredOrders = [...allOrders];
-  updateResumen();
-  renderOrders();
-}
-
-function saveOrders(orders) {
-  localStorage.setItem('tlc_orders', JSON.stringify(orders));
-}
-
-function loadCollaborators() {
-  return JSON.parse(localStorage.getItem('colaboradores') || '[]');
-}
-
-function saveCollaborators(collaborators) {
-  localStorage.setItem('colaboradores', JSON.stringify(collaborators));
-}
-
-// Sistema de notificaciones
-function showNotification(type, title, message, duration = NOTIFICATION_DURATION) {
-  // Crear contenedor si no existe
-  let container = document.getElementById('notification-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'notification-container';
-    container.className = 'fixed top-4 right-4 z-50 flex flex-col gap-3';
-    document.body.appendChild(container);
+  const { data, error } = await supabaseConfig.client.from('orders').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.error("Error al cargar las órdenes:", error);
+    return;
   }
-  
-  // Crear notificación
-  const notification = document.createElement('div');
-  notification.className = `max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 overflow-hidden transition-all transform translate-y-0 opacity-100 ${type === 'error' ? 'ring-red-500' : type === 'success' ? 'ring-green-500' : 'ring-blue-500'}`;
-  
-  // Contenido de la notificación
-  notification.innerHTML = `
-    <div class="p-4">
-      <div class="flex items-start">
-        <div class="flex-shrink-0">
-          <i data-lucide="${type === 'error' ? 'alert-circle' : type === 'success' ? 'check-circle' : 'info'}" 
-             class="h-6 w-6 ${type === 'error' ? 'text-red-500' : type === 'success' ? 'text-green-500' : 'text-blue-500'}"></i>
-        </div>
-        <div class="ml-3 w-0 flex-1 pt-0.5">
-          <p class="text-sm font-medium text-gray-900">${title}</p>
-          <p class="mt-1 text-sm text-gray-500">${message}</p>
-        </div>
-        <div class="ml-4 flex-shrink-0 flex">
-          <button class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none">
-            <span class="sr-only">Cerrar</span>
-            <i data-lucide="x" class="h-5 w-5"></i>
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-  
-  // Agregar al contenedor
-  container.appendChild(notification);
-  
-  // Inicializar iconos
-  lucide.createIcons({
-    icons: {
-      'x': notification.querySelector('[data-lucide="x"]'),
-      [type === 'error' ? 'alert-circle' : type === 'success' ? 'check-circle' : 'info']: notification.querySelector(`[data-lucide="${type === 'error' ? 'alert-circle' : type === 'success' ? 'check-circle' : 'info'}"]`)
-    }
-  });
-  
-  // Evento para cerrar
-  notification.querySelector('button').addEventListener('click', () => {
-    notification.classList.replace('translate-y-0', '-translate-y-1');
-    notification.classList.replace('opacity-100', 'opacity-0');
-    setTimeout(() => notification.remove(), 300);
-  });
-  
-  // Auto-cerrar después de la duración
-  setTimeout(() => {
-    if (notification.parentNode) {
-      notification.classList.replace('translate-y-0', '-translate-y-1');
-      notification.classList.replace('opacity-100', 'opacity-0');
-      setTimeout(() => notification.remove(), 300);
-    }
-  }, duration);
+  allOrders = data || [];
+  filterOrders(); // Llama a filterOrders para aplicar filtros iniciales y renderizar
 }
 
-function showSuccess(title, message, duration) {
-  showNotification('success', title, message, duration);
+// Carga de colaboradores desde Supabase
+async function loadCollaborators() {
+  const { data, error } = await supabaseConfig.client.from('collaborators').select('*');
+  if (error) {
+    console.error("Error al cargar colaboradores:", error);
+    return [];
+  }
+  return data;
 }
 
-function showError(title, message, duration) {
-  showNotification('error', title, message, duration);
-}
-
-function showInfo(title, message, duration) {
-  showNotification('info', title, message, duration);
+// Guardar colaboradores (si fuera necesario, aunque ahora se gestiona en su propia página)
+async function saveCollaborators(collaborators) {
+  // Esta función ahora podría usarse para hacer un upsert masivo si se necesitara.
+  const { data, error } = await supabaseConfig.client.from('collaborators').upsert(collaborators);
+  if (error) console.error("Error al guardar colaboradores:", error);
+  return !error;
 }
 
 // Función para filtrar pedidos
@@ -127,7 +49,7 @@ function filterOrders() {
       order.phone.includes(searchTerm) ||
       order.email.toLowerCase().includes(searchTerm);
     
-    // Por defecto excluir "Completado", a menos que se filtre explícitamente por ese estado
+    // Por defecto, no mostrar "Completado" a menos que se filtre explícitamente por ese estado
     const matchesStatus = statusFilter
       ? order.status === statusFilter
       : order.status !== 'Completado';
@@ -142,17 +64,17 @@ function filterOrders() {
 }
 
 // Función para ordenar tabla
-function sortTable(column) {
+function sortTable(column, element) {
   if (sortColumn === column) {
     sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
   } else {
     sortColumn = column;
     sortDirection = 'asc';
   }
-
+  
   filteredOrders.sort((a, b) => {
-    let aVal = a[column];
-    let bVal = b[column];
+    let aVal = a[column] || '';
+    let bVal = b[column] || '';
 
     if (column === 'date') {
       aVal = new Date(`${a.date}T${a.time}`);
@@ -165,68 +87,14 @@ function sortTable(column) {
   });
 
   renderOrders();
-}
 
-// Función para cambiar estado de pedido
-function changeOrderStatus(orderId, newStatus, collaboratorEmail = null) {
-  const orderIndex = allOrders.findIndex(o => o.id === orderId);
-  if (orderIndex !== -1) {
-    const oldStatus = allOrders[orderIndex].status;
-    allOrders[orderIndex].status = newStatus;
-    
-    // Si cambia a "En proceso" y no tiene colaborador asignado, asignar al colaborador actual
-    if (newStatus === 'En proceso' && !allOrders[orderIndex].assignedTo && collaboratorEmail) {
-      const collaborators = loadCollaborators();
-      const collaborator = collaborators.find(c => c.email === collaboratorEmail);
-      if (collaborator) {
-        allOrders[orderIndex].assignedTo = collaborator.name;
-        allOrders[orderIndex].assignedEmail = collaborator.email;
-        allOrders[orderIndex].assignedAt = new Date().toISOString();
-        showSuccess('Servicio asignado', `El servicio ha sido asignado a ${collaborator.name} y marcado como "En proceso"`);
-      }
-    }
-    
-    // Si cambia a "Completado" o el colaborador marca como "entregado", registrar fecha de finalización
-    if ((newStatus === 'Completado' && oldStatus !== 'Completado') || 
-        allOrders[orderIndex].lastCollabStatus === 'entregado') {
-      allOrders[orderIndex].completedAt = new Date().toISOString();
-      allOrders[orderIndex].status = 'Completado';
-      
-      // Actualizar métricas del colaborador si fue finalizado por él
-      if (allOrders[orderIndex].lastCollabStatus === 'entregado' && allOrders[orderIndex].assignedEmail) {
-        const collabMetrics = JSON.parse(localStorage.getItem('tlc_collab_metrics') || '{}');
-        const email = allOrders[orderIndex].assignedEmail;
-        
-        if (!collabMetrics[email]) {
-          collabMetrics[email] = {
-            completedOrders: 0,
-            totalTime: 0,
-            serviceTypes: {}
-          };
-        }
-        
-        collabMetrics[email].completedOrders++;
-        
-        if (allOrders[orderIndex].assignedAt) {
-          const timeElapsed = new Date(allOrders[orderIndex].completedAt) - new Date(allOrders[orderIndex].assignedAt);
-          collabMetrics[email].totalTime += timeElapsed;
-        }
-        
-        const serviceType = allOrders[orderIndex].service;
-        if (serviceType) {
-          collabMetrics[email].serviceTypes[serviceType] = 
-            (collabMetrics[email].serviceTypes[serviceType] || 0) + 1;
-        }
-        
-        localStorage.setItem('tlc_collab_metrics', JSON.stringify(collabMetrics));
-      }
-      
-      showSuccess('Servicio completado', 'El servicio ha sido marcado como completado');
-    }
-    
-    saveOrders(allOrders);
-    filterOrders();
-  }
+  // Actualizar íconos de ordenación
+  document.querySelectorAll('th i[data-lucide="chevron-up-down"], th i[data-lucide="chevron-up"], th i[data-lucide="chevron-down"]').forEach(icon => {
+    icon.setAttribute('data-lucide', 'chevron-up-down');
+  });
+  const icon = element.querySelector('i');
+  icon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+  lucide.createIcons();
 }
 
 // Función para renderizar pedidos
@@ -270,7 +138,7 @@ function renderOrders(){
 
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50 transition-colors';
-    tr.innerHTML = `
+    tr.innerHTML = /*html*/`
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-sm font-medium text-gray-900">${o.name}</div>
@@ -296,9 +164,9 @@ function renderOrders(){
         <div class="text-gray-500">${o.time}</div>
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
-        <select onchange="changeOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">
+        <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">
           <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-          <option value="En proceso" ${o.status === 'En proceso' ? 'selected' : ''}>En proceso</option>
+          <option value="En proceso" ${o.status === 'En proceso' ? 'selected' : ''}>En Proceso</option>
           <option value="Completado" ${o.status === 'Completado' ? 'selected' : ''}>Completado</option>
         </select>
         ${o.assignedTo ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.assignedTo}</div>` : ''}
@@ -307,7 +175,7 @@ function renderOrders(){
         <span class="editable-price cursor-pointer hover:bg-yellow-100 px-2 py-1 rounded" 
               data-order-id="${o.id}" 
               onclick="editPrice('${o.id}', this)">
-          ${o.estimatedPrice || 'Por confirmar'}
+          ${o.estimated_price || 'Por confirmar'}
         </span>
       </td>
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -319,10 +187,6 @@ function renderOrders(){
           <a href="https://wa.me/${o.phone}?text=${mensaje}" target="_blank" 
              class="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600 transition-colors flex items-center gap-1">
             <i data-lucide="message-circle" class="w-3 h-3"></i> WhatsApp
-          </a>
-          <button onclick="generateAndSendInvoice('${o.id}')" 
-             class="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 transition-colors flex items-center gap-1">
-            <i data-lucide="file-text" class="w-3 h-3"></i> Factura
           </button>
         </div>
       </td>
@@ -341,6 +205,26 @@ function renderOrders(){
     console.warn('Error al actualizar gráficos o alertas:', error.message);
   }
 }
+
+// Función para actualizar el estado de una orden en Supabase
+async function updateOrderStatus(orderId, newStatus) {
+  const { data, error } = await supabaseConfig.client
+    .from('orders')
+    .update({ status: newStatus })
+    .eq('id', orderId);
+
+  if (error) {
+    console.error('Error al actualizar el estado:', error);
+    alert('No se pudo actualizar el estado de la orden.');
+    // Revertir el cambio en la UI si falla
+    loadOrders();
+  } else {
+    // Actualizar el estado en el array local para no tener que recargar toda la data
+    const orderIndex = allOrders.findIndex(o => o.id === orderId);
+    if (orderIndex !== -1) allOrders[orderIndex].status = newStatus;
+    filterOrders(); // Re-renderizar con el nuevo estado
+    showSuccess('Estado actualizado', `El estado del pedido ${orderId} es ahora ${newStatus}`);
+  }}
 
 // Función para mostrar detalles del servicio
 function showServiceDetails(orderId) {
@@ -394,16 +278,16 @@ function updateResumen(){
 
   // Calcular ganancias
   const totalEarnings = allOrders.reduce((sum, o) => {
-    if (o.estimatedPrice) {
-      const price = parseInt(o.estimatedPrice.replace(/[^0-9]/g, '')) || 0;
+    if (o.estimated_price) {
+      const price = parseInt(o.estimated_price.replace(/[^0-9]/g, '')) || 0;
       return sum + price;
     }
     return sum + 150000; // Precio base estimado
   }, 0);
 
   const todayEarnings = todayOrders.reduce((sum, o) => {
-    if (o.estimatedPrice) {
-      const price = parseInt(o.estimatedPrice.replace(/[^0-9]/g, '')) || 0;
+    if (o.estimated_price) {
+      const price = parseInt(o.estimated_price.replace(/[^0-9]/g, '')) || 0;
       return sum + price;
     }
     return sum + 150000;
@@ -494,16 +378,15 @@ function checkAlertas(){
 }
 
 // Gestión de asignación y eliminación de pedidos desde modal
-function openAssignModal(orderId){
+async function openAssignModal(orderId){
   selectedOrderIdForAssign = orderId;
   const modal = document.getElementById('assignModal');
   const body = document.getElementById('assignModalBody');
   const select = document.getElementById('assignSelect');
   const assignBtn = document.getElementById('assignConfirmBtn');
 
-  const orders = loadOrders();
-  const order = orders.find(o => o.id === orderId);
-  const colaboradores = JSON.parse(localStorage.getItem('colaboradores') || '[]');
+  const order = allOrders.find(o => o.id === orderId);
+  const colaboradores = await loadCollaborators();
 
   body.innerHTML = `
     <div class="space-y-1 text-sm text-gray-700">
@@ -546,55 +429,60 @@ function closeAssignModal(){
   selectedOrderIdForAssign = null;
 }
 
-function assignSelectedCollaborator(){
+async function assignSelectedCollaborator(){
   const email = document.getElementById('assignSelect').value;
   if (!email) { 
     showError('Error', 'Selecciona un colaborador'); 
     return; 
   }
   
-  const colaboradores = loadCollaborators();
+  const colaboradores = await loadCollaborators();
   const col = colaboradores.find(c => c.email === email);
   if (!col) { 
     showError('Error', 'Colaborador no encontrado'); 
     return; 
   }
 
-  const orders = loadOrders();
-  const idx = orders.findIndex(o => o.id === selectedOrderIdForAssign);
-  if (idx === -1) return;
+  const updateData = {
+    assigned_to: col.name,
+    assigned_email: col.email,
+    assigned_at: new Date().toISOString(),
+    status: 'En proceso' // Cambio automático a "En proceso"
+  };
+
+  const { data, error } = await supabaseConfig.client
+    .from('orders')
+    .update(updateData)
+    .eq('id', selectedOrderIdForAssign);
+
+  if (error) {
+    showError('Error de asignación', error.message);
+  } else {
+    // Actualizar el array local para reflejar el cambio inmediatamente
+    const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
+    if (orderIndex !== -1) {
+      allOrders[orderIndex] = { ...allOrders[orderIndex], ...updateData };
+    }
+    filterOrders();
+    showSuccess('Asignación exitosa', `El pedido ha sido asignado a ${col.name} y marcado como "En proceso"`);
+  }
   
-  // Asignar colaborador y cambiar estado a "En proceso"
-  orders[idx].assignedTo = col.name;
-  orders[idx].assignedEmail = col.email;
-  orders[idx].assignedAt = new Date().toISOString();
-  orders[idx].status = 'En proceso'; // Cambio automático a "En proceso"
-  
-  saveOrders(orders);
-  allOrders = orders;
-  filterOrders();
   closeAssignModal();
-  
-  showSuccess('Asignación exitosa', `El pedido ha sido asignado a ${col.name} y marcado como "En proceso"`);
-  
-  // Enviar notificación al colaborador (simulado)
-  notifyCollaborator(orders[idx], col);
 }
 
-function deleteSelectedOrder(){
+async function deleteSelectedOrder(){
   if (!confirm('¿Eliminar esta solicitud?')) return;
-  const orders = loadOrders();
-  const idx = orders.findIndex(o => o.id === selectedOrderIdForAssign);
-  if (idx === -1) return;
   
-  const deletedOrder = orders[idx];
-  orders.splice(idx, 1);
-  saveOrders(orders);
-  allOrders = orders;
-  filterOrders();
+  const { error } = await supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign);
+  
+  if (error) {
+    showError('Error al eliminar', error.message);
+  } else {
+    allOrders = allOrders.filter(o => o.id !== selectedOrderIdForAssign);
+    filterOrders();
+    showSuccess('Solicitud eliminada', `La solicitud ${selectedOrderIdForAssign} ha sido eliminada.`);
+  }
   closeAssignModal();
-  
-  showInfo('Solicitud eliminada', `La solicitud ${deletedOrder.id} ha sido eliminada`);
 }
 
 // Función para generar y enviar factura
@@ -618,7 +506,7 @@ function generateAndSendInvoice(orderId) {
     `- Fecha: ${order.date}\n` +
     `- Hora: ${order.time}\n` +
     `- Ruta: ${order.pickup} → ${order.delivery}\n` +
-    `- Precio: ${order.estimatedPrice || 'Por confirmar'}\n\n` +
+    `- Precio: ${order.estimated_price || 'Por confirmar'}\n\n` +
     `Gracias por confiar en nuestros servicios.\n\nAtentamente,\nEquipo TLC`
   );
   
@@ -658,7 +546,7 @@ function exportToCSV() {
       order.date,
       order.time,
       order.status,
-      order.estimatedPrice || 'Por confirmar'
+      order.estimated_price || 'Por confirmar'
     ];
     csvContent.push(row.join(','));
   });
@@ -674,6 +562,93 @@ function exportToCSV() {
   document.body.removeChild(link);
 }
 
+// --- Lógica de Tiempo Real con Supabase ---
+
+function handleRealtimeUpdate(payload) {
+  const { eventType, new: newRecord, old: oldRecord, table } = payload;
+
+  if (table !== 'orders') return;
+
+  switch (eventType) {
+    case 'INSERT':
+      // Añadir la nueva orden al principio del array
+      allOrders.unshift(newRecord);
+      // Volver a aplicar filtros y renderizar
+      filterOrders();
+      // Mostrar una notificación
+      showNotification('Nueva Solicitud Recibida', `Cliente: ${newRecord.name}\nServicio: ${newRecord.service}`, 'info');
+      break;
+    case 'UPDATE':
+      // Encontrar y actualizar la orden en el array
+      const indexToUpdate = allOrders.findIndex(order => order.id === newRecord.id);
+      if (indexToUpdate !== -1) {
+        allOrders[indexToUpdate] = { ...allOrders[indexToUpdate], ...newRecord };
+        filterOrders();
+      }
+      break;
+    case 'DELETE':
+      // Eliminar la orden del array
+      allOrders = allOrders.filter(order => order.id !== oldRecord.id);
+      filterOrders();
+      break;
+  }
+}
+
+function showNotification(title, body, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const typeConfig = {
+    success: { icon: 'check-circle', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
+    error: { icon: 'x-circle', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
+    warning: { icon: 'alert-triangle', color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+    info: { icon: 'bell-ring', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' }
+  };
+
+  const config = typeConfig[type] || typeConfig.info;
+
+  const toastId = `toast-${Date.now()}`;
+  const toast = document.createElement('div');
+  toast.id = toastId;
+  toast.className = `toast-in border rounded-lg shadow-lg p-4 flex items-start gap-3 ${config.bg} ${config.border}`;
+
+  toast.innerHTML = `
+    <div>
+      <i data-lucide="${config.icon}" class="w-6 h-6 ${config.color}"></i>
+    </div>
+    <div class="flex-1">
+      <p class="font-semibold text-gray-800">${title}</p>
+      <p class="text-sm text-gray-600 whitespace-pre-wrap">${body}</p>
+    </div>
+    <div>
+      <button onclick="this.closest('.toast-in').classList.add('toast-out')" class="text-gray-400 hover:text-gray-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+  `;
+
+  container.appendChild(toast);
+  lucide.createIcons(); // Renderizar el nuevo ícono
+
+  // Auto-dismiss after 7 seconds
+  setTimeout(() => {
+    const activeToast = document.getElementById(toastId);
+    if (activeToast && !activeToast.classList.contains('toast-out')) {
+      activeToast.classList.add('toast-out');
+    }
+  }, 7000);
+
+  // Eliminar el elemento del DOM después de la animación de salida
+  toast.addEventListener('animationend', (e) => {
+    if (e.animationName.includes('toast-out')) {
+      toast.remove();
+    }
+  });
+}
+
+const showSuccess = (title, body) => showNotification(title, body, 'success');
+const showError = (title, body) => showNotification(title, body, 'error');
+const showWarning = (title, body) => showNotification(title, body, 'warning');
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('searchInput').addEventListener('input', filterOrders);
@@ -696,27 +671,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Función para hacer funciones globales
   window.sortTable = sortTable;
-  window.changeOrderStatus = changeOrderStatus;
+  window.updateOrderStatus = updateOrderStatus;
+  window.openAssignModal = openAssignModal;
   window.generateAndSendInvoice = generateAndSendInvoice;
 
-
-  // Escuchar cambios en localStorage para actualizar automáticamente
-  window.addEventListener('storage', function(e) {
-    if (e.key === 'tlc_orders') {
-      reloadOrdersFromStorage();
-    }
-  });
-
-  // Verificar periódicamente si hay nuevas órdenes (para cuando se actualiza en la misma pestaña)
-  setInterval(() => {
-    const currentOrders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-    if (currentOrders.length !== allOrders.length) {
-      reloadOrdersFromStorage();
-    }
-  }, 2000); // Verificar cada 2 segundos
+  // Suscribirse a los cambios en tiempo real de la tabla 'orders'
+  const ordersSubscription = supabaseConfig.client
+    .channel('public:orders')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
+    .subscribe();
 
   // Función para actualizar los paneles de resumen
   function updateSummaryPanels() {
+    if (!allOrders) return;
+
     // Actualizar contadores en los paneles de resumen
     const totalPedidos = document.getElementById('totalPedidos');
     const pedidosCompletados = document.getElementById('pedidosCompletados');
@@ -770,15 +738,24 @@ document.addEventListener('DOMContentLoaded', function() {
     input.focus();
     
     function savePrice() {
-      const newPrice = input.value.trim() || 'Por confirmar';
-      const orderIndex = allOrders.findIndex(o => o.id === orderId);
-      if (orderIndex !== -1) {
-        allOrders[orderIndex].estimatedPrice = newPrice;
-        saveOrders(allOrders);
-        element.innerHTML = newPrice;
-        showSuccess('Precio actualizado', `Precio actualizado a ${newPrice}`);
-        updateResumen();
-      }
+        const newPrice = input.value.trim() || 'Por confirmar';
+        
+        supabaseConfig.client
+          .from('orders')
+          .update({ estimated_price: newPrice })
+          .eq('id', orderId)
+          .then(({ error }) => {
+            if (error) {
+              showError('Error al guardar', error.message);
+              element.innerHTML = currentPrice; // Revertir
+            } else {
+              element.innerHTML = newPrice;
+              showSuccess('Precio actualizado', `Precio actualizado a ${newPrice}`);
+              const orderIndex = allOrders.findIndex(o => o.id === orderId);
+              if (orderIndex !== -1) allOrders[orderIndex].estimated_price = newPrice;
+              updateResumen();
+            }
+          });
     }
     
     input.addEventListener('blur', savePrice);
@@ -873,18 +850,8 @@ Email: info@tlc-transporte.com
 
   // Inicialización
   function init() {
-    loadOrders().then((orders) => {
-      allOrders = orders;
-      filteredOrders = [...allOrders];
-      renderOrders();
-      updateResumen();
-      console.log('Sistema inicializado con', allOrders.length, 'pedidos.');
-    });
+    loadOrders();
   }
 
   init();
-  setInterval(() => {
-    allOrders = loadOrders();
-    filterOrders();
-  }, 30000);
 });

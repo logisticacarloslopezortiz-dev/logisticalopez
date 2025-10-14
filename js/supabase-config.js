@@ -22,7 +22,7 @@ class SupabaseConfig {
             'SUPABASE_URL': 'https://fkprllkxyjtosjhtikxy.supabase.co',
             'SUPABASE_ANON_KEY': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ',
             'USE_LOCAL_STORAGE': 'false',
-            'GOOGLE_MAPS_API_KEY': 'tu-clave-de-google-maps'
+            'GOOGLE_MAPS_API_KEY': 'AQUI_VA_TU_CLAVE_DE_API_REAL'
         };
         return envVars[name];
     }
