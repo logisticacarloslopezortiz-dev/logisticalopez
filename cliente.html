@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ✅ Favicon y Iconos para Apple / iOS -->
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <link rel="apple-touch-icon" href="img/android-chrome-192x192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Logística López Ortiz - Solicitud de Servicio</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -107,13 +112,18 @@
           <!-- Paso 4: Ubicación -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="4">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 4: Dirección de Origen y Destino</h4>
-            <div class="relative mb-4">
-              <input type="text" id="pickupAddress" placeholder="Dirección de origen" class="w-full border p-2 rounded pr-24">
-              <button type="button" class="open-map-btn absolute right-1 top-1/2 -translate-y-1/2 bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium hover:bg-gray-300" data-target="pickupAddress">Ver Mapa</button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div class="relative">
+                <label for="pickupAddress" class="block text-sm font-medium text-gray-700 mb-1">📍 Dirección de Origen</label>
+                <input type="text" id="pickupAddress" placeholder="Escribe o selecciona en el mapa" class="w-full border p-2 rounded focus:ring-2 focus:ring-azulClaro">
+              </div>
+              <div class="relative">
+                <label for="deliveryAddress" class="block text-sm font-medium text-gray-700 mb-1">🏁 Dirección de Destino</label>
+                <input type="text" id="deliveryAddress" placeholder="Escribe o selecciona en el mapa" class="w-full border p-2 rounded focus:ring-2 focus:ring-azulClaro">
+              </div>
             </div>
-            <div class="relative mb-4">
-              <input type="text" id="deliveryAddress" placeholder="Dirección de destino" class="w-full border p-2 rounded pr-24">
-              <button type="button" class="open-map-btn absolute right-1 top-1/2 -translate-y-1/2 bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-medium hover:bg-gray-300" data-target="deliveryAddress">Ver Mapa</button>
+            <div id="map" class="w-full h-80 rounded-lg border-2 border-gray-200 shadow-inner">
+              <p class="text-center p-8 text-gray-500">Cargando mapa...</p>
             </div>
 
             <div class="mt-6 border-t pt-4 text-center space-y-2">
@@ -158,25 +168,6 @@
       </div>
     </div>
   </section>
-
-  <!-- Modal para el Mapa -->
-  <div id="mapModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-4xl h-[90vh] flex flex-col">
-      <div class="p-4 border-b flex justify-between items-center">
-        <h3 class="text-lg font-semibold text-azulOscuro">Selecciona la ubicación en el mapa</h3>
-        <button id="closeMapModal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
-      </div>
-      <div id="map" class="flex-grow w-full h-full">
-        <!-- El mapa se renderizará aquí -->
-        <p class="text-center p-8 text-gray-500">Cargando mapa...</p>
-      </div>
-      <div class="p-4 border-t bg-gray-50 flex justify-end">
-        <button id="confirmLocationBtn" class="bg-azulClaro text-white px-6 py-2 rounded-lg font-medium hover:bg-azulOscuro transition">
-          Confirmar Ubicación
-        </button>
-      </div>
-    </div>
-  </div>
 
   <!-- Modales para preguntas específicas de cada servicio -->
   

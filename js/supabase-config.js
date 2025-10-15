@@ -4,6 +4,7 @@ class SupabaseConfig {
         // Cargar variables de entorno desde .env o usar valores por defecto
         this.supabaseUrl = this.getEnvVar('SUPABASE_URL');
         this.supabaseKey = this.getEnvVar('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ';
+        this.vapidPublicKey = this.getEnvVar('VAPID_PUBLIC_KEY');
         this.useLocalStorage = this.getEnvVar('USE_LOCAL_STORAGE') === 'true';
         
         // Inicializar cliente de Supabase si está disponible
@@ -21,7 +22,6 @@ class SupabaseConfig {
         const envVars = { // Cambia 'USE_LOCAL_STORAGE' a 'false' para conectar a Supabase
             'SUPABASE_URL': 'https://fkprllkxyjtosjhtikxy.supabase.co',
             'SUPABASE_ANON_KEY': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ',
-            'USE_LOCAL_STORAGE': 'false',
             'GOOGLE_MAPS_API_KEY': 'AQUI_VA_TU_CLAVE_DE_API_REAL'
         };
         return envVars[name];
@@ -215,6 +215,20 @@ class SupabaseConfig {
         if (error) throw error;
     }
 
+    async getBusinessSettings() {
+        if (this.useLocalStorage) {
+            return JSON.parse(localStorage.getItem('businessData') || '{}');
+        }
+        try {
+            const { data, error } = await this.client
+                .from('business_settings')
+                .select('*')
+                .eq('id', 1)
+                .single();
+            if (error) throw error;
+            return data;
+        } catch (error) { console.error('Error al obtener configuración del negocio:', error); return {}; }
+    }
     // Método para sincronizar datos locales con Supabase
     async syncLocalData() {
         if (this.useLocalStorage) {

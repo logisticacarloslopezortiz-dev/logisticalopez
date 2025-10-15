@@ -179,15 +179,26 @@ function renderOrders(){
         </span>
       </td>
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-        <div class="flex gap-2">
-          <a href="mailto:${o.email}?subject=Solicitud recibida&body=${mensaje}" target="_blank" 
-             class="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700 transition-colors flex items-center gap-1">
-            <i data-lucide="mail" class="w-3 h-3"></i> Email
-          </a>
-          <a href="https://wa.me/${o.phone}?text=${mensaje}" target="_blank" 
-             class="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600 transition-colors flex items-center gap-1">
-            <i data-lucide="message-circle" class="w-3 h-3"></i> WhatsApp
-          </button>
+        <div class="relative inline-block text-left">
+          <div>
+            <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-3 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500" onclick="toggleActionsMenu(this)">
+              Acciones
+              <i data-lucide="chevron-down" class="ml-2 -mr-1 h-5 w-5"></i>
+            </button>
+          </div>
+          <div class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden z-10">
+            <div class="py-1" role="menu" aria-orientation="vertical">
+              <a href="https://wa.me/${o.phone}?text=${mensaje}" target="_blank" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
+                <i data-lucide="message-circle" class="w-4 h-4 text-green-500"></i> WhatsApp
+              </a>
+              <a href="mailto:${o.email}?subject=Solicitud recibida&body=${mensaje}" target="_blank" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
+                <i data-lucide="mail" class="w-4 h-4 text-blue-500"></i> Email
+              </a>
+              <a href="#" onclick="generateAndSendInvoice('${o.id}')" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
+                <i data-lucide="file-text" class="w-4 h-4 text-gray-500"></i> Generar Factura
+              </a>
+            </div>
+          </div>
         </div>
       </td>
     `;
@@ -205,6 +216,20 @@ function renderOrders(){
     console.warn('Error al actualizar gráficos o alertas:', error.message);
   }
 }
+
+// Función para mostrar/ocultar el menú de acciones
+function toggleActionsMenu(button) {
+  const dropdown = button.nextElementSibling;
+  dropdown.classList.toggle('hidden');
+  // Cerrar otros menús abiertos
+  document.querySelectorAll('.origin-top-right').forEach(menu => {
+    if (menu !== dropdown && !menu.classList.contains('hidden')) {
+      menu.classList.add('hidden');
+    }
+  });
+}
+// Cerrar menús si se hace clic fuera
+window.addEventListener('click', (e) => { if (!e.target.closest('.relative')) toggleActionsMenu({nextElementSibling: null}); });
 
 // Función para actualizar el estado de una orden en Supabase
 async function updateOrderStatus(orderId, newStatus) {
@@ -486,40 +511,103 @@ async function deleteSelectedOrder(){
 }
 
 // Función para generar y enviar factura
-function generateAndSendInvoice(orderId) {
-  const orders = loadOrders();
-  const order = orders.find(o => o.id === orderId);
-  
+async function generateAndSendInvoice(orderId) {
+  showNotification('Generando Factura...', 'Por favor, espera un momento.', 'info');
+
+  const order = allOrders.find(o => o.id === orderId);
   if (!order) {
-    showError('Error', 'No se encontró la orden solicitada');
+    showError('Error', 'Orden no encontrada.');
     return;
   }
-  
-  // Simulación de generación de factura
-  console.log('Generando factura para orden:', order.id);
-  
-  // Crear mensaje para WhatsApp y correo
-  const invoiceMessage = encodeURIComponent(
-    `Hola ${order.name},\n\nAdjunto encontrarás la factura de tu servicio de ${order.service}.\n\nDetalles del servicio:\n` +
-    `- Servicio: ${order.service}\n` +
-    `- Vehículo: ${order.vehicle}\n` +
-    `- Fecha: ${order.date}\n` +
-    `- Hora: ${order.time}\n` +
-    `- Ruta: ${order.pickup} → ${order.delivery}\n` +
-    `- Precio: ${order.estimated_price || 'Por confirmar'}\n\n` +
-    `Gracias por confiar en nuestros servicios.\n\nAtentamente,\nEquipo TLC`
-  );
-  
-  // Simular envío por correo
-  const emailSubject = encodeURIComponent(`Factura de servicio TLC - ${order.id}`);
-  window.open(`mailto:${order.email}?subject=${emailSubject}&body=${invoiceMessage}`, '_blank');
-  
-  // Simular envío por WhatsApp
-  setTimeout(() => {
-    window.open(`https://wa.me/${order.phone}?text=${invoiceMessage}`, '_blank');
-  }, 1000);
-  
-  showSuccess('Factura enviada', `La factura de la orden ${order.id} ha sido enviada al cliente por correo electrónico y WhatsApp.`);
+
+  if (!order.estimated_price || order.estimated_price === 'Por confirmar') {
+    showError('Acción requerida', 'Debes establecer un precio antes de generar la factura.');
+    return;
+  }
+
+  try {
+    const businessSettings = await supabaseConfig.getBusinessSettings();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // --- Contenido del PDF ---
+    // Logo (si existe)
+    if (businessSettings.logo_url) {
+      try {
+        // Necesitamos una imagen que no tenga restricciones de CORS
+        // Por ahora, lo dejamos como texto. Para usar una imagen, debe estar en un bucket público.
+        // const imgData = businessSettings.logo_url; 
+        // doc.addImage(imgData, 'PNG', 15, 15, 40, 40);
+      } catch (e) { console.error("No se pudo cargar el logo en el PDF:", e); }
+    }
+
+    // Encabezado de la factura
+    doc.setFontSize(20);
+    doc.text(businessSettings.business_name || 'Logística López Ortiz', 105, 20, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(businessSettings.address || 'Dirección de la empresa', 105, 27, { align: 'center' });
+    doc.text(`Tel: ${businessSettings.phone || 'N/A'} | Email: ${businessSettings.email || 'N/A'}`, 105, 32, { align: 'center' });
+
+    doc.setFontSize(16);
+    doc.text(`Factura #${order.id}`, 15, 50);
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 15, 56);
+
+    // Datos del cliente
+    doc.setFontSize(12);
+    doc.text('Facturar a:', 15, 70);
+    doc.setFontSize(10);
+    doc.text(order.name, 15, 76);
+    doc.text(order.phone, 15, 81);
+    doc.text(order.email, 15, 86);
+    if (order.rnc) {
+      doc.text(`RNC: ${order.rnc} (${order.empresa})`, 15, 91);
+    }
+
+    // Tabla con detalles del servicio
+    doc.autoTable({
+      startY: 100,
+      head: [['Descripción', 'Detalle']],
+      body: [
+        ['Servicio', order.service],
+        ['Vehículo', order.vehicle],
+        ['Fecha Programada', `${order.date} a las ${order.time}`],
+        ['Origen', order.pickup],
+        ['Destino', order.delivery],
+      ],
+      theme: 'striped'
+    });
+
+    // Total
+    const finalY = doc.lastAutoTable.finalY;
+    doc.setFontSize(14);
+    doc.text('Total:', 140, finalY + 15);
+    doc.setFont(undefined, 'bold');
+    doc.text(order.estimated_price, 170, finalY + 15);
+
+    // --- Envío por Correo ---
+    const pdfBase64 = doc.output('datauristring').split(',')[1];
+
+    showNotification('Enviando Correo...', 'La factura se está enviando al cliente.', 'info');
+
+    const { error: functionError } = await supabaseConfig.client.functions.invoke('send-invoice', {
+      body: {
+        to: order.email,
+        subject: `Factura de tu servicio TLC: Orden #${order.id}`,
+        html: `¡Hola ${order.name}! <br><br>Adjuntamos la factura de tu servicio. ¡Gracias por confiar en nosotros!<br><br>Equipo de Logística López Ortiz`,
+        pdfData: pdfBase64,
+        fileName: `Factura-${order.id}.pdf`
+      }
+    });
+
+    if (functionError) throw functionError;
+
+    showSuccess('Factura Enviada', `La factura para la orden #${order.id} ha sido enviada por correo.`);
+
+  } catch (error) {
+    console.error('Error al generar o enviar la factura:', error);
+    showError('Error de Factura', 'No se pudo generar o enviar el PDF. Revisa la consola.');
+  }
 }
 
 // Función para notificar al colaborador (simulada)

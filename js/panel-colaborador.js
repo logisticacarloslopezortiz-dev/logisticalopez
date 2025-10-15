@@ -1,16 +1,3 @@
-// Utilidades compartidas
-function filterOrders(){ 
-  const orders = JSON.parse(localStorage.getItem('tlc_orders')||'[]');
-  // Eliminar solicitudes de prueba y pedidos completados/finalizados
-  return orders.filter(order => 
-    !order.id.toLowerCase().includes('prueba') && 
-    !order.name.toLowerCase().includes('prueba') && 
-    order.status !== 'Completado' && 
-    order.lastCollabStatus !== 'entregado'
-  );
-}
-function saveOrders(arr){ localStorage.setItem('tlc_orders', JSON.stringify(arr)); }
-
 // Sesión colaborador
 function getSession(){ return JSON.parse(localStorage.getItem('tlc_collab_session')||'null'); }
 function requireSession(){
@@ -140,10 +127,10 @@ function showActiveJob(order){
   const section = document.getElementById('activeJobSection');
   section.classList.remove('hidden');
   const info = document.getElementById('activeJobInfo');
-  info.innerHTML = `
+  info.innerHTML = /*html*/`
     <div class="space-y-4">
       <div class="flex flex-wrap items-center gap-2">
-        <span class="px-2 py-1 text-xs rounded bg-gray-100">ID: ${order.id}</span>
+        <span class="px-2 py-1 text-xs rounded bg-gray-100 font-mono">ID: ${order.id}</span>
         ${order.assignedTo ? `<span class=\"px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800 inline-flex items-center gap-1\"><i data-lucide=\"user\" class=\"w-3 h-3\"></i> ${order.assignedTo}</span>` : ''}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -264,93 +251,43 @@ function handlePhotoUpload(event) {
   reader.readAsDataURL(file);
 }
 
-function notifyClient(order, statusKey){
-  const statusLabel = STATUS_MAP[statusKey]?.label || statusKey;
-  
-  // Guardamos un historial simple en el pedido
-  order.tracking = order.tracking || [];
-  order.tracking.unshift({
-    at: new Date().toISOString(),
-    status: statusLabel
-  });
-  saveOrders(all);
-  
-  return { success: true };
-}
-
 async function changeStatus(orderId, newKey){
-  const idx = all.findIndex(o => o.id === orderId);
-  if (idx === -1) return;
-  all[idx].lastCollabStatus = newKey;
+  const order = all.find(o => o.id === orderId);
+  if (!order) return;
 
-  // Notificar al cliente del cambio de estado
-  notifyClient(all[idx], newKey);
-  
-  // Mostrar notificación de éxito al colaborador
-  notifications.success('Estado actualizado y cliente notificado', {
-    title: 'Notificación enviada',
-    duration: 5000
-  });
+  const updates = { last_collab_status: newKey };
 
-  // Mostrar notificación del navegador al cliente
-  await showBrowserNotification(all[idx], newKey);
+  if (newKey === 'entregado') {
+    updates.status = 'Completado';
+    updates.completed_at = new Date().toISOString();
+    updates.completed_by = collabSession.email;
+  }
 
-  // Si se finaliza el pedido, actualizar estado global y fecha de finalización
-  if (newKey === 'entregado' && all[idx].status !== 'Completado') {
-    all[idx].status = 'Completado';
-    all[idx].completedAt = new Date().toISOString();
-    all[idx].completedBy = collabSession.email;
-    
-    // Intentar enviar Web Push mediante la Edge Function
-    if (all[idx].push_subscription) {
-      const payload = {
-        subscription: all[idx].push_subscription,
-        notification: {
-          title: `Tu pedido ${all[idx].id} ha sido completado`,
-          body: '¡Gracias por confiar en nosotros! Toca para ver los detalles.',
-          icon: '/img/android-chrome-192x192.png',
-          badge: '/img/favicon-32x32.png',
-          data: { url: `/seguimiento.html?order=${all[idx].id}` }
-        }
-      };
-      // Llama a tu Edge Function
-      supabaseConfig.client.functions.invoke('send-push', { body: payload });
-    }
+  const { error } = await supabaseConfig.client
+    .from('orders')
+    .update(updates)
+    .eq('id', orderId);
 
-    // Actualizar métricas de rendimiento
-    const collabMetrics = JSON.parse(localStorage.getItem('tlc_collab_metrics') || '{}');
-    if (!collabMetrics[collabSession.email]) {
-      collabMetrics[collabSession.email] = {
-        completedOrders: 0,
-        totalTime: 0,
-        serviceTypes: {}
-      };
-    }
-    
-    collabMetrics[collabSession.email].completedOrders++;
-    
-    // Calcular tiempo total desde la asignación hasta la entrega
-    if (all[idx].assignedAt) {
-      const timeElapsed = new Date(all[idx].completedAt) - new Date(all[idx].assignedAt);
-      collabMetrics[collabSession.email].totalTime += timeElapsed;
-    }
-    
-    // Actualizar distribución de servicios
-    const serviceType = all[idx].service;
-    if (serviceType) {
-      collabMetrics[collabSession.email].serviceTypes[serviceType] = 
-        (collabMetrics[collabSession.email].serviceTypes[serviceType] || 0) + 1;
-    }
-    
-    localStorage.setItem('tlc_collab_metrics', JSON.stringify(collabMetrics));
-    
-    // Remover de la lista de pedidos activos
-    filtered = filtered.filter(o => o.id !== orderId);
-    
-    // Mostrar notificación para valorar el servicio
-    setTimeout(() => {
-      showRatingNotification(all[idx]);
-    }, 1000);
+  if (error) {
+    showError('Error', 'No se pudo actualizar el estado.');
+    return;
+  }
+
+  showSuccess('Estado actualizado', `El estado del pedido ahora es: ${STATUS_MAP[newKey]?.label || newKey}`);
+
+  // Enviar notificación push si el cliente se suscribió
+  if (order.push_subscription) {
+    const payload = {
+      subscription: order.push_subscription,
+      notification: {
+        title: `Actualización de tu pedido ${order.id}`,
+        body: buildStatusMessage(order, newKey),
+        icon: '/img/android-chrome-192x192.png',
+        data: { url: `/seguimiento.html?order=${order.id}` }
+      }
+    };
+    await supabaseConfig.client.functions.invoke('send-notification', { body: payload });
+    showInfo('Notificación enviada', 'El cliente ha sido notificado del cambio de estado.');
   }
 
   // Si el trabajo se marca como entregado, limpiar el trabajo activo
@@ -359,13 +296,8 @@ async function changeStatus(orderId, newKey){
     localStorage.removeItem('tlc_collab_active_job');
     document.getElementById('activeJobSection').classList.add('hidden');
   }
-  
-  saveOrders(all);
-  filterAndRender();
-  if (activeJobId === orderId) updateActiveJobView();
 
-  // Toast mínimo
-  notifications.info('Estado actualizado y cliente notificado');
+  // La actualización en tiempo real se encargará de refrescar la UI
 }
 
 let baseVisibleCount = 0;
@@ -381,7 +313,7 @@ function render(){
   }
 
   filtered.forEach(o => {
-    const statusKey = o.lastCollabStatus || 'en_camino_recoger';
+    const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
     const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50';
@@ -401,7 +333,7 @@ function render(){
       </td>
       <td class="px-3 md:px-6 py-4 whitespace-nowrap">
         <span class="px-2 py-1 rounded-full text-xs font-semibold ${status.badge}">${status.label}</span>
-        ${o.assignedTo ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.assignedTo}</div>` : ''}
+        ${o.assigned_to ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.assigned_to}</div>` : ''}
       </td>
       <td class="px-3 md:px-6 py-4 whitespace-nowrap text-sm">
         <div class="flex flex-col sm:flex-row items-center gap-1 sm:gap-2">
@@ -414,7 +346,7 @@ function render(){
       </td>
     `;
 
-    if (o.assignedTo) { tr.className += ' bg-yellow-50'; }
+    if (o.assigned_to) { tr.className += ' bg-yellow-50'; }
     tbody.appendChild(tr);
     tr.addEventListener('dblclick', () => openAcceptModal(o));
 
@@ -432,24 +364,24 @@ function filterAndRender(){
   const s = document.getElementById('statusFilter').value;
   const visibleForCollab = (o) => {
     if (!collabSession) return false;
-    // Mostrar sólo solicitudes no entregadas y no completadas
-    return (!o.assignedTo || o.assignedEmail === collabSession.email) &&
-           (o.lastCollabStatus !== 'entregado') &&
-           (o.status !== 'Completado');
+    // Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador que no estén completadas.
+    return (o.status === 'Pendiente' && !o.assigned_to) || 
+           (o.assigned_email === collabSession.email && o.status !== 'Completado');
   };
   const base = all.filter(visibleForCollab);
   baseVisibleCount = base.length;
   filtered = base.filter(o => {
     const m1 = !term || o.name.toLowerCase().includes(term) || o.id.toLowerCase().includes(term) || o.service.toLowerCase().includes(term);
-    const current = o.lastCollabStatus || 'en_camino_recoger';
-    const m2 = !s || s === current || s === o.status; // permite filtrar por estados del dueño si fuera necesario
+    const currentStatus = o.last_collab_status || o.status;
+    const m2 = !s || s === currentStatus;
     return m1 && m2;
   });
   render();
+  updateCollaboratorStats(collabSession.email);
 }
 
 // Funciones para actualizar el sidebar
-async function updateCollaboratorProfile(session) {
+function updateCollaboratorProfile(session) {
   const name = collabDisplayName(session.email);
   const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   
@@ -457,36 +389,66 @@ async function updateCollaboratorProfile(session) {
   document.getElementById('collabEmail').textContent = session.email;
   document.getElementById('collabAvatar').textContent = initials;
   
-  // Actualizar estadísticas del colaborador
-  await updateCollaboratorStats(session.email);
+  updateCollaboratorStats(session.email);
 }
 
 // Función para cargar órdenes
+async function loadInitialOrders() {
+  const { data, error } = await supabaseConfig.client
+    .from('orders')
+    .select('*')
+    .in('status', ['Pendiente', 'En proceso']); // Cargar solo las relevantes
 
-async function loadOrders() {
-  // Usar siempre la clase SupabaseConfig como única fuente de verdad
-  return await supabaseConfig.getOrders();
+  if (error) {
+    console.error("Error al cargar órdenes iniciales:", error);
+    all = [];
+  } else {
+    all = data || [];
+  }
+  filterAndRender();
 }
 
-async function updateCollaboratorStats(email) {
-  const orders = await loadOrders();
-  const collaboratorOrders = orders.filter(order => order.assignedEmail === email);
+function updateCollaboratorStats(email) {
+  const collaboratorOrders = all.filter(order => order.assigned_email === email);
   
-  const activeJobs = collaboratorOrders.filter(order => 
-    ['en_camino_recoger', 'cargando', 'en_camino_entregar'].includes(order.lastCollabStatus || order.status)
-  ).length;
+  const activeJobs = collaboratorOrders.filter(order => order.status === 'En proceso').length;
+  const completedJobs = collaboratorOrders.filter(order => order.status === 'Completado').length;
   
-  const completedJobs = collaboratorOrders.filter(order => 
-    order.status === 'Completado' || order.lastCollabStatus === 'entregado'
-  ).length;
-  
-  const pendingRequests = orders.filter(order => 
-    !order.assignedTo || (order.assignedEmail === email && order.status !== 'Completado')
-  ).length;
+  const pendingRequests = all.filter(order => order.status === 'Pendiente' && !order.assigned_to).length;
   
   document.getElementById('collabActiveJobs').textContent = activeJobs;
   document.getElementById('collabCompletedJobs').textContent = completedJobs;
   document.getElementById('pendingRequestsCount').textContent = pendingRequests;
+}
+
+// --- Lógica de Tiempo Real ---
+function handleRealtimeUpdate(payload) {
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+
+  switch (eventType) {
+    case 'INSERT':
+      // Añadir si es una nueva orden pendiente
+      if (newRecord.status === 'Pendiente') {
+        all.unshift(newRecord);
+      }
+      break;
+    case 'UPDATE':
+      const index = all.findIndex(o => o.id === newRecord.id);
+      if (index !== -1) {
+        all[index] = { ...all[index], ...newRecord };
+      } else {
+        // Si no estaba, es una orden que ahora es relevante (ej. asignada)
+        all.unshift(newRecord);
+      }
+      break;
+    case 'DELETE':
+      all = all.filter(o => o.id !== oldRecord.id);
+      break;
+  }
+  filterAndRender();
+  if (activeJobId && payload.new?.id === activeJobId) {
+    showActiveJob(payload.new);
+  }
 }
 
 // Inicialización
@@ -496,12 +458,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   currentCollabName = collabDisplayName(session.email);
   collabSession = session;
-  
+    
   // Actualizar perfil del colaborador
-  await updateCollaboratorProfile(session);
-
-  all = await loadOrders();
-  filtered = [...all];
+  updateCollaboratorProfile(session);
 
   document.getElementById('searchInput').addEventListener('input', filterAndRender);
   document.getElementById('statusFilter').addEventListener('change', filterAndRender);
@@ -522,23 +481,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     closeAcceptModal();
   });
-  document.getElementById('confirmAcceptBtn').addEventListener('click', (e) => {
+  document.getElementById('confirmAcceptBtn').addEventListener('click', async (e) => {
     e.preventDefault();
     if (!selectedOrderIdForAccept) { closeAcceptModal(); return; }
-    const order = all.find(o => o.id === selectedOrderIdForAccept);
+    
+    const updates = {
+      assigned_to: currentCollabName,
+      assigned_email: collabSession.email,
+      assigned_at: new Date().toISOString(),
+      status: 'En proceso',
+      last_collab_status: 'en_camino_recoger'
+    };
+
+    const { data, error } = await supabaseConfig.client
+      .from('orders')
+      .update(updates)
+      .eq('id', selectedOrderIdForAccept);
+
     closeAcceptModal();
-    if (order) {
-      order.assignedTo = currentCollabName;
-      order.assignedEmail = collabSession.email;
-      order.assignedAt = new Date().toISOString();
-      order.status = 'En proceso'; // Marcar automáticamente como "En proceso"
-      order.lastCollabStatus = 'en_camino_recoger'; // Estado inicial del colaborador
-      saveOrders(all);
-      filterAndRender();
-      // Asegurarse de que se muestre el trabajo activo
-      showActiveJob(order);
-      // Hacer scroll hasta la sección de trabajo activo para que sea visible
-      document.getElementById('activeJobSection').scrollIntoView({ behavior: 'smooth' });
+
+    if (error) {
+      showError('Error', 'No se pudo aceptar la solicitud.');
+    } else {
+      showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
     }
   });
 
@@ -570,14 +535,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  filterAndRender();
+  // Carga inicial y suscripción a tiempo real
+  await loadInitialOrders();
 
-  // Sincronizar cada 30s en caso de que el dueño cree nuevas solicitudes
-  setInterval(() => {
-    loadOrders().then(orders => { all = orders; });
-    filterAndRender();
-    updateCollaboratorStats(session.email);
-  }, 30000);
+  supabaseConfig.client
+    .channel('public:orders')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
+    .subscribe();
 });
 
 // Endpoint de envío de Web Push (configurable). Si no está definido, se usa sólo la notificación local.
@@ -637,12 +601,11 @@ async function sendPushToClient(order, statusKey) {
     if (!PUSH_ENDPOINT) return false; // Aún no configurado
     if (!order.pushSubscription) return false; // Cliente no se suscribió
     const payload = {
-      subscription: order.pushSubscription,
+      subscription: order.push_subscription,
       notification: {
         title: `Actualización de tu pedido ${order.id}`,
         body: buildStatusMessage(order, statusKey),
         icon: '/img/android-chrome-192x192.png',
-        badge: '/img/favicon-32x32.png',
         data: { url: `/index.html?order=${order.id}` }
       }
     };
@@ -662,5 +625,3 @@ async function sendPushToClient(order, statusKey) {
 async function changeStatus(orderId, newStatusKey) {
   await handleStatusChange(orderId, newStatusKey);
 }
-
-filterAndRender();

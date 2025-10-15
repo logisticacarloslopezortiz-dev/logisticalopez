@@ -5,9 +5,12 @@ let serviceQuestions = {};
 
 // Variables para el mapa
 let map;
-let marker;
+let originMarker;
+let destinationMarker;
 let geocoder;
 let activeMapInputId = null;
+let autocompleteOrigin;
+let autocompleteDestination;
 
 
 // Elementos del DOM
@@ -21,6 +24,18 @@ function showStep(step) {
   progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
 }
 
+function getServiceOrder() {
+  return [
+    'Transporte Comercial',
+    'Paquetería',
+    'Carga Pesada',
+    'Flete',
+    'Mudanza',
+    'Grúa Vehículo',
+    'Botes Mineros',
+    'Grúa de Carga'
+  ];
+}
 // --- Carga dinámica de datos desde Supabase ---
 
 async function loadServices() {
@@ -35,9 +50,18 @@ async function loadServices() {
     return;
   }
 
+  const serviceOrder = getServiceOrder();
+  // Ordenar los servicios según el array `serviceOrder`
+  services.sort((a, b) => {
+    return serviceOrder.indexOf(a.name) - serviceOrder.indexOf(b.name);
+  });
+
   serviceListContainer.innerHTML = services.map(service => `
-    <div class="service-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-service-name="${service.name}">
-      <img src="assets/${service.image_url || '1vertical.png'}" alt="${service.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+    <div class="service-card relative flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition-all duration-300" data-service-name="${service.name}">
+      <div class="absolute top-2 right-2 h-5 w-5 bg-green-500 rounded-full hidden items-center justify-center check-mark transition-transform duration-300 scale-0">
+        <i class="fas fa-check text-white text-xs"></i>
+      </div>
+      <img src="assets/${service.image_url || '1vertical.png'}" alt="${service.name}" class="mx-auto w-full h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
       <span class="font-medium">${service.name}</span>
     </div>
   `).join('');
@@ -45,12 +69,23 @@ async function loadServices() {
   // Asignar listeners a los nuevos elementos
   document.querySelectorAll('.service-card').forEach(card => {
     card.addEventListener('click', function() {
-      document.querySelectorAll('.service-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+      document.querySelectorAll('.service-card').forEach(c => {
+        c.classList.remove('border-azulClaro', 'bg-blue-50', 'border-2');
+        c.querySelector('.check-mark').classList.add('hidden', 'scale-0');
+      });
       this.classList.add('border-azulClaro', 'bg-blue-50');
+      this.classList.add('border-2');
+      this.querySelector('.check-mark').classList.remove('hidden');
+      this.querySelector('.check-mark').classList.add('scale-100');
       selectedService = { name: this.dataset.serviceName };
 
-      const modalName = selectedService.name.toLowerCase().replace(/ /g, '-');
-      const modal = document.getElementById(`modal-${modalName}`);
+      // Normalizar el nombre para crear un ID de modal seguro
+      const normalizedName = selectedService.name
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Eliminar tildes
+        .replace(/ /g, '-'); // Reemplazar espacios con guiones
+
+      const modal = document.getElementById(`modal-${normalizedName}`);
       if (modal) {
         modal.classList.remove('hidden');
       }
@@ -71,8 +106,11 @@ async function loadVehicles() {
   }
 
   vehicleListContainer.innerHTML = vehicles.map(vehicle => `
-    <div class="vehicle-card flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition" data-vehicle-name="${vehicle.name}">
-      <img src="img-vehiculo/${vehicle.image_url || 'camion.png'}" alt="${vehicle.name}" class="mx-auto w-24 h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+    <div class="vehicle-card relative flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition-all duration-300" data-vehicle-name="${vehicle.name}">
+      <div class="absolute top-2 right-2 h-5 w-5 bg-green-500 rounded-full hidden items-center justify-center check-mark transition-transform duration-300 scale-0">
+        <i class="fas fa-check text-white text-xs"></i>
+      </div>
+      <img src="img-vehiculos/${vehicle.image_url || 'camion.png'}" alt="${vehicle.name}" class="mx-auto w-full h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
       <h4 class="font-medium">${vehicle.name}</h4>
     </div>
   `).join('');
@@ -80,8 +118,14 @@ async function loadVehicles() {
   // Asignar listeners a los nuevos elementos
   document.querySelectorAll('.vehicle-card').forEach(card => {
     card.addEventListener('click', function() {
-      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('border-azulClaro', 'bg-blue-50'));
+      document.querySelectorAll('.vehicle-card').forEach(c => {
+        c.classList.remove('border-azulClaro', 'bg-blue-50', 'border-2');
+        c.querySelector('.check-mark').classList.add('hidden', 'scale-0');
+      });
       this.classList.add('border-azulClaro', 'bg-blue-50');
+      this.classList.add('border-2');
+      this.querySelector('.check-mark').classList.remove('hidden');
+      this.querySelector('.check-mark').classList.add('scale-100');
     });
   });
 }
@@ -179,22 +223,147 @@ function toggleRNCField() {
 
 // --- Funciones del Mapa de Google ---
 async function initMap(Map, AdvancedMarkerElement) {
-    const santoDomingo = { lat: 18.4861, lng: -69.9312 };
-    map = new Map(document.getElementById("map"), {
-        center: santoDomingo,
-        zoom: 12,
-        mapId: 'TLC_MAP_ID' // ID de mapa requerido para Advanced Markers
-    });
-    geocoder = new google.maps.Geocoder();
-    marker = new AdvancedMarkerElement({
-        map: map,
-        position: santoDomingo,
-        gmpDraggable: true,
-    });
+  const mapElement = document.getElementById("map");
+  if (!mapElement) {
+    console.log("Elemento del mapa no encontrado en esta página.");
+    return;
+  }
+  const santoDomingo = { lat: 18.4861, lng: -69.9312 };
+  map = new Map(document.getElementById("map"), {
+    center: santoDomingo,
+    zoom: 12,
+    mapId: 'TLC_MAP_ID' // ID de mapa requerido para Advanced Markers
+  });
+  geocoder = new google.maps.Geocoder();
 
-    map.addListener('click', (e) => {
-        marker.position = e.latLng;
-    });
+  // --- Marcadores para Origen y Destino ---
+  originMarker = new AdvancedMarkerElement({ map: map, gmpDraggable: true });
+  destinationMarker = new AdvancedMarkerElement({ map: map, gmpDraggable: true });
+
+  // Estilizar los marcadores
+  const originPin = new google.maps.marker.PinElement({
+    background: '#117D8B', // azulClaro
+    borderColor: '#0C375D', // azulOscuro
+    glyphColor: 'white',
+  });
+  originMarker.content = originPin.element;
+
+  const destinationPin = new google.maps.marker.PinElement({
+    background: '#DC2626', // red-600
+    borderColor: '#991B1B', // red-800
+    glyphColor: 'white',
+  });
+  destinationMarker.content = destinationPin.element;
+
+  // --- Autocompletado de Direcciones ---
+  const pickupInput = document.getElementById('pickupAddress');
+  const deliveryInput = document.getElementById('deliveryAddress');
+
+  autocompleteOrigin = new google.maps.places.Autocomplete(pickupInput, {
+    fields: ["geometry", "name"],
+  });
+  autocompleteDestination = new google.maps.places.Autocomplete(deliveryInput, {
+    fields: ["geometry", "name"],
+  });
+
+  // --- Event Listeners ---
+  autocompleteOrigin.addListener('place_changed', () => {
+    const place = autocompleteOrigin.getPlace();
+    if (place.geometry) {
+      updateMarkerAndAddress(place.geometry.location, originMarker);
+      fitMapToBounds();
+    }
+  });
+
+  autocompleteDestination.addListener('place_changed', () => {
+    const place = autocompleteDestination.getPlace();
+    if (place.geometry) {
+      updateMarkerAndAddress(place.geometry.location, destinationMarker);
+      fitMapToBounds();
+    }
+  });
+
+  map.addListener('click', (e) => {
+    const targetMarker = (activeMapInputId === 'pickupAddress') ? originMarker : destinationMarker;
+    updateMarkerAndAddress(e.latLng, targetMarker);
+  });
+
+  originMarker.addListener('dragend', (e) => updateMarkerAndAddress(e.latLng, originMarker));
+  destinationMarker.addListener('dragend', (e) => updateMarkerAndAddress(e.latLng, destinationMarker));
+
+  pickupInput.addEventListener('focus', () => activeMapInputId = 'pickupAddress');
+  deliveryInput.addEventListener('focus', () => activeMapInputId = 'deliveryAddress');
+}
+
+function fitMapToBounds() {
+  const bounds = new google.maps.LatLngBounds();
+  if (originMarker.position) bounds.extend(originMarker.position);
+  if (destinationMarker.position) bounds.extend(destinationMarker.position);
+  if (!bounds.isEmpty()) {
+    map.fitBounds(bounds);
+    if (map.getZoom() > 15) map.setZoom(15); // Evitar zoom excesivo
+  }
+}
+
+function updateMarkerAndAddress(latLng) {
+  const targetMarker = (activeMapInputId === 'pickupAddress') ? originMarker : destinationMarker;
+  if (!targetMarker) return;
+
+  targetMarker.position = latLng;
+  geocoder.geocode({ location: latLng }, (results, status) => {
+    if (status === 'OK' && results[0] && activeMapInputId) {
+      document.getElementById(activeMapInputId).value = results[0].formatted_address;
+    }
+  });
+  fitMapToBounds();
+}
+
+// --- Lógica de Notificaciones Push ---
+
+/**
+ * Pide permiso al usuario para notificaciones y guarda la suscripción en la orden.
+ * @param {string} orderId - El ID de la orden recién creada.
+ */
+async function askForNotificationPermission(orderId) {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    console.log('Este navegador no soporta notificaciones push.');
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    await subscribeUserToPush(orderId);
+  } else if (Notification.permission !== 'denied') {
+    if (confirm('¿Deseas recibir notificaciones sobre el estado de tu pedido?')) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        await subscribeUserToPush(orderId);
+      }
+    }
+  }
+}
+
+async function subscribeUserToPush(orderId) {
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: supabaseConfig.vapidPublicKey // Usamos la clave desde la config
+  });
+
+  // Actualizar la orden en Supabase con la suscripción
+  await supabaseConfig.client.from('orders').update({ push_subscription: subscription }).eq('id', orderId);
+  console.log('Suscripción guardada para la orden:', orderId);
+}
+
+/**
+ * Copia un texto al portapapeles y muestra una notificación.
+ * @param {string} text - El texto a copiar.
+ */
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showSuccess('ID copiado al portapapeles');
+  }).catch(err => {
+    showError('No se pudo copiar el ID');
+  });
 }
 
 // Inicialización cuando el DOM esté listo
@@ -251,37 +420,6 @@ document.addEventListener('DOMContentLoaded', function() {
       materialOtroInput.classList.add('hidden');
       materialOtroInput.required = false;
     }
-  });
-
-  // --- Lógica del Modal del Mapa ---
-  const mapModal = document.getElementById('mapModal');
-  const closeMapModalBtn = document.getElementById('closeMapModal');
-  const confirmLocationBtn = document.getElementById('confirmLocationBtn');
-
-  document.querySelectorAll('.open-map-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      activeMapInputId = this.dataset.target;
-      mapModal.classList.remove('hidden');
-      mapModal.classList.add('flex');
-      // Forzar al mapa a redibujarse correctamente
-      google.maps.event.trigger(map, 'resize');
-    });
-  });
-
-  closeMapModalBtn.addEventListener('click', () => {
-    mapModal.classList.add('hidden');
-    mapModal.classList.remove('flex');
-  });
-
-  confirmLocationBtn.addEventListener('click', () => {
-    const location = marker.position;
-    geocoder.geocode({ location: location }, (results, status) => {
-      if (status === 'OK' && results[0]) {
-        document.getElementById(activeMapInputId).value = results[0].formatted_address;
-      }
-    });
-    mapModal.classList.add('hidden');
-    mapModal.classList.remove('flex');
   });
 
   // Manejar cierre de modales
@@ -345,8 +483,10 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Construir el objeto de la orden para Supabase
       const selectedVehicleCard = document.querySelector('.vehicle-card.border-azulClaro');
+      const newOrderId = generateOrderId(); // Generar el ID una sola vez
       const orderData = {
-        id: generateOrderId(),
+        id: newOrderId,
+        tracking_url: `${window.location.origin}/seguimiento.html?order=${newOrderId}`,
         // Datos del cliente (Paso 1)
         name: document.querySelector('input[placeholder="Nombre completo"]').value,
         phone: document.querySelector('input[placeholder="Teléfono"]').value,
@@ -379,11 +519,29 @@ document.addEventListener('DOMContentLoaded', function() {
           throw error;
         }
 
-        // Mostrar confirmación
-        alert(`¡Solicitud enviada exitosamente! Su número de orden es: ${orderData.id}`);
+        // Mostrar notificaciones de éxito
+        showSuccess('¡Solicitud enviada exitosamente!');
         
-        // Redirigir
-        window.location.href = 'index.html';
+        // Segunda notificación con el ID y botón para copiar
+        showInfo(
+          `Tu número de orden es: <strong>${orderData.id}</strong>. Úsalo para darle seguimiento.`, 
+          {
+            title: 'Guarda tu ID',
+            duration: 15000, // Darle más tiempo para que lo vea
+            actions: [{
+              text: 'Copiar ID',
+              handler: `copyToClipboard('${orderData.id}')`
+            }]
+          }
+        );
+        
+        // Preguntar por permiso de notificaciones
+        await askForNotificationPermission(orderData.id);
+        
+        // Redirigir después de un momento para que el usuario vea las notificaciones
+        setTimeout(() => {
+          window.location.href = 'index.html';
+        }, 5000);
 
       } catch (error) {
         console.error('Error al guardar la solicitud:', error);

@@ -6,6 +6,7 @@ const urlsToCache = [
   'cliente.html',
   'inicio.html',
   'servicios.html',
+  'historial-solicitudes.html',
   'colaboradores.html',
   'panel-colaborador.html',
   'js/cliente.js',

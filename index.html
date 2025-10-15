@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- ✅ SEO Meta Tags -->
+  <meta name="description" content="Empresa líder en transporte logístico confiable y seguro. Ofrecemos servicios de mudanza, carga pesada, fletes y paquetería. Solicita tu servicio en línea.">
+  <meta name="keywords" content="transporte, logística, mudanza, fletes, carga pesada, paquetería, República Dominicana">
+  <meta name="author" content="Logística López Ortiz">
   <title>Logística López Ortiz - Transporte Profesional</title>
 
 <!-- ✅ Favicon -->
@@ -10,6 +14,10 @@
 <link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
 <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
 <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
+<!-- ✅ Iconos para Apple / iOS -->
+<link rel="apple-touch-icon" href="img/android-chrome-192x192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
@@ -75,14 +83,30 @@
       <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2">
         <i class="fas fa-download"></i> Instalar App
       </button>
-      <!-- Mensaje para usuarios de iOS -->
-      <div id="ios-install-prompt" class="hidden mt-4 bg-white text-azulOscuro p-4 rounded-lg shadow-md max-w-md mx-auto text-sm">
-        <p class="font-semibold">Para instalar la aplicación en tu iPhone/iPad:</p>
-        <p>1. Toca el botón de Compartir <i class="fas fa-share-square"></i> en la barra de navegación.</p>
-        <p>2. Desliza hacia arriba y selecciona "Agregar a la pantalla de inicio".</p>
-      </div>
     </div>
   </section>
+
+  <!-- Modal de Instalación para iOS -->
+  <div id="ios-install-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full text-center p-6 animate-fadeInUp">
+      <img src="img/1vertical.png" alt="Logo LLO" class="h-20 w-20 mx-auto mb-4">
+      <h3 class="text-xl font-bold text-azulOscuro mb-2">Instala Nuestra App</h3>
+      <p class="text-gray-600 mb-6">Accede más rápido a nuestros servicios añadiendo la app a tu pantalla de inicio. ¡Es gratis y no ocupa espacio!</p>
+      <div class="text-left space-y-3 text-gray-700">
+        <p>1. Pulsa el botón de <strong>Compartir</strong> en tu navegador.</p>
+        <div class="text-center">
+          <img src="https://developer.apple.com/design/human-interface-guidelines/images/icons/navigation-bar-and-toolbar/toolbar-icon-share_2x.png" alt="Icono de Compartir" class="w-8 h-8 inline-block">
+        </div>
+        <p>2. Busca y selecciona la opción <strong>"Agregar a la pantalla de inicio"</strong>.</p>
+        <div class="text-center">
+          <img src="https://developer.apple.com/design/human-interface-guidelines/images/icons/navigation-bar-and-toolbar/toolbar-icon-add_2x.png" alt="Icono de Añadir" class="w-8 h-8 inline-block">
+        </div>
+      </div>
+      <button id="close-ios-modal" class="mt-8 w-full bg-gray-200 text-gray-800 py-2 rounded-lg font-semibold hover:bg-gray-300">
+        Entendido
+      </button>
+    </div>
+  </div>
 
   <!-- Nosotros -->
   <section id="nosotros" class="py-16 bg-gray-50 text-center">
@@ -175,10 +199,25 @@
     const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);
 
+    // Lógica para el modal de instalación en iOS
     if (isIOS() && !isInStandaloneMode()) {
-      const iosPrompt = document.getElementById('ios-install-prompt');
-      if (iosPrompt) {
-        iosPrompt.classList.remove('hidden');
+      const iosModal = document.getElementById('ios-install-modal');
+      const closeIosModalBtn = document.getElementById('close-ios-modal');
+      
+      // Mostrar el modal solo si no se ha mostrado antes
+      if (!localStorage.getItem('hasSeenIosInstallModal')) {
+        setTimeout(() => {
+          iosModal.classList.remove('hidden');
+          iosModal.classList.add('flex');
+          localStorage.setItem('hasSeenIosInstallModal', 'true');
+        }, 3000); // Mostrar después de 3 segundos
+      }
+
+      if (closeIosModalBtn) {
+        closeIosModalBtn.addEventListener('click', () => {
+          iosModal.classList.add('hidden');
+          iosModal.classList.remove('flex');
+        });
       }
     }
 

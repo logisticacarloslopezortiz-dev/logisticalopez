@@ -1,6 +1,6 @@
 // Import necessary modules
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import webpush from "https://deno.land/x/web_push@0.2.5/mod.ts";
+import * as webpush from "https://deno.land/x/web_push@0.2.5/mod.ts";
 
 // --- VAPID Keys Configuration ---
 // These keys should be set as environment variables in your Supabase project settings.
@@ -12,7 +12,9 @@ const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT")! || "mailto:tu-correo@ejempl
 // --- CORS Headers ---
 // These headers are necessary to allow your web application to call this Edge Function.
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*", // Or specify your app's domain for better security
+  // ✅ ¡IMPORTANTE! Reemplaza 'tu-usuario.github.io' con tu dominio real para mayor seguridad.
+  // Si estás probando localmente, puedes usar "*" temporalmente.
+  "Access-control-allow-origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 

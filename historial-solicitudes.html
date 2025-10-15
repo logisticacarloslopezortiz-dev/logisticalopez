@@ -1,328 +1,84 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historial de Solicitudes - TLC Transporte</title>
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/admin.css">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1a365d">
-    <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192x192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="img/icon-512x512.png">
-    <style>
-        .history-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .filters {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        
-        .filter-row {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        
-        .filter-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .filter-group label {
-            font-weight: 600;
-            color: #2d3748;
-        }
-        
-        .filter-group input, .filter-group select {
-            padding: 8px 12px;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        
-        .requests-table {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .table-header {
-            background: #1a365d;
-            color: white;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .table-content {
-            overflow-x: auto;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        
-        th {
-            background: #f7fafc;
-            font-weight: 600;
-            color: #2d3748;
-        }
-        
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        
-        .status-completado {
-            background: #c6f6d5;
-            color: #22543d;
-        }
-        
-        .status-cancelado {
-            background: #fed7d7;
-            color: #742a2a;
-        }
-        
-        .status-en-proceso {
-            background: #fef5e7;
-            color: #744210;
-        }
-        
-        .order-type-badge {
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-        
-        .type-regular {
-            background: #e6fffa;
-            color: #234e52;
-        }
-        
-        .type-fiscal {
-            background: #fef5e7;
-            color: #744210;
-        }
-        
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .btn-view {
-            padding: 6px 12px;
-            background: #3182ce;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        
-        .btn-view:hover {
-            background: #2c5282;
-        }
-        
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            padding: 20px;
-        }
-        
-        .pagination button {
-            padding: 8px 12px;
-            border: 1px solid #e2e8f0;
-            background: white;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        
-        .pagination button:hover {
-            background: #f7fafc;
-        }
-        
-        .pagination button.active {
-            background: #3182ce;
-            color: white;
-            border-color: #3182ce;
-        }
-        
-        .no-requests {
-            text-align: center;
-            padding: 40px;
-            color: #718096;
-        }
-        
-        .detail-section {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f7fafc;
-            border-radius: 8px;
-        }
-        
-        .detail-section h4 {
-            margin: 0 0 10px 0;
-            color: #2d3748;
-            border-bottom: 2px solid #3182ce;
-            padding-bottom: 5px;
-        }
-        
-        .detail-section p {
-            margin: 5px 0;
-            color: #4a5568;
-        }
-        
-        .service-details {
-            background: #edf2f7;
-            padding: 10px;
-            border-radius: 6px;
-            font-family: monospace;
-            white-space: pre-wrap;
-        }
-        
-        @media (max-width: 768px) {
-            .filter-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .table-content {
-                font-size: 14px;
-            }
-            
-            th, td {
-                padding: 8px 10px;
-            }
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Historial de Solicitudes — Panel de Admin</title>
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="nav-logo">
-                <img src="img/logo.png" alt="TLC Logo" class="logo">
-                <span>TLC Transporte</span>
-            </div>
-            <div class="nav-links">
-                <a href="inicio.html">Inicio</a>
-                <a href="mi-negocio.html">Mi Negocio</a>
-                <a href="historial-solicitudes.html" class="active">Historial</a>
-                <a href="panel-colaborador.html">Colaboradores</a>
-            </div>
-        </div>
+<body class="bg-gray-100 flex">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white shadow-md min-h-screen p-6 flex flex-col">
+    <h2 class="text-xl font-bold mb-6 text-blue-700">TLC Admin</h2>
+    <nav class="flex flex-col gap-3">
+      <a href="inicio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="home"></i> Inicio</a>
+      <a href="servicios.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="box"></i> Servicios</a>
+      <a href="ganancias.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="dollar-sign"></i> Ganancia</a>
+      <a href="historial-solicitudes.html" class="flex items-center gap-2 p-2 rounded bg-blue-50 text-blue-700 font-semibold"><i data-lucide="history"></i> Historial</a>
+      <a href="mi-negocio.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="briefcase"></i> Mi negocio</a>
+      <a href="colaboradores.html" class="flex items-center gap-2 p-2 rounded hover:bg-gray-100"><i data-lucide="users"></i> Colaboradores</a>
+      <a href="cierre.html" class="flex items-center gap-2 mt-auto p-2 rounded hover:bg-gray-100 text-blue-700"><i data-lucide="log-out"></i> Cerrar sesión</a>
     </nav>
+  </aside>
 
-    <div class="history-container">
-        <h1>Historial de Solicitudes</h1>
-        
-        <div class="filters">
-            <div class="filter-row">
-                <div class="filter-group">
-                    <label for="filterDate">Fecha</label>
-                    <input type="date" id="filterDate">
-                </div>
-                <div class="filter-group">
-                    <label for="filterStatus">Estado</label>
-                    <select id="filterStatus">
-                        <option value="">Todos</option>
-                        <option value="Completado">Completado</option>
-                        <option value="Cancelado">Cancelado</option>
-                        <option value="En Proceso">En Proceso</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="filterService">Servicio</label>
-                    <select id="filterService">
-                        <option value="">Todos</option>
-                        <option value="Mudanza">Mudanza</option>
-                        <option value="Transporte Comercial">Transporte Comercial</option>
-                        <option value="Paquetería">Paquetería</option>
-                        <option value="Botes Mineros">Botes Mineros</option>
-                        <option value="Grúas">Grúas</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="searchId">Buscar ID</label>
-                    <input type="text" id="searchId" placeholder="TLC-01">
-                </div>
-                <button onclick="applyFilters()" class="btn-primary">Filtrar</button>
-                <button onclick="clearFilters()" class="btn-secondary">Limpiar</button>
-            </div>
-        </div>
+  <!-- Contenido principal -->
+  <main class="flex-1 p-8">
+    <h1 class="text-2xl font-bold mb-2">Historial de Solicitudes</h1>
+    <p class="text-gray-600 mb-6">Consulta todas las solicitudes que han sido completadas.</p>
 
-        <div class="requests-table">
-            <div class="table-header">
-                <h3>Solicitudes Procesadas</h3>
-                <span id="totalRequests">Total: 0</span>
-            </div>
-            <div class="table-content">
-                <table>
-                    <thead>
-                        <tr class="text-left">
-                            <th>ID</th>
-                            <th>Fecha</th>
-                            <th>Cliente</th>
-                            <th>Servicio</th>
-                            <th>Tipo</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="requestsTableBody" class="divide-y divide-gray-200">
-                        <!-- Las solicitudes se cargarán aquí dinámicamente -->
-                    </tbody>
-                </table>
-            </div>
-            <div class="pagination" id="pagination">
-                <!-- La paginación se generará dinámicamente -->
-            </div>
+    <!-- Filtros y búsqueda -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+      <div class="flex flex-wrap gap-4 items-center">
+        <div class="flex-1 min-w-64">
+          <input type="text" id="searchInput" placeholder="Buscar por cliente, servicio, ID..." 
+                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
         </div>
-
-        <div class="no-requests" id="noRequests" style="display: none;">
-            <h3>No hay solicitudes en el historial</h3>
-            <p>Las solicitudes completadas o canceladas aparecerán aquí.</p>
-        </div>
+        <input type="date" id="dateFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+        <button id="clearFilters" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors" title="Limpiar filtros">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
     </div>
 
-    <!-- Modal para ver detalles de solicitud -->
-    <div id="requestDetailModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Detalles de la Solicitud</h3>
-                <span class="close" onclick="closeRequestDetail()">&times;</span>
-            </div>
-            <div class="modal-body" id="requestDetailContent">
-                <!-- Los detalles se cargarán aquí -->
-            </div>
-        </div>
+    <!-- Tabla de historial -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="text-lg font-semibold text-gray-800">Solicitudes Completadas</h3>
+        <span class="text-sm text-gray-500">Mostrando <span id="showingCount">0</span> de <span id="totalCount">0</span></span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Servicio</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Completado</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asignado a</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody" class="bg-white divide-y divide-gray-200">
+            <!-- Las solicitudes se cargarán aquí dinámicamente -->
+            <tr>
+              <td colspan="6" class="text-center py-10 text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <i data-lucide="loader" class="w-8 h-8 animate-spin"></i>
+                  <span>Cargando historial...</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+  </main>
 
-    <script src="js/supabase-config.js"></script>
-    <script src="js/historial.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/historial-solicitudes.js"></script>
 </body>
 </html>

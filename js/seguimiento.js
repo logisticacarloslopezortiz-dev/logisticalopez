@@ -1,201 +1,190 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Inicializar iconos
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+
+    // --- DOM Elements ---
     const loginScreen = document.getElementById('loginScreen');
     const trackingScreen = document.getElementById('trackingScreen');
     const orderIdInput = document.getElementById('orderIdInput');
     const trackButton = document.getElementById('trackButton');
     const errorMessage = document.getElementById('errorMessage');
+    const newOrderButton = document.getElementById('newOrderButton');
+    let currentSubscription = null; // Para gestionar la suscripción en tiempo real
 
-    // Elementos de la pantalla de seguimiento
-    const orderTitle = document.getElementById('orderTitle');
-    const orderDate = document.getElementById('orderDate');
-    const orderStatus = document.getElementById('orderStatus');
-    const orderDetails = document.getElementById('orderDetails');
-    const timeline = document.getElementById('timeline');
-    const photoSection = document.getElementById('photoSection');
-    const photoGallery = document.getElementById('photoGallery');
-
-    // Elementos para notificaciones push
-    const pwaModal = document.getElementById('pwaModal');
-
-    lucide.createIcons();
-
-    function findOrder(orderId) {
-        const orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-        return orders.find(o => o.id.toLowerCase() === orderId.toLowerCase());
-    }
-
-    async function displayOrder(order) {
-        loginScreen.classList.add('hidden');
-        trackingScreen.classList.remove('hidden');
-
-        // Información general
-        document.title = `Seguimiento Orden #${order.id} — TLC`;
-        orderTitle.textContent = `Orden #${order.id}`;
-        orderDate.textContent = `Creada el ${new Date(order.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`;
-        
-        const statusKey = order.lastCollabStatus || order.status;
-        const statusInfo = getStatusInfo(statusKey);
-        orderStatus.textContent = statusInfo.label;
-        orderStatus.className = `status-badge ${statusInfo.badge}`;
-
-        // Detalles de la orden
-        orderDetails.innerHTML = `
-            <div>
-                <p class="text-sm text-gray-500">Cliente</p>
-                <p class="font-medium text-gray-800">${order.name}</p>
-            </div>
-            <div>
-                <p class="text-sm text-gray-500">Servicio</p>
-                <p class="font-medium text-gray-800">${order.service}</p>
-            </div>
-            <div class="md:col-span-2">
-                <p class="text-sm text-gray-500">Ruta</p>
-                <p class="font-medium text-gray-800">${order.pickup} → ${order.delivery}</p>
-            </div>
-        `;
-
-        // Timeline
-        timeline.innerHTML = '';
-        const trackingEvents = order.tracking || [];
-        if (trackingEvents.length === 0) {
-            trackingEvents.push({ status: 'Pendiente', at: order.createdAt });
-        }
-        
-        trackingEvents.forEach((event, index) => {
-            const item = document.createElement('div');
-            item.className = `timeline-item ${index === 0 ? 'active' : ''}`;
-            item.innerHTML = `
-                <h4 class="font-semibold text-gray-800">${event.status}</h4>
-                <p class="text-sm text-gray-500">${new Date(event.at).toLocaleString('es-ES')}</p>
-            `;
-            timeline.appendChild(item);
-        });
-
-        // Galería de fotos
-        if (order.photos && order.photos.length > 0) {
-            photoSection.classList.remove('hidden');
-            photoGallery.innerHTML = '';
-            order.photos.forEach(photoSrc => {
-                const imgContainer = document.createElement('a');
-                imgContainer.href = photoSrc;
-                imgContainer.target = '_blank';
-                imgContainer.className = 'block aspect-square bg-gray-100 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow';
-                imgContainer.innerHTML = `<img src="${photoSrc}" class="w-full h-full object-cover">`;
-                photoGallery.appendChild(imgContainer);
-            });
-        } else {
-            photoSection.classList.add('hidden');
-        }
-
-        // Después de mostrar la orden, verificar si se puede suscribir a notificaciones
-        if ('serviceWorker' in navigator && 'PushManager' in window) {
-            await setupPushNotifications(order);
-        }
-    }
-
-    function getStatusInfo(statusKey) {
-        const statusMap = {
-            'Pendiente': { label: 'Pendiente', badge: 'status-pending' },
-            'En proceso': { label: 'En Proceso', badge: 'status-confirmed' },
-            'en_camino_recoger': { label: 'En camino a recoger', badge: 'status-in-progress' },
-            'cargando': { label: 'Cargando pedido', badge: 'status-in-progress' },
-            'en_camino_entregar': { label: 'En camino a entregar', badge: 'status-in-progress' },
-            'retraso_tapon': { label: 'Retraso por tráfico', badge: 'status-cancelled' },
-            'entregado': { label: 'Completado', badge: 'status-completed' },
-            'Completado': { label: 'Completado', badge: 'status-completed' }
-        };
-        return statusMap[statusKey] || { label: statusKey, badge: 'status-pending' };
-    }
-
-    trackButton.addEventListener('click', async () => {
-        const orderId = orderIdInput.value.trim();
-        if (!orderId) {
-            errorMessage.querySelector('p').textContent = 'Por favor, ingresa un ID de orden.';
-            errorMessage.classList.remove('hidden');
-            return;
-        }
-
-        const order = findOrder(orderId);
-        if (order) {
-            errorMessage.classList.add('hidden');
-            await displayOrder(order);
-        } else {
-            errorMessage.querySelector('p').textContent = 'No se encontró ninguna orden con ese ID.';
-            errorMessage.classList.remove('hidden');
-        }
+    // --- Event Listeners ---
+    trackButton.addEventListener('click', findOrder);
+    orderIdInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') findOrder();
     });
-
-    document.getElementById('newOrderButton').addEventListener('click', () => {
+    newOrderButton.addEventListener('click', () => {
         window.location.href = 'index.html';
     });
 
-    // Comprobar si hay un ID de orden en la URL
-    async function checkUrlForOrder() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const orderIdFromUrl = urlParams.get('order');
-        if (orderIdFromUrl) {
-            const order = findOrder(orderIdFromUrl);
-            if (order) {
-                await displayOrder(order);
-            }
+    // --- Main Logic ---
+
+    // Función para buscar la orden en Supabase
+    async function findOrder() {
+        const orderId = orderIdInput.value.trim().toUpperCase();
+        if (!orderId) {
+            showError('Por favor, ingresa un ID de orden.');
+            return;
         }
-    }
 
-    // --- Lógica de Notificaciones Push ---
-    async function setupPushNotifications(order) {
-        const registration = await navigator.serviceWorker.ready;
-        let subscription = await registration.pushManager.getSubscription();
+        // Mostrar un estado de carga
+        trackButton.disabled = true;
+        trackButton.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 inline mr-2 animate-spin"></i> Buscando...';
+        lucide.createIcons();
+        hideError();
 
-        // Si no está suscrito y no se le ha preguntado antes, mostrar modal
-        if (!subscription && Notification.permission === 'default') {
-            pwaModal.classList.remove('hidden');
-            document.getElementById('installPWA').onclick = async () => {
-                pwaModal.classList.add('hidden');
-                await subscribeUser(order);
-            };
-            document.getElementById('cancelPWA').onclick = () => {
-                pwaModal.classList.add('hidden');
-            };
-        } else if (!subscription && Notification.permission === 'granted') {
-            // Si dio permiso pero no hay suscripción (raro, pero puede pasar), intentar suscribir
-            await subscribeUser(order);
+        // Cancelar suscripción anterior si existe
+        if (currentSubscription) {
+            supabaseConfig.client.removeChannel(currentSubscription);
+            currentSubscription = null;
         }
-    }
 
-    async function subscribeUser(order) {
-        const registration = await navigator.serviceWorker.ready;
         try {
-            // La VAPID public key debe ser generada y almacenada de forma segura
-            const vapidPublicKey = 'REEMPLAZA_CON_TU_VAPID_PUBLIC_KEY';
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-            });
+            const { data: order, error } = await supabaseConfig.client
+                .from('orders')
+                .select('*')
+                .eq('id', orderId)
+                .single(); // .single() espera un solo resultado o ninguno
 
-            // Guardar la suscripción en la base de datos asociada a la orden
-            await supabaseConfig.updateOrder(order.id, { push_subscription: subscription });
-            console.log('Usuario suscrito a notificaciones push.');
+            if (error || !order) {
+                throw new Error('No se encontró ninguna solicitud con ese ID.');
+            }
 
-        } catch (error) {
-            console.error('Error al suscribir al usuario:', error);
+            // Orden encontrada, mostrar detalles
+            displayOrderDetails(order);
+
+            // Suscribirse a cambios en tiempo real para esta orden
+            subscribeToOrderUpdates(orderId);
+
+        } catch (err) {
+            showError(err.message);
+        } finally {
+            // Restaurar botón
+            trackButton.disabled = false;
+            trackButton.innerHTML = '<i data-lucide="search" class="w-4 h-4 inline mr-2"></i> Buscar Solicitud';
+            lucide.createIcons();
         }
     }
 
-    // Función para convertir la VAPID key a un formato usable
-    function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding)
-            .replace(/\-/g, '+')
-            .replace(/_/g, '/');
-
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
+    // Función para suscribirse a los cambios de una orden específica
+    function subscribeToOrderUpdates(orderId) {
+        currentSubscription = supabaseConfig.client
+            .channel(`public:orders:id=eq.${orderId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'orders',
+                    filter: `id=eq.${orderId}`
+                },
+                (payload) => {
+                    displayOrderDetails(payload.new);
+                }
+            ).subscribe();
     }
 
-    checkUrlForOrder();
+    // Función para mostrar los detalles de la orden
+    function displayOrderDetails(order) {
+        loginScreen.classList.add('hidden');
+        trackingScreen.classList.remove('hidden');
+
+        // Poblar Header
+        document.getElementById('orderTitle').textContent = `Orden #${order.id}`;
+        document.getElementById('orderDate').textContent = `Creada el ${new Date(order.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+        
+        const statusBadge = document.getElementById('orderStatus');
+        statusBadge.textContent = order.status;
+        statusBadge.className = 'status-badge ' + getStatusClass(order.status);
+
+        // Poblar Detalles
+        const detailsContainer = document.getElementById('orderDetails');
+        detailsContainer.innerHTML = `
+            <div>
+                <p class="text-sm text-gray-500">Cliente</p>
+                <p class="font-semibold text-gray-800">${order.name}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">Servicio</p>
+                <p class="font-semibold text-gray-800">${order.service}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">Vehículo</p>
+                <p class="font-semibold text-gray-800">${order.vehicle}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">Fecha Programada</p>
+                <p class="font-semibold text-gray-800">${order.date} a las ${order.time}</p>
+            </div>
+            <div class="md:col-span-2">
+                <p class="text-sm text-gray-500">Ruta</p>
+                <p class="font-semibold text-gray-800">
+                    <span class="font-normal">Desde:</span> ${order.pickup} <br>
+                    <span class="font-normal">Hasta:</span> ${order.delivery}
+                </p>
+            </div>
+        `;
+
+        // Poblar Timeline
+        const timelineContainer = document.getElementById('timeline');
+        timelineContainer.innerHTML = ''; // Limpiar
+
+        const statuses = [
+            { name: 'Solicitud Creada', date: order.created_at, active: true, isMain: true },
+            { name: 'Servicio Asignado', date: order.assigned_at, active: !!order.assigned_at, isMain: true },
+            { name: 'En camino a recoger', date: order.last_collab_status === 'en_camino_recoger' ? new Date() : null, active: order.last_collab_status === 'en_camino_recoger', isMain: false },
+            { name: 'En camino a entregar', date: order.last_collab_status === 'en_camino_entregar' ? new Date() : null, active: order.last_collab_status === 'en_camino_entregar', isMain: false },
+            { name: 'Servicio Completado', date: order.completed_at, active: !!order.completed_at, isMain: true }
+        ];
+
+        statuses.forEach(status => {
+            if (status.active && status.date) {
+                const item = document.createElement('div');
+                item.className = 'timeline-item active';
+                item.innerHTML = `
+                    <h4 class="font-semibold text-gray-800">${status.name}</h4>
+                    <p class="text-sm text-gray-500">${new Date(status.date).toLocaleString('es-ES')}</p>
+                `;
+                timelineContainer.appendChild(item);
+            }
+        });
+    }
+
+    // --- Funciones de Utilidad ---
+    function showError(message) {
+        errorMessage.classList.remove('hidden');
+        errorMessage.querySelector('p').textContent = message;
+    }
+
+    function hideError() {
+        errorMessage.classList.add('hidden');
+    }
+
+    function getStatusClass(status) {
+        switch (status) {
+            case 'Pendiente': return 'status-pending';
+            case 'En proceso': return 'status-in-progress';
+            case 'Completado': return 'status-completed';
+            case 'Cancelado': return 'status-cancelled';
+            default: return 'status-pending';
+        }
+    }
+
+    // --- Inicialización ---
+    async function init() {
+        const params = new URLSearchParams(window.location.search);
+        const orderIdFromUrl = params.get('order');
+
+        if (orderIdFromUrl) {
+            orderIdInput.value = orderIdFromUrl;
+            await findOrder();
+        }
+    }
+
+    init();
 });
