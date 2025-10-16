@@ -18,10 +18,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Carga de Datos ---
     async function loadInitialData() {
         try {
-            [allServices, allVehicles] = await Promise.all([
-                supabaseConfig.getServices(), // Ya obtiene de Supabase
-                supabaseConfig.getVehicles()  // Ya obtiene de Supabase
+            const [servicesResponse, vehiclesResponse] = await Promise.all([
+                supabaseConfig.getServices(),
+                supabaseConfig.getVehicles()
             ]);
+
+            allServices = servicesResponse.data || [];
+            allVehicles = vehiclesResponse.data || [];
+
             renderServices();
             renderVehicles();
             updateSummary();

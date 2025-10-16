@@ -20,7 +20,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <!-- PWA Manifest -->
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+  <meta name="theme-color" content="#2563eb">
 
 
   <script src="https://cdn.tailwindcss.com"></script>
@@ -71,18 +72,28 @@
   </header>
 
   <!-- Hero Section -->
-  <section class="pt-32 pb-16 bg-gradient-to-r from-azulOscuro to-azulClaro text-white text-center">
-    <h2 class="text-4xl md:text-6xl font-bold mb-4">Bienvenido a <span class="text-acento">Logística López Ortiz</span></h2>
-    <p class="text-xl md:text-2xl mb-8">Empresa líder en transporte logístico confiable y seguro para tus necesidades de mudanza y carga.</p>
-    <div class="flex justify-center gap-6">
-      <a href="cliente.html" class="bg-acento text-azulOscuro px-8 py-4 rounded-lg font-bold hover:bg-yellow-400 transition text-lg">🚚 Comenzar Solicitud</a>
-      <a href="seguimiento.html" class="border border-white px-8 py-4 rounded-lg font-bold hover:bg-white hover:text-azulOscuro transition">Ver Estado</a>
-    </div>
-    <p class="mt-6 text-lg">📲 ¡Descarga nuestra app para seguimiento en tiempo real!</p>
-    <div class="mt-4 flex justify-center">
-      <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2">
-        <i class="fas fa-download"></i> Instalar App
-      </button>
+  <section class="relative min-h-screen flex items-center justify-center text-white text-center bg-cover bg-center" style="background-image: url('img/logistica.jpg');">
+    <!-- Overlay para legibilidad -->
+    <div class="absolute inset-0 bg-black bg-opacity-60"></div>
+   
+    <!-- Contenido del Hero Section -->
+    <div class="relative z-10 container mx-auto px-4">
+      <h2 class="text-4xl md:text-6xl font-bold mb-4">Bienvenido a <span class="text-acento">Logística López Ortiz</span></h2>
+      <p class="text-xl md:text-2xl mb-8">Empresa líder en transporte logístico confiable y seguro para tus necesidades de mudanza y carga.</p>
+      <div class="flex flex-col sm:flex-row justify-center items-center gap-6">
+        <a href="cliente.html" class="bg-acento text-azulOscuro px-10 py-4 rounded-lg font-bold hover:bg-yellow-400 transition-transform hover:scale-105 text-xl shadow-lg">
+          🚚 Comenzar Solicitud
+        </a>
+        <a href="seguimiento.html" class="border-2 border-white px-10 py-4 rounded-lg font-bold hover:bg-white hover:text-azulOscuro transition-transform hover:scale-105 text-xl shadow-lg">
+          Ver Estado
+        </a>
+      </div>
+      <p class="mt-6 text-lg">📲 ¡Descarga nuestra app para seguimiento en tiempo real!</p>
+      <div class="mt-4 flex justify-center">
+        <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2">
+          <i class="fas fa-download"></i> Instalar App
+        </button>
+      </div>
     </div>
   </section>
 
@@ -112,7 +123,7 @@
   <section id="nosotros" class="py-16 bg-gray-50 text-center">
     <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-6">¿Quiénes Somos?</h3>
     <p class="max-w-3xl mx-auto text-gray-700 text-lg mb-12">
-      Logística López Ortiz es una empresa de transporte y  logística  que brinda soluciones eficientes y especializándose en carga pesada, fletes, paquetería y mudanzas.
+      Logística López Ortiz es una empresa de transporte y logística que brinda soluciones eficientes y especializándose en carga pesada, fletes, paquetería y mudanzas.
     </p>
   </section>
 
@@ -173,15 +184,7 @@
     mobileBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
 
     // Registrar el Service Worker para la PWA
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').then(registration => {
-          console.log('ServiceWorker registrado con éxito:', registration.scope);
-        }).catch(error => {
-          console.log('Fallo en el registro del ServiceWorker:', error);
-        });
-      });
-    }
+      // Service worker registration moved to js/pwa.js
 
     // Lógica para la instalación de la PWA
     let deferredPrompt;
@@ -229,5 +232,6 @@
       });
     }
   </script>
+  <script src="js/pwa.js"></script>
 </body>
 </html>

@@ -204,51 +204,7 @@
   <script src="js/rating-system.js"></script>
   <script src="js/panel-colaborador.js"></script>
   
-  <!-- PWA Service Worker -->
-  <script>
-    // Registrar Service Worker para PWA
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('sw.js')
-          .then(function(registration) {
-            console.log('ServiceWorker registrado exitosamente:', registration.scope);
-          })
-          .catch(function(error) {
-            console.log('Error al registrar ServiceWorker:', error);
-          });
-      });
-    }
-
-    // Manejar instalación PWA
-    let deferredPrompt;
-    const installButton = document.createElement('button');
-    installButton.textContent = 'Instalar App';
-    installButton.className = 'fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-blue-700 transition-colors z-50';
-    installButton.style.display = 'none';
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      installButton.style.display = 'block';
-      document.body.appendChild(installButton);
-    });
-
-    installButton.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        deferredPrompt = null;
-        installButton.style.display = 'none';
-      }
-    });
-
-    window.addEventListener('appinstalled', () => {
-      console.log('PWA instalada exitosamente');
-      installButton.style.display = 'none';
-    });
-  </script>
-  
+  <script src="js/pwa.js"></script>
   <script>
     // Inicializar iconos
     document.addEventListener('DOMContentLoaded', () => {

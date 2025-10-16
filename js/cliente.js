@@ -61,7 +61,7 @@ async function loadServices() {
       <div class="absolute top-2 right-2 h-5 w-5 bg-green-500 rounded-full hidden items-center justify-center check-mark transition-transform duration-300 scale-0">
         <i class="fas fa-check text-white text-xs"></i>
       </div>
-      <img src="assets/${service.image_url || '1vertical.png'}" alt="${service.name}" class="mx-auto w-full h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+      <img src="${service.image_url || 'img/1vertical.png'}" alt="${service.name}" class="mx-auto w-full h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
       <span class="font-medium">${service.name}</span>
     </div>
   `).join('');
@@ -110,7 +110,7 @@ async function loadVehicles() {
       <div class="absolute top-2 right-2 h-5 w-5 bg-green-500 rounded-full hidden items-center justify-center check-mark transition-transform duration-300 scale-0">
         <i class="fas fa-check text-white text-xs"></i>
       </div>
-      <img src="img-vehiculos/${vehicle.image_url || 'camion.png'}" alt="${vehicle.name}" class="mx-auto w-full h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
+      <img src="${vehicle.image_url || 'img/1vertical.png'}" alt="${vehicle.name}" class="mx-auto w-full h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
       <h4 class="font-medium">${vehicle.name}</h4>
     </div>
   `).join('');
@@ -505,7 +505,8 @@ document.addEventListener('DOMContentLoaded', function() {
         "time": document.querySelector('input[type="time"]').value,
         // Estado y precio inicial
         status: 'Pendiente',
-        estimated_price: 'Por confirmar'
+        estimated_price: 'Por confirmar',
+        tracking: [{ status: 'Solicitud Creada', date: new Date().toISOString() }] // Añadir el campo tracking inicial
       };
       
       // Guardar orden en Supabase

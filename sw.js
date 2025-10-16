@@ -21,6 +21,7 @@ const urlsToCache = [
   'img/android-chrome-192x192.png',
   'img/android-chrome-512x512.png',
   'img/1vertical.png', // Añadir la imagen del logo al caché
+  'offline.html',
   // No cachear Tailwind CSS CDN debido a restricciones de CORS
   'https://unpkg.com/lucide@latest',
 ];
@@ -56,13 +57,25 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   // No interceptar solicitudes a CDN de Tailwind
   if (event.request.url.includes('cdn.tailwindcss.com')) {
-    return fetch(event.request);
+    return event.respondWith(fetch(event.request));
   }
 
+  // Navigation requests -> Network first, fallback to offline page
+  if (event.request.mode === 'navigate' || (event.request.headers && event.request.headers.get && event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html'))) {
+    event.respondWith(
+      fetch(event.request).then(networkResponse => {
+        return networkResponse;
+      }).catch(() => {
+        return caches.match('offline.html');
+      })
+    );
+    return;
+  }
+
+  // For other requests use cache-first, then network and cache new local resources
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Cache hit - return response
         if (response) {
           return response;
         }
@@ -85,7 +98,13 @@ self.addEventListener('fetch', event => {
 
             return response;
           }
-        );
+        ).catch(() => {
+          // As a final fallback, if it's an image request, we could return a placeholder
+          if (event.request.destination === 'image') {
+            return caches.match('img/1vertical.png');
+          }
+          return undefined;
+        });
       })
   );
 });

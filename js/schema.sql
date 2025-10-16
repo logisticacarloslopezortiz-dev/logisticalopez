@@ -144,14 +144,14 @@ COMMENT ON TABLE public.vehicles IS 'Catálogo de vehículos disponibles para lo
 
 -- Insertar vehículos iniciales
 INSERT INTO public.vehicles (name, description, image_url, is_active) VALUES
-('Camión Pequeño', '14 pies', 'camionpequeno.jpg', true),
-('Furgoneta', 'Ideal para paquetería y cargas ligeras', 'furgoneta.jpg', true),
-('Grúa Vehicular', 'Para remolque de autos y jeepetas', 'gruaauto.jpg', true),
-('Camión Grande', '22 a 28 pies', 'camiongrande.jpg', true),
-('Camión Especial', 'Configuración para necesidades específicas', 'camionespecial.jpg', true),
-('Grúa de Carga', 'Para izado y movimiento de carga', 'gruacarga.jpg', true),
-('Motor', 'Para paquetería y entregas rápidas', 'motor.jpg', true),
-('Camión Abierto', 'Carga y transporte de materiales y mineros', 'camionmineros.jpg', true)
+('Camión Pequeño', '14 pies', 'https://images.pexels.com/photos/2199293/pexels-photo-2199293.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Furgoneta', 'Ideal para paquetería y cargas ligeras', 'https://images.pexels.com/photos/4392036/pexels-photo-4392036.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Grúa Vehicular', 'Para remolque de autos y jeepetas', 'https://images.pexels.com/photos/6871636/pexels-photo-6871636.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Camión Grande', '22 a 28 pies', 'https://images.pexels.com/photos/1437593/pexels-photo-1437593.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Camión Especial', 'Configuración para necesidades específicas', 'https://images.pexels.com/photos/7213431/pexels-photo-7213431.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Grúa de Carga', 'Para izado y movimiento de carga', 'https://images.pexels.com/photos/5969512/pexels-photo-5969512.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Motor', 'Para paquetería y entregas rápidas', 'https://images.pexels.com/photos/8435503/pexels-photo-8435503.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Camión Abierto', 'Carga y transporte de materiales y mineros', 'https://images.pexels.com/photos/8995733/pexels-photo-8995733.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true)
 ON CONFLICT (name) DO UPDATE SET
   description = EXCLUDED.description,
   image_url = EXCLUDED.image_url,
@@ -159,14 +159,14 @@ ON CONFLICT (name) DO UPDATE SET
 
 -- Insertar servicios con imágenes
 INSERT INTO public.services (name, description, image_url, is_active) VALUES
-('Mudanza', 'Servicios completos de mudanza residencial y comercial.', 'mudanza.png', true),
-('Transporte Comercial', 'Transporte seguro de mercancías comerciales.', 'transporte-comercial.png', true),
-('Carga Pesada', 'Especialistas en transporte de carga pesada.', 'carga-pesada.png', true),
-('Flete', 'Servicios de flete a todo nivel nacional.', 'flete.png', true),
-('Grúa Vehículo', 'Servicio con grúa para vehículos.', 'grua-vehiculo.png', true),
-('Paquetería', 'Envíos de paquetes seguros y rápidos.', 'paqueteria.png', true),
-('Grúa de Carga', 'Servicio con grúa para mover carga pesada.', 'grua-carga.png', true),
-('Botes Mineros', 'Servicio de alquiler y transporte de botes para desechos.', 'botes-mineros.png', true)
+('Mudanza', 'Servicios completos de mudanza residencial y comercial.', 'https://images.pexels.com/photos/424620/pexels-photo-424620.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Transporte Comercial', 'Transporte seguro de mercancías comerciales.', 'https://images.pexels.com/photos/7675638/pexels-photo-7675638.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Carga Pesada', 'Especialistas en transporte de carga pesada.', 'https://images.pexels.com/photos/11785533/pexels-photo-11785533.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Flete', 'Servicios de flete a todo nivel nacional.', 'https://images.pexels.com/photos/5025517/pexels-photo-5025517.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Grúa Vehículo', 'Servicio con grúa para vehículos.', 'https://images.pexels.com/photos/6871636/pexels-photo-6871636.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Paquetería', 'Envíos de paquetes seguros y rápidos.', 'https://images.pexels.com/photos/7709293/pexels-photo-7709293.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Grúa de Carga', 'Servicio con grúa para mover carga pesada.', 'https://images.pexels.com/photos/5969512/pexels-photo-5969512.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true),
+('Botes Mineros', 'Servicio de alquiler y transporte de botes para desechos.', 'https://images.pexels.com/photos/6755436/pexels-photo-6755436.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', true)
 ON CONFLICT (name) DO UPDATE SET
     description = EXCLUDED.description,
     image_url = EXCLUDED.image_url,

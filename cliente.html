@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- ✅ Favicon y Iconos para Apple / iOS -->
   <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
-  <link rel="apple-touch-icon" href="img/android-chrome-192x192.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="img/android-chrome-192x192.png" />
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Logística López Ortiz - Solicitud de Servicio</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -228,7 +228,7 @@
   </div>
 
   <!-- Modal Paquetería -->
-  <div id="modal-paquetería" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+  <div id="modal-paqueteria" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
       <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6">
@@ -469,7 +469,7 @@
   </div>
 
   <!-- Modal Grúa Vehículo -->
-  <div id="modal-grúa-vehículo" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+  <div id="modal-grua-vehiculo" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
       <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6">
@@ -529,7 +529,7 @@
   </div>
 
   <!-- Modal Grúa Carga -->
-  <div id="modal-grúa-de-carga" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+  <div id="modal-grua-de-carga" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
       <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6">
@@ -625,7 +625,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
-  <script>(g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await(a=m.createElement("script"));e.set("libraries",[...r,"places"].join(","));e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>dl)})
+  <script>(g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await(a=m.createElement("script"));e.set("libraries",[...r,"places"].join(","));e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?key=${supabaseConfig.getEnvVar('GOOGLE_MAPS_API_KEY')}&`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>dl)})
   (async () => {
       const { Map } = await google.maps.importLibrary("maps");
       const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");

@@ -220,6 +220,7 @@ function renderOrders(){
 // Función para mostrar/ocultar el menú de acciones
 function toggleActionsMenu(button) {
   const dropdown = button.nextElementSibling;
+  if (!dropdown) return; // Evita el error si el elemento no existe
   dropdown.classList.toggle('hidden');
   // Cerrar otros menús abiertos
   document.querySelectorAll('.origin-top-right').forEach(menu => {
@@ -229,7 +230,11 @@ function toggleActionsMenu(button) {
   });
 }
 // Cerrar menús si se hace clic fuera
-window.addEventListener('click', (e) => { if (!e.target.closest('.relative')) toggleActionsMenu({nextElementSibling: null}); });
+window.addEventListener('click', (e) => { 
+  if (!e.target.closest('.relative.inline-block')) {
+    document.querySelectorAll('.origin-top-right').forEach(menu => menu.classList.add('hidden'));
+  }
+});
 
 // Función para actualizar el estado de una orden en Supabase
 async function updateOrderStatus(orderId, newStatus) {
@@ -330,14 +335,16 @@ function updateResumen(){
 
 // Función para actualizar gráficos
 function updateCharts() {
+  const servicesChartEl = document.getElementById('servicesChart');
+  const vehiclesChartEl = document.getElementById('vehiclesChart');
+  if (!servicesChartEl || !vehiclesChartEl) return; // No hacer nada si los gráficos no están en la página
   // Gráfico de servicios
   const serviceStats = {};
   allOrders.forEach(o => {
     serviceStats[o.service] = (serviceStats[o.service] || 0) + 1;
   });
 
-  const servicesChart = document.getElementById('servicesChart');
-  servicesChart.innerHTML = '';
+  servicesChartEl.innerHTML = '';
   const maxService = Math.max(...Object.values(serviceStats));
 
   Object.entries(serviceStats).forEach(([service, count]) => {
@@ -348,7 +355,7 @@ function updateCharts() {
         <span class="text-sm text-gray-500">${count}</span>
       </div>
       <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
-        <div class="bg-red-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+        <div class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
       </div>
     `;
   });
@@ -359,8 +366,7 @@ function updateCharts() {
     vehicleStats[o.vehicle] = (vehicleStats[o.vehicle] || 0) + 1;
   });
 
-  const vehiclesChart = document.getElementById('vehiclesChart');
-  vehiclesChart.innerHTML = '';
+  vehiclesChartEl.innerHTML = '';
   const maxVehicle = Math.max(...Object.values(vehicleStats));
 
   Object.entries(vehicleStats).forEach(([vehicle, count]) => {
@@ -371,7 +377,7 @@ function updateCharts() {
         <span class="text-sm text-gray-500">${count}</span>
       </div>
       <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
-        <div class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+        <div class="bg-red-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
       </div>
     `;
   });
