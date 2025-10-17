@@ -1,21 +1,15 @@
 {
   "name": "Logística López Ortiz",
-  "short_name": "logística",
-  "description": "Solicita servicios de transporte y logística con Logística López Ortiz",
-  "start_url": "/",
-  "scope": "/",
+  "short_name": "LLO",
+  "description": "Empresa líder en transporte logístico confiable y seguro.",
+  "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "theme_color": "#0C375D",
   "icons": [
     {
       "src": "img/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "img/android-chrome-512x512.png",
-      "sizes": "512x512",
       "type": "image/png"
     }
   ]

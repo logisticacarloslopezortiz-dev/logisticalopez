@@ -4,18 +4,13 @@ lucide.createIcons();
 // Variables globales
 const form = document.getElementById('colaboradorForm');
 const tableBody = document.getElementById('colaboradoresTable');
-let colaboradores = JSON.parse(localStorage.getItem('colaboradores') || '[]');
+let colaboradores = []; // Ahora se cargará desde Supabase
 
 // Variables para el modal de métricas
 const metricsModal = document.getElementById('metricsModal');
 const closeMetricsModal = document.getElementById('closeMetricsModal');
 let modalWeeklyChart = null;
 let modalServicesChart = null;
-
-// Función para guardar colaboradores en localStorage
-function saveColaboradores() {
-  localStorage.setItem('colaboradores', JSON.stringify(colaboradores));
-}
 
 // Función para mostrar modal de métricas
 function showMetricsModal(email) {
@@ -299,7 +294,7 @@ function getStatusBadge(status) {
     'inactivo': '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"><i data-lucide="x-circle" class="w-3 h-3"></i>Inactivo</span>'
   };
   return badges[status] || badges['activo'];
-}
+} 
 
 // Función para obtener badge de rol
 function getRoleBadge(role) {
@@ -325,39 +320,64 @@ function updateSummary() {
 }
 
 // Función para editar colaborador
-function editColaborador(index) {
-  const colaborador = colaboradores[index];
+async function editColaborador(id) {
+  const colaborador = colaboradores.find(c => c.id === id);
+  if (!colaborador) return;
+
   const newName = prompt('Nuevo nombre:', colaborador.name);
   if (newName && newName.trim()) {
-    colaboradores[index].name = newName.trim();
-    saveColaboradores();
-    renderColaboradores();
-    showMessage('Colaborador actualizado correctamente.', 'success');
+    const { data, error } = await supabaseConfig.client
+      .from('collaborators')
+      .update({ name: newName.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      showMessage(`Error al actualizar: ${error.message}`, 'error');
+    } else {
+      const index = colaboradores.findIndex(c => c.id === id);
+      if (index !== -1) colaboradores[index] = data;
+      renderColaboradores();
+      showMessage('Colaborador actualizado correctamente.', 'success');
+    }
   }
 }
 
 // Función para cambiar estado del colaborador
-function toggleStatus(index) {
-  const colaborador = colaboradores[index];
+async function toggleStatus(id) {
+  const colaborador = colaboradores.find(c => c.id === id);
+  if (!colaborador) return;
+
   const currentStatus = colaborador.status || 'activo';
   const newStatus = currentStatus === 'activo' ? 'inactivo' : 'activo';
   
   if (confirm(`¿Cambiar estado de ${colaborador.name} a ${newStatus}?`)) {
-    colaboradores[index].status = newStatus;
-    saveColaboradores();
-    renderColaboradores();
-    showMessage(`Estado cambiado a ${newStatus}.`, 'success');
+    const { error } = await supabaseConfig.client.from('collaborators').update({ status: newStatus }).eq('id', id);
+    if (error) {
+      showMessage(`Error al cambiar estado: ${error.message}`, 'error');
+    } else {
+      colaborador.status = newStatus;
+      renderColaboradores();
+      showMessage(`Estado cambiado a ${newStatus}.`, 'success');
+    }
   }
 }
 
 // Función para eliminar colaborador
-function deleteColaborador(index) {
-  const colaborador = colaboradores[index];
+async function deleteColaborador(id) {
+  const colaborador = colaboradores.find(c => c.id === id);
+  if (!colaborador) return;
+
   if (confirm(`¿Estás seguro de eliminar a ${colaborador.name}?`)) {
-    colaboradores.splice(index, 1);
-    saveColaboradores();
-    renderColaboradores();
-    showMessage('Colaborador eliminado correctamente.', 'success');
+    const { error } = await supabaseConfig.client.from('collaborators').delete().eq('id', id);
+    if (error) {
+      showMessage(`Error al eliminar: ${error.message}`, 'error');
+    } else {
+      colaboradores = colaboradores.filter(c => c.id !== id);
+      renderColaboradores();
+      showMessage('Colaborador eliminado correctamente.', 'success');
+    }
   }
 }
 
@@ -410,8 +430,7 @@ function filterColaboradores() {
     return;
   }
   
-  filteredColaboradores.forEach((c, originalIndex) => {
-    const index = colaboradores.indexOf(c);
+  filteredColaboradores.forEach(c => {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50 transition-colors';
     
@@ -442,13 +461,13 @@ function filterColaboradores() {
       </td>
       <td class="py-4 px-2">
         <div class="flex items-center gap-2">
-          <button onclick="editColaborador(${index})" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
+          <button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
             <i data-lucide="edit-2" class="w-4 h-4"></i>
           </button>
-          <button onclick="toggleStatus(${index})" class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors" title="Cambiar estado">
+          <button onclick="toggleStatus('${c.id}')" class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors" title="Cambiar estado">
             <i data-lucide="${c.status === 'inactivo' ? 'user-check' : 'user-x'}" class="w-4 h-4"></i>
           </button>
-          <button onclick="deleteColaborador(${index})" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+          <button onclick="deleteColaborador('${c.id}')" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
         </div>
@@ -464,7 +483,7 @@ function filterColaboradores() {
 closeMetricsModal.addEventListener('click', hideMetricsModal);
 
 // Event listeners
-form.addEventListener('submit', (e) => {
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = document.getElementById('colaboradorName').value.trim();
   const email = document.getElementById('colaboradorEmail').value.trim();
@@ -492,21 +511,29 @@ form.addEventListener('submit', (e) => {
     return;
   }
 
-  // Crear nuevo colaborador
-  const newColaborador = {
+  // Crear objeto para Supabase
+  const newColaboradorData = {
     name,
     email,
     password,
     role,
-    status: 'activo',
-    createdAt: new Date().toISOString()
+    status: 'activo'
   };
   
-  colaboradores.push(newColaborador);
-  saveColaboradores();
-  renderColaboradores();
-  form.reset();
-  showMessage('Colaborador agregado correctamente.', 'success');
+  try {
+    const { data: newColaborador, error } = await supabaseConfig.client.functions.invoke('create-collaborator', {
+      body: newColaboradorData
+    });
+
+    if (error) throw error;
+
+    colaboradores.push(newColaborador);
+    renderColaboradores();
+    form.reset();
+    showMessage('Colaborador agregado correctamente.', 'success');
+  } catch (error) {
+    showMessage(`Error al crear colaborador: ${error.message}`, 'error');
+  }
 });
 
 // Event listeners para filtros
@@ -526,9 +553,17 @@ function clearFilters() {
 document.getElementById('clearFilters').addEventListener('click', clearFilters);
 
 // Función de inicialización
-function init() {
-  renderColaboradores();
-  updateSummary();
+async function init() {
+  try {
+    const { data, error } = await supabaseConfig.client.from('collaborators').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    colaboradores = data;
+    renderColaboradores();
+    updateSummary();
+  } catch (error) {
+    console.error("Error al cargar colaboradores:", error);
+    showMessage('No se pudieron cargar los colaboradores.', 'error');
+  }
 }
 
 // Hacer funciones globales para los botones

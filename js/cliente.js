@@ -2,6 +2,7 @@
 let currentStep = 1;
 let selectedService = null; // Ahora será un objeto {id, name}
 let serviceQuestions = {};
+let modalFilled = false; // Nueva variable para controlar si el modal fue llenado
 
 // Variables para el mapa
 let map;
@@ -20,7 +21,12 @@ function showStep(step) {
   steps.forEach(s => s.classList.add('hidden'));
   document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
   prevBtn.classList.toggle('hidden', step === 1);
-  nextBtn.classList.toggle('hidden', step === steps.length);
+  const isLastStep = step === steps.length;
+  nextBtn.classList.toggle('hidden', isLastStep);
+  // Si es el último paso, mostrar el resumen
+  if (isLastStep) {
+    displayOrderSummary();
+  }
   progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
 }
 
@@ -57,30 +63,40 @@ async function loadServices() {
   });
 
   serviceListContainer.innerHTML = services.map(service => `
-    <div class="service-card relative flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition-all duration-300" data-service-name="${service.name}">
-      <div class="absolute top-2 right-2 h-5 w-5 bg-green-500 rounded-full hidden items-center justify-center check-mark transition-transform duration-300 scale-0">
-        <i class="fas fa-check text-white text-xs"></i>
+    <div class="service-item group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white text-center shadow-md transition-all duration-300 ease-in-out hover:shadow-xl hover:border-azulClaro hover:-translate-y-1" 
+         data-service-id="${service.id}" 
+         data-service-name="${service.name}">
+      <div class="relative mb-2 h-32 w-full rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+          <img src="${service.image_url || 'img/1vertical.png'}" alt="${service.name}" class="h-28 w-auto object-contain transition-transform duration-300 group-hover:scale-110" onerror="this.src='img/1vertical.png'">
       </div>
-      <img src="${service.image_url || 'img/1vertical.png'}" alt="${service.name}" class="mx-auto w-full h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
-      <span class="font-medium">${service.name}</span>
+      <div class="p-2">
+        <span class="block truncate font-semibold text-gray-700 group-hover:text-azulOscuro">${service.name}</span>
+      </div>
+      <div class="check-indicator absolute top-2 right-2 hidden h-6 w-6 items-center justify-center rounded-full bg-azulClaro text-white transition-transform duration-300 scale-0">
+        <i class="fas fa-check text-xs"></i> 
+      </div>
     </div>
   `).join('');
   
   // Asignar listeners a los nuevos elementos
-  document.querySelectorAll('.service-card').forEach(card => {
+  document.querySelectorAll('.service-item').forEach(card => {
     card.addEventListener('click', function() {
-      document.querySelectorAll('.service-card').forEach(c => {
-        c.classList.remove('border-azulClaro', 'bg-blue-50', 'border-2');
-        c.querySelector('.check-mark').classList.add('hidden', 'scale-0');
+      // Reiniciar estado de selección y validación de modal
+      modalFilled = false; 
+      document.querySelectorAll('.service-item').forEach(c => {
+        c.classList.remove('selected', 'border-azulClaro', 'shadow-lg');
+        c.querySelector('.check-indicator').classList.add('hidden', 'scale-0');
       });
-      this.classList.add('border-azulClaro', 'bg-blue-50');
-      this.classList.add('border-2');
-      this.querySelector('.check-mark').classList.remove('hidden');
-      this.querySelector('.check-mark').classList.add('scale-100');
-      selectedService = { name: this.dataset.serviceName };
+
+      // Marcar el nuevo servicio como seleccionado
+      this.classList.add('selected', 'border-azulClaro', 'shadow-lg');
+      this.querySelector('.check-indicator').classList.remove('hidden');
+      this.querySelector('.check-indicator').classList.add('scale-100');
+      
+      selectedService = { id: this.dataset.serviceId, name: this.dataset.serviceName };
 
       // Normalizar el nombre para crear un ID de modal seguro
-      const normalizedName = selectedService.name
+      const normalizedName = this.dataset.serviceName
         .toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Eliminar tildes
         .replace(/ /g, '-'); // Reemplazar espacios con guiones
@@ -106,26 +122,32 @@ async function loadVehicles() {
   }
 
   vehicleListContainer.innerHTML = vehicles.map(vehicle => `
-    <div class="vehicle-card relative flex flex-col items-center p-4 border rounded-lg text-center cursor-pointer hover:border-azulClaro hover:bg-blue-50 transition-all duration-300" data-vehicle-name="${vehicle.name}">
-      <div class="absolute top-2 right-2 h-5 w-5 bg-green-500 rounded-full hidden items-center justify-center check-mark transition-transform duration-300 scale-0">
-        <i class="fas fa-check text-white text-xs"></i>
+    <div class="vehicle-item group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white text-center shadow-md transition-all duration-300 ease-in-out hover:shadow-xl hover:border-azulClaro hover:-translate-y-1" 
+         data-vehicle-id="${vehicle.id}" 
+         data-vehicle-name="${vehicle.name}">
+      <div class="relative mb-2 h-32 w-full rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+          <img src="${vehicle.image_url || 'img/1vertical.png'}" alt="${vehicle.name}" class="h-28 w-auto object-contain transition-transform duration-300 group-hover:scale-110" onerror="this.src='img/1vertical.png'">
       </div>
-      <img src="${vehicle.image_url || 'img/1vertical.png'}" alt="${vehicle.name}" class="mx-auto w-full h-24 object-contain mb-4" onerror="this.src='img/1vertical.png'">
-      <h4 class="font-medium">${vehicle.name}</h4>
+      <div class="p-2">
+        <span class="block truncate font-semibold text-gray-700 group-hover:text-azulOscuro">${vehicle.name}</span>
+      </div>
+      <div class="check-indicator absolute top-2 right-2 hidden h-6 w-6 items-center justify-center rounded-full bg-azulClaro text-white transition-transform duration-300 scale-0">
+        <i class="fas fa-check text-xs"></i> 
+      </div>
     </div>
   `).join('');
 
   // Asignar listeners a los nuevos elementos
-  document.querySelectorAll('.vehicle-card').forEach(card => {
+  document.querySelectorAll('.vehicle-item').forEach(card => {
     card.addEventListener('click', function() {
-      document.querySelectorAll('.vehicle-card').forEach(c => {
-        c.classList.remove('border-azulClaro', 'bg-blue-50', 'border-2');
-        c.querySelector('.check-mark').classList.add('hidden', 'scale-0');
+      document.querySelectorAll('.vehicle-item').forEach(c => {
+        c.classList.remove('selected', 'border-azulClaro', 'shadow-lg');
+        c.querySelector('.check-indicator').classList.add('hidden', 'scale-0');
       });
-      this.classList.add('border-azulClaro', 'bg-blue-50');
-      this.classList.add('border-2');
-      this.querySelector('.check-mark').classList.remove('hidden');
-      this.querySelector('.check-mark').classList.add('scale-100');
+
+      this.classList.add('selected', 'border-azulClaro', 'shadow-lg');
+      this.querySelector('.check-indicator').classList.remove('hidden');
+      this.querySelector('.check-indicator').classList.add('scale-100');
     });
   });
 }
@@ -143,7 +165,7 @@ function validateCurrentStep() {
     const telefonoInput = document.querySelector('input[placeholder="Teléfono"]');
     const emailInput = document.querySelector('input[placeholder="Correo"]');
     
-    const isNombreValid = /^[a-zA-Z\s]+$/.test(nombreInput.value);
+    const isNombreValid = /^[a-zA-Z\s\u00C0-\u017F]+$/.test(nombreInput.value) && nombreInput.value.trim().length > 2;
     const isTelefonoValid = /^[\d\s()-]+$/.test(telefonoInput.value) && telefonoInput.value.length > 6;
     const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value);
 
@@ -157,7 +179,7 @@ function validateCurrentStep() {
 
     if (!isNombreValid || !isTelefonoValid || !isEmailValid) {
       let errorMessage = 'Por favor, corrija los siguientes campos:\n';
-      if (!isNombreValid) errorMessage += '- Nombre: solo puede contener letras.\n';
+      if (!isNombreValid) errorMessage += '- Nombre: debe tener más de 2 letras y no contener números o símbolos.\n';
       if (!isTelefonoValid) errorMessage += '- Teléfono: debe ser un número válido.\n';
       if (!isEmailValid) errorMessage += '- Correo: debe ser un correo electrónico válido.\n';
       alert(errorMessage);
@@ -169,9 +191,18 @@ function validateCurrentStep() {
     alert('Por favor seleccione un servicio');
     return false;
   }
+
+  // Nueva validación: Asegurarse de que el modal del servicio fue llenado
+  if (currentStep === 2) {
+    const modalId = `modal-${selectedService.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ /g, '-')}`;
+    if (document.getElementById(modalId) && !modalFilled) {
+      alert('Por favor, complete la información adicional del servicio seleccionado antes de continuar.');
+      return false;
+    }
+  }
   
   if (currentStep === 3) {
-    const selectedVehicle = document.querySelector('.vehicle-card.border-azulClaro');
+    const selectedVehicle = document.querySelector('.vehicle-item.selected');
     if (!selectedVehicle) {
       alert('Por favor seleccione un vehículo');
       return false;
@@ -200,6 +231,70 @@ function validateCurrentStep() {
   
   return true;
 }
+
+// Función para mostrar el resumen de la orden en el paso 6
+function displayOrderSummary() {
+  const summaryContainer = document.getElementById('order-summary');
+  if (!summaryContainer) return;
+
+  // Recolectar todos los datos
+  const name = document.querySelector('input[placeholder="Nombre completo"]').value;
+  const phone = document.querySelector('input[placeholder="Teléfono"]').value;
+  const email = document.querySelector('input[placeholder="Correo"]').value;
+  const rnc = document.querySelector('input[name="rnc"]').value;
+  const empresa = document.querySelector('input[name="empresa"]').value;
+
+  const service = selectedService ? selectedService.name : 'No seleccionado';
+  
+  const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
+  const vehicle = selectedVehicleCard ? selectedVehicleCard.dataset.vehicleName : 'No seleccionado';
+
+  const pickup = document.getElementById('pickupAddress').value;
+  const delivery = document.getElementById('deliveryAddress').value;
+
+  const date = document.querySelector('input[type="date"]').value;
+  const time = document.querySelector('input[type="time"]').value;
+
+  // Construir el HTML del resumen
+  let summaryHTML = `
+    <div class="summary-section">
+      <h5 class="font-bold text-azulOscuro mb-2 border-b pb-1">Datos del Cliente</h5>
+      <p><strong>Nombre:</strong> ${name}</p>
+      <p><strong>Teléfono:</strong> ${phone}</p>
+      <p><strong>Correo:</strong> ${email}</p>
+      ${rnc ? `<p><strong>RNC:</strong> ${rnc}</p>` : ''}
+      ${empresa ? `<p><strong>Empresa:</strong> ${empresa}</p>` : ''}
+    </div>
+
+    <div class="summary-section">
+      <h5 class="font-bold text-azulOscuro mt-4 mb-2 border-b pb-1">Detalles del Servicio</h5>
+      <p><strong>Servicio:</strong> ${service}</p>
+      <p><strong>Vehículo:</strong> ${vehicle}</p>`;
+
+  // Añadir preguntas del modal si existen
+  if (Object.keys(serviceQuestions).length > 0) {
+    summaryHTML += `<div class="mt-2 pl-4 border-l-2 border-gray-200">`;
+    for (const [key, value] of Object.entries(serviceQuestions)) {
+      const questionText = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      summaryHTML += `<p><strong>${questionText}:</strong> ${value}</p>`;
+    }
+    summaryHTML += `</div>`;
+  }
+  summaryHTML += `</div>`;
+
+  summaryHTML += `
+    <div class="summary-section">
+      <h5 class="font-bold text-azulOscuro mt-4 mb-2 border-b pb-1">Ruta y Horario</h5>
+      <p><strong>Origen:</strong> ${pickup}</p>
+      <p><strong>Destino:</strong> ${delivery}</p>
+      <p><strong>Fecha:</strong> ${date}</p>
+      <p><strong>Hora:</strong> ${time}</p>
+    </div>
+  `;
+
+  summaryContainer.innerHTML = summaryHTML;
+}
+
 
 // Función para manejar el checkbox de RNC
 function toggleRNCField() {
@@ -442,12 +537,11 @@ document.addEventListener('DOMContentLoaded', function() {
         serviceQuestions[key] = value;
       }
       
-      // Cerrar modal y continuar al siguiente paso
+      modalFilled = true; // Marcar que el modal fue completado
+      showSuccess('Información del servicio guardada.'); // Notificación opcional
+
+      // Solo cerrar el modal, no avanzar de paso
       this.closest('.fixed').classList.add('hidden');
-      if (currentStep < steps.length) {
-        currentStep++;
-        showStep(currentStep);
-      }
     });
   });
 
@@ -455,6 +549,11 @@ document.addEventListener('DOMContentLoaded', function() {
   if (nextBtn) {
     nextBtn.addEventListener('click', () => {
       if (!validateCurrentStep()) return;
+
+      // Si estamos en el paso 2, reiniciamos la validación del modal para la próxima vez que se entre
+      if (currentStep === 2) {
+        modalFilled = false;
+      }
       
       if(currentStep < steps.length) {
         currentStep++;
@@ -482,7 +581,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!validateCurrentStep()) return;
       
       // Construir el objeto de la orden para Supabase
-      const selectedVehicleCard = document.querySelector('.vehicle-card.border-azulClaro');
+      const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
       const newOrderId = generateOrderId(); // Generar el ID una sola vez
       const orderData = {
         id: newOrderId,
@@ -495,7 +594,7 @@ document.addEventListener('DOMContentLoaded', function() {
         empresa: document.querySelector('input[name="empresa"]')?.value || null,
         // Detalles del servicio (Pasos 2 y 3)
         service: selectedService.name,
-        vehicle: selectedVehicleCard ? selectedVehicleCard.querySelector('h4').textContent : null,
+        vehicle: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleName : null,
         service_questions: serviceQuestions,
         // Detalles de la ruta (Paso 4)
         pickup: document.getElementById('pickupAddress').value,

@@ -149,6 +149,28 @@ class SupabaseConfig {
         }
     }
 
+    async loginCollaborator(email, password) {
+        if (this.useLocalStorage) {
+            const localCollaborators = JSON.parse(localStorage.getItem('colaboradores') || '[]');
+            const user = localCollaborators.find(c => c.email === email && c.password === password);
+            return { user: user || null, error: user ? null : { message: 'Credenciales inválidas' } };
+        }
+
+        try {
+            const { data: user, error } = await this.client
+                .from('collaborators')
+                .select('*')
+                .eq('email', email)
+                .single();
+
+            if (error || !user || user.password !== password) { // ¡IMPORTANTE! Esto es inseguro. Ver nota abajo.
+                throw new Error('Correo o contraseña incorrectos.');
+            }
+            return { user, error: null };
+        } catch (error) {
+            return { user: null, error };
+        }
+    }
     // Métodos para servicios y vehículos
     async getServices() {
         if (this.useLocalStorage) {

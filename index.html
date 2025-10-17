@@ -35,17 +35,31 @@
             azulOscuro: '#0C375D',   /* Azul oscuro del logo */
             azulClaro: '#117D8B',    /* Azul turquesa del logo */
             acento: '#FBBF24'        /* Amarillo cálido para acentos */
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(20px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
+            }
+          },
+          animation: {
+            fadeInUp: 'fadeInUp 0.6s ease-out forwards'
           }
         }
       }
     }
   </script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    .header-hidden {
+      transform: translateY(-100%);
+    }
+  </style>
 </head>
 <body class="bg-white text-gray-800">
 
   <!-- Header -->
-  <header class="fixed w-full bg-white shadow-md z-50">
+  <header id="main-header" class="fixed w-full bg-white shadow-md z-50 transition-transform duration-300">
     <div class="container mx-auto flex justify-between items-center p-4">
       <div class="flex items-center gap-3">
         <img src="img/1vertical.png" alt="Logo LLO" class="h-14 w-14">
@@ -72,15 +86,17 @@
   </header>
 
   <!-- Hero Section -->
-  <section class="relative min-h-screen flex items-center justify-center text-white text-center bg-cover bg-center" style="background-image: url('img/logistica.jpg');">
+  <section class="relative min-h-screen flex items-center bg-cover bg-center text-white" style="background-image: url('img/logistica.jpg');">
     <!-- Overlay para legibilidad -->
     <div class="absolute inset-0 bg-black bg-opacity-60"></div>
    
     <!-- Contenido del Hero Section -->
-    <div class="relative z-10 container mx-auto px-4">
-      <h2 class="text-4xl md:text-6xl font-bold mb-4">Bienvenido a <span class="text-acento">Logística López Ortiz</span></h2>
-      <p class="text-xl md:text-2xl mb-8">Empresa líder en transporte logístico confiable y seguro para tus necesidades de mudanza y carga.</p>
-      <div class="flex flex-col sm:flex-row justify-center items-center gap-6">
+    <div class="relative z-10 container mx-auto px-4 md:px-12 lg:px-24">
+      <div class="max-w-2xl text-center sm:text-left">
+        <h2 class="text-4xl md:text-6xl font-bold mb-4" style="text-shadow: 2px 2px 8px rgba(0,0,0,0.7);">Bienvenido a <span class="text-acento">Logística López Ortiz</span></h2>
+        <p class="text-xl md:text-2xl mb-8" style="text-shadow: 1px 1px 6px rgba(0,0,0,0.7);">Empresa líder en transporte logístico confiable y seguro para tus necesidades de mudanza y carga.</p>
+      </div>
+      <div class="flex flex-col sm:flex-row justify-center sm:justify-start items-center gap-6">
         <a href="cliente.html" class="bg-acento text-azulOscuro px-10 py-4 rounded-lg font-bold hover:bg-yellow-400 transition-transform hover:scale-105 text-xl shadow-lg">
           🚚 Comenzar Solicitud
         </a>
@@ -88,8 +104,8 @@
           Ver Estado
         </a>
       </div>
-      <p class="mt-6 text-lg">📲 ¡Descarga nuestra app para seguimiento en tiempo real!</p>
-      <div class="mt-4 flex justify-center">
+      <p class="mt-8 text-lg text-center sm:text-left">📲 ¡Descarga nuestra app para seguimiento en tiempo real!</p>
+      <div class="mt-4 flex justify-center sm:justify-start">
         <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2">
           <i class="fas fa-download"></i> Instalar App
         </button>
@@ -128,41 +144,43 @@
   </section>
 
   <!-- Servicios -->
-  <section id="servicios" class="py-16 bg-white text-center">
-    <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-12">Nuestros Servicios</h3>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 px-6 md:px-0">
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-home text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Mudanzas</h4>
-        <p>Servicios completos de mudanza residencial y comercial.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-boxes text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Carga Comercial</h4>
-        <p>Transporte seguro de mercancías comerciales.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-weight-hanging text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Carga Pesada</h4>
-        <p>Especialistas en transporte de carga pesada.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-shipping-fast text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Fletes</h4>
-        <p>Servicios de flete de todo tipo de mercancía.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-truck-pickup text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Grúas</h4>
-        <p>Transporte con grúa y equipos especializados.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-box text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Paquetería</h4>
-        <p>Envíos de paquetes seguros y rápidos.</p>
+  <section id="servicios" class="relative py-16 bg-cover bg-center text-center" style="background-image: url('img/cargo.jpg');">
+    <div class="absolute inset-0 bg-azulOscuro bg-opacity-80"></div>
+    <div class="relative z-10 container mx-auto px-4">
+      <h3 class="text-3xl md:text-4xl font-bold text-white mb-12" style="text-shadow: 1px 1px 4px rgba(0,0,0,0.5);">Nuestros Servicios</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div class="service-card opacity-0 bg-white/10 backdrop-blur-sm p-6 border border-white/20 rounded-lg hover:bg-white/20 transition text-white">
+          <i class="fas fa-home text-4xl text-acento mb-4"></i>
+          <h4 class="font-bold text-xl mb-2">Mudanzas</h4>
+          <p class="opacity-90">Servicios completos de mudanza residencial y comercial.</p>
+        </div>
+        <div class="service-card opacity-0 bg-white/10 backdrop-blur-sm p-6 border border-white/20 rounded-lg hover:bg-white/20 transition text-white">
+          <i class="fas fa-boxes text-4xl text-acento mb-4"></i>
+          <h4 class="font-bold text-xl mb-2">Carga Comercial</h4>
+          <p class="opacity-90">Transporte seguro de mercancías comerciales.</p>
+        </div>
+        <div class="service-card opacity-0 bg-white/10 backdrop-blur-sm p-6 border border-white/20 rounded-lg hover:bg-white/20 transition text-white">
+          <i class="fas fa-weight-hanging text-4xl text-acento mb-4"></i>
+          <h4 class="font-bold text-xl mb-2">Carga Pesada</h4>
+          <p class="opacity-90">Especialistas en transporte de carga pesada.</p>
+        </div>
+        <div class="service-card opacity-0 bg-white/10 backdrop-blur-sm p-6 border border-white/20 rounded-lg hover:bg-white/20 transition text-white">
+          <i class="fas fa-shipping-fast text-4xl text-acento mb-4"></i>
+          <h4 class="font-bold text-xl mb-2">Fletes</h4>
+          <p class="opacity-90">Servicios de flete de todo tipo de mercancía.</p>
+        </div>
+        <div class="service-card opacity-0 bg-white/10 backdrop-blur-sm p-6 border border-white/20 rounded-lg hover:bg-white/20 transition text-white">
+          <i class="fas fa-truck-pickup text-4xl text-acento mb-4"></i>
+          <h4 class="font-bold text-xl mb-2">Grúas</h4>
+          <p class="opacity-90">Transporte con grúa y equipos especializados.</p>
+        </div>
+        <div class="service-card opacity-0 bg-white/10 backdrop-blur-sm p-6 border border-white/20 rounded-lg hover:bg-white/20 transition text-white">
+          <i class="fas fa-box text-4xl text-acento mb-4"></i>
+          <h4 class="font-bold text-xl mb-2">Paquetería</h4>
+          <p class="opacity-90">Envíos de paquetes seguros y rápidos.</p>
+        </div>
       </div>
     </div>
-    
   </section>
 
   <!-- Footer -->
@@ -231,6 +249,44 @@
         }
       });
     }
+
+    // --- Lógica para animaciones en scroll ---
+    const servicesSection = document.getElementById('servicios');
+    if (servicesSection) {
+      const serviceCards = servicesSection.querySelectorAll('.service-card');
+      
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            serviceCards.forEach((card, index) => {
+              // Aplicar un retardo escalonado a cada tarjeta
+              card.style.animationDelay = `${index * 150}ms`;
+              card.classList.add('animate-fadeInUp');
+            });
+            observer.unobserve(servicesSection); // Dejar de observar una vez que la animación se ha disparado
+          }
+        });
+      }, { threshold: 0.1 }); // Disparar cuando el 10% de la sección sea visible
+
+      observer.observe(servicesSection);
+    }
+
+    // --- Lógica para ocultar/mostrar header en scroll ---
+    let lastScrollY = window.scrollY;
+    const header = document.getElementById('main-header');
+
+    window.addEventListener('scroll', () => {
+      if (header) {
+        if (window.scrollY > lastScrollY && window.scrollY > header.offsetHeight) {
+          // Scroll hacia abajo
+          header.classList.add('header-hidden');
+        } else {
+          // Scroll hacia arriba
+          header.classList.remove('header-hidden');
+        }
+        lastScrollY = window.scrollY;
+      }
+    });
   </script>
   <script src="js/pwa.js"></script>
 </body>
