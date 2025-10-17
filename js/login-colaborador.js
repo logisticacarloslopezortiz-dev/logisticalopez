@@ -1,32 +1,41 @@
-// Inicializar íconos
 document.addEventListener('DOMContentLoaded', () => {
-  if (window.lucide) lucide.createIcons();
-});
+    // Inicializar Supabase (asumiendo que supabase-config.js ya está cargado)
+    if (typeof supabaseConfig === 'undefined') {
+        console.error('Supabase config no está cargado. Asegúrate de incluir supabase-config.js antes de este script.');
+        // Crear un div de error para que sea visible en la página
+        const errorDiv = document.getElementById('loginError');
+        if(errorDiv) {
+            errorDiv.textContent = 'Error de configuración. Contacte al administrador.';
+            errorDiv.classList.remove('hidden');
+        }
+        return;
+    }
 
-// Login de colaboradores validando contra localStorage ('colaboradores')
-const form = document.getElementById('collabLoginForm');
-const errorBox = document.getElementById('loginError');
+    const loginForm = document.getElementById('collabLoginForm');
+    const errorDiv = document.getElementById('loginError');
 
-form.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value.trim();
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorDiv.classList.add('hidden');
+        errorDiv.textContent = '';
 
-  if (!email || !password) {
-    errorBox.textContent = 'Ingresa correo y contraseña.';
-    errorBox.classList.remove('hidden');
-    return;
-  }
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
 
-  const colaboradores = JSON.parse(localStorage.getItem('colaboradores') || '[]');
-  const user = colaboradores.find(c => (c.email || '').toLowerCase() === email.toLowerCase());
-  if (!user || user.password !== password) {
-    errorBox.textContent = 'Correo o contraseña incorrectos.';
-    errorBox.classList.remove('hidden');
-    return;
-  }
+        const { data, error } = await supabaseConfig.loginCollaborator(email, password);
 
-  const session = { email: user.email, name: user.name, role: user.role, loginAt: new Date().toISOString() };
-  localStorage.setItem('tlc_collab_session', JSON.stringify(session));
-  window.location.href = 'panel-colaborador.html';
+        if (error) {
+            console.error('Error de inicio de sesión:', error.message);
+            errorDiv.textContent = 'Correo o contraseña incorrectos. Por favor, inténtalo de nuevo.';
+            errorDiv.classList.remove('hidden');
+        } else if (data.user) {
+            console.log('Inicio de sesión exitoso:', data.user);
+            // Guardar la sesión del usuario para usarla en otras páginas
+            sessionStorage.setItem('supabase.auth.token', JSON.stringify(data.session));
+            // Redirigir al panel principal
+            window.location.href = 'inicio.html';
+        }
+    });
+
+    lucide.createIcons();
 });

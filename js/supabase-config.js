@@ -151,24 +151,21 @@ class SupabaseConfig {
 
     async loginCollaborator(email, password) {
         if (this.useLocalStorage) {
-            const localCollaborators = JSON.parse(localStorage.getItem('colaboradores') || '[]');
-            const user = localCollaborators.find(c => c.email === email && c.password === password);
-            return { user: user || null, error: user ? null : { message: 'Credenciales inválidas' } };
+            // El modo local no soporta autenticación segura. Se recomienda usar Supabase.
+            console.warn("El login en modo localStorage no es seguro y es solo para desarrollo.");
+            const localCollaborators = JSON.parse(localStorage.getItem('collaborators') || '[]');
+            const user = localCollaborators.find(c => c.email === email); // No se verifica password en local.
+            if (user) return { data: { user }, error: null };
+            return { data: { user: null }, error: { message: 'Credenciales inválidas en modo local.' } };
         }
 
         try {
-            const { data: user, error } = await this.client
-                .from('collaborators')
-                .select('*')
-                .eq('email', email)
-                .single();
-
-            if (error || !user || user.password !== password) { // ¡IMPORTANTE! Esto es inseguro. Ver nota abajo.
-                throw new Error('Correo o contraseña incorrectos.');
-            }
-            return { user, error: null };
+            // Usar el método de autenticación de Supabase
+            const { data, error } = await this.client.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            return { data, error: null };
         } catch (error) {
-            return { user: null, error };
+            return { data: null, error };
         }
     }
     // Métodos para servicios y vehículos

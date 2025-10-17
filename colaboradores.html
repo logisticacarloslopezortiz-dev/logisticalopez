@@ -105,10 +105,14 @@
         </div>
         <h2 class="text-xl font-semibold text-gray-900">Agregar Nuevo Colaborador</h2>
       </div>
-      <form id="colaboradorForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <form id="colaboradorForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Nombre Completo</label>
           <input type="text" id="colaboradorName" placeholder="Ej: Juan Pérez" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700">Matrícula</label>
+          <input type="text" id="colaboradorMatricula" placeholder="Ej: 12345678" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
         </div>
         <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Correo Electrónico</label>
@@ -195,6 +199,7 @@
           <thead class="bg-gray-50">
             <tr>
               <th class="text-left py-4 px-6 font-semibold text-gray-700">Colaborador</th>
+              <th class="text-left py-4 px-6 font-semibold text-gray-700">Matrícula</th>
               <th class="text-left py-4 px-6 font-semibold text-gray-700">Email</th>
               <th class="text-left py-4 px-6 font-semibold text-gray-700">Rol</th>
               <th class="text-left py-4 px-6 font-semibold text-gray-700">Estado</th>
@@ -289,6 +294,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
   <script src="js/colaboradores.js"></script>
   <script src="js/sidebar.js"></script>
 </body>

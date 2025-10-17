@@ -52,14 +52,17 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <style>
     .header-hidden {
-      transform: translateY(-100%);
+      transform: translateY(-100%) !important;
+    }
+    body.is-pwa .pwa-hide {
+      display: none !important;
     }
   </style>
 </head>
 <body class="bg-white text-gray-800">
 
   <!-- Header -->
-  <header id="main-header" class="fixed w-full bg-white shadow-md z-50 transition-transform duration-300">
+  <header id="main-header" class="fixed w-full bg-white/90 backdrop-blur-md shadow-md z-50 transition-transform duration-300">
     <div class="container mx-auto flex justify-between items-center p-4">
       <div class="flex items-center gap-3">
         <img src="img/1vertical.png" alt="Logo LLO" class="h-14 w-14">
@@ -104,9 +107,9 @@
           Ver Estado
         </a>
       </div>
-      <p class="mt-8 text-lg text-center sm:text-left">📲 ¡Descarga nuestra app para seguimiento en tiempo real!</p>
-      <div class="mt-4 flex justify-center sm:justify-start">
-        <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2">
+      <p class="mt-8 text-lg text-center sm:text-left pwa-hide">📲 ¡Descarga nuestra app para seguimiento en tiempo real!</p>
+      <div class="mt-4 flex justify-center sm:justify-start pwa-hide">
+        <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2 pwa-hide">
           <i class="fas fa-download"></i> Instalar App
         </button>
       </div>

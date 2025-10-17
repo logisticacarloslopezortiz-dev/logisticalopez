@@ -229,7 +229,7 @@ function getTimeStats(orders, email) {
 function renderColaboradores() {
   tableBody.innerHTML = '';
   if (colaboradores.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="users" class="w-8 h-8 text-gray-400"></i><span>No hay colaboradores registrados</span></div></td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="users" class="w-8 h-8 text-gray-400"></i><span>No hay colaboradores registrados</span></div></td></tr>';
     lucide.createIcons();
     return;
   }
@@ -253,6 +253,9 @@ function renderColaboradores() {
             <div class="text-sm text-gray-500">Registrado: ${createdDate}</div>
           </div>
         </div>
+      </td>
+      <td class="py-4 px-2">
+        <div class="text-gray-700 font-mono text-sm">${c.matricula || 'N/A'}</div>
       </td>
       <td class="py-4 px-2">
         <div class="text-gray-900">${c.email}</div>
@@ -425,7 +428,7 @@ function filterColaboradores() {
   // Renderizar colaboradores filtrados
   tableBody.innerHTML = '';
   if (filteredColaboradores.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="search" class="w-8 h-8 text-gray-400"></i><span>No se encontraron colaboradores</span></div></td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="search" class="w-8 h-8 text-gray-400"></i><span>No se encontraron colaboradores</span></div></td></tr>';
     lucide.createIcons();
     return;
   }
@@ -449,6 +452,9 @@ function filterColaboradores() {
             <div class="text-sm text-gray-500">Registrado: ${createdDate}</div>
           </div>
         </div>
+      </td>
+      <td class="py-4 px-2">
+        <div class="text-gray-700 font-mono text-sm">${c.matricula || 'N/A'}</div>
       </td>
       <td class="py-4 px-2">
         <div class="text-gray-900">${c.email}</div>
@@ -486,6 +492,7 @@ closeMetricsModal.addEventListener('click', hideMetricsModal);
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = document.getElementById('colaboradorName').value.trim();
+  const matricula = document.getElementById('colaboradorMatricula').value.trim();
   const email = document.getElementById('colaboradorEmail').value.trim();
   const password = document.getElementById('colaboradorPassword').value;
   const role = document.getElementById('colaboradorRole').value;
@@ -514,25 +521,46 @@ form.addEventListener('submit', async (e) => {
   // Crear objeto para Supabase
   const newColaboradorData = {
     name,
+    matricula,
     email,
     password,
     role,
     status: 'activo'
   };
   
+  // Proceso de creación en 2 pasos: 1. Auth, 2. Tabla de perfiles
   try {
-    const { data: newColaborador, error } = await supabaseConfig.client.functions.invoke('create-collaborator', {
-      body: newColaboradorData
+    // 1. Crear el usuario en Supabase Auth
+    const { data: authData, error: authError } = await supabaseConfig.client.auth.signUp({
+      email: email,
+      password: password,
+      options: {
+        data: { 
+          full_name: name,
+          role: role
+        }
+      }
     });
 
-    if (error) throw error;
+    if (authError) throw authError;
+    if (!authData.user) throw new Error('No se pudo crear el usuario en el sistema de autenticación.');
 
-    colaboradores.push(newColaborador);
+    // 2. Insertar el perfil en la tabla 'collaborators'
+    const { data: profileData, error: profileError } = await supabaseConfig.client
+      .from('collaborators')
+      .insert([{ ...newColaboradorData, id: authData.user.id }]) // Usar el ID de auth
+      .select()
+      .single();
+
+    if (profileError) throw profileError;
+
+    colaboradores.push(profileData);
     renderColaboradores();
     form.reset();
     showMessage('Colaborador agregado correctamente.', 'success');
   } catch (error) {
     showMessage(`Error al crear colaborador: ${error.message}`, 'error');
+    console.error('Error detallado:', error);
   }
 });
 

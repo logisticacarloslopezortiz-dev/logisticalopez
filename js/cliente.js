@@ -8,11 +8,7 @@ let modalFilled = false; // Nueva variable para controlar si el modal fue llenad
 let map;
 let originMarker;
 let destinationMarker;
-let geocoder;
-let activeMapInputId = null;
-let autocompleteOrigin;
-let autocompleteDestination;
-
+let isOriginSet = false; // Controla si el origen ya fue establecido
 
 // Elementos del DOM
 let steps, nextBtn, prevBtn, progressBar;
@@ -26,6 +22,10 @@ function showStep(step) {
   // Si es el último paso, mostrar el resumen
   if (isLastStep) {
     displayOrderSummary();
+  }
+  // Si volvemos al paso 4, invalidar el mapa para que se redibuje correctamente
+  if (step === 4 && map) {
+    setTimeout(() => map.invalidateSize(), 100);
   }
   progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
 }
@@ -165,7 +165,7 @@ function validateCurrentStep() {
     const telefonoInput = document.querySelector('input[placeholder="Teléfono"]');
     const emailInput = document.querySelector('input[placeholder="Correo"]');
     
-    const isNombreValid = /^[a-zA-Z\s\u00C0-\u017F]+$/.test(nombreInput.value) && nombreInput.value.trim().length > 2;
+    const isNombreValid = /^[a-zA-Z\s\u00C0-\u024F]+$/.test(nombreInput.value) && nombreInput.value.trim().length > 2;
     const isTelefonoValid = /^[\d\s()-]+$/.test(telefonoInput.value) && telefonoInput.value.length > 6;
     const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value);
 
@@ -179,7 +179,7 @@ function validateCurrentStep() {
 
     if (!isNombreValid || !isTelefonoValid || !isEmailValid) {
       let errorMessage = 'Por favor, corrija los siguientes campos:\n';
-      if (!isNombreValid) errorMessage += '- Nombre: debe tener más de 2 letras y no contener números o símbolos.\n';
+      if (!isNombreValid) errorMessage += '- Nombre: debe tener más de 2 letras y solo puede contener letras y espacios.\n';
       if (!isTelefonoValid) errorMessage += '- Teléfono: debe ser un número válido.\n';
       if (!isEmailValid) errorMessage += '- Correo: debe ser un correo electrónico válido.\n';
       alert(errorMessage);
@@ -252,6 +252,11 @@ function displayOrderSummary() {
   const pickup = document.getElementById('pickupAddress').value;
   const delivery = document.getElementById('deliveryAddress').value;
 
+  // Obtener datos del mapa en el momento de mostrar el resumen
+  const distance = document.getElementById('distance-value').textContent;
+  const originCoords = originMarker ? originMarker.getLatLng() : null;
+  const destinationCoords = destinationMarker ? destinationMarker.getLatLng() : null;
+
   const date = document.querySelector('input[type="date"]').value;
   const time = document.querySelector('input[type="time"]').value;
 
@@ -287,6 +292,9 @@ function displayOrderSummary() {
       <h5 class="font-bold text-azulOscuro mt-4 mb-2 border-b pb-1">Ruta y Horario</h5>
       <p><strong>Origen:</strong> ${pickup}</p>
       <p><strong>Destino:</strong> ${delivery}</p>
+      ${distance !== '--' ? `<p><strong>Distancia:</strong> ${distance} km</p>` : ''}
+      ${originCoords ? `<p class="text-xs text-gray-500">Coords. Origen: ${originCoords.lat.toFixed(4)}, ${originCoords.lng.toFixed(4)}</p>` : ''}
+      ${destinationCoords ? `<p class="text-xs text-gray-500">Coords. Destino: ${destinationCoords.lat.toFixed(4)}, ${destinationCoords.lng.toFixed(4)}</p>` : ''}
       <p><strong>Fecha:</strong> ${date}</p>
       <p><strong>Hora:</strong> ${time}</p>
     </div>
@@ -316,101 +324,198 @@ function toggleRNCField() {
   }
 }
 
-// --- Funciones del Mapa de Google ---
-async function initMap(Map, AdvancedMarkerElement) {
+// --- Funciones del Mapa (Leaflet) ---
+
+/**
+ * Obtiene la ubicación actual del usuario y la establece como origen.
+ */
+function locateUserAndSetOrigin() {
+  const loader = document.getElementById('map-loader');
+  const loaderText = document.getElementById('map-loader-text');
+  if (!navigator.geolocation) {
+    alert('La geolocalización no es soportada por tu navegador.');
+    return;
+  }
+
+  // Mostrar spinner de geolocalización
+  loader.style.display = 'flex';
+  loaderText.textContent = 'Obteniendo ubicación...';
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude } = position.coords;
+      // Activar el input de origen antes de llamar a la función de actualización
+      document.getElementById('pickupAddress').focus();
+      // Llamar a la función que actualiza el marcador y la dirección
+      updateMarkerAndAddress({ lat: latitude, lng: longitude });
+      // Centrar el mapa en la nueva ubicación
+      map.setView([latitude, longitude], 15);
+      loader.style.display = 'none'; // Ocultar spinner al encontrar
+    },
+    () => {
+      alert('No se pudo obtener tu ubicación. Asegúrate de haber concedido los permisos.');
+      loader.style.display = 'none'; // Ocultar spinner si hay error
+    }
+  );
+}
+
+async function initMap() {
   const mapElement = document.getElementById("map");
   if (!mapElement) {
     console.log("Elemento del mapa no encontrado en esta página.");
     return;
   }
-  const santoDomingo = { lat: 18.4861, lng: -69.9312 };
-  map = new Map(document.getElementById("map"), {
-    center: santoDomingo,
-    zoom: 12,
-    mapId: 'TLC_MAP_ID' // ID de mapa requerido para Advanced Markers
+
+  // Mostrar spinner mientras carga el mapa
+  const loader = document.getElementById('map-loader');
+  const loaderText = document.getElementById('map-loader-text');
+  loader.style.display = 'flex';
+
+  map = L.map(mapElement).setView([18.4273, -70.0976], 13);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OSM &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map).on('load', () => loader.style.display = 'none');
+
+
+  // --- Iconos personalizados para los marcadores ---
+  const originIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
   });
-  geocoder = new google.maps.Geocoder();
 
-  // --- Marcadores para Origen y Destino ---
-  originMarker = new AdvancedMarkerElement({ map: map, gmpDraggable: true });
-  destinationMarker = new AdvancedMarkerElement({ map: map, gmpDraggable: true });
-
-  // Estilizar los marcadores
-  const originPin = new google.maps.marker.PinElement({
-    background: '#117D8B', // azulClaro
-    borderColor: '#0C375D', // azulOscuro
-    glyphColor: 'white',
+  const destinationIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
   });
-  originMarker.content = originPin.element;
 
-  const destinationPin = new google.maps.marker.PinElement({
-    background: '#DC2626', // red-600
-    borderColor: '#991B1B', // red-800
-    glyphColor: 'white',
+  // --- Búsqueda de direcciones ---
+  const searchControl = new GeoSearch.GeoSearchControl({
+    provider: new GeoSearch.OpenStreetMapProvider(),
+    style: 'bar',
+    showMarker: false,
+    autoClose: true,
   });
-  destinationMarker.content = destinationPin.element;
+  map.addControl(searchControl);
 
-  // --- Autocompletado de Direcciones ---
+  map.on('geosearch/showlocation', (result) => {
+    updateMarkerAndAddress({ lat: result.location.y, lng: result.location.x }, result.location.label);
+  });
+
+  // --- Inputs y listeners ---
   const pickupInput = document.getElementById('pickupAddress');
   const deliveryInput = document.getElementById('deliveryAddress');
+  const useCurrentLocationBtn = document.getElementById('use-current-location-btn');
+  const instructionText = document.getElementById('map-instruction-text');
 
-  autocompleteOrigin = new google.maps.places.Autocomplete(pickupInput, {
-    fields: ["geometry", "name"],
+  map.on('click', (e) => { updateMarkerAndAddress(e.latlng); });
+
+  pickupInput.addEventListener('focus', () => {
+    instructionText.innerHTML = "Busca o haz clic en el mapa para establecer el <strong>punto de origen</strong>.";
   });
-  autocompleteDestination = new google.maps.places.Autocomplete(deliveryInput, {
-    fields: ["geometry", "name"],
+  deliveryInput.addEventListener('focus', () => {
+    instructionText.innerHTML = "Ahora, busca o haz clic para establecer el <strong>punto de destino</strong>.";
   });
 
-  // --- Event Listeners ---
-  autocompleteOrigin.addListener('place_changed', () => {
-    const place = autocompleteOrigin.getPlace();
-    if (place.geometry) {
-      updateMarkerAndAddress(place.geometry.location, originMarker);
-      fitMapToBounds();
+  useCurrentLocationBtn.addEventListener('click', locateUserAndSetOrigin);
+
+  // Lógica principal para actualizar marcadores
+  async function updateMarkerAndAddress(latlng, label = null) {
+    let currentMarker, currentInput, currentIcon;
+
+    if (!isOriginSet) {
+      // Estableciendo el ORIGEN
+      currentMarker = originMarker;
+      currentInput = pickupInput;
+      currentIcon = originIcon;
+
+      if (!currentMarker) {
+        originMarker = L.marker(latlng, { icon: currentIcon, draggable: true }).addTo(map);
+        originMarker.on('dragend', (e) => updateMarkerAndAddress(e.target.getLatLng()));
+      } else {
+        originMarker.setLatLng(latlng);
+      }
+    } else {
+      // Estableciendo el DESTINO
+      currentMarker = destinationMarker;
+      currentInput = deliveryInput;
+      currentIcon = destinationIcon;
+
+      if (!currentMarker) {
+        destinationMarker = L.marker(latlng, { icon: currentIcon, draggable: true }).addTo(map);
+        destinationMarker.on('dragend', (e) => updateMarkerAndAddress(e.target.getLatLng()));
+      } else {
+        destinationMarker.setLatLng(latlng);
+      }
     }
-  });
 
-  autocompleteDestination.addListener('place_changed', () => {
-    const place = autocompleteDestination.getPlace();
-    if (place.geometry) {
-      updateMarkerAndAddress(place.geometry.location, destinationMarker);
-      fitMapToBounds();
+    // Obtener dirección (Geocodificación inversa)
+    if (label) {
+      currentInput.value = label;
+    } else {
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}`);
+        if (!response.ok) throw new Error(`Nominatim respondió con estado: ${response.status}`);
+        const data = await response.json();
+        currentInput.value = data.display_name || `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+      } catch (error) {
+        console.error("Error en geocodificación inversa:", error);
+        currentInput.value = `Lat: ${latlng.lat.toFixed(5)}, Lon: ${latlng.lng.toFixed(5)}`;
+      }
     }
-  });
 
-  map.addListener('click', (e) => {
-    const targetMarker = (activeMapInputId === 'pickupAddress') ? originMarker : destinationMarker;
-    updateMarkerAndAddress(e.latLng, targetMarker);
-  });
+    // Lógica de flujo secuencial
+    if (!isOriginSet) {
+      isOriginSet = true;
+      deliveryInput.disabled = false;
+      deliveryInput.placeholder = "Escribe o selecciona en el mapa";
+      deliveryInput.focus(); // Mover el foco al siguiente campo
+      instructionText.innerHTML = "¡Perfecto! Ahora, establece el <strong>punto de destino</strong>.";
+    }
 
-  originMarker.addListener('dragend', (e) => updateMarkerAndAddress(e.latLng, originMarker));
-  destinationMarker.addListener('dragend', (e) => updateMarkerAndAddress(e.latLng, destinationMarker));
-
-  pickupInput.addEventListener('focus', () => activeMapInputId = 'pickupAddress');
-  deliveryInput.addEventListener('focus', () => activeMapInputId = 'deliveryAddress');
-}
-
-function fitMapToBounds() {
-  const bounds = new google.maps.LatLngBounds();
-  if (originMarker.position) bounds.extend(originMarker.position);
-  if (destinationMarker.position) bounds.extend(destinationMarker.position);
-  if (!bounds.isEmpty()) {
-    map.fitBounds(bounds);
-    if (map.getZoom() > 15) map.setZoom(15); // Evitar zoom excesivo
+    calculateAndDisplayDistance();
+    fitMapToBounds();
   }
 }
 
-function updateMarkerAndAddress(latLng) {
-  const targetMarker = (activeMapInputId === 'pickupAddress') ? originMarker : destinationMarker;
-  if (!targetMarker) return;
+function fitMapToBounds() {
+  const bounds = L.latLngBounds();
+  let markerCount = 0;
+  if (originMarker) {
+    bounds.extend(originMarker.getLatLng());
+    markerCount++;
+  }
+  if (destinationMarker) {
+    bounds.extend(destinationMarker.getLatLng());
+    markerCount++;
+  }
+  if (markerCount > 0) {
+    map.fitBounds(bounds, { padding: [50, 50] });
+  }
+}
 
-  targetMarker.position = latLng;
-  geocoder.geocode({ location: latLng }, (results, status) => {
-    if (status === 'OK' && results[0] && activeMapInputId) {
-      document.getElementById(activeMapInputId).value = results[0].formatted_address;
-    }
-  });
-  fitMapToBounds();
+function calculateAndDisplayDistance() {
+  const distanceContainer = document.getElementById('distance-container');
+  const distanceValueEl = document.getElementById('distance-value');
+
+  if (originMarker && destinationMarker) {
+    const distanceInMeters = map.distance(originMarker.getLatLng(), destinationMarker.getLatLng());
+    const distanceInKm = (distanceInMeters / 1000).toFixed(2);
+    distanceValueEl.textContent = distanceInKm;
+    distanceContainer.classList.remove('hidden');
+  } else {
+    distanceContainer.classList.add('hidden');
+  }
 }
 
 // --- Lógica de Notificaciones Push ---
@@ -473,6 +578,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Cargar datos dinámicos
   loadServices();
   loadVehicles();
+  initMap();
 
   // Manejar checkbox de RNC
   const rncCheckbox = document.getElementById('hasRNC');
@@ -492,7 +598,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const emailInput = document.querySelector('input[placeholder="Correo"]');
 
   nombreInput?.addEventListener('input', (e) => {
-    const isValid = /^[a-zA-Z\s]*$/.test(e.target.value);
+    const isValid = /^[a-zA-Z\s\u00C0-\u024F]*$/.test(e.target.value);
     e.target.classList.toggle('border-red-500', !isValid);
   });
   telefonoInput?.addEventListener('input', (e) => {
@@ -582,6 +688,8 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Construir el objeto de la orden para Supabase
       const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
+      const originCoords = originMarker ? originMarker.getLatLng() : null;
+      const destinationCoords = destinationMarker ? destinationMarker.getLatLng() : null;
       const newOrderId = generateOrderId(); // Generar el ID una sola vez
       const orderData = {
         id: newOrderId,
@@ -599,6 +707,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Detalles de la ruta (Paso 4)
         pickup: document.getElementById('pickupAddress').value,
         delivery: document.getElementById('deliveryAddress').value,
+        origin_coords: originCoords ? { lat: originCoords.lat, lng: originCoords.lng } : null,
+        destination_coords: destinationCoords ? { lat: destinationCoords.lat, lng: destinationCoords.lng } : null,
         // Fecha y Hora (Paso 5)
         "date": document.querySelector('input[type="date"]').value,
         "time": document.querySelector('input[type="time"]').value,
