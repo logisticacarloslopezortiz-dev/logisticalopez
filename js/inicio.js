@@ -217,18 +217,20 @@ function renderOrders(){
   }
 }
 
-// Función para mostrar/ocultar el menú de acciones
+// --- INICIO: Lógica de Menú de Acciones Corregida ---
 function toggleActionsMenu(button) {
   const dropdown = button.nextElementSibling;
-  if (!dropdown) return; // Evita el error si el elemento no existe
-  dropdown.classList.toggle('hidden');
+  if (!dropdown) return;
+
+  const isHidden = dropdown.classList.contains('hidden');
   // Cerrar otros menús abiertos
   document.querySelectorAll('.origin-top-right').forEach(menu => {
-    if (menu !== dropdown && !menu.classList.contains('hidden')) {
-      menu.classList.add('hidden');
-    }
+    menu.classList.add('hidden');
   });
+
+  if (isHidden) dropdown.classList.remove('hidden'); // Abrir el actual si estaba cerrado
 }
+
 // Cerrar menús si se hace clic fuera
 window.addEventListener('click', (e) => { 
   if (!e.target.closest('.relative.inline-block')) {
@@ -236,6 +238,7 @@ window.addEventListener('click', (e) => {
   }
 });
 
+// --- FIN: Lógica de Menú de Acciones Corregida ---
 // Función para actualizar el estado de una orden en Supabase
 async function updateOrderStatus(orderId, newStatus) {
   const { data, error } = await supabaseConfig.client
@@ -768,6 +771,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.updateOrderStatus = updateOrderStatus;
   window.openAssignModal = openAssignModal;
   window.generateAndSendInvoice = generateAndSendInvoice;
+  window.toggleActionsMenu = toggleActionsMenu;
 
   // Suscribirse a los cambios en tiempo real de la tabla 'orders'
   const ordersSubscription = supabaseConfig.client

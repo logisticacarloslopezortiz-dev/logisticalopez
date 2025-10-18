@@ -529,17 +529,8 @@ async function askForNotificationPermission(orderId) {
     console.log('Este navegador no soporta notificaciones push.');
     return;
   }
-
-  if (Notification.permission === 'granted') {
-    await subscribeUserToPush(orderId);
-  } else if (Notification.permission !== 'denied') {
-    if (confirm('¿Deseas recibir notificaciones sobre el estado de tu pedido?')) {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        await subscribeUserToPush(orderId);
-      }
-    }
-  }
+  // Mostrar tarjeta elegante para opt-in de notificaciones
+  showPushOptInCard(orderId);
 }
 
 async function subscribeUserToPush(orderId) {
@@ -553,6 +544,60 @@ async function subscribeUserToPush(orderId) {
   await supabaseConfig.client.from('orders').update({ push_subscription: subscription }).eq('id', orderId);
   console.log('Suscripción guardada para la orden:', orderId);
 }
+
+// --- UI elegante para opt-in de notificaciones (tarjeta blanca con logo) ---
+function showPushOptInCard(orderId) {
+  // Evitar duplicados
+  if (document.getElementById('push-optin-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'push-optin-overlay';
+  overlay.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4';
+  overlay.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div class="p-6 text-center">
+        <img src="img/1vertical.png" alt="Logo LLO" class="h-14 w-14 mx-auto mb-3"/>
+        <h3 class="text-xl font-bold text-gray-900 mb-2">¿Deseas recibir notificaciones?</h3>
+        <p class="text-gray-600 mb-5">Activa las notificaciones para saber cuando tu solicitud avance de estado.</p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <button id="push-decline" class="px-5 py-2.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Ahora no</button>
+          <button id="push-accept" class="px-5 py-2.5 rounded-lg bg-azulClaro text-white hover:bg-azulOscuro">Sí, activar notificaciones</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const closeOverlay = () => overlay.remove();
+  document.getElementById('push-decline').addEventListener('click', closeOverlay);
+  document.getElementById('push-accept').addEventListener('click', async () => {
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        await subscribeUserToPush(orderId);
+        showSuccess('Notificaciones activadas.');
+      } else {
+        showInfo('Podrás activarlas más tarde desde tu navegador.');
+      }
+    } catch (e) {
+      console.error('Error al activar notificaciones:', e);
+      showError('No se pudieron activar las notificaciones.');
+    } finally {
+      closeOverlay();
+    }
+  });
+}
+
+// Redirección después de copiar el ID
+function handleAfterCopy(orderId) {
+  try {
+    sessionStorage.setItem('justSubmitted', orderId);
+  } catch (_) {}
+  window.location.href = 'index.html';
+}
+
+// Exponer función para acciones de notificación
+window.handleAfterCopy = handleAfterCopy;
 
 /**
  * Copia un texto al portapapeles y muestra una notificación.
@@ -732,26 +777,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // Mostrar notificaciones de éxito
         showSuccess('¡Solicitud enviada exitosamente!');
         
-        // Segunda notificación con el ID y botón para copiar
+        // Notificación con el ID y botón para copiar y continuar
         showInfo(
           `Tu número de orden es: <strong>${orderData.id}</strong>. Úsalo para darle seguimiento.`, 
           {
             title: 'Guarda tu ID',
-            duration: 15000, // Darle más tiempo para que lo vea
+            duration: 0, // Persistente hasta que el usuario actúe
             actions: [{
-              text: 'Copiar ID',
-              handler: `copyToClipboard('${orderData.id}')`
+              text: 'Copiar ID y continuar',
+              handler: `copyToClipboard('${orderData.id}'); handleAfterCopy('${orderData.id}')`
             }]
           }
         );
         
-        // Preguntar por permiso de notificaciones
-        await askForNotificationPermission(orderData.id);
-        
-        // Redirigir después de un momento para que el usuario vea las notificaciones
-        setTimeout(() => {
-          window.location.href = 'index.html';
-        }, 5000);
+        // Mostrar tarjeta de opt-in para notificaciones push
+        askForNotificationPermission(orderData.id);
 
       } catch (error) {
         console.error('Error al guardar la solicitud:', error);

@@ -11,8 +11,9 @@
 -- -------------------------------------------------------------
 CREATE TABLE public.orders (
     -- Columnas principales
-    id TEXT PRIMARY KEY, -- ID generado por la app (ej: "TLC-01")
+    id TEXT PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    tracking_url TEXT,
 
     -- Datos del cliente
     name TEXT NOT NULL,
@@ -24,37 +25,39 @@ CREATE TABLE public.orders (
     -- Detalles del servicio
     service TEXT,
     vehicle TEXT,
-    service_questions JSONB, -- Para guardar las preguntas y respuestas específicas del servicio.
+    service_questions JSONB,
 
     -- Detalles de la ruta
     pickup TEXT,
     delivery TEXT,
+    origin_coords JSONB,
+    destination_coords JSONB,
 
     -- Fecha y Hora
     "date" DATE,
     "time" TIME,
 
     -- Estado y Asignación
-    status TEXT DEFAULT 'Pendiente', -- Pendiente, En proceso, Completado
-    assigned_to TEXT, -- Nombre del colaborador
-    assigned_email TEXT, -- Email del colaborador
+    status TEXT DEFAULT 'Pendiente',
+    assigned_to TEXT,
+    assigned_email TEXT,
     assigned_at TIMESTAMP WITH TIME ZONE,
-    last_collab_status TEXT, -- Último estado reportado por el colaborador (ej: 'en_camino_recoger')
     completed_at TIMESTAMP WITH TIME ZONE,
-    completed_by TEXT, -- Email del colaborador que completó
+    completed_by TEXT,
 
     -- Finanzas y seguimiento
     estimated_price TEXT DEFAULT 'Por confirmar',
-    tracking JSONB, -- Historial de estados para el cliente
-    synced BOOLEAN DEFAULT false, -- Para futuras sincronizaciones
-    push_subscription JSONB -- Almacena el objeto de suscripción para notificaciones push
+    tracking JSONB,
+    push_subscription JSONB
 );
 
 -- Comentarios sobre la tabla 'orders'
 COMMENT ON TABLE public.orders IS 'Tabla principal que contiene todas las solicitudes de servicio.';
-COMMENT ON COLUMN public.orders.id IS 'ID único de la orden, generado por la aplicación (ej: TLC-01).';
+COMMENT ON COLUMN public.orders.id IS 'ID único de la orden, generado por la aplicación (ej: TLC-123456).';
+COMMENT ON COLUMN public.orders.tracking_url IS 'URL única para el seguimiento del cliente.';
 COMMENT ON COLUMN public.orders.service_questions IS 'Almacena un objeto JSON con preguntas y respuestas del modal de servicio.';
-COMMENT ON COLUMN public.orders.last_collab_status IS 'Último estado reportado por el colaborador desde su panel.';
+COMMENT ON COLUMN public.orders.origin_coords IS 'Coordenadas de origen en formato GeoJSON.';
+COMMENT ON COLUMN public.orders.destination_coords IS 'Coordenadas de destino en formato GeoJSON.';
 COMMENT ON COLUMN public.orders.tracking IS 'Historial de cambios de estado para la vista del cliente.';
 
 -- Índices para optimizar búsquedas comunes
@@ -71,6 +74,7 @@ CREATE TABLE public.collaborators (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     name TEXT NOT NULL,
+    matricula TEXT UNIQUE,
     email TEXT NOT NULL UNIQUE,
     "password" TEXT NOT NULL, -- En un futuro, debería ser un hash.
     "role" TEXT, -- administrador, chofer, operador
@@ -79,6 +83,10 @@ CREATE TABLE public.collaborators (
 
 -- Comentarios sobre la tabla 'collaborators'
 COMMENT ON TABLE public.collaborators IS 'Almacena los usuarios internos del sistema (dueños, chóferes, etc.).';
+
+-- Migración defensiva para entornos existentes (agrega la columna si no existe)
+ALTER TABLE IF EXISTS public.collaborators
+ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE;
 
 
 -- -------------------------------------------------------------

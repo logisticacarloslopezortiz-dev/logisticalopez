@@ -13,16 +13,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loginForm = document.getElementById('collabLoginForm');
     const errorDiv = document.getElementById('loginError');
+    const submitButton = loginForm.querySelector('button[type="submit"]');
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         errorDiv.classList.add('hidden');
         errorDiv.textContent = '';
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Ingresando...';
 
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
 
         const { data, error } = await supabaseConfig.loginCollaborator(email, password);
+
+        submitButton.disabled = false;
+        submitButton.textContent = 'Ingresar';
 
         if (error) {
             console.error('Error de inicio de sesión:', error.message);

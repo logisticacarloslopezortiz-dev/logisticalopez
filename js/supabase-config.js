@@ -2,7 +2,7 @@
 class SupabaseConfig {
     constructor() {
         // Cargar variables de entorno desde .env o usar valores por defecto
-        this.supabaseUrl = this.getEnvVar('SUPABASE_URL');
+        this.supabaseUrl = this.getEnvVar('SUPABASE_URL') || 'https://fkprllkxyjtosjhtikxy.supabase.co';
         this.supabaseKey = this.getEnvVar('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ';
         this.vapidPublicKey = this.getEnvVar('VAPID_PUBLIC_KEY');
         this.useLocalStorage = this.getEnvVar('USE_LOCAL_STORAGE') === 'true';
@@ -19,7 +19,8 @@ class SupabaseConfig {
     // Método para obtener variables de entorno (simulado para frontend)
     getEnvVar(name) {
         // En un entorno real, esto vendría de process.env o configuración del servidor
-        const envVars = { // Cambia 'USE_LOCAL_STORAGE' a 'false' para conectar a Supabase
+        const envVars = {
+            'USE_LOCAL_STORAGE': 'false', // <-- ¡CAMBIO IMPORTANTE! Forzamos el uso de Supabase.
             'SUPABASE_URL': 'https://fkprllkxyjtosjhtikxy.supabase.co',
             'SUPABASE_ANON_KEY': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ',
             'GOOGLE_MAPS_API_KEY': 'AQUI_VA_TU_CLAVE_DE_API_REAL'
@@ -28,27 +29,42 @@ class SupabaseConfig {
     }
 
     // Métodos para órdenes/pedidos
-    async getOrders() {
+    async getOrders(filters = {}) {
         if (this.useLocalStorage) {
-            return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+            let orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
+            if (filters.collaboratorId) {
+                orders = orders.filter(o => o.assigned_to === filters.collaboratorId);
+            }
+            return orders;
         }
         
         try {
-            // Si el cliente de Supabase no está inicializado, usar localStorage directamente.
             if (!this.client) {
                 return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
             }
-            const { data, error } = await this.client
+
+            let query = this.client
                 .from('orders')
                 .select('*')
                 .order('created_at', { ascending: false });
+
+            // Aplicar filtros si existen
+            if (filters.collaboratorId) {
+                query = query.eq('assigned_to', filters.collaboratorId);
+            }
+
+            const { data, error } = await query;
             
             if (error) throw error;
             return data || [];
         } catch (error) {
             console.error('Error al obtener órdenes:', error);
-            return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); // Return the fallback
+            return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
         }
+    }
+
+    async getOrdersForCollaborator(collaboratorId) {
+        return this.getOrders({ collaboratorId });
     }
 
     async saveOrder(order) {
@@ -112,7 +128,7 @@ class SupabaseConfig {
 
         try {
             const { data, error } = await this.client
-                .from('collaborators')
+                .from('colaboradores')
                 .select('*');
             
             if (error) throw error;
@@ -133,7 +149,7 @@ class SupabaseConfig {
 
         try {
             const { data, error } = await this.client
-                .from('collaborators')
+                .from('colaboradores')
                 .insert([collaborator])
                 .select();
             

@@ -1,386 +1,119 @@
- <!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Logística López Ortiz - Solicitud de Servicio</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            azulOscuro: '#0C375D',
-            azulClaro: '#117D8B',
-            acento: '#FBBF24'
-          },
-          keyframes: {
-            fadeInUp: {
-              '0%': { opacity: '0', transform: 'translateY(20px)' },
-              '100%': { opacity: '1', transform: 'translateY(0)' }
-            }
-          },
-          animation: {
-            fadeInUp: 'fadeInUp 0.5s ease-out'
-          }
-        }
-      }
-    }
-  </script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-100">
-
-  <!-- Hero / Solicitud -->
-  <section class="pt-16 pb-16 flex justify-center items-start min-h-screen">
-    <div class="w-full max-w-5xl px-4">
-
-      <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fadeInUp">
-        <h3 class="text-3xl font-bold text-azulOscuro mb-6 text-center">Solicitud de Servicio</h3>
-        <p class="text-gray-600 mb-8 text-center">Completa los 6 pasos para solicitar tu servicio de manera rápida y segura.</p>
-
-        <!-- Progress -->
-        <div class="flex items-center justify-between mb-6">
-          <div class="flex-1 h-2 bg-gray-200 rounded-full relative">
-            <div id="progress-bar" class="h-2 bg-azulClaro rounded-full w-0 transition-all duration-500"></div>
-          </div>
-        </div>
-
-        <!-- Formulario pasos -->
-        <form id="serviceForm" class="space-y-6">
-
-          <!-- Paso 1: Datos Personales -->
-          <div class="step p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="1">
-            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 1: Datos Personales</h4>
-            <input type="text" placeholder="Nombre completo" class="w-full border p-2 rounded mb-4">
-            <input type="tel" placeholder="Teléfono" class="w-full border p-2 rounded mb-4">
-            <input type="email" placeholder="Correo" class="w-full border p-2 rounded mb-4">
-
-            <div class="mt-6 border-t pt-4 text-center space-y-2">
-              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
-            </div>
-          </div>
-
-          <!-- Paso 2: Servicio -->
-          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="2">
-            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 2: Selecciona Servicio</h4>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/mudanza.png" alt="Mudanza" class="mx-auto h-16 mb-2">
-                <span>Mudanza</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/carga_comercial.png" alt="Carga Comercial" class="mx-auto h-16 mb-2">
-                <span>Carga Comercial</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/carga_pesada.png" alt="Carga Pesada" class="mx-auto h-16 mb-2">
-                <span>Carga Pesada</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/flete.png" alt="Flete" class="mx-auto h-16 mb-2">
-                <span>Flete</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/grua.png" alt="Grúa" class="mx-auto h-16 mb-2">
-                <span>Grúa</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/paqueteria.png" alt="Paquetería" class="mx-auto h-16 mb-2">
-                <span>Paquetería</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/otro.png" alt="Otro" class="mx-auto h-16 mb-2">
-                <span>Otro</span>
-              </div>
-            </div>
-
-            <div class="mt-6 border-t pt-4 text-center space-y-2">
-              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
-            </div>
-          </div>
-
-          <!-- Paso 3: Vehículo -->
-          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="3">
-            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 3: Selecciona Vehículo</h4>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/camion_peque.png" alt="Camión Pequeño" class="mx-auto h-16 mb-2">
-                <span>Camión Pequeño</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/furgoneta.png" alt="Furgoneta" class="mx-auto h-16 mb-2">
-                <span>Furgoneta</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/camion_medio.png" alt="Camión Medio" class="mx-auto h-16 mb-2">
-                <span>Camión Medio</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/camion_grande.png" alt="Camión Grande" class="mx-auto h-16 mb-2">
-                <span>Camión Grande</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/camion_especial.png" alt="Camión Especial" class="mx-auto h-16 mb-2">
-                <span>Camión Especial</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/grua_pequena.png" alt="Grúa Pequeña" class="mx-auto h-16 mb-2">
-                <span>Grúa Pequeña</span>
-              </div>
-              <div class="p-2 border rounded-lg text-center cursor-pointer">
-                <img src="./img/otro_vehiculo.png" alt="Otro Vehículo" class="mx-auto h-16 mb-2">
-                <span>Otro</span>
-              </div>
-            </div>
-
-            <div class="mt-6 border-t pt-4 text-center space-y-2">
-              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
-            </div>
-          </div>
-
-          <!-- Paso 4: Ubicación -->
-          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="4">
-            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 4: Dirección de Origen y Destino</h4>
-            <input type="text" placeholder="Dirección de origen" class="w-full border p-2 rounded mb-4">
-            <input type="text" placeholder="Dirección de destino" class="w-full border p-2 rounded mb-4">
-
-            <div class="mt-6 border-t pt-4 text-center space-y-2">
-              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
-            </div>
-          </div>
-
-          <!-- Paso 5: Fecha y Hora -->
-          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="5">
-            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 5: Fecha y Hora</h4>
-            <input type="date" class="w-full border p-2 rounded mb-4">
-            <input type="time" class="w-full border p-2 rounded mb-4">
-
-            <div class="mt-6 border-t pt-4 text-center space-y-2">
-              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
-            </div>
-          </div>
-
-          <!-- Paso 6: Confirmación -->
-          <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="6">
-            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 6: Confirmación</h4>
-            <p class="text-gray-600 mb-4 text-center">Revisa tus datos y confirma la solicitud.</p>
-            <button type="submit" class="w-full bg-azulClaro text-white py-3 rounded-lg font-bold hover:bg-azulOscuro transition">Enviar Solicitud</button>
-
-            <div class="mt-6 border-t pt-4 text-center space-y-2">
-              <p class="text-gray-600">© 2025 Logística López Ortiz</p>
-            </div>
-          </div>
-
-          <!-- Botones de navegación -->
-          <div class="flex justify-between mt-6">
-            <button type="button" id="prevBtn" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-300 transition hidden">Anterior</button>
-            <div class="flex-1"></div>
-            <button type="button" id="nextBtn" class="bg-azulClaro text-white px-6 py-2 rounded-lg font-medium hover:bg-azulOscuro transition">Siguiente</button>
-          </div>
-
-        </form>
-      </div>
-    </div>
-  </section>
-
-  <script>
-    let currentStep = 1;
-    const steps = document.querySelectorAll('.step');
-    const nextBtn = document.getElementById('nextBtn');
-    const prevBtn = document.getElementById('prevBtn');
-    const progressBar = document.getElementById('progress-bar');
-
-    function showStep(step) {
-      steps.forEach(s => s.classList.add('hidden'));
-      document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
-      prevBtn.classList.toggle('hidden', step === 1);
-      nextBtn.classList.toggle('hidden', step === steps.length);
-      progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
-    }
-
-    nextBtn.addEventListener('click', () => {
-      if(currentStep < steps.length) currentStep++;
-      showStep(currentStep);
-    });
-
-    prevBtn.addEventListener('click', () => {
-      if(currentStep > 1) currentStep--;
-      showStep(currentStep);
-    });
-
-    showStep(currentStep);
-  </script>
-</body>
-</html>
-
-
-
-
-
-
-
-
-
-
-
-
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Empresa líder en transporte logístico confiable y seguro. Ofrecemos servicios de mudanza, carga pesada, fletes y paquetería. Solicita tu servicio en línea.">
-  <meta name="keywords" content="transporte, logística, mudanza, fletes, carga pesada, paquetería, República Dominicana">
-  <meta name="author" content="Logística López Ortiz">
-  <title>Logística López Ortiz - Transporte Profesional</title>
-
-  <!-- Favicon -->
-  <link rel="icon" href="img/favicon.ico">
-  
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            azulOscuro: '#0C375D',
-            azulClaro: '#117D8B',
-            acento: '#FBBF24'
-          }
-        }
-      }
-    }
-  </script>
-
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <title>Logística López Ortiz - Transporte y Distribución</title>
+  <link rel="icon" type="image/png" href="assets/img/logo.png">
+  <script src="https://kit.fontawesome.com/a2e0e6e6c4.js" crossorigin="anonymous"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body { font-family: 'Roboto', sans-serif; }
-    .text-shadow { text-shadow: 2px 2px 8px rgba(0,0,0,0.7); }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeInUp { animation: fadeInUp 1.2s ease-out; }
+
+    /* Fondo de partículas */
+    #particles-bg {
+      background: radial-gradient(circle at center, #0a0a0a, #000);
+    }
   </style>
-
 </head>
-<body class="bg-white text-gray-800">
+<body class="bg-black text-white overflow-x-hidden">
 
-  <!-- Header -->
-  <header class="fixed w-full bg-white/90 backdrop-blur-md shadow-md z-50">
-    <div class="container mx-auto flex justify-between items-center p-4">
-      <div class="flex items-center gap-3">
-        <img src="img/1vertical.png" alt="Logo LLO" class="h-14 w-14">
-        <h1 class="text-2xl font-bold text-azulOscuro">Logística López Ortiz</h1>
+  <!-- HERO Moderno -->
+  <section class="hero relative min-h-screen flex items-center justify-center text-white overflow-hidden">
+    <!-- Fondo animado -->
+    <canvas id="particles-bg" class="absolute inset-0 w-full h-full"></canvas>
+
+    <!-- Capa de degradado -->
+    <div class="absolute inset-0 bg-gradient-to-b from-black/80 via-black/60 to-black/70"></div>
+
+    <!-- Contenido principal -->
+    <div class="relative z-10 text-center px-6 max-w-3xl animate-fadeInUp">
+      <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-4">
+        Tu carga, <span class="text-yellow-400">nuestra prioridad</span>.
+      </h1>
+      <p class="text-lg md:text-xl text-white/90 mb-8">
+        Soluciones de transporte y logística a tu medida.<br>
+        Confiable, seguro y siempre a tiempo.
+      </p>
+
+      <!-- Botones -->
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="cliente.html" class="bg-yellow-400 text-black font-bold px-8 py-3 rounded-xl shadow-lg hover:scale-105 hover:bg-yellow-300 transition-all duration-300">
+          🚚 Comenzar Solicitud
+        </a>
+        <a href="seguimiento.html" class="border-2 border-white text-white font-bold px-8 py-3 rounded-xl hover:bg-white hover:text-black hover:scale-105 transition-all duration-300">
+          📦 Ver Estado
+        </a>
       </div>
-      <nav class="hidden md:flex gap-6 text-azulOscuro font-medium">
-        <a href="#nosotros" class="hover:text-acento transition-colors">Nosotros</a>
-        <a href="#servicios" class="hover:text-acento transition-colors">Servicios</a>
-        <a href="cliente.html" class="hover:text-acento transition-colors">Solicitar Servicio</a>
-        <a href="seguimiento.html" class="hover:text-acento transition-colors">Ver Estado</a>
-      </nav>
-      <button id="mobile-menu-btn" class="md:hidden text-azulOscuro text-2xl">
-        <i class="fas fa-bars"></i>
+    </div>
+
+    <!-- Banner instalación App -->
+    <div id="install-banner" class="hidden fixed bottom-6 right-6 bg-white/90 backdrop-blur-md text-black rounded-2xl shadow-2xl p-5 w-80 animate-fadeInUp border border-white/50 z-20">
+      <div class="flex items-center gap-3">
+        <div class="bg-yellow-400 text-black p-3 rounded-xl">
+          <i class="fas fa-truck text-2xl"></i>
+        </div>
+        <div>
+          <h4 class="font-semibold text-lg">Instala nuestra app</h4>
+          <p class="text-sm text-gray-700">Gestiona tus envíos fácil y rápido.</p>
+        </div>
+      </div>
+      <button id="install-btn" class="mt-4 w-full bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-2 rounded-xl transition-all duration-300">
+        📲 Instalar App
       </button>
     </div>
-
-    <!-- Mobile Menu -->
-    <div id="mobile-menu" class="hidden md:hidden bg-white shadow-md">
-      <a href="#nosotros" class="block p-3 text-azulOscuro hover:bg-gray-100">Nosotros</a>
-      <a href="#servicios" class="block p-3 text-azulOscuro hover:bg-gray-100">Servicios</a>
-      <a href="cliente.html" class="block p-3 text-azulOscuro hover:bg-gray-100">Solicitar Servicio</a>
-      <a href="seguimiento.html" class="block p-3 text-azulOscuro hover:bg-gray-100">Ver Estado</a>
-    </div>
-  </header>
-
-  <!-- Hero Section -->
-  <section class="relative pt-32 pb-16 text-center text-white bg-cover bg-center" style="background-image: url('img/logistica.jpg');">
-    <!-- Overlay -->
-    <div class="absolute inset-0 bg-black/50"></div>
-    <div class="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/50"></div>
-
-    <!-- Contenido -->
-    <div class="relative z-10 container mx-auto px-4">
-      <h2 class="text-4xl md:text-6xl font-bold mb-4 text-shadow">Bienvenido a <span class="text-acento">Logística López Ortiz</span></h2>
-      <p class="text-xl md:text-2xl mb-8 text-shadow">Empresa líder en transporte logístico confiable y seguro para tus necesidades de mudanza y carga.</p>
-      <div class="flex flex-col md:flex-row justify-center gap-6">
-        <a href="cliente.html" class="bg-acento text-azulOscuro px-8 py-4 rounded-lg font-bold hover:bg-yellow-400 transition text-lg shadow-lg">🚚 Comenzar Solicitud</a>
-        <a href="seguimiento.html" class="border-2 border-white px-8 py-4 rounded-lg font-bold hover:bg-white hover:text-azulOscuro transition shadow-lg">Ver Estado</a>
-      </div>
-      <p class="mt-6 text-lg font-medium text-shadow">📲 ¡Descarga nuestra app para seguimiento en tiempo real!</p>
-      <div class="mt-4 flex justify-center">
-        <button id="install-app-btn" class="hidden bg-white text-azulOscuro px-6 py-3 rounded-lg font-bold hover:bg-gray-200 transition text-base flex items-center gap-2">
-          <i class="fas fa-download"></i> Instalar App
-        </button>
-      </div>
-    </div>
   </section>
 
-  <!-- Nosotros -->
-  <section id="nosotros" class="py-16 bg-gray-50 text-center">
-    <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-6">¿Quiénes Somos?</h3>
-    <p class="max-w-3xl mx-auto text-gray-700 text-lg mb-12">
-      Logística López Ortiz es una empresa de transporte y logística que brinda soluciones eficientes y especializándose en carga pesada, fletes, paquetería y mudanzas.
-    </p>
-  </section>
-
-  <!-- Servicios -->
-  <section id="servicios" class="py-16 bg-white text-center">
-    <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-12">Nuestros Servicios</h3>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 px-6 md:px-0">
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-home text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Mudanzas</h4>
-        <p>Servicios completos de mudanza residencial y comercial.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-boxes text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Carga Comercial</h4>
-        <p>Transporte seguro de mercancías comerciales.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-weight-hanging text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Carga Pesada</h4>
-        <p>Especialistas en transporte de carga pesada.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-shipping-fast text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Fletes</h4>
-        <p>Servicios de flete de todo tipo de mercancía.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-truck-pickup text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Grúas</h4>
-        <p>Transporte con grúa y equipos especializados.</p>
-      </div>
-      <div class="p-6 border rounded-lg hover:shadow-lg transition">
-        <i class="fas fa-box text-4xl text-azulClaro mb-4"></i>
-        <h4 class="font-bold text-xl mb-2">Paquetería</h4>
-        <p>Envíos de paquetes seguros y rápidos.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer class="bg-azulOscuro text-white py-12">
-    <div class="container mx-auto text-center space-y-4">
-      <p>© 2025 Logística López Ortiz. Todos los derechos reservados.</p>
-      <div class="flex justify-center gap-6 text-2xl">
-        <a href="https://wa.me/+18297293822" target="_blank" class="hover:text-acento"><i class="fab fa-whatsapp"></i></a>
-        <a href="mailto:transporteylogisticalopezortir@gmail.com" class="hover:text-acento"><i class="fas fa-envelope"></i></a>
-        <a href="https://www.instagram.com/logisticalopezortizrd" target="_blank" class="hover:text-acento"><i class="fab fa-instagram"></i></a>
-      </div>
-    </div>
-  </footer>
-<img src="https://i.imgur.com/4nJ8w9Y.jpg" alt="Imagen 1">
-<img src="https://i.imgur.com/7s3pT2X.jpg" alt="Imagen 2">
-<img src="https://i.imgur.com/9z8u5B0.jpg" alt="Imagen 3">
-<img src="https://i.imgur.com/2w3kF8Q.jpg" alt="Imagen 4">
-<img src="https://i.imgur.com/1y4c9ZJ.jpg" alt="Imagen 5">
-
+  <!-- Script Partículas -->
   <script>
-    const mobileBtn = document.getElementById('mobile-menu-btn');
-    const mobileMenu = document.getElementById('mobile-menu');
-    mobileBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+  const canvas = document.getElementById('particles-bg');
+  const ctx = canvas.getContext('2d');
+  let particlesArray;
+
+  function initParticles() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    particlesArray = [];
+    const numParticles = Math.floor((canvas.width * canvas.height) / 8000);
+    for (let i = 0; i < numParticles; i++) {
+      const size = Math.random() * 2 + 1;
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      const speedX = (Math.random() - 0.5) * 0.5;
+      const speedY = (Math.random() - 0.5) * 0.5;
+      particlesArray.push({ x, y, size, speedX, speedY });
+    }
+  }
+
+  function animateParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgba(255, 215, 0, 0.6)";
+    particlesArray.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      p.x += p.speedX;
+      p.y += p.speedY;
+      if (p.x < 0 || p.x > canvas.width) p.speedX *= -1;
+      if (p.y < 0 || p.y > canvas.height) p.speedY *= -1;
+    });
+    requestAnimationFrame(animateParticles);
+  }
+
+  window.addEventListener('resize', initParticles);
+  initParticles();
+  animateParticles();
+
+  // Mostrar banner instalación
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      document.getElementById('install-banner').classList.remove('hidden');
+    }, 3000);
+  });
   </script>
 
 </body>

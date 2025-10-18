@@ -45,12 +45,12 @@
       <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">TLC Admin</h2>
     </div>
     <nav class="flex-1 flex flex-col gap-3 py-4">
-      <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 rounded-r-full hover:bg-blue-50 text-blue-700 font-semibold"><i data-lucide="home" class="w-6 h-6"></i> <span class="sidebar-text">Inicio</span></a>
-      <a href="servicios.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="box" class="w-6 h-6"></i> <span class="sidebar-text">Servicios</span></a>
-      <a href="ganancias.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="dollar-sign" class="w-6 h-6"></i> <span class="sidebar-text">Ganancia</span></a>
-      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="history" class="w-6 h-6"></i> <span class="sidebar-text">Historial</span></a>
-      <a href="mi-negocio.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="briefcase" class="w-6 h-6"></i> <span class="sidebar-text">Mi negocio</span></a>
-      <a href="colaboradores.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="users" class="w-6 h-6"></i> <span class="sidebar-text">Colaboradores</span></a>
+      <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 rounded-r-full hover:bg-blue-50 text-blue-700 font-semibold"><i data-lucide="home" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Inicio</span></a>
+      <a href="servicios.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="box" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Servicios</span></a>
+      <a href="ganancias.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="dollar-sign" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Ganancia</span></a>
+      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="history" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Historial</span></a>
+      <a href="mi-negocio.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="briefcase" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Mi negocio</span></a>
+      <a href="colaboradores.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="users" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Colaboradores</span></a>
     </nav>
     <div class="p-4 border-t">
       <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded hover:bg-gray-100 text-gray-600">
@@ -214,6 +214,32 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/notifications.js"></script>
+  
+  <!-- Lógica de carga de datos para el panel -->
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Verificar si el usuario es un colaborador
+      const userRole = localStorage.getItem('userRole');
+      const userDataString = localStorage.getItem('userData');
+
+      if (userRole === 'colaborador' && userDataString) {
+        try {
+          const userData = JSON.parse(userDataString);
+          // Ocultar elementos del menú que no son para colaboradores
+          document.querySelector('a[href="ganancias.html"]').style.display = 'none';
+          document.querySelector('a[href="mi-negocio.html"]').style.display = 'none';
+          document.querySelector('a[href="colaboradores.html"]').style.display = 'none';
+
+          // Cargar solo las órdenes asignadas a este colaborador
+          const assignedOrders = await supabaseConfig.getOrdersForCollaborator(userData.id);
+          window.allOrders = assignedOrders; // Poner las órdenes en una variable global para que `inicio.js` las use
+        } catch (error) {
+          console.error('Error al procesar datos del colaborador:', error);
+        }
+      }
+    });
+  </script>
+
   <script src="js/inicio.js"></script>
   <script src="js/sidebar.js"></script>
   <script src="js/test-data.js"></script>

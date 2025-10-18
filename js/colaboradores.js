@@ -271,13 +271,13 @@ function renderColaboradores() {
           <button onclick="showMetricsModal('${c.email}')" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver métricas">
             <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
           </button>
-          <button onclick="editColaborador(${index})" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
+          <button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
             <i data-lucide="edit-2" class="w-4 h-4"></i>
           </button>
-          <button onclick="toggleStatus(${index})" class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors" title="Cambiar estado">
+          <button onclick="toggleStatus('${c.id}')" class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors" title="Cambiar estado">
             <i data-lucide="${c.status === 'inactivo' ? 'user-check' : 'user-x'}" class="w-4 h-4"></i>
           </button>
-          <button onclick="deleteColaborador(${index})" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+          <button onclick="deleteColaborador('${c.id}')" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
         </div>
@@ -467,7 +467,7 @@ function filterColaboradores() {
       </td>
       <td class="py-4 px-2">
         <div class="flex items-center gap-2">
-          <button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
+          <button onclick="showMetricsModal('${c.email}')" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver métricas"><i data-lucide="bar-chart-2" class="w-4 h-4"></i></button><button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
             <i data-lucide="edit-2" class="w-4 h-4"></i>
           </button>
           <button onclick="toggleStatus('${c.id}')" class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors" title="Cambiar estado">

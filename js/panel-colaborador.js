@@ -117,8 +117,8 @@ function closeAcceptModal(){
 
 function showActiveJob(order){
   // Solo mostrar el trabajo activo si está asignado al colaborador actual o si acaba de ser aceptado
-  // Si el colaborador acaba de aceptar la orden, permitir mostrarla aunque aún no tenga assignedEmail
-  if (order.assignedEmail && order.assignedEmail !== collabSession.email) {
+  const assignedEmail = order.assigned_email || order.assignedEmail;
+  if (assignedEmail && assignedEmail !== collabSession.email) {
     return; // No mostrar si está asignado a otro colaborador
   }
   
@@ -207,7 +207,7 @@ function updateActiveJobView(){
   if (!activeJobId) return;
   const order = all.find(o => o.id === activeJobId);
   if (!order) return;
-  const statusKey = order.lastCollabStatus || 'en_camino_recoger';
+  const statusKey = order.last_collab_status || order.lastCollabStatus || 'en_camino_recoger';
   const statusLabel = (STATUS_MAP[statusKey] && STATUS_MAP[statusKey].label) || statusKey;
   const badge = document.getElementById('activeJobStatus');
   badge.textContent = statusLabel;
@@ -263,41 +263,48 @@ async function changeStatus(orderId, newKey){
     updates.completed_by = collabSession.email;
   }
 
-  const { error } = await supabaseConfig.client
-    .from('orders')
-    .update(updates)
-    .eq('id', orderId);
+  try {
+    if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
+      const { error } = await supabaseConfig.client
+        .from('orders')
+        .update(updates)
+        .eq('id', orderId);
+      if (error) throw error;
+    } else {
+      await supabaseConfig.updateOrder(orderId, updates);
+      // Actualizar en memoria para reflejar inmediatamente
+      const idx = all.findIndex(o => o.id === orderId);
+      if (idx !== -1) all[idx] = { ...all[idx], ...updates };
+    }
 
-  if (error) {
+    showSuccess('Estado actualizado', `El estado del pedido ahora es: ${STATUS_MAP[newKey]?.label || newKey}`);
+
+    // Enviar notificación push si el cliente se suscribió (solo si hay backend)
+    if (order.push_subscription && supabaseConfig.client && !supabaseConfig.useLocalStorage) {
+      const payload = {
+        subscription: order.push_subscription,
+        notification: {
+          title: `Actualización de tu pedido ${order.id}`,
+          body: buildStatusMessage(order, newKey),
+          icon: '/img/android-chrome-192x192.png',
+          data: { url: `/seguimiento.html?order=${order.id}` }
+        }
+      };
+      await supabaseConfig.client.functions.invoke('send-notification', { body: payload });
+      showInfo('Notificación enviada', 'El cliente ha sido notificado del cambio de estado.');
+    }
+
+    if (newKey === 'entregado' && activeJobId === orderId) {
+      activeJobId = null;
+      localStorage.removeItem('tlc_collab_active_job');
+      document.getElementById('activeJobSection').classList.add('hidden');
+    }
+
+    filterAndRender();
+  } catch (e) {
+    console.error('Error al actualizar estado:', e);
     showError('Error', 'No se pudo actualizar el estado.');
-    return;
   }
-
-  showSuccess('Estado actualizado', `El estado del pedido ahora es: ${STATUS_MAP[newKey]?.label || newKey}`);
-
-  // Enviar notificación push si el cliente se suscribió
-  if (order.push_subscription) {
-    const payload = {
-      subscription: order.push_subscription,
-      notification: {
-        title: `Actualización de tu pedido ${order.id}`,
-        body: buildStatusMessage(order, newKey),
-        icon: '/img/android-chrome-192x192.png',
-        data: { url: `/seguimiento.html?order=${order.id}` }
-      }
-    };
-    await supabaseConfig.client.functions.invoke('send-notification', { body: payload });
-    showInfo('Notificación enviada', 'El cliente ha sido notificado del cambio de estado.');
-  }
-
-  // Si el trabajo se marca como entregado, limpiar el trabajo activo
-  if (newKey === 'entregado' && activeJobId === orderId) {
-    activeJobId = null;
-    localStorage.removeItem('tlc_collab_active_job');
-    document.getElementById('activeJobSection').classList.add('hidden');
-  }
-
-  // La actualización en tiempo real se encargará de refrescar la UI
 }
 
 let baseVisibleCount = 0;
@@ -394,16 +401,21 @@ function updateCollaboratorProfile(session) {
 
 // Función para cargar órdenes
 async function loadInitialOrders() {
-  const { data, error } = await supabaseConfig.client
-    .from('orders')
-    .select('*')
-    .in('status', ['Pendiente', 'En proceso']); // Cargar solo las relevantes
-
-  if (error) {
+  try {
+    if (!supabaseConfig.client || supabaseConfig.useLocalStorage) {
+      const local = await supabaseConfig.getOrders();
+      all = (local || []).filter(o => ['Pendiente', 'En proceso'].includes(o.status));
+    } else {
+      const { data, error } = await supabaseConfig.client
+        .from('orders')
+        .select('*')
+        .in('status', ['Pendiente', 'En proceso']);
+      if (error) throw error;
+      all = data || [];
+    }
+  } catch (error) {
     console.error("Error al cargar órdenes iniciales:", error);
     all = [];
-  } else {
-    all = data || [];
   }
   filterAndRender();
 }
@@ -493,28 +505,35 @@ document.addEventListener('DOMContentLoaded', async () => {
       last_collab_status: 'en_camino_recoger'
     };
 
-    const { data, error } = await supabaseConfig.client
-      .from('orders')
-      .update(updates)
-      .eq('id', selectedOrderIdForAccept);
-
-    closeAcceptModal();
-
-    if (error) {
-      showError('Error', 'No se pudo aceptar la solicitud.');
-    } else {
+    try {
+      if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
+        const { error } = await supabaseConfig.client
+          .from('orders')
+          .update(updates)
+          .eq('id', selectedOrderIdForAccept);
+        if (error) throw error;
+      } else {
+        await supabaseConfig.updateOrder(selectedOrderIdForAccept, updates);
+        const idx = all.findIndex(o => o.id === selectedOrderIdForAccept);
+        if (idx !== -1) all[idx] = { ...all[idx], ...updates };
+      }
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
+    } catch (err) {
+      showError('Error', 'No se pudo aceptar la solicitud.');
+    } finally {
+      closeAcceptModal();
+      filterAndRender();
     }
   });
 
   // Restaurar trabajo activo si existe
   if (activeJobId) {
     const order = all.find(o => o.id === activeJobId);
-    // Solo mostrar si está asignado al colaborador actual y no está entregado
-    if (order && (!order.assignedEmail || order.assignedEmail === collabSession.email) && order.lastCollabStatus !== 'entregado') {
+    const assignedEmail = order?.assigned_email || order?.assignedEmail;
+    const lastStatus = order?.last_collab_status || order?.lastCollabStatus;
+    if (order && (!assignedEmail || assignedEmail === collabSession.email) && lastStatus !== 'entregado') {
       showActiveJob(order);
     } else {
-      // Si el trabajo ya no está asignado a este colaborador o está entregado, limpiar el activeJobId
       activeJobId = null;
       localStorage.removeItem('tlc_collab_active_job');
       document.getElementById('activeJobSection').classList.add('hidden');
@@ -523,13 +542,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Buscar automáticamente trabajos activos asignados al colaborador actual
   if (!activeJobId) {
-    const activeOrder = all.find(order => 
-      order.assignedEmail === collabSession.email && 
-      order.lastCollabStatus && 
-      order.lastCollabStatus !== 'entregado' &&
-      ['en_camino_recoger', 'cargando', 'en_camino_entregar'].includes(order.lastCollabStatus)
-    );
-    
+    const activeOrder = all.find(order => {
+      const assignedEmail = order.assigned_email || order.assignedEmail;
+      const lastStatus = order.last_collab_status || order.lastCollabStatus;
+      return assignedEmail === collabSession.email && lastStatus && lastStatus !== 'entregado' && ['en_camino_recoger', 'cargando', 'en_camino_entregar'].includes(lastStatus);
+    });
     if (activeOrder) {
       showActiveJob(activeOrder);
     }
@@ -538,10 +555,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Carga inicial y suscripción a tiempo real
   await loadInitialOrders();
 
-  supabaseConfig.client
-    .channel('public:orders')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
-    .subscribe();
+  if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
+    supabaseConfig.client
+      .channel('public:orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
+      .subscribe();
+  } else {
+    // Fallback: refrescar periódicamente desde localStorage
+    setInterval(async () => {
+      const latest = await supabaseConfig.getOrders();
+      all = (latest || []).filter(o => ['Pendiente', 'En proceso'].includes(o.status));
+      filterAndRender();
+    }, 5000);
+  }
 });
 
 // Endpoint de envío de Web Push (configurable). Si no está definido, se usa sólo la notificación local.

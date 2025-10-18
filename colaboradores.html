@@ -298,5 +298,16 @@
   <script src="js/supabase-config.js"></script>
   <script src="js/colaboradores.js"></script>
   <script src="js/sidebar.js"></script>
+  <script>
+    // Añadir funcionalidad al botón de generar contraseña
+    document.getElementById('generatePasswordBtn').addEventListener('click', () => {
+      const passwordInput = document.getElementById('colaboradorPassword');
+      // Genera una contraseña aleatoria simple
+      const newPassword = Math.random().toString(36).slice(-8);
+      passwordInput.value = newPassword;
+      passwordInput.type = 'text'; // Mostrar la contraseña generada
+      setTimeout(() => { passwordInput.type = 'password'; }, 2000); // Ocultarla después de 2 segundos
+    });
+  </script>
 </body>
 </html>

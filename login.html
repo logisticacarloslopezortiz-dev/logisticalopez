@@ -35,36 +35,72 @@
   <script>
     lucide.createIcons();
 
-    // Datos de acceso (ejemplo)
-    const validUser = {
-      username: 'admin',
-      password: '123456'
-    };
+    // --- INICIO: Lógica de Login Mejorada ---
 
-    const form = document.getElementById('loginForm');
-    const errorMsg = document.getElementById('loginError');
-
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      const user = document.getElementById('username').value;
-      const pass = document.getElementById('password').value;
-
-      if(user === validUser.username && pass === validUser.password) {
-        // Guardar estado de sesión
-        localStorage.setItem('loggedIn', 'true');
-        window.location.href = 'inicio.html'; // Redirigir al panel
-      } else {
-        errorMsg.classList.remove('hidden');
-      }
-    });
-
-    // Redirigir al panel si ya está logueado
-    window.onload = () => {
-      if(localStorage.getItem('loggedIn') === 'true') {
+    document.addEventListener('DOMContentLoaded', () => {
+      // Redirigir al panel si ya está logueado
+      if (localStorage.getItem('loggedIn') === 'true') {
         window.location.href = 'inicio.html';
+        return; // Detener la ejecución si ya está logueado
       }
-    }
+
+      const loginForm = document.getElementById('loginForm');
+      const usernameInput = document.getElementById('username');
+      const passwordInput = document.getElementById('password');
+      const errorMsg = document.getElementById('loginError');
+
+      // --- INICIO: Lógica de Login con Supabase ---
+      loginForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorMsg.classList.add('hidden'); // Ocultar error previo
+
+        const username = usernameInput.value;
+        const password = passwordInput.value;
+        
+        // Reemplaza la simulación con la lógica de Supabase
+        try {
+          // --- INICIO: Lógica de Login contra la tabla 'colaboradores' ---
+          // Se busca un colaborador cuyo email y contraseña coincidan.
+          // ADVERTENCIA: ¡Este método es inseguro! Las contraseñas no deben guardarse en texto plano.
+          const { data: collaboratorData, error } = await supabaseConfig.client
+            .from('colaboradores')
+            .select('*')
+            .eq('email', username)
+            .eq('password', password) // Se compara la contraseña directamente
+            .single(); // .single() espera un único resultado
+
+          // Si Supabase devuelve un error (que no sea "no se encontró la fila"), lo mostramos.
+          if (error && error.code !== 'PGRST116') { // PGRST116 = "No rows found"
+            throw error;
+          }
+
+          if (collaboratorData) {
+            // Si se encontró un colaborador, el login es exitoso.
+            // Usuario y contraseña correctos
+            localStorage.setItem('loggedIn', 'true');
+            localStorage.setItem('userRole', 'colaborador'); // Opcional: guardar el rol
+            localStorage.setItem('userData', JSON.stringify(collaboratorData)); // Guardar datos del colaborador
+            window.location.href = 'inicio.html';
+          } else {
+            // Si no se encontró un colaborador, las credenciales son incorrectas.
+            errorMsg.textContent = 'Usuario o contraseña incorrectos.';
+            errorMsg.classList.remove('hidden');
+          }
+        } catch (error) {
+          console.error('Error de inicio de sesión:', error);
+          errorMsg.textContent = error.message === 'Invalid login credentials' ? 'Usuario o contraseña incorrectos.' : 'Error de conexión. Inténtelo más tarde.';
+          errorMsg.classList.remove('hidden');
+        }
+        // --- FIN: Lógica de Login contra la tabla 'colaboradores' ---
+      });
+      // --- FIN: Lógica de Login con Supabase ---
+    });
+    // --- FIN: Lógica de Login Mejorada ---
   </script>
+
+  <!-- Scripts de Supabase (asegúrate de que estén presentes) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
 
 </body>
 </html>
