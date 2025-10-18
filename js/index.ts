@@ -1,71 +1,51 @@
 // Import necessary modules
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import * as webpush from "https://deno.land/x/web_push@0.2.5/mod.ts";
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
-// --- VAPID Keys Configuration ---
-// These keys should be set as environment variables in your Supabase project settings.
-// Go to Project Settings > Edge Functions > Add new secret
-const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
-const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
-const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT")! || "mailto:tu-correo@ejemplo.com";
-
-// --- CORS Headers ---
-// These headers are necessary to allow your web application to call this Edge Function.
+// Headers para permitir CORS desde cualquier origen
 const corsHeaders = {
-  // ✅ ¡IMPORTANTE! Reemplaza 'tu-usuario.github.io' con tu dominio real para mayor seguridad.
-  // Si estás probando localmente, puedes usar "*" temporalmente.
-  "Access-control-allow-origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 serve(async (req) => {
-  // Handle CORS preflight request
+  // Manejar la solicitud pre-vuelo (preflight) de CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Ensure the request is a POST request
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
-  }
-
   try {
-    // Parse the request body to get subscription and notification data
-    const { subscription, notification } = await req.json();
+    // Obtener latitud y longitud del cuerpo de la solicitud
+    const { lat, lon } = await req.json();
 
-    // Validate that the necessary data is present
-    if (!subscription || !notification) {
-      return new Response("Missing subscription or notification payload", { status: 400, headers: corsHeaders });
+    if (!lat || !lon) {
+      throw new Error('Faltan los parámetros de latitud o longitud.');
     }
 
-    // Prepare the payload to be sent
-    const payload = JSON.stringify({
-      title: notification.title,
-      body: notification.body,
-      icon: notification.icon,
-      badge: notification.badge,
-      data: notification.data,
+    // Llamar a la API de Nominatim desde el servidor
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
+    
+    const nominatimResponse = await fetch(nominatimUrl, {
+      headers: {
+        // Es buena práctica enviar un User-Agent
+        'User-Agent': 'LogisticaLopezOrtiz/1.0 (https://your-app-url.com)' 
+      }
     });
 
-    // Send the push notification using the web-push library
-    await webpush.sendNotification(
-      subscription,
-      payload,
-      {
-        vapidDetails: {
-          publicKey: VAPID_PUBLIC_KEY,
-          privateKey: VAPID_PRIVATE_KEY,
-          subject: VAPID_SUBJECT,
-        },
-      }
+    if (!nominatimResponse.ok) {
+      throw new Error(`Error al contactar Nominatim: ${nominatimResponse.statusText}`);
+    }
+
+    const data = await nominatimResponse.json();
+
+    // Devolver la respuesta al cliente con los headers de CORS
+    return new Response(
+      JSON.stringify(data),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
-
-    // Return a success response
-    return new Response("Push notification sent successfully", { status: 200, headers: corsHeaders });
-
   } catch (error) {
-    console.error("Error sending push notification:", error);
-    // Return an error response
-    return new Response(`Failed to send push notification: ${error.message}`, { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+    });
   }
-});
+})

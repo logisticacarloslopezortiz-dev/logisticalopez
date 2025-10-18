@@ -122,7 +122,10 @@ class NotificationSystem {
                 <i data-lucide="${config.icon}" class="w-5 h-5 mt-0.5 flex-shrink-0"></i>
                 <div class="flex-1 min-w-0">
                     <div class="font-semibold text-sm">${title}</div>
-                    <div class="text-sm opacity-90 mt-1">${message}</div>
+                    <div class="text-sm opacity-90 mt-1 ${options.isCopyable ? 'select-all' : ''}">${message}</div>
+                    ${options.copyText ? `
+                        <button class="mt-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-xs font-medium transition-colors" onclick="notifications.copyAndContinue('${id}', '${options.copyText}')">Copiar ID y Continuar</button>
+                    ` : ''}
                     ${options.actions ? this.createActions(options.actions, id) : ''}
                 </div>
                 <button class="notification-close ml-2 p-1 hover:bg-white/20 rounded" onclick="notifications.hide('${id}')">
@@ -144,7 +147,8 @@ class NotificationSystem {
             element,
             type,
             timer: null,
-            progressTimer: null
+            progressTimer: null,
+            onCopy: options.onCopy
         };
     }
 
@@ -206,6 +210,23 @@ class NotificationSystem {
         });
     }
 
+    copyAndContinue(id, textToCopy) {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const notification = this.notifications.find(n => n.id === id);
+            if (notification) {
+                // Actualizar el botón para dar feedback
+                const copyButton = notification.element.querySelector('button[onclick*="copyAndContinue"]');
+                if (copyButton) {
+                    copyButton.textContent = '¡ID Copiado!';
+                    copyButton.disabled = true;
+                }
+                // Ejecutar la función de continuación después de un breve retraso
+                if (typeof notification.onCopy === 'function') {
+                    setTimeout(notification.onCopy, 500);
+                }
+            }
+        }).catch(err => console.error('Error al copiar:', err));
+    }
     // Métodos de conveniencia
     success(message, options = {}) {
         return this.show(message, 'success', options.duration || 4000, options);

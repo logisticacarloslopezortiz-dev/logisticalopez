@@ -464,10 +464,17 @@ async function initMap() {
       currentInput.value = label;
     } else {
       try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}`);
-        if (!response.ok) throw new Error(`Nominatim respondió con estado: ${response.status}`);
-        const data = await response.json();
+        // --- INICIO: Llamada a la Función Edge de Supabase ---
+        const { data, error } = await supabaseConfig.client.functions.invoke('reverse-geocode', {
+          body: { lat: latlng.lat, lon: latlng.lng }
+        });
+
+        if (error) {
+          throw error;
+        }
+
         currentInput.value = data.display_name || `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+        // --- FIN: Llamada a la Función Edge de Supabase ---
       } catch (error) {
         console.error("Error en geocodificación inversa:", error);
         currentInput.value = `Lat: ${latlng.lat.toFixed(5)}, Lon: ${latlng.lng.toFixed(5)}`;
@@ -770,28 +777,28 @@ document.addEventListener('DOMContentLoaded', function() {
           .insert([orderData])
           .select();
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
+        if (!data || data.length === 0) throw new Error("No se recibió confirmación al guardar la orden.");
 
-        // Mostrar notificaciones de éxito
-        showSuccess('¡Solicitud enviada exitosamente!');
-        
-        // Notificación con el ID y botón para copiar y continuar
-        showInfo(
-          `Tu número de orden es: <strong>${orderData.id}</strong>. Úsalo para darle seguimiento.`, 
+        const savedOrder = data[0];
+
+        // --- INICIO: Lógica de Notificación y Redirección Mejorada ---
+        notifications.persistent(
+          `Guarda este ID para dar seguimiento a tu servicio: <strong>${savedOrder.id}</strong>`,
+          'success',
           {
-            title: 'Guarda tu ID',
-            duration: 0, // Persistente hasta que el usuario actúe
-            actions: [{
-              text: 'Copiar ID y continuar',
-              handler: `copyToClipboard('${orderData.id}'); handleAfterCopy('${orderData.id}')`
-            }]
+            title: '¡Solicitud Enviada con Éxito!',
+            copyText: savedOrder.id, // El ID que se copiará
+            onCopy: () => {
+              // Redirige a index.html con un parámetro para mostrar el modal
+              window.location.href = `index.html?highlight=status&orderId=${savedOrder.id}`;
+            }
           }
         );
-        
+        // --- FIN: Lógica de Notificación y Redirección Mejorada ---
+
         // Mostrar tarjeta de opt-in para notificaciones push
-        askForNotificationPermission(orderData.id);
+        askForNotificationPermission(savedOrder.id);
 
       } catch (error) {
         console.error('Error al guardar la solicitud:', error);

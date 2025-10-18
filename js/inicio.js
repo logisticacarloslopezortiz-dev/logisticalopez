@@ -20,7 +20,7 @@ async function loadOrders() {
 
 // Carga de colaboradores desde Supabase
 async function loadCollaborators() {
-  const { data, error } = await supabaseConfig.client.from('collaborators').select('*');
+  const { data, error } = await supabaseConfig.client.from('colaboradores').select('*');
   if (error) {
     console.error("Error al cargar colaboradores:", error);
     return [];
@@ -31,7 +31,7 @@ async function loadCollaborators() {
 // Guardar colaboradores (si fuera necesario, aunque ahora se gestiona en su propia página)
 async function saveCollaborators(collaborators) {
   // Esta función ahora podría usarse para hacer un upsert masivo si se necesitara.
-  const { data, error } = await supabaseConfig.client.from('collaborators').upsert(collaborators);
+  const { data, error } = await supabaseConfig.client.from('colaboradores').upsert(collaborators);
   if (error) console.error("Error al guardar colaboradores:", error);
   return !error;
 }
@@ -672,8 +672,14 @@ function handleRealtimeUpdate(payload) {
       allOrders.unshift(newRecord);
       // Volver a aplicar filtros y renderizar
       filterOrders();
-      // Mostrar una notificación
-      showNotification('Nueva Solicitud Recibida', `Cliente: ${newRecord.name}\nServicio: ${newRecord.service}`, 'info');
+      // Mostrar una notificación persistente con el ID para copiar
+      if (window.notifications) {
+        notifications.persistent(
+          `ID de solicitud: ${newRecord.id}. Cliente: ${newRecord.name}.`, 
+          'info', 
+          { title: 'Nueva Solicitud Recibida', isCopyable: true }
+        );
+      }
       break;
     case 'UPDATE':
       // Encontrar y actualizar la orden en el array

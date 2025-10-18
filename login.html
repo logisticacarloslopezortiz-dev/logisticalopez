@@ -59,39 +59,55 @@
         
         // Reemplaza la simulación con la lógica de Supabase
         try {
-          // --- INICIO: Lógica de Login contra la tabla 'colaboradores' ---
-          // Se busca un colaborador cuyo email y contraseña coincidan.
-          // ADVERTENCIA: ¡Este método es inseguro! Las contraseñas no deben guardarse en texto plano.
-          const { data: collaboratorData, error } = await supabaseConfig.client
-            .from('colaboradores')
-            .select('*')
-            .eq('email', username)
-            .eq('password', password) // Se compara la contraseña directamente
-            .single(); // .single() espera un único resultado
+          // --- INICIO: Lógica de Login Segura con Supabase Auth ---
+          const { data: authData, error } = await supabaseConfig.client.auth.signInWithPassword({
+            email: username,
+            password: password,
+          });
 
-          // Si Supabase devuelve un error (que no sea "no se encontró la fila"), lo mostramos.
-          if (error && error.code !== 'PGRST116') { // PGRST116 = "No rows found"
-            throw error;
-          }
+          if (error) throw error;
 
-          if (collaboratorData) {
-            // Si se encontró un colaborador, el login es exitoso.
+          if (authData.user) {
+            // Una vez autenticado, obtenemos los detalles del perfil desde la tabla 'colaboradores'
+            const { data: collaboratorProfile, error: profileError } = await supabaseConfig.client
+              .from('colaboradores')
+              .select('*')
+              .eq('id', authData.user.id) // Buscamos por el ID de usuario único
+              .single();
+
+            if (profileError) {
+              // Si no se encuentra el perfil, es un estado inconsistente.
+              // Por seguridad, cerramos la sesión de auth.
+              await supabaseConfig.client.auth.signOut();
+              throw new Error('Perfil de colaborador no encontrado.');
+            }
+
+            // --- VERIFICACIÓN DE ROL ---
+            if (collaboratorProfile.role !== 'administrador') {
+              await supabaseConfig.client.auth.signOut();
+              throw new Error('Acceso denegado. Esta área es solo para administradores.');
+            }
+
             // Usuario y contraseña correctos
             localStorage.setItem('loggedIn', 'true');
-            localStorage.setItem('userRole', 'colaborador'); // Opcional: guardar el rol
-            localStorage.setItem('userData', JSON.stringify(collaboratorData)); // Guardar datos del colaborador
+            localStorage.setItem('userRole', collaboratorProfile.role || 'colaborador');
+            localStorage.setItem('userData', JSON.stringify(collaboratorProfile)); // Guardar datos del colaborador
             window.location.href = 'inicio.html';
           } else {
-            // Si no se encontró un colaborador, las credenciales son incorrectas.
+            // Esto no debería ocurrir si no hay error, pero es una salvaguarda.
             errorMsg.textContent = 'Usuario o contraseña incorrectos.';
             errorMsg.classList.remove('hidden');
           }
         } catch (error) {
           console.error('Error de inicio de sesión:', error);
-          errorMsg.textContent = error.message === 'Invalid login credentials' ? 'Usuario o contraseña incorrectos.' : 'Error de conexión. Inténtelo más tarde.';
+          if (error.message === 'Invalid login credentials') {
+            errorMsg.textContent = 'Usuario o contraseña incorrectos.';
+          } else {
+            errorMsg.textContent = error.message;
+          }
           errorMsg.classList.remove('hidden');
         }
-        // --- FIN: Lógica de Login contra la tabla 'colaboradores' ---
+        // --- FIN: Lógica de Login Segura con Supabase Auth ---
       });
       // --- FIN: Lógica de Login con Supabase ---
     });

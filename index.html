@@ -37,13 +37,32 @@
             acento: '#FBBF24'        /* Amarillo cálido para acentos */
           },
           keyframes: {
-            fadeInUp: {
-              '0%': { opacity: '0', transform: 'translateY(20px)' },
-              '100%': { opacity: '1', transform: 'translateY(0)' }
+            fadeInUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },            
+            // --- INICIO: Keyframes para la animación del camión en bucle ---
+            truckLoop: {
+              '0%, 100%': { transform: 'translateX(-150%)', opacity: '0' },
+              '10%, 60%': { transform: 'translateX(0)', opacity: '1' },
+              '70%, 90%': { transform: 'translateX(150%)', opacity: '0' }
+            },
+            packageLoop: {
+              '0%, 15%, 100%': { transform: 'translateX(0)', opacity: '0' },
+              '25%, 55%': { transform: 'translateX(100%)', opacity: '1' },
+              '65%, 90%': { transform: 'translateX(200%)', opacity: '0' }
+            },
+            buttonLoop: {
+              '0%, 30%, 100%': { opacity: '0', transform: 'scale(0.8)' },
+              '40%, 90%': { opacity: '1', transform: 'scale(1)' }
             }
+            // --- FIN: Keyframes para la animación del camión en bucle ---
           },
           animation: {
-            fadeInUp: 'fadeInUp 0.6s ease-out forwards'
+            fadeInUp: 'fadeInUp 0.6s ease-out forwards',
+            // --- INICIO: Animaciones personalizadas en bucle ---
+            'truck-loop': 'truckLoop 8s ease-in-out infinite',
+            'package-loop-1': 'packageLoop 8s ease-in-out infinite',
+            'package-loop-2': 'packageLoop 8s ease-in-out infinite 0.2s', // Pequeño retraso
+            'button-loop': 'buttonLoop 8s ease-in-out infinite'
+            // --- FIN: Animaciones personalizadas en bucle ---
           }
         }
       }
@@ -184,16 +203,31 @@
         </div>
       </div>
 
-      <!-- Acciones debajo de Cómo Funciona -->
-      <div class="mt-12 flex flex-col sm:flex-row justify-center items-center gap-4">
-        <a href="cliente.html" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-acento hover:bg-yellow-500 text-azulOscuro px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105" aria-label="Comenzar solicitud">
-          🚚 Comenzar Solicitud
-        </a>
-        <button type="button" onclick="document.getElementById('install-app-btn')?.click()" title="Descarga nuestra app para realizar tu solicitud y seguimiento" aria-label="Descarga nuestra app para realizar tu solicitud y seguimiento" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105">
-          <i class="fas fa-download"></i>
-          Instalar App
-        </button>
+      <!-- INICIO: Animación 2D con Tailwind CSS (Activada por Scroll) -->
+      <div id="animation-section" class="mt-12 w-full flex flex-col justify-center items-center overflow-x-hidden p-4 min-h-[18rem] sm:min-h-[12rem]">
+        <div class="relative w-full max-w-lg h-48 flex items-center justify-center">
+          <!-- El camión -->
+          <div id="truck-animation" class="absolute left-0 z-10 opacity-0">
+            <i class="fas fa-truck text-8xl md:text-9xl text-azulOscuro -scale-x-100"></i>
+          </div>
+          <!-- Los "paquetes" que se convierten en botones -->
+          <div class="absolute left-[40%] md:left-[45%] flex flex-col gap-4">
+            <div id="package-animation-1" class="w-12 h-12 bg-acento rounded-lg opacity-0"></div>
+            <div id="package-animation-2" class="w-12 h-12 bg-azulClaro rounded-lg opacity-0"></div>
+          </div>
+        </div>
+        <!-- Acciones (botones) que aparecerán con la animación -->
+        <div id="action-buttons" class="flex flex-col sm:flex-row justify-center items-center gap-4 opacity-0">
+          <a href="cliente.html" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-acento hover:bg-yellow-500 text-azulOscuro px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105" aria-label="Comenzar solicitud">
+            🚚 Comenzar Solicitud
+          </a>
+          <button type="button" onclick="document.getElementById('install-app-btn')?.click()" title="Descarga nuestra app para realizar tu solicitud y seguimiento" aria-label="Descarga nuestra app para realizar tu solicitud y seguimiento" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105">
+            <i class="fas fa-download"></i>
+            Instalar App
+          </button>
+        </div>
       </div>
+      <!-- FIN: Animación 2D con Tailwind CSS -->
     </div>
   </section>
 
@@ -289,6 +323,34 @@
   </footer>
 
   <script src="js/index.js"></script>
+  <script>
+    // --- INICIO: Lógica para activar animación con Intersection Observer ---
+    document.addEventListener('DOMContentLoaded', () => {
+      const animationSection = document.getElementById('animation-section');
+      const truck = document.getElementById('truck-animation');
+      const package1 = document.getElementById('package-animation-1');
+      const package2 = document.getElementById('package-animation-2');
+      const actionButtons = document.getElementById('action-buttons');
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            // Añadir clases de animación cuando la sección es visible
+            truck.classList.add('animate-truck-loop');
+            package1.classList.add('animate-package-loop-1');
+            package2.classList.add('animate-package-loop-2');
+            actionButtons.classList.add('animate-button-loop');
+            
+            // Opcional: Dejar de observar después de la primera vez para que no se repita al hacer scroll de nuevo
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.5 }); // Se activa cuando el 50% de la sección es visible
+
+      if (animationSection) observer.observe(animationSection);
+    });
+    // --- FIN: Lógica para activar animación ---
+  </script>
   <script src="js/pwa.js"></script>
 </body>
 </html>

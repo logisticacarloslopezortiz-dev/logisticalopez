@@ -1,6 +1,3 @@
-// Inicializar iconos de Lucide
-lucide.createIcons();
-
 // Variables globales
 const form = document.getElementById('colaboradorForm');
 const tableBody = document.getElementById('colaboradoresTable');
@@ -9,8 +6,15 @@ let colaboradores = []; // Ahora se cargará desde Supabase
 // Variables para el modal de métricas
 const metricsModal = document.getElementById('metricsModal');
 const closeMetricsModal = document.getElementById('closeMetricsModal');
+const generatePasswordBtn = document.getElementById('generatePasswordBtn'); // Botón para generar contraseña
 let modalWeeklyChart = null;
 let modalServicesChart = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Inicializar iconos de Lucide
+  lucide.createIcons();
+  init();
+});
 
 // Función para mostrar modal de métricas
 function showMetricsModal(email) {
@@ -330,7 +334,7 @@ async function editColaborador(id) {
   const newName = prompt('Nuevo nombre:', colaborador.name);
   if (newName && newName.trim()) {
     const { data, error } = await supabaseConfig.client
-      .from('collaborators')
+      .from('colaboradores')
       .update({ name: newName.trim() })
       .eq('id', id)
       .select()
@@ -356,7 +360,7 @@ async function toggleStatus(id) {
   const newStatus = currentStatus === 'activo' ? 'inactivo' : 'activo';
   
   if (confirm(`¿Cambiar estado de ${colaborador.name} a ${newStatus}?`)) {
-    const { error } = await supabaseConfig.client.from('collaborators').update({ status: newStatus }).eq('id', id);
+    const { error } = await supabaseConfig.client.from('colaboradores').update({ status: newStatus }).eq('id', id);
     if (error) {
       showMessage(`Error al cambiar estado: ${error.message}`, 'error');
     } else {
@@ -373,7 +377,7 @@ async function deleteColaborador(id) {
   if (!colaborador) return;
 
   if (confirm(`¿Estás seguro de eliminar a ${colaborador.name}?`)) {
-    const { error } = await supabaseConfig.client.from('collaborators').delete().eq('id', id);
+    const { error } = await supabaseConfig.client.from('colaboradores').delete().eq('id', id);
     if (error) {
       showMessage(`Error al eliminar: ${error.message}`, 'error');
     } else {
@@ -535,7 +539,7 @@ form.addEventListener('submit', async (e) => {
       email: email,
       password: password,
       options: {
-        data: { 
+        data: {
           full_name: name,
           role: role
         }
@@ -547,8 +551,8 @@ form.addEventListener('submit', async (e) => {
 
     // 2. Insertar el perfil en la tabla 'collaborators'
     const { data: profileData, error: profileError } = await supabaseConfig.client
-      .from('collaborators')
-      .insert([{ ...newColaboradorData, id: authData.user.id }]) // Usar el ID de auth
+      .from('colaboradores')
+      .insert([{ id: authData.user.id, name, matricula, email, role, status: 'activo' }]) // Usar el ID de auth y no guardar pass
       .select()
       .single();
 
@@ -580,10 +584,21 @@ function clearFilters() {
 // Event listener para limpiar filtros
 document.getElementById('clearFilters').addEventListener('click', clearFilters);
 
+if (generatePasswordBtn) {
+  generatePasswordBtn.addEventListener('click', () => {
+    const passwordInput = document.getElementById('colaboradorPassword');
+    // Genera una contraseña aleatoria simple
+    const newPassword = Math.random().toString(36).slice(-8);
+    passwordInput.value = newPassword;
+    passwordInput.type = 'text'; // Mostrar la contraseña generada
+    setTimeout(() => { passwordInput.type = 'password'; }, 2000); // Ocultarla después de 2 segundos
+  });
+}
+
 // Función de inicialización
 async function init() {
   try {
-    const { data, error } = await supabaseConfig.client.from('collaborators').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabaseConfig.client.from('colaboradores').select('*').order('created_at', { ascending: false });
     if (error) throw error;
     colaboradores = data;
     renderColaboradores();
@@ -599,6 +614,4 @@ window.editColaborador = editColaborador;
 window.toggleStatus = toggleStatus;
 window.deleteColaborador = deleteColaborador;
 window.clearFilters = clearFilters;
-
-// Inicializar cuando se carga la página
-init();
+window.showMetricsModal = showMetricsModal; // Hacerla global
