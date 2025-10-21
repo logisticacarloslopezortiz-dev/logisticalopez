@@ -1,12 +1,11 @@
 // Variables globales
 const form = document.getElementById('colaboradorForm');
-const tableBody = document.getElementById('colaboradoresTable');
+const tableBody = document.getElementById('colaboradoresTableBody'); // ✅ CORREGIDO: El ID correcto es 'colaboradoresTableBody'
 let colaboradores = []; // Ahora se cargará desde Supabase
 
 // Variables para el modal de métricas
 const metricsModal = document.getElementById('metricsModal');
 const closeMetricsModal = document.getElementById('closeMetricsModal');
-const generatePasswordBtn = document.getElementById('generatePasswordBtn'); // Botón para generar contraseña
 let modalWeeklyChart = null;
 let modalServicesChart = null;
 
@@ -17,35 +16,40 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Función para mostrar modal de métricas
-function showMetricsModal(email) {
-  const colaborador = colaboradores.find(c => c.email === email);
+async function showMetricsModal(colaboradorId) {
+  const colaborador = colaboradores.find(c => c.id === colaboradorId);
   if (!colaborador) return;
 
   // Actualizar información del colaborador en el modal
   document.getElementById('modalCollabName').textContent = colaborador.name;
   document.getElementById('modalCollabEmail').textContent = colaborador.email;
   document.getElementById('modalCollabAvatar').textContent = colaborador.name.charAt(0).toUpperCase();
+  
+  // Mostrar un indicador de carga mientras se obtienen los datos
+  metricsModal.classList.remove('hidden');
+  // (Opcional: podrías añadir un spinner aquí)
 
-  // Cargar métricas del colaborador
-  const { orders, metrics } = JSON.parse(localStorage.getItem('tlc_orders') || '{ "orders": [], "metrics": {} }');
-  const collabMetrics = metrics[email] || { completedOrders: 0, totalTime: 0, serviceTypes: {} };
+  // Cargar métricas del colaborador desde Supabase
+  const { data: orders, error } = await supabaseConfig.client.from('orders').select('*').eq('assigned_to', colaboradorId);
+  if (error) {
+    showMessage('No se pudieron cargar las métricas del colaborador.', 'error');
+    return;
+  }
 
   // Actualizar métricas principales
-  const mainMetrics = calculateMainMetrics(orders, email);
+  const mainMetrics = calculateMainMetrics(orders);
   document.getElementById('modalCompletedCount').textContent = mainMetrics.completed;
   document.getElementById('modalActiveCount').textContent = mainMetrics.active;
   document.getElementById('modalSuccessRate').textContent = mainMetrics.successRate + '%';
   document.getElementById('modalAvgTime').textContent = mainMetrics.avgTime + 'h';
 
   // Crear gráficos
-  createModalWeeklyChart(getWeeklyData(orders, email));
-  createModalServicesChart(getServicesDistribution(orders, email));
+  createModalWeeklyChart(getWeeklyData(orders));
+  createModalServicesChart(getServicesDistribution(orders));
 
   // Renderizar estadísticas
-  renderModalVehicleStats(getVehicleStats(orders, email));
-  renderModalSchedule(getTimeStats(orders, email));
-
-  metricsModal.classList.remove('hidden');
+  renderModalVehicleStats(getVehicleStats(orders));
+  renderModalSchedule(colaborador); // Pasamos el colaborador para futuras mejoras (ej. horario desde su perfil)
 }
 
 // Función para ocultar modal de métricas
@@ -169,30 +173,37 @@ function renderModalSchedule(schedule) {
 }
 
 // Función para calcular métricas principales
-function calculateMainMetrics(orders, email) {
-  const collaboratorOrders = orders.filter(order => order.completedBy === email || order.assignedEmail === email);
-  const metrics = JSON.parse(localStorage.getItem('tlc_collab_metrics') || '{}')[email] || { completedOrders: 0, totalTime: 0 };
+function calculateMainMetrics(orders) {
+  const completedOrders = orders.filter(o => o.status === 'Completado');
+  const activeOrders = orders.filter(o => o.status === 'En proceso');
+  
+  const completed = completedOrders.length;
+  const active = activeOrders.length;
+  const totalConsidered = completed + active;
 
-  const completed = metrics.completedOrders;
-  const active = collaboratorOrders.filter(order => 
-    ['en_camino_recoger', 'cargando', 'en_camino_entregar'].includes(order.lastCollabStatus)
-  ).length;
-
-  const successRate = completed > 0 ? Math.round((completed / (completed + active)) * 100) : 0;
-  const avgTime = metrics.totalTime > 0 ? Math.round(metrics.totalTime / (1000 * 60 * metrics.completedOrders)) : 0;
+  const successRate = totalConsidered > 0 ? Math.round((completed / totalConsidered) * 100) : 0;
+  
+  // Cálculo de tiempo promedio (simplificado)
+  const totalTime = completedOrders.reduce((sum, order) => {
+    if (order.created_at && order.completed_at) {
+      return sum + (new Date(order.completed_at) - new Date(order.created_at));
+    }
+    return sum;
+  }, 0);
+  const avgTime = completed > 0 ? Math.round(totalTime / completed / (1000 * 60 * 60)) : 0; // en horas
 
   return { completed, active, successRate, avgTime };
 }
 
 // Función para obtener datos semanales
-function getWeeklyData(orders, email) {
+function getWeeklyData(orders) {
   const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const weekData = new Array(7).fill(0);
 
   const now = new Date();
   const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 1));
 
-  orders.filter(order => order.completedBy === email).forEach(order => {
+  orders.filter(order => order.status === 'Completado').forEach(order => {
     if (order.completedAt) {
       const orderDate = new Date(order.completedAt);
       const daysDiff = Math.floor((orderDate - startOfWeek) / (1000 * 60 * 60 * 24));
@@ -204,19 +215,22 @@ function getWeeklyData(orders, email) {
 }
 
 // Función para obtener distribución de servicios
-function getServicesDistribution(orders, email) {
-  const metrics = JSON.parse(localStorage.getItem('tlc_collab_metrics') || '{}')[email] || { serviceTypes: {} };
+function getServicesDistribution(orders) {
+  const serviceTypes = {};
+  orders.forEach(order => {
+    serviceTypes[order.service] = (serviceTypes[order.service] || 0) + 1;
+  });
   return {
-    labels: Object.keys(metrics.serviceTypes || {}),
-    data: Object.values(metrics.serviceTypes || {})
+    labels: Object.keys(serviceTypes),
+    data: Object.values(serviceTypes)
   };
 }
 
 // Función para obtener estadísticas de vehículos
-function getVehicleStats(orders, email) {
+function getVehicleStats(orders) {
   const vehicles = {};
-  orders.filter(order => order.completedBy === email).forEach(order => {
-    if (order.vehicle && order.completedAt) {
+  orders.forEach(order => {
+    if (order.vehicle) {
       vehicles[order.vehicle] = (vehicles[order.vehicle] || 0) + 1;
     }
   });
@@ -224,14 +238,15 @@ function getVehicleStats(orders, email) {
 }
 
 // Función para obtener horario
-function getTimeStats(orders, email) {
-  const schedule = JSON.parse(localStorage.getItem(`schedule_${email}`) || 'null');
-  return schedule;
+function getTimeStats(colaborador) {
+  // Placeholder: En el futuro, podrías obtener esto de la tabla 'collaborators'
+  return null;
 }
 
 // Función para renderizar colaboradores
 function renderColaboradores() {
-  tableBody.innerHTML = '';
+  if (!tableBody) return; // ✅ DEFENSA: No hacer nada si la tabla no existe
+  tableBody.innerHTML = ''; // Esta línea causaba el error si tableBody era null
   if (colaboradores.length === 0) {
     tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="users" class="w-8 h-8 text-gray-400"></i><span>No hay colaboradores registrados</span></div></td></tr>';
     lucide.createIcons();
@@ -244,7 +259,7 @@ function renderColaboradores() {
     
     const statusBadge = getStatusBadge(c.status || 'activo');
     const roleBadge = getRoleBadge(c.role);
-    const createdDate = new Date(c.createdAt).toLocaleDateString('es-ES');
+    const createdDate = new Date(c.created_at).toLocaleDateString('es-ES');
     
     tr.innerHTML = `
       <td class="py-4 px-2">
@@ -272,7 +287,7 @@ function renderColaboradores() {
       </td>
       <td class="py-4 px-2">
         <div class="flex items-center gap-2">
-          <button onclick="showMetricsModal('${c.email}')" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver métricas">
+          <button onclick="showMetricsModal('${c.id}')" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver métricas">
             <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
           </button>
           <button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
@@ -334,7 +349,7 @@ async function editColaborador(id) {
   const newName = prompt('Nuevo nombre:', colaborador.name);
   if (newName && newName.trim()) {
     const { data, error } = await supabaseConfig.client
-      .from('colaboradores')
+      .from('collaborators')
       .update({ name: newName.trim() })
       .eq('id', id)
       .select()
@@ -360,7 +375,7 @@ async function toggleStatus(id) {
   const newStatus = currentStatus === 'activo' ? 'inactivo' : 'activo';
   
   if (confirm(`¿Cambiar estado de ${colaborador.name} a ${newStatus}?`)) {
-    const { error } = await supabaseConfig.client.from('colaboradores').update({ status: newStatus }).eq('id', id);
+    const { error } = await supabaseConfig.client.from('collaborators').update({ status: newStatus }).eq('id', id);
     if (error) {
       showMessage(`Error al cambiar estado: ${error.message}`, 'error');
     } else {
@@ -377,7 +392,19 @@ async function deleteColaborador(id) {
   if (!colaborador) return;
 
   if (confirm(`¿Estás seguro de eliminar a ${colaborador.name}?`)) {
-    const { error } = await supabaseConfig.client.from('colaboradores').delete().eq('id', id);
+    // Primero, eliminar de la tabla pública 'colaboradores'
+    const { error } = await supabaseConfig.client.from('collaborators').delete().eq('id', id);
+    
+    // Si tiene éxito, llamar a la Función Edge para eliminar el usuario de auth
+    if (!error) {
+      try {
+        await supabaseConfig.client.functions.invoke('delete-user', { body: { userId: id } });
+      } catch (functionError) {
+        // No es un error crítico si la función falla (ej. el usuario ya no existía en auth)
+        console.warn('Advertencia al eliminar usuario de auth:', functionError.message);
+      }
+    }
+
     if (error) {
       showMessage(`Error al eliminar: ${error.message}`, 'error');
     } else {
@@ -429,72 +456,32 @@ function filterColaboradores() {
     return matchesSearch && matchesRole && matchesStatus;
   });
   
-  // Renderizar colaboradores filtrados
-  tableBody.innerHTML = '';
-  if (filteredColaboradores.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="search" class="w-8 h-8 text-gray-400"></i><span>No se encontraron colaboradores</span></div></td></tr>';
-    lucide.createIcons();
-    return;
-  }
-  
-  filteredColaboradores.forEach(c => {
-    const tr = document.createElement('tr');
-    tr.className = 'hover:bg-gray-50 transition-colors';
-    
-    const statusBadge = getStatusBadge(c.status || 'activo');
-    const roleBadge = getRoleBadge(c.role);
-    const createdDate = new Date(c.createdAt).toLocaleDateString('es-ES');
-    
-    tr.innerHTML = `
-      <td class="py-4 px-2">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-            ${c.name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div class="font-medium text-gray-900">${c.name}</div>
-            <div class="text-sm text-gray-500">Registrado: ${createdDate}</div>
-          </div>
-        </div>
-      </td>
-      <td class="py-4 px-2">
-        <div class="text-gray-700 font-mono text-sm">${c.matricula || 'N/A'}</div>
-      </td>
-      <td class="py-4 px-2">
-        <div class="text-gray-900">${c.email}</div>
-      </td>
-      <td class="py-4 px-2">
-        ${roleBadge}
-      </td>
-      <td class="py-4 px-2">
-        ${statusBadge}
-      </td>
-      <td class="py-4 px-2">
-        <div class="flex items-center gap-2">
-          <button onclick="showMetricsModal('${c.email}')" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver métricas"><i data-lucide="bar-chart-2" class="w-4 h-4"></i></button><button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
-            <i data-lucide="edit-2" class="w-4 h-4"></i>
-          </button>
-          <button onclick="toggleStatus('${c.id}')" class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors" title="Cambiar estado">
-            <i data-lucide="${c.status === 'inactivo' ? 'user-check' : 'user-x'}" class="w-4 h-4"></i>
-          </button>
-          <button onclick="deleteColaborador('${c.id}')" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
-        </div>
-      </td>
-    `;
-    tableBody.appendChild(tr);
-  });
-  
-  lucide.createIcons();
+  // En lugar de duplicar el código de renderizado, simplemente llama a la función principal
+  // pasándole los datos filtrados. Esto evita la duplicación de código.
+  // Nota: Para que esto funcione, renderColaboradores debe aceptar un parámetro.
+  // Por simplicidad, por ahora, modificaremos la variable global y llamaremos a la función original.
+  const originalColaboradores = colaboradores; // Guardar el estado original
+  colaboradores = filteredColaboradores;
+  renderColaboradores();
+  colaboradores = originalColaboradores; // Restaurar el estado original
 }
 
 // Event listeners para el modal de métricas
-closeMetricsModal.addEventListener('click', hideMetricsModal);
+if (closeMetricsModal) {
+  closeMetricsModal.addEventListener('click', hideMetricsModal);
+}
 
-// Event listeners
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
+
+  // Desactivar botón y mostrar estado de carga
+  submitButton.disabled = true;
+  submitButton.innerHTML = `
+    <i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
+    Agregando...
+  `;
+  lucide.createIcons();
+
   const name = document.getElementById('colaboradorName').value.trim();
   const matricula = document.getElementById('colaboradorMatricula').value.trim();
   const email = document.getElementById('colaboradorEmail').value.trim();
@@ -504,16 +491,19 @@ form.addEventListener('submit', async (e) => {
   // Validaciones
   if (!name || !email || !password) {
     showMessage('Completa todos los campos obligatorios.', 'error');
+    restoreButton();
     return;
   }
   
   if (!isValidEmail(email)) {
     showMessage('Correo electrónico inválido.', 'error');
+    restoreButton();
     return;
   }
   
   if (password.length < 6) {
     showMessage('La contraseña debe tener al menos 6 caracteres.', 'error');
+    restoreButton();
     return;
   }
   
@@ -522,16 +512,6 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
-  // Crear objeto para Supabase
-  const newColaboradorData = {
-    name,
-    matricula,
-    email,
-    password,
-    role,
-    status: 'activo'
-  };
-  
   // Proceso de creación en 2 pasos: 1. Auth, 2. Tabla de perfiles
   try {
     // 1. Crear el usuario en Supabase Auth
@@ -551,8 +531,8 @@ form.addEventListener('submit', async (e) => {
 
     // 2. Insertar el perfil en la tabla 'collaborators'
     const { data: profileData, error: profileError } = await supabaseConfig.client
-      .from('colaboradores')
-      .insert([{ id: authData.user.id, name, matricula, email, role, status: 'activo' }]) // Usar el ID de auth y no guardar pass
+      .from('collaborators')
+      .insert([{ id: authData.user.id, name, matricula, email, role, status: 'activo' }])
       .select()
       .single();
 
@@ -563,8 +543,19 @@ form.addEventListener('submit', async (e) => {
     form.reset();
     showMessage('Colaborador agregado correctamente.', 'success');
   } catch (error) {
-    showMessage(`Error al crear colaborador: ${error.message}`, 'error');
+    if (error.message.includes('duplicate key value') || error.message.includes('already exists') || error.message.includes('unique constraint') || error.message.includes('User already registered')) {
+      showMessage('Error: El correo electrónico ya está en uso.', 'error');
+    } else if (error.message.includes('For security purposes')) {
+      showMessage('Error: Has intentado crear usuarios muy rápido. Por favor, espera un minuto antes de volver a intentarlo.', 'error');
+    } else {
+      showMessage(`Error al crear colaborador: ${error.message}`, 'error');
+    }
     console.error('Error detallado:', error);
+  } finally {
+    // Restaurar el botón a su estado original
+    submitButton.disabled = false;
+    submitButton.innerHTML = originalButtonHTML;
+    lucide.createIcons();
   }
 });
 
@@ -581,31 +572,40 @@ function clearFilters() {
   renderColaboradores();
 }
 
+const submitButton = form.querySelector('button[type="submit"]');
+const originalButtonHTML = submitButton.innerHTML;
+
+function restoreButton() {
+  submitButton.disabled = false;
+  submitButton.innerHTML = originalButtonHTML;
+  lucide.createIcons();
+}
+
 // Event listener para limpiar filtros
 document.getElementById('clearFilters').addEventListener('click', clearFilters);
 
-if (generatePasswordBtn) {
-  generatePasswordBtn.addEventListener('click', () => {
-    const passwordInput = document.getElementById('colaboradorPassword');
-    // Genera una contraseña aleatoria simple
-    const newPassword = Math.random().toString(36).slice(-8);
-    passwordInput.value = newPassword;
-    passwordInput.type = 'text'; // Mostrar la contraseña generada
-    setTimeout(() => { passwordInput.type = 'password'; }, 2000); // Ocultarla después de 2 segundos
-  });
-}
+// La funcionalidad del botón de generar contraseña ya está en el HTML,
+// por lo que no es necesario duplicarla aquí.
 
 // Función de inicialización
 async function init() {
-  try {
-    const { data, error } = await supabaseConfig.client.from('colaboradores').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    colaboradores = data;
-    renderColaboradores();
-    updateSummary();
-  } catch (error) {
-    console.error("Error al cargar colaboradores:", error);
-    showMessage('No se pudieron cargar los colaboradores.', 'error');
+  const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
+  
+  if (sessionError || !session) {
+    console.error('No hay sesión activa. Redirigiendo al login.');
+    window.location.href = '/login.html';
+    return; // Detener la ejecución
+  } else {
+    try {
+      const { data, error } = await supabaseConfig.client.from('collaborators').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      colaboradores = data;
+      renderColaboradores();
+      updateSummary();
+    } catch (error) {
+      console.error("Error al cargar colaboradores:", error);
+      showMessage('No se pudieron cargar los colaboradores.', 'error');
+    }
   }
 }
 

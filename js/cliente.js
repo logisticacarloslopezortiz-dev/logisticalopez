@@ -384,6 +384,8 @@ async function initMap() {
   const originIcon = L.icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconUrl: 'img/marker-icon-2x-green.png', // Cambiado a ruta local
+    shadowUrl: 'img/marker-shadow.png',      // Cambiado a ruta local
     iconSize: [25, 41],
     iconAnchor: [12, 41],
     popupAnchor: [1, -34],
@@ -393,6 +395,8 @@ async function initMap() {
   const destinationIcon = L.icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconUrl: 'img/marker-icon-2x-red.png', // Cambiado a ruta local
+    shadowUrl: 'img/marker-shadow.png',      // Cambiado a ruta local
     iconSize: [25, 41],
     iconAnchor: [12, 41],
     popupAnchor: [1, -34],

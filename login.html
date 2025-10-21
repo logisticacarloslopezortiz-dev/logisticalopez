@@ -11,6 +11,10 @@
 <link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/> 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Scripts de Supabase (cargados primero) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
 </head>
 <body class="bg-gray-100 flex justify-center items-center h-screen">
 
@@ -38,12 +42,18 @@
     // --- INICIO: Lógica de Login Mejorada ---
 
     document.addEventListener('DOMContentLoaded', () => {
-      // Redirigir al panel si ya está logueado
-      if (localStorage.getItem('loggedIn') === 'true') {
-        window.location.href = 'inicio.html';
-        return; // Detener la ejecución si ya está logueado
-      }
-
+      // --- INICIO: Verificación de sesión con Supabase ---
+      // En lugar de usar localStorage, verificamos la sesión real de Supabase.
+      supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          // Si hay una sesión activa, redirigir al panel.
+          console.log('Sesión activa encontrada, redirigiendo a inicio.html');
+          window.location.href = 'inicio.html';
+        }
+      }).catch(error => {
+        console.error('Error al verificar la sesión en la página de login:', error);
+      });
+      // --- FIN: Verificación de sesión con Supabase ---
       const loginForm = document.getElementById('loginForm');
       const usernameInput = document.getElementById('username');
       const passwordInput = document.getElementById('password');
@@ -70,7 +80,7 @@
           if (authData.user) {
             // Una vez autenticado, obtenemos los detalles del perfil desde la tabla 'colaboradores'
             const { data: collaboratorProfile, error: profileError } = await supabaseConfig.client
-              .from('colaboradores')
+              .from('collaborators')
               .select('*')
               .eq('id', authData.user.id) // Buscamos por el ID de usuario único
               .single();
@@ -83,14 +93,14 @@
             }
 
             // --- VERIFICACIÓN DE ROL ---
-            if (collaboratorProfile.role !== 'administrador') {
+            if (collaboratorProfile.role?.toLowerCase() !== 'administrador') {
               await supabaseConfig.client.auth.signOut();
               throw new Error('Acceso denegado. Esta área es solo para administradores.');
             }
 
-            // Usuario y contraseña correctos
-            localStorage.setItem('loggedIn', 'true');
-            localStorage.setItem('userRole', collaboratorProfile.role || 'colaborador');
+            // Usuario y contraseña correctos. Supabase maneja la sesión en su propio localStorage.
+            // Ya no necesitamos 'loggedIn'. Guardamos el rol y los datos para usarlos en otras páginas.
+            localStorage.setItem('userRole', collaboratorProfile.role);
             localStorage.setItem('userData', JSON.stringify(collaboratorProfile)); // Guardar datos del colaborador
             window.location.href = 'inicio.html';
           } else {
@@ -113,10 +123,6 @@
     });
     // --- FIN: Lógica de Login Mejorada ---
   </script>
-
-  <!-- Scripts de Supabase (asegúrate de que estén presentes) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
 
 </body>
 </html>

@@ -1,47 +1,62 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar Supabase (asumiendo que supabase-config.js ya está cargado)
-    if (typeof supabaseConfig === 'undefined') {
-        console.error('Supabase config no está cargado. Asegúrate de incluir supabase-config.js antes de este script.');
-        // Crear un div de error para que sea visible en la página
-        const errorDiv = document.getElementById('loginError');
-        if(errorDiv) {
-            errorDiv.textContent = 'Error de configuración. Contacte al administrador.';
-            errorDiv.classList.remove('hidden');
-        }
-        return;
+    // Inicializar iconos
+    if (window.lucide) {
+        lucide.createIcons();
     }
 
-    const loginForm = document.getElementById('collabLoginForm');
-    const errorDiv = document.getElementById('loginError');
-    const submitButton = loginForm.querySelector('button[type="submit"]');
-
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        errorDiv.classList.add('hidden');
-        errorDiv.textContent = '';
-        submitButton.disabled = true;
-        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Ingresando...';
-
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-
-        const { data, error } = await supabaseConfig.loginCollaborator(email, password);
-
-        submitButton.disabled = false;
-        submitButton.textContent = 'Ingresar';
-
-        if (error) {
-            console.error('Error de inicio de sesión:', error.message);
-            errorDiv.textContent = 'Correo o contraseña incorrectos. Por favor, inténtalo de nuevo.';
-            errorDiv.classList.remove('hidden');
-        } else if (data.user) {
-            console.log('Inicio de sesión exitoso:', data.user);
-            // Guardar la sesión del usuario para usarla en otras páginas
-            sessionStorage.setItem('supabase.auth.token', JSON.stringify(data.session));
-            // Redirigir al panel principal
-            window.location.href = 'inicio.html';
+    // Redirigir si ya hay una sesión activa
+    supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+            console.log('Sesión de colaborador activa encontrada, redirigiendo al panel.');
+            // Idealmente, aquí podrías verificar el rol y redirigir a la página correcta
+            window.location.href = 'panel-colaborador.html';
         }
+    }).catch(error => {
+        console.error('Error al verificar la sesión en el login de colaborador:', error);
     });
 
-    lucide.createIcons();
+    const loginForm = document.getElementById('collabLoginForm');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const errorMsg = document.getElementById('loginError');
+
+    loginForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorMsg.classList.add('hidden');
+        errorMsg.textContent = '';
+
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!email || !password) {
+            errorMsg.textContent = 'Por favor, ingresa tu correo y contraseña.';
+            errorMsg.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const { data, error } = await supabaseConfig.client.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (error) throw error;
+
+            if (data.user) {
+                // Guardar datos del colaborador en localStorage para usarlos en el panel
+                localStorage.setItem('collaboratorData', JSON.stringify(data.user));
+                window.location.href = 'panel-colaborador.html'; // Redirigir al panel del colaborador
+            }
+        } catch (error) {
+            console.error('Error de inicio de sesión:', error.message);
+            if (error.message.includes('Invalid login credentials')) {
+                errorMsg.textContent = 'Correo o contraseña incorrectos.';
+            } else if (error.message.includes('Email not confirmed')) {
+                errorMsg.textContent = 'Tu correo no ha sido confirmado. Revisa tu bandeja de entrada.';
+            } else {
+                errorMsg.textContent = 'Ocurrió un error. Inténtalo de nuevo.';
+            }
+            errorMsg.classList.remove('hidden');
+        }
+    });
 });

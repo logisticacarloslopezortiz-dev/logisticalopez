@@ -36,6 +36,10 @@
         <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-6 h-6"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
       </button>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded mt-2 text-red-600 hover:bg-red-50">
+        <i data-lucide="log-out" class="w-6 h-6"></i>
+        <span class="sidebar-text font-medium">Cerrar Sesión</span>
+      </button>
     </div>
   </aside>
 
@@ -105,24 +109,24 @@
         </div>
         <h2 class="text-xl font-semibold text-gray-900">Agregar Nuevo Colaborador</h2>
       </div>
-      <form id="colaboradorForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-        <div class="space-y-2">
+      <form id="colaboradorForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div class="space-y-2 lg:col-span-2 xl:col-span-1">
           <label class="text-sm font-medium text-gray-700">Nombre Completo</label>
           <input type="text" id="colaboradorName" placeholder="Ej: Juan Pérez" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
         </div>
-        <div class="space-y-2">
+        <div class="space-y-2 lg:col-span-1">
           <label class="text-sm font-medium text-gray-700">Matrícula</label>
           <input type="text" id="colaboradorMatricula" placeholder="Ej: 12345678" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
         </div>
-        <div class="space-y-2">
+        <div class="space-y-2 lg:col-span-2 xl:col-span-1">
           <label class="text-sm font-medium text-gray-700">Correo Electrónico</label>
           <input type="email" id="colaboradorEmail" placeholder="correo@ejemplo.com" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
         </div>
-        <div class="space-y-2">
+        <div class="space-y-2 lg:col-span-1">
           <label class="text-sm font-medium text-gray-700">Contraseña</label>
           <input type="password" id="colaboradorPassword" placeholder="Mínimo 6 caracteres" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
         </div>
-        <div class="space-y-2">
+        <div class="space-y-2 lg:col-span-1">
           <label class="text-sm font-medium text-gray-700">Rol</label>
           <select id="colaboradorRole" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
             <option value="">Seleccionar rol</option>
@@ -131,12 +135,12 @@
             <option value="operador">Operador</option>
           </select>
         </div>
-        <div class="flex items-end gap-2">
+        <div class="flex items-end gap-2 lg:col-span-1">
           <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium flex items-center justify-center gap-2">
             <i data-lucide="user-plus" class="w-5 h-5"></i>
             Agregar
           </button>
-          <button type="button" id="generatePasswordBtn" title="Generar contraseña aleatoria" class="flex-shrink-0 bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center justify-center gap-2">
+          <button type="button" id="generatePasswordBtn" title="Generar contraseña" class="bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center justify-center">
             <i data-lucide="key-round" class="w-5 h-5"></i>
           </button>
         </div>
@@ -153,7 +157,7 @@
         </div>
         <h3 class="text-lg font-semibold text-gray-900">Filtros y Búsqueda</h3>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Buscar</label>
           <div class="relative">
@@ -161,7 +165,6 @@
             <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"></i>
           </div>
         </div>
-        <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Filtrar por Rol</label>
           <select id="roleFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
             <option value="">Todos los roles</option>
@@ -201,22 +204,21 @@
         <table class="w-full">
           <thead class="bg-gray-50">
             <tr>
-              <th class="text-left py-4 px-6 font-semibold text-gray-700">Colaborador</th>
-              <th class="text-left py-4 px-6 font-semibold text-gray-700">Matrícula</th>
-              <th class="text-left py-4 px-6 font-semibold text-gray-700">Email</th>
+              <th class="text-left py-4 px-6 font-semibold text-gray-700 w-1/4">Colaborador</th>
+              <th class="hidden md:table-cell text-left py-4 px-6 font-semibold text-gray-700">Matrícula</th>
+              <th class="hidden lg:table-cell text-left py-4 px-6 font-semibold text-gray-700">Email</th>
               <th class="text-left py-4 px-6 font-semibold text-gray-700">Rol</th>
-              <th class="text-left py-4 px-6 font-semibold text-gray-700">Estado</th>
+              <th class="hidden sm:table-cell text-left py-4 px-6 font-semibold text-gray-700">Estado</th>
               <th class="text-left py-4 px-6 font-semibold text-gray-700">Acciones</th>
             </tr>
           </thead>
-          <tbody id="colaboradoresTable">
+          <tbody id="colaboradoresTableBody" class="bg-white divide-y divide-gray-200">
             <!-- Los colaboradores se cargarán aquí -->
           </tbody>
         </table>
       </div>
     </div>
   </main>
-
   <!-- Modal de Métricas -->
   <div id="metricsModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black bg-opacity-50"></div>
@@ -297,10 +299,10 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/colaboradores.js"></script>
-  <script src="js/sidebar.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> <!-- 1. Librería de Supabase -->
+  <script src="js/supabase-config.js"></script> <!-- 2. Configuración de Supabase -->
+  <script src="js/colaboradores.js"></script> <!-- 3. Scripts de la página -->
+  <script src="js/sidebar.js"></script> <!-- 4. Otros scripts -->
   <script>
     // Añadir funcionalidad al botón de generar contraseña
     document.getElementById('generatePasswordBtn').addEventListener('click', () => {

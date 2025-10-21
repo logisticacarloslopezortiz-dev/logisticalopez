@@ -1,7 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('main-content');
-    const toggleButton = document.getElementById('sidebar-toggle');    
+    const toggleButton = document.getElementById('sidebar-toggle');
+    const logoutButton = document.getElementById('logout-button');
     
     if (!sidebar || !mainContent || !toggleButton) {
         console.warn('Algunos elementos del sidebar no fueron encontrados. La funcionalidad podría ser limitada.');
@@ -61,4 +62,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Aplicar estado guardado al cargar la página
     applyState(localStorage.getItem('sidebarCollapsed') === 'true');
     // --- FIN: Lógica de Sidebar Mejorada ---
+
+    // --- INICIO: Lógica de Logout ---
+    if (logoutButton) {
+        logoutButton.addEventListener('click', async () => {
+            const { error } = await supabaseConfig.client.auth.signOut();
+            
+            // Limpiar datos de sesión del localStorage
+            localStorage.removeItem('userRole');
+            localStorage.removeItem('userData');
+
+            if (error) {
+                console.error('Error al cerrar sesión:', error);
+            }
+            window.location.href = '/login.html'; // Redirigir siempre al login
+        });
+    }
 });

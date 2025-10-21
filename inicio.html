@@ -57,6 +57,10 @@
         <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-6 h-6"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
       </button>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded mt-2 text-red-600 hover:bg-red-50">
+        <i data-lucide="log-out" class="w-6 h-6"></i>
+        <span class="sidebar-text font-medium">Cerrar Sesión</span>
+      </button>
     </div>
   </aside>
 
@@ -197,10 +201,11 @@
         <label class="block text-sm font-medium mb-1">Asignar a colaborador</label>
         <select id="assignSelect" class="w-full border rounded px-3 py-2"></select>
       </div>
-      <div class="flex justify-between">
+      <div class="flex justify-between items-center">
         <button id="deleteOrderBtn" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800 inline-flex items-center gap-2"><i data-lucide="trash-2" class="w-4 h-4"></i>Eliminar</button>
         <div class="flex gap-3">
           <button id="assignCancelBtn" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Cancelar</button>
+          <button id="whatsappBtn" class="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-600 inline-flex items-center gap-2"><i data-lucide="message-circle" class="w-4 h-4"></i>WhatsApp</button>
           <button id="assignConfirmBtn" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Asignar</button>
           <button id="generateInvoiceBtn" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-2"><i data-lucide="file-text" class="w-4 h-4"></i>Factura</button>
         </div>
@@ -211,39 +216,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/notifications.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> <!-- 1. Librería de Supabase -->
+  <script src="js/supabase-config.js"></script> <!-- 2. Configuración de Supabase -->
+  <script src="js/notifications.js"></script> <!-- 3. Scripts de utilidad -->
   
   <!-- Lógica de carga de datos para el panel -->
-  <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      // Verificar si el usuario es un colaborador
-      const userRole = localStorage.getItem('userRole');
-      const userDataString = localStorage.getItem('userData');
-
-      if (userRole === 'colaborador' && userDataString) {
-        try {
-          const userData = JSON.parse(userDataString);
-          // Ocultar elementos del menú que no son para colaboradores
-          document.querySelector('a[href="ganancias.html"]').style.display = 'none';
-          document.querySelector('a[href="mi-negocio.html"]').style.display = 'none';
-          document.querySelector('a[href="colaboradores.html"]').style.display = 'none';
-
-          // Cargar solo las órdenes asignadas a este colaborador
-          const assignedOrders = await supabaseConfig.getOrdersForCollaborator(userData.id);
-          window.allOrders = assignedOrders; // Poner las órdenes en una variable global para que `inicio.js` las use
-        } catch (error) {
-          console.error('Error al procesar datos del colaborador:', error);
-        }
-      }
-    });
-  </script>
-
-  <script src="js/inicio.js"></script>
-  <script src="js/sidebar.js"></script>
-  <script src="js/test-data.js"></script>
-  <script src="js/pwa.js"></script>
+  <script src="js/sidebar.js"></script> <!-- 4. Scripts de la página -->
+  <script src="js/pwa.js"></script> <!-- 5. Otros scripts -->
+  <script src="js/admin.js"></script> <!-- 6. Lógica principal -->
 
 </body>
 </html>
