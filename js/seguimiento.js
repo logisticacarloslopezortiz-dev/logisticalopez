@@ -85,9 +85,59 @@ document.addEventListener('DOMContentLoaded', () => {
                     filter: `id=eq.${orderId}`
                 },
                 (payload) => {
+                    // Verificar si el estado ha cambiado
+                    const newStatus = payload.new.status;
+                    const oldStatus = payload.old?.status;
+                    
+                    if (newStatus !== oldStatus) {
+                        // Mostrar notificación de cambio de estado
+                        showStatusNotification(newStatus);
+                    }
+                    
+                    // Actualizar la interfaz con los nuevos datos
                     displayOrderDetails(payload.new);
                 }
             ).subscribe();
+    }
+    
+    // Función para mostrar notificación de cambio de estado
+    function showStatusNotification(status) {
+        // Verificar si el navegador soporta notificaciones
+        if (!("Notification" in window)) {
+            console.log("Este navegador no soporta notificaciones de escritorio");
+            return;
+        }
+        
+        // Textos según el estado
+        const statusMessages = {
+            'pendiente': 'Tu solicitud está pendiente de confirmación',
+            'confirmado': 'Tu solicitud ha sido confirmada',
+            'asignado': 'Un colaborador ha sido asignado a tu solicitud',
+            'en_ruta_recoger': 'El colaborador está en camino a recoger',
+            'recogido': 'El servicio ha sido recogido',
+            'en_ruta_entrega': 'En camino a la entrega',
+            'completado': 'Tu servicio ha sido completado exitosamente',
+            'cancelado': 'Tu solicitud ha sido cancelada'
+        };
+        
+        const title = '¡Actualización de tu solicitud!';
+        const options = {
+            body: statusMessages[status] || `Estado actualizado a: ${status}`,
+            icon: 'img/logo-192.png',
+            badge: 'img/badge-96.png',
+            vibrate: [200, 100, 200]
+        };
+        
+        // Verificar permiso y mostrar notificación
+        if (Notification.permission === "granted") {
+            new Notification(title, options);
+        } else if (Notification.permission !== "denied") {
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    new Notification(title, options);
+                }
+            });
+        }
     }
 
     // Función para mostrar los detalles de la orden

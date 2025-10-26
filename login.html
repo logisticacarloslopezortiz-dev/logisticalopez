@@ -76,20 +76,8 @@
           // --- INICIO: Lógica de Login Segura con Supabase Auth ---
           console.log('Intentando iniciar sesión con:', username);
           
-          // Verificar si el usuario existe antes de intentar iniciar sesión
-          const { data: userExists, error: checkError } = await supabaseConfig.client
-            .from('profiles')
-            .select('email')
-            .eq('email', username)
-            .maybeSingle();
-            
-          if (checkError) {
-            console.error('Error al verificar usuario:', checkError);
-          }
-          
-          if (!userExists) {
-            throw new Error('Usuario no encontrado. Verifica tus credenciales.');
-          }
+          // Intentar iniciar sesión directamente sin verificar profiles
+          // Esto evita el error de 'column profiles.email does not exist'
           
           const { data: authData, error } = await supabaseConfig.client.auth.signInWithPassword({
             email: username,

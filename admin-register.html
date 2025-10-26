@@ -176,8 +176,8 @@
           if (loginErr) throw loginErr;
 
           // Obtener token y llamar ensure-owner-profile
-          const { data: sessionData } = await supabaseConfig.client.auth.getSession();
-          const accessTokenNew = sessionData?.session?.access_token;
+          const { data: sessionDataNew } = await supabaseConfig.client.auth.getSession();
+          const accessTokenNew = sessionDataNew?.session?.access_token;
           if (!accessTokenNew) throw new Error('Sesión inválida tras crear administrador');
 
           const { data: ensureResult, error: ensureErr } = await supabaseConfig.client.functions.invoke('ensure-owner-profile', {

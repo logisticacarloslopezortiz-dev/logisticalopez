@@ -548,18 +548,19 @@ async function subscribeUserToPush(orderId) {
     
     const applicationServerKey = urlBase64ToUint8Array(vapidKey);
     console.log("applicationServerKey generada correctamente");
-  const subscription = await registration.pushManager.subscribe({
+    const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey
     });
+    
+    // Actualizar la orden en Supabase con la suscripción
+    await supabaseConfig.client.from('orders').update({ push_subscription: subscription }).eq('id', orderId);
+    console.log('Suscripción guardada para la orden:', orderId);
+    return subscription;
   } catch (error) {
     console.error("Error en subscribeUserToPush:", error);
     throw error;
   }
-
-  // Actualizar la orden en Supabase con la suscripción
-  await supabaseConfig.client.from('orders').update({ push_subscription: subscription }).eq('id', orderId);
-  console.log('Suscripción guardada para la orden:', orderId);
 }
 
 // --- UI elegante para opt-in de notificaciones (tarjeta blanca con logo) ---
@@ -591,8 +592,10 @@ function showPushOptInCard(orderId) {
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        await subscribeUserToPush(orderId);
-        showSuccess('Notificaciones activadas.');
+        const subscription = await subscribeUserToPush(orderId);
+        if (subscription) {
+          showSuccess('Notificaciones activadas.');
+        }
       } else {
         showInfo('Podrás activarlas más tarde desde tu navegador.');
       }
