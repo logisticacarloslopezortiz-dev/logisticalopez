@@ -521,46 +521,30 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
-  // --- INICIO: LÓGICA DIRECTA SIN EDGE FUNCTION ---
+  // --- USANDO EDGE FUNCTION PARA CREAR COLABORADORES ---
   try {
-    // Paso 1: Crear usuario en Supabase Auth
-    const { data: authData, error: authError } = await supabaseConfig.client.auth.signUp({
-      email: email,
-      password: password,
-      options: {
-        data: {
+    // Usar la Edge Function process-collaborator-requests
+    const { data, error } = await supabaseConfig.client.functions.invoke('process-collaborator-requests', {
+      body: {
+        action: 'create_collaborator',
+        collaborator_data: {
           name: name,
-          role: role
+          email: email,
+          password: password,
+          matricula: matricula || null,
+          role: role,
+          status: 'activo'
         }
       }
     });
 
-    if (authError) {
-      throw new Error(authError.message);
+    if (error) {
+      console.error('Error en Edge Function:', error);
+      throw new Error(error.message || 'Error al procesar la solicitud');
     }
 
-    if (!authData.user) {
-      throw new Error('No se pudo crear el usuario');
-    }
-
-    // Paso 2: Insertar datos del colaborador en la tabla
-    const { error: insertError } = await supabaseConfig.client
-      .from('collaborators')
-      .insert({
-        id: authData.user.id,
-        name: name,
-        email: email,
-        matricula: matricula || null,
-        role: role,
-        status: 'activo',
-        created_at: new Date().toISOString()
-      });
-
-    if (insertError) {
-      console.error('Error al insertar colaborador:', insertError);
-      // Si falla la inserción, el usuario ya fue creado en Auth
-      // pero no tenemos forma de eliminarlo desde el frontend
-      throw new Error('Usuario creado pero error al guardar datos adicionales');
+    if (!data || !data.success) {
+      throw new Error(data?.error || 'Error desconocido al crear colaborador');
     }
 
     // Éxito

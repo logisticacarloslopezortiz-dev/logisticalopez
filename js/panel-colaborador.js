@@ -106,7 +106,17 @@ async function changeStatus(orderId, newKey){
     filterAndRender();
   } catch (e) {
     console.error('Error al actualizar estado:', e);
-    showError('Error', 'No se pudo actualizar el estado.');
+    
+    let errorMessage = 'No se pudo actualizar el estado.';
+    if (e.code === 'ORDER_NOT_FOUND') {
+      errorMessage = 'La orden no existe o ya fue eliminada.';
+    } else if (e.message && e.message.includes('not found')) {
+      errorMessage = 'La orden no fue encontrada.';
+    } else if (e.message) {
+      errorMessage = `Error: ${e.message}`;
+    }
+    
+    showError('Error al actualizar', errorMessage);
   }
 }
 
@@ -212,7 +222,8 @@ function showActiveJob(order){
             <div class="text-gray-600">${order.time}</div>
           </div>
         </div>
-        <div class="flex items-start gap-3">
+        <!-- Precio oculto para colaboradores -->
+        <div class="hidden">
           <i data-lucide="badge-dollar-sign" class="w-5 h-5 text-gray-500 mt-0.5"></i>
           <div>
             <div class="font-semibold text-gray-800">Precio estimado</div>
@@ -316,7 +327,22 @@ async function handlePhotoUpload(event) {
 
   } catch (error) {
     console.error('Error al subir la foto:', error);
-    showError('Error de subida', 'No se pudo guardar la foto. Inténtalo de nuevo.');
+    
+    let errorMessage = 'No se pudo guardar la foto. Inténtalo de nuevo.';
+    
+    if (error.message && error.message.includes('Failed to fetch')) {
+      errorMessage = 'Error de conexión. Verifica tu conexión a internet e inténtalo de nuevo.';
+    } else if (error.message && error.message.includes('413')) {
+      errorMessage = 'La imagen es muy grande. Usa una imagen más pequeña.';
+    } else if (error.message && error.message.includes('415')) {
+      errorMessage = 'Formato de imagen no válido. Usa JPG, PNG, WebP o GIF.';
+    } else if (error.message && error.message.includes('storage')) {
+      errorMessage = 'Error en el almacenamiento. Inténtalo más tarde.';
+    } else if (error.message) {
+      errorMessage = `Error: ${error.message}`;
+    }
+    
+    showError('Error de subida', errorMessage);
   }
 }
 

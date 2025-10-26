@@ -10,7 +10,6 @@ lucide.createIcons();
 
 const businessForm = document.getElementById('businessForm');
 const quotationForm = document.getElementById('quotationForm');
-const logoPreview = document.getElementById('logoPreview');
 
 /**
  * Carga la configuración del negocio desde Supabase y la muestra en los formularios.
@@ -25,10 +24,7 @@ async function loadSettings() {
     document.getElementById('businessAddress').value = settings.address || '';
     document.getElementById('businessPhone').value = settings.phone || '';
     document.getElementById('businessEmail').value = settings.email || '';
-    document.getElementById('businessLogo').value = settings.logo_url || '';
-    if (settings.logo_url) {
-      logoPreview.src = settings.logo_url;
-    }
+    document.getElementById('businessRnc').value = settings.rnc || '';
 
     // Formulario de cotización
     const rates = settings.quotation_rates || {};
@@ -61,12 +57,11 @@ businessForm.addEventListener('submit', async (e) => {
     address: document.getElementById('businessAddress').value,
     phone: document.getElementById('businessPhone').value,
     email: document.getElementById('businessEmail').value,
-    logo_url: document.getElementById('businessLogo').value
+    rnc: document.getElementById('businessRnc').value
   };
   try {
     await supabaseConfig.saveBusinessSettings(updates);
     alert('Datos del negocio guardados correctamente.');
-    logoPreview.src = updates.logo_url;
   } catch (error) {
     console.error("Error al guardar datos del negocio:", error);
     alert("No se pudieron guardar los datos del negocio.");

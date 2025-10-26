@@ -202,29 +202,7 @@ function renderOrders(){
           ${o.estimated_price || 'Por confirmar'}
         </span>
       </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-        <div class="relative inline-block text-left">
-          <div>
-            <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-3 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500" onclick="toggleActionsMenu(this, event)">
-              Acciones
-              <i data-lucide="chevron-down" class="ml-2 -mr-1 h-5 w-5"></i>
-            </button>
-          </div>
-          <div class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden z-10">
-            <div class="py-1" role="menu" aria-orientation="vertical">
-              <a href="https://wa.me/${o.phone}?text=${mensaje}" target="_blank" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                <i data-lucide="message-circle" class="w-4 h-4 text-green-500"></i> WhatsApp
-              </a>
-              <a href="mailto:${o.email}?subject=Solicitud recibida&body=${mensaje}" target="_blank" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                <i data-lucide="mail" class="w-4 h-4 text-blue-500"></i> Email
-              </a>
-              <a href="#" onclick="generateAndSendInvoice('${o.id}')" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                <i data-lucide="file-text" class="w-4 h-4 text-gray-500"></i> Generar Factura
-              </a>
-            </div>
-          </div>
-        </div>
-      </td>
+
     `;
     tr.addEventListener('dblclick', () => openAssignModal(o.id));
     ordersTableBody.appendChild(tr);
@@ -234,27 +212,7 @@ function renderOrders(){
   updateCharts();
 }
 
-// --- INICIO: Lógica de Menú de Acciones Corregida ---
-function toggleActionsMenu(button, e) {
-  if (e) e.stopPropagation();
-  const dropdown = button.nextElementSibling;
-  if (!dropdown) return;
-
-  const isHidden = dropdown.classList.contains('hidden');
-  document.querySelectorAll('.origin-top-right').forEach(menu => {
-    menu.classList.add('hidden');
-  });
-  if (isHidden) dropdown.classList.remove('hidden');
-}
-
-// Cerrar menús si se hace clic fuera
-window.addEventListener('click', (e) => { 
-  if (!e.target.closest('.relative.inline-block')) {
-    document.querySelectorAll('.origin-top-right').forEach(menu => menu.classList.add('hidden'));
-  }
-});
-
-// --- FIN: Lógica de Menú de Acciones Corregida ---
+// --- Menú de acciones eliminado ---
 
 // --- INICIO: Funciones de Actualización y UI ---
 // Función para actualizar el estado de una orden en Supabase
@@ -680,6 +638,33 @@ function exportToCSV() {
   link.click();
   document.body.removeChild(link);
 }
+
+// Función para alternar menú de acciones
+function toggleActionsMenu(orderId, event) {
+  event.stopPropagation();
+  
+  // Cerrar otros menús abiertos
+  document.querySelectorAll('.actions-menu').forEach(menu => {
+    if (menu.id !== `actions-menu-${orderId}`) {
+      menu.classList.add('hidden');
+    }
+  });
+  
+  // Alternar el menú actual
+  const menu = document.getElementById(`actions-menu-${orderId}`);
+  if (menu) {
+    menu.classList.toggle('hidden');
+  }
+}
+
+// Cerrar menús al hacer clic fuera
+document.addEventListener('click', function(event) {
+  if (!event.target.closest('.actions-menu') && !event.target.closest('[onclick*="toggleActionsMenu"]')) {
+    document.querySelectorAll('.actions-menu').forEach(menu => {
+      menu.classList.add('hidden');
+    });
+  }
+});
 
 // --- Lógica de Tiempo Real con Supabase ---
 

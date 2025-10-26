@@ -130,6 +130,25 @@ const supabaseConfig = {
    */
   async updateOrder(orderId, updates) {
     console.log('updateOrder called with:', { orderId, updates });
+    
+    // Primero verificar si la orden existe
+    const { data: existingOrder, error: checkError } = await this.client
+      .from('orders')
+      .select('id')
+      .eq('id', orderId)
+      .maybeSingle();
+    
+    if (checkError) {
+      console.error('Error checking order existence:', checkError);
+      throw checkError;
+    }
+    
+    if (!existingOrder) {
+      const notFoundError = new Error(`Orden con ID ${orderId} no encontrada`);
+      notFoundError.code = 'ORDER_NOT_FOUND';
+      throw notFoundError;
+    }
+    
     // Sanea payload: elimina campos que no existen en el esquema
     const safeUpdates = { ...updates };
     delete safeUpdates.last_collab_status;
@@ -140,7 +159,7 @@ const supabaseConfig = {
       .update(safeUpdates)
       .eq('id', orderId)
       .select()
-      .single();
+      .maybeSingle();
     
     if (error) {
       console.error('updateOrder error:', error);
@@ -197,9 +216,22 @@ const supabaseConfig = {
    * @param {object} settingsData - Los datos de configuración a guardar.
    */
   async saveBusinessSettings(settingsData) {
-    if (!this.client) return;
+    if (!this.client) throw new Error('Cliente de Supabase no inicializado');
+    
+    console.log('Guardando configuración del negocio:', settingsData);
+    
     // Usamos upsert para crear la fila si no existe, o actualizarla si ya existe.
-    const { error } = await this.client.from('business_settings').upsert({ id: 1, ...settingsData });
-    if (error) throw error;
+    const { data, error } = await this.client
+      .from('business_settings')
+      .upsert({ id: 1, ...settingsData })
+      .select();
+    
+    if (error) {
+      console.error('Error detallado al guardar business_settings:', error);
+      throw new Error(`Error al guardar configuración: ${error.message}`);
+    }
+    
+    console.log('Configuración guardada exitosamente:', data);
+    return data;
   }
 };
