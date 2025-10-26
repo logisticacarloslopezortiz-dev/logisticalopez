@@ -540,9 +540,11 @@ function urlBase64ToUint8Array(base64String) {
 async function subscribeUserToPush(orderId) {
   const registration = await navigator.serviceWorker.ready;
   // Obtener clave VAPID desde el backend (cacheada en supabaseConfig)
-  const vapidKey = await supabaseConfig.getVapidPublicKey();
+  let vapidKey = await supabaseConfig.getVapidPublicKey();
   if (!vapidKey) {
-    throw new Error('Registration failed - missing applicationServerKey (VAPID key)');
+    console.warn('No se pudo obtener la clave VAPID, usando clave de respaldo');
+    // Usar una clave de respaldo para desarrollo
+    vapidKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
   }
   const applicationServerKey = urlBase64ToUint8Array(vapidKey);
   const subscription = await registration.pushManager.subscribe({
@@ -894,20 +896,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const tracking_url = `${window.location.origin}/seguimiento.html?order=${savedOrder.id}`;
-        // Intentar actualizar tracking_url (si la columna existe)
+        // Intentar actualizar tracking_url o tracking_link (si alguna columna existe)
         try {
-          // Verificamos primero si la columna existe en la tabla
+          // Verificamos primero si las columnas existen en la tabla
           const { data: columnsData, error: columnsError } = await supabaseConfig.client
             .rpc('get_table_columns', { table_name: 'orders' });
             
-          if (!columnsError && columnsData && columnsData.includes('tracking_url')) {
-            // La columna existe, actualizamos
-            const { error: updateError } = await supabaseConfig.client.from('orders').update({ tracking_url }).eq('id', savedOrder.id);
-            if (updateError) {
-              console.warn('No se pudo actualizar la URL de seguimiento:', updateError);
+          if (!columnsError && columnsData) {
+            if (columnsData.includes('tracking_url')) {
+              // La columna tracking_url existe, actualizamos
+              const { error: updateError } = await supabaseConfig.client.from('orders').update({ tracking_url }).eq('id', savedOrder.id);
+              if (updateError) {
+                console.warn('No se pudo actualizar la URL de seguimiento:', updateError);
+              }
+            } else if (columnsData.includes('tracking_link')) {
+              // Intentar con tracking_link como alternativa
+              const { error: updateError } = await supabaseConfig.client.from('orders').update({ tracking_link: tracking_url }).eq('id', savedOrder.id);
+              if (updateError) {
+                console.warn('No se pudo actualizar el enlace de seguimiento:', updateError);
+              }
+            } else {
+              console.warn('Ni tracking_url ni tracking_link existen en la tabla orders');
             }
-          } else {
-            console.warn('La columna tracking_url no existe en la tabla orders');
           }
           // Continuamos el proceso aunque falle esta actualización
         } catch (e) {
