@@ -1,11 +1,3 @@
-// Sesión colaborador
-function getSession(){ return JSON.parse(localStorage.getItem('tlc_collab_session')||'null'); }
-function requireSession(){
-  const s = getSession();
-  if (!s) { window.location.href = 'login-colaborador.html'; return null; }
-  return s;
-}
-
 const STATUS_MAP = {
   en_camino_recoger: {
     label: 'En camino a recoger pedido',
@@ -72,12 +64,60 @@ async function showBrowserNotification(order, statusKey) {
   }
   return false;
 }
-let all = [];
-let filtered = [];
-let selectedOrderIdForAccept = null;
-let activeJobId = localStorage.getItem('tlc_collab_active_job') || null;
-let currentCollabName = 'Colaborador';
-let collabSession = null;
+
+/**
+ * Cambia el estado de una orden, actualiza la base de datos y notifica al cliente.
+ * @param {number} orderId - El ID de la orden a actualizar.
+ * @param {string} newKey - La nueva clave de estado (ej. 'en_camino_recoger').
+ */
+async function changeStatus(orderId, newKey){
+  const order = state.allOrders.find(o => o.id === orderId);
+  if (!order) return;
+
+  const updates = { last_collab_status: newKey };
+
+  if (newKey === 'entregado') {
+    updates.status = 'Completado';
+    updates.completed_at = new Date().toISOString(); // ✅ CORREGIDO: Usar el ID del colaborador
+    updates.completed_by = state.collabSession.user.id;
+  }
+
+  try {
+    await supabaseConfig.updateOrder(orderId, updates);
+
+    // Actualizar en memoria para reflejar inmediatamente
+    const idx = state.allOrders.findIndex(o => o.id === orderId);
+    if (idx !== -1) state.allOrders[idx] = { ...state.allOrders[idx], ...updates };
+
+    showSuccess('Estado actualizado', `El estado del pedido ahora es: ${STATUS_MAP[newKey]?.label || newKey}`);
+
+    // Enviar notificación push si el cliente se suscribió
+    if (order.push_subscription) {
+      await showBrowserNotification(order, newKey);
+      showInfo('Notificación enviada', 'El cliente ha sido notificado del cambio de estado.');
+    }
+
+    if (newKey === 'entregado' && state.activeJobId === orderId) {
+      state.activeJobId = null;
+      localStorage.removeItem('tlc_collab_active_job');
+      document.getElementById('activeJobSection').classList.add('hidden');
+    }
+
+    filterAndRender();
+  } catch (e) {
+    console.error('Error al actualizar estado:', e);
+    showError('Error', 'No se pudo actualizar el estado.');
+  }
+}
+
+// ✅ MEJORA: Agrupar variables globales en un objeto de estado para mayor claridad.
+const state = {
+  allOrders: [],
+  filteredOrders: [],
+  selectedOrderIdForAccept: null,
+  activeJobId: Number(localStorage.getItem('tlc_collab_active_job')) || null,
+  collabSession: null,
+};
 
 function collabDisplayName(email){
   try {
@@ -91,7 +131,7 @@ function gmapEmbed(addr){
 }
 
 function openAcceptModal(order){
-  selectedOrderIdForAccept = order.id;
+  state.selectedOrderIdForAccept = order.id;
   const modal = document.getElementById('acceptModal');
   const body = document.getElementById('acceptModalBody');
   body.innerHTML = `
@@ -112,18 +152,18 @@ function closeAcceptModal(){
   const modal = document.getElementById('acceptModal');
   modal.classList.add('hidden');
   modal.classList.remove('flex');
-  selectedOrderIdForAccept = null;
+  state.selectedOrderIdForAccept = null;
 }
 
 function showActiveJob(order){
   // Solo mostrar el trabajo activo si está asignado al colaborador actual o si acaba de ser aceptado
-  const assignedEmail = order.assigned_email || order.assignedEmail;
-  if (assignedEmail && assignedEmail !== collabSession.email) {
+  const assignedId = order.assigned_to;
+  if (assignedId && assignedId !== state.collabSession.user.id) {
     return; // No mostrar si está asignado a otro colaborador
   }
   
-  activeJobId = order.id;
-  localStorage.setItem('tlc_collab_active_job', activeJobId);
+  state.activeJobId = Number(order.id);
+  localStorage.setItem('tlc_collab_active_job', state.activeJobId);
   const section = document.getElementById('activeJobSection');
   section.classList.remove('hidden');
   const info = document.getElementById('activeJobInfo');
@@ -131,7 +171,7 @@ function showActiveJob(order){
     <div class="space-y-4">
       <div class="flex flex-wrap items-center gap-2">
         <span class="px-2 py-1 text-xs rounded bg-gray-100 font-mono">ID: ${order.id}</span>
-        ${order.assignedTo ? `<span class=\"px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800 inline-flex items-center gap-1\"><i data-lucide=\"user\" class=\"w-3 h-3\"></i> ${order.assignedTo}</span>` : ''}
+        ${order.assigned_to ? `<span class=\"px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800 inline-flex items-center gap-1\"><i data-lucide=\"user\" class=\"w-3 h-3\"></i> ${order.assigned_to}</span>` : ''}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
         <div class="flex items-start gap-3">
@@ -176,7 +216,7 @@ function showActiveJob(order){
           <i data-lucide="badge-dollar-sign" class="w-5 h-5 text-gray-500 mt-0.5"></i>
           <div>
             <div class="font-semibold text-gray-800">Precio estimado</div>
-            <div class="text-green-700 font-bold">${order.estimatedPrice || 'Por confirmar'}</div>
+            <div class="text-green-700 font-bold">${order.estimated_price || 'Por confirmar'}</div>
           </div>
         </div>
         
@@ -204,11 +244,11 @@ function showActiveJob(order){
 }
 
 function updateActiveJobView(){
-  if (!activeJobId) return;
-  const order = all.find(o => o.id === activeJobId);
+  if (!state.activeJobId) return;
+  const order = state.allOrders.find(o => o.id === state.activeJobId);
   if (!order) return;
-  const statusKey = order.last_collab_status || order.lastCollabStatus || 'en_camino_recoger';
-  const statusLabel = (STATUS_MAP[statusKey] && STATUS_MAP[statusKey].label) || statusKey;
+  const statusKey = order.last_collab_status || 'en_camino_recoger';
+  const statusLabel = STATUS_MAP[statusKey]?.label || statusKey;
   const badge = document.getElementById('activeJobStatus');
   badge.textContent = statusLabel;
   const mapEl = document.getElementById('activeJobMap');
@@ -233,77 +273,50 @@ function renderPhotoGallery(photos) {
   });
 }
 
-function handlePhotoUpload(event) {
+/**
+ * ✅ REFACTORIZADO: Maneja la subida de fotos a Supabase Storage.
+ * @param {Event} event - El evento del input de archivo.
+ */
+async function handlePhotoUpload(event) {
   const file = event.target.files[0];
-  if (!file || !activeJobId) return;
+  if (!file || !state.activeJobId) return;
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const photoSrc = e.target.result;
-    const orderIndex = all.findIndex(o => o.id === activeJobId);
-    if (orderIndex === -1) return;
-
-    all[orderIndex].photos = all[orderIndex].photos || [];
-    all[orderIndex].photos.push(photoSrc);
-    saveOrders(all);
-    renderPhotoGallery(all[orderIndex].photos);
-  };
-  reader.readAsDataURL(file);
-}
-
-async function changeStatus(orderId, newKey){
-  const order = all.find(o => o.id === orderId);
+  const order = state.allOrders.find(o => o.id === state.activeJobId);
   if (!order) return;
 
-  const updates = { last_collab_status: newKey };
-
-  if (newKey === 'entregado') {
-    updates.status = 'Completado';
-    updates.completed_at = new Date().toISOString();
-    updates.completed_by = collabSession.email;
-  }
+  showInfo('Subiendo foto...', 'Por favor, espera un momento.');
 
   try {
-    if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
-      const { error } = await supabaseConfig.client
-        .from('orders')
-        .update(updates)
-        .eq('id', orderId);
-      if (error) throw error;
-    } else {
-      await supabaseConfig.updateOrder(orderId, updates);
-      // Actualizar en memoria para reflejar inmediatamente
-      const idx = all.findIndex(o => o.id === orderId);
-      if (idx !== -1) all[idx] = { ...all[idx], ...updates };
-    }
+    // 1. Crear un nombre de archivo único para evitar colisiones
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${state.activeJobId}/${Date.now()}.${fileExt}`;
+    const filePath = `public/${fileName}`; // Guardar en una carpeta 'public' dentro del bucket
 
-    showSuccess('Estado actualizado', `El estado del pedido ahora es: ${STATUS_MAP[newKey]?.label || newKey}`);
+    // 2. Subir el archivo a Supabase Storage en el bucket 'order-evidence'
+    const { error: uploadError } = await supabaseConfig.client.storage
+      .from('order-evidence')
+      .upload(filePath, file);
 
-    // Enviar notificación push si el cliente se suscribió (solo si hay backend)
-    if (order.push_subscription && supabaseConfig.client && !supabaseConfig.useLocalStorage) {
-      const payload = {
-        subscription: order.push_subscription,
-        notification: {
-          title: `Actualización de tu pedido ${order.id}`,
-          body: buildStatusMessage(order, newKey),
-          icon: '/img/android-chrome-192x192.png',
-          data: { url: `/seguimiento.html?order=${order.id}` }
-        }
-      };
-      await supabaseConfig.client.functions.invoke('send-notification', { body: payload });
-      showInfo('Notificación enviada', 'El cliente ha sido notificado del cambio de estado.');
-    }
+    if (uploadError) throw uploadError;
 
-    if (newKey === 'entregado' && activeJobId === orderId) {
-      activeJobId = null;
-      localStorage.removeItem('tlc_collab_active_job');
-      document.getElementById('activeJobSection').classList.add('hidden');
-    }
+    // 3. Obtener la URL pública del archivo recién subido
+    const { data: { publicUrl } } = supabaseConfig.client.storage
+      .from('order-evidence')
+      .getPublicUrl(filePath);
 
-    filterAndRender();
-  } catch (e) {
-    console.error('Error al actualizar estado:', e);
-    showError('Error', 'No se pudo actualizar el estado.');
+    // 4. Actualizar la columna 'evidence_photos' (JSONB) en la tabla 'orders'
+    const currentPhotos = order.evidence_photos || [];
+    const updatedPhotos = [...currentPhotos, publicUrl];
+    await supabaseConfig.updateOrder(state.activeJobId, { evidence_photos: updatedPhotos });
+
+    // 5. Actualizar la UI localmente para reflejar el cambio al instante
+    order.evidence_photos = updatedPhotos;
+    renderPhotoGallery(updatedPhotos);
+    showSuccess('Foto subida', 'La evidencia ha sido guardada correctamente.');
+
+  } catch (error) {
+    console.error('Error al subir la foto:', error);
+    showError('Error de subida', 'No se pudo guardar la foto. Inténtalo de nuevo.');
   }
 }
 
@@ -311,15 +324,15 @@ let baseVisibleCount = 0;
 function render(){
   const tbody = document.getElementById('ordersTableBody');
   tbody.innerHTML = '';
-  document.getElementById('showingCount').textContent = filtered.length;
+  document.getElementById('showingCount').textContent = state.filteredOrders.length;
   document.getElementById('totalCount').textContent = baseVisibleCount;
 
-  if (filtered.length === 0){
+  if (state.filteredOrders.length === 0){
     tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-500">Sin solicitudes</td></tr>';
     return;
   }
 
-  filtered.forEach(o => {
+  state.filteredOrders.forEach(o => {
     const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
     const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
     const tr = document.createElement('tr');
@@ -366,67 +379,107 @@ function render(){
   if (window.lucide) lucide.createIcons();
 }
 
+/**
+ * Filtra las órdenes según los criterios de búsqueda y estado, y luego las renderiza.
+ * Esta función es el punto central para actualizar la vista de la tabla.
+ */
 function filterAndRender(){
   const term = document.getElementById('searchInput').value.toLowerCase();
-  const s = document.getElementById('statusFilter').value;
+  const statusFilter = document.getElementById('statusFilter').value;
   const visibleForCollab = (o) => {
-    if (!collabSession) return false;
-    // Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador que no estén completadas.
-    return (o.status === 'Pendiente' && !o.assigned_to) || 
-           (o.assigned_email === collabSession.email && o.status !== 'Completado');
+    if (!state.collabSession) return false;
+    // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador.
+    const isPendingAndUnassigned = o.status === 'Pendiente' && !o.assigned_to;
+    const isAssignedToMe = o.assigned_to === state.collabSession.user.id && o.status !== 'Completado';
+    return isPendingAndUnassigned || isAssignedToMe;
   };
-  const base = all.filter(visibleForCollab);
+  const base = state.allOrders.filter(visibleForCollab);
   baseVisibleCount = base.length;
-  filtered = base.filter(o => {
-    const m1 = !term || o.name.toLowerCase().includes(term) || o.id.toLowerCase().includes(term) || o.service.toLowerCase().includes(term);
+  state.filteredOrders = base.filter(o => {
+    // ✅ CORRECCIÓN: Convertir el ID a String para evitar errores al buscar.
+    const m1 = !term || o.name.toLowerCase().includes(term) || String(o.id).includes(term) || o.service.toLowerCase().includes(term);
     const currentStatus = o.last_collab_status || o.status;
-    const m2 = !s || s === currentStatus;
+    const m2 = !statusFilter || statusFilter === currentStatus;
     return m1 && m2;
   });
   render();
-  updateCollaboratorStats(collabSession.email);
+  updateCollaboratorStats(state.collabSession.user.id);
 }
 
 // Funciones para actualizar el sidebar
 function updateCollaboratorProfile(session) {
-  const name = collabDisplayName(session.email);
+  // ✅ CORRECCIÓN: Usar el nombre completo desde los metadatos del usuario si existe.
+  const user = session.user;
+  const name = user.user_metadata?.full_name || collabDisplayName(user.email);
   const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   
   document.getElementById('collabName').textContent = name;
-  document.getElementById('collabEmail').textContent = session.email;
+  document.getElementById('collabEmail').textContent = user.email;
   document.getElementById('collabAvatar').textContent = initials;
   
-  updateCollaboratorStats(session.email);
+  updateCollaboratorStats(user.id);
 }
 
 // Función para cargar órdenes
 async function loadInitialOrders() {
   try {
-    if (!supabaseConfig.client || supabaseConfig.useLocalStorage) {
-      const local = await supabaseConfig.getOrders();
-      all = (local || []).filter(o => ['Pendiente', 'En proceso'].includes(o.status));
-    } else {
-      const { data, error } = await supabaseConfig.client
+    // Helper para ejecutar la consulta
+    const doQuery = async () => {
+      return await supabaseConfig.client
         .from('orders')
-        .select('*')
-        .in('status', ['Pendiente', 'En proceso']);
-      if (error) throw error;
-      all = data || [];
+        .select(`
+          *,
+          service:services(name),
+          vehicle:vehicles(name)
+        `)
+        .or(`status.eq.Pendiente,and(assigned_to.eq.${state.collabSession.user.id},status.neq.Completado)`)
+        .order('created_at', { ascending: false });
+    };
+
+    let { data, error } = await doQuery();
+
+    // Detectar token expirado y refrescar sesión, luego reintentar
+    if (error && (error.code === 'PGRST303' || /JWT expired/i.test(error.message || '') || error.status === 401)) {
+      console.warn('JWT expirado. Intentando refrescar sesión y reintentar...');
+      const { data: refreshData, error: refreshError } = await supabaseConfig.client.auth.refreshSession();
+      if (refreshError) {
+        console.error('Error al refrescar sesión:', refreshError);
+        throw new Error(`Sesión expirada. Inicia sesión nuevamente. (${refreshError.message || refreshError.code})`);
+      }
+      if (refreshData?.session) {
+        state.collabSession = refreshData.session;
+      }
+      ({ data, error } = await doQuery());
     }
+
+    if (error) {
+      console.error('Error de Supabase:', error);
+      throw new Error(`Error de base de datos: ${error.message || error.code || 'Error desconocido'}`);
+    }
+
+    // ✅ CORRECCIÓN: Procesar los datos para asegurar que service y vehicle sean strings
+    state.allOrders = (data || []).map(order => ({
+      ...order,
+      service: order.service?.name || order.service || 'Sin servicio',
+      vehicle: order.vehicle?.name || order.vehicle || 'Sin vehículo'
+    }));
+    
+    filterAndRender();
   } catch (error) {
-    console.error("Error al cargar órdenes iniciales:", error);
-    all = [];
+    console.error('Error al cargar órdenes iniciales:', error);
+    const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+    showError('Error de Carga', `No se pudieron cargar las solicitudes: ${errorMsg}`);
+    state.allOrders = [];
   }
-  filterAndRender();
 }
 
-function updateCollaboratorStats(email) {
-  const collaboratorOrders = all.filter(order => order.assigned_email === email);
+function updateCollaboratorStats(collaboratorId) {
+  const collaboratorOrders = state.allOrders.filter(order => order.assigned_to === collaboratorId);
   
   const activeJobs = collaboratorOrders.filter(order => order.status === 'En proceso').length;
   const completedJobs = collaboratorOrders.filter(order => order.status === 'Completado').length;
   
-  const pendingRequests = all.filter(order => order.status === 'Pendiente' && !order.assigned_to).length;
+  const pendingRequests = state.allOrders.filter(order => order.status === 'Pendiente' && !order.assigned_to).length;
   
   document.getElementById('collabActiveJobs').textContent = activeJobs;
   document.getElementById('collabCompletedJobs').textContent = completedJobs;
@@ -441,35 +494,55 @@ function handleRealtimeUpdate(payload) {
     case 'INSERT':
       // Añadir si es una nueva orden pendiente
       if (newRecord.status === 'Pendiente') {
-        all.unshift(newRecord);
+        state.allOrders.unshift(newRecord);
       }
       break;
     case 'UPDATE':
-      const index = all.findIndex(o => o.id === newRecord.id);
+      // ✅ CORRECCIÓN: Comparar IDs como números para evitar inconsistencias.
+      const index = state.allOrders.findIndex(o => o.id === newRecord.id);
       if (index !== -1) {
-        all[index] = { ...all[index], ...newRecord };
+        state.allOrders[index] = { ...state.allOrders[index], ...newRecord };
       } else {
         // Si no estaba, es una orden que ahora es relevante (ej. asignada)
-        all.unshift(newRecord);
+        state.allOrders.unshift(newRecord);
       }
       break;
     case 'DELETE':
-      all = all.filter(o => o.id !== oldRecord.id);
+      state.allOrders = state.allOrders.filter(o => o.id !== oldRecord.id);
       break;
   }
   filterAndRender();
-  if (activeJobId && payload.new?.id === activeJobId) {
+  // ✅ CORRECCIÓN: Actualizar la vista del trabajo activo si cambia en tiempo real.
+  if (state.activeJobId && payload.new?.id === state.activeJobId) {
     showActiveJob(payload.new);
+    // ✅ CORRECIÓN: Actualizar el mapa si el estado cambia.
+    updateActiveJobView();
   }
 }
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
-  const session = requireSession();
-  if (!session) return; // redirigido
+  // ✅ CORRECCIÓN: Usar el método oficial de Supabase para verificar la sesión
+  const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
+
+  if (sessionError || !session) {
+    const msg = 'No hay sesión de colaborador activa. Redirigiendo al login.';
+    console.error(msg);
+    if (window.showError) {
+      try { window.showError('Sesión requerida', msg); } catch (_) {}
+    }
+    setTimeout(() => { window.location.href = 'login-colaborador.html'; }, 400);
+    return;
+  }
   
-  currentCollabName = collabDisplayName(session.email);
-  collabSession = session;
+  state.collabSession = session;
+
+  // Suscribirse a cambios de auth para mantener sesión fresca
+  supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
+    if (newSession) {
+      state.collabSession = newSession;
+    }
+  });
     
   // Actualizar perfil del colaborador
   updateCollaboratorProfile(session);
@@ -484,7 +557,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('logoutBtn').addEventListener('click', (e) => {
     e.preventDefault();
-    localStorage.removeItem('tlc_collab_session');
+    // ✅ CORRECCIÓN: Usar el método oficial de Supabase para cerrar sesión
+    supabaseConfig.client.auth.signOut();
     window.location.href = 'login-colaborador.html';
   });
 
@@ -493,67 +567,101 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     closeAcceptModal();
   });
+  // ✅ CORRECCIÓN: Conectar el input de subida de fotos a su función.
+  document.getElementById('photoUpload').addEventListener('change', handlePhotoUpload);
+
   document.getElementById('confirmAcceptBtn').addEventListener('click', async (e) => {
     e.preventDefault();
-    if (!selectedOrderIdForAccept) { closeAcceptModal(); return; }
-    
-    const updates = {
-      assigned_to: currentCollabName,
-      assigned_email: collabSession.email,
-      assigned_at: new Date().toISOString(),
-      status: 'En proceso',
-      last_collab_status: 'en_camino_recoger'
-    };
+    if (!state.selectedOrderIdForAccept) { closeAcceptModal(); return; }
+
+    const orderId = state.selectedOrderIdForAccept;
+    const myId = state.collabSession.user.id;
 
     try {
-      if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
-        const { error } = await supabaseConfig.client
-          .from('orders')
-          .update(updates)
-          .eq('id', selectedOrderIdForAccept);
-        if (error) throw error;
-      } else {
-        await supabaseConfig.updateOrder(selectedOrderIdForAccept, updates);
-        const idx = all.findIndex(o => o.id === selectedOrderIdForAccept);
-        if (idx !== -1) all[idx] = { ...all[idx], ...updates };
+      // Paso 1: Reclamar la orden (solo asignar)
+      await supabaseConfig.updateOrder(orderId, {
+        assigned_to: myId,
+        assigned_at: new Date().toISOString()
+      });
+
+      // Paso 2: Actualizar estado (removido last_collab_status por no existir en la BD)
+      await supabaseConfig.updateOrder(orderId, {
+        status: 'En proceso'
+      });
+
+      // Actualizar el estado local y mostrar el trabajo activo.
+      const idx = state.allOrders.findIndex(o => o.id === orderId);
+      if (idx !== -1) {
+        state.allOrders[idx] = {
+          ...state.allOrders[idx],
+          assigned_to: myId,
+          assigned_at: new Date().toISOString(),
+          status: 'En proceso'
+        };
+        showActiveJob(state.allOrders[idx]);
       }
+
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
     } catch (err) {
-      showError('Error', 'No se pudo aceptar la solicitud.');
+      console.error('Error al aceptar la solicitud:', err);
+      
+      // Logging detallado para depuración
+      console.log('=== ERROR DETAILS ===');
+      console.log('Error type:', typeof err);
+      console.log('Error constructor:', err?.constructor?.name);
+      console.log('Error keys:', err ? Object.keys(err) : 'null');
+      
+      try {
+        console.log('Error JSON:', JSON.stringify(err, null, 2));
+      } catch (jsonErr) {
+        console.log('Cannot stringify error:', jsonErr.message);
+      }
+      
+      let msg = 'Error desconocido';
+      
+      // Manejo específico para errores de Supabase
+      if (err && typeof err === 'object') {
+        // Intentar diferentes propiedades del error
+        const possibleMessages = [
+          err.message,
+          err.error,
+          err.details,
+          err.hint,
+          err.code,
+          err.statusText
+        ].filter(Boolean);
+        
+        if (possibleMessages.length > 0) {
+          msg = possibleMessages.join(' - ');
+        } else {
+          // Último recurso: mostrar todas las propiedades
+          const props = Object.entries(err)
+            .filter(([key, value]) => value != null)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join(', ');
+          msg = props || 'Error sin detalles disponibles';
+        }
+      } else {
+        msg = String(err);
+      }
+      
+      console.log('Final error message:', msg);
+      console.log('Order ID:', orderId);
+      console.log('User ID:', myId);
+      console.log('=== END ERROR DETAILS ===');
+      
+      showError('Error al aceptar la solicitud', msg);
     } finally {
       closeAcceptModal();
       filterAndRender();
     }
   });
 
-  // Restaurar trabajo activo si existe
-  if (activeJobId) {
-    const order = all.find(o => o.id === activeJobId);
-    const assignedEmail = order?.assigned_email || order?.assignedEmail;
-    const lastStatus = order?.last_collab_status || order?.lastCollabStatus;
-    if (order && (!assignedEmail || assignedEmail === collabSession.email) && lastStatus !== 'entregado') {
-      showActiveJob(order);
-    } else {
-      activeJobId = null;
-      localStorage.removeItem('tlc_collab_active_job');
-      document.getElementById('activeJobSection').classList.add('hidden');
-    }
-  }
-  
-  // Buscar automáticamente trabajos activos asignados al colaborador actual
-  if (!activeJobId) {
-    const activeOrder = all.find(order => {
-      const assignedEmail = order.assigned_email || order.assignedEmail;
-      const lastStatus = order.last_collab_status || order.lastCollabStatus;
-      return assignedEmail === collabSession.email && lastStatus && lastStatus !== 'entregado' && ['en_camino_recoger', 'cargando', 'en_camino_entregar'].includes(lastStatus);
-    });
-    if (activeOrder) {
-      showActiveJob(activeOrder);
-    }
-  }
-
   // Carga inicial y suscripción a tiempo real
   await loadInitialOrders();
+
+  // ✅ CORRECCIÓN: Mover la lógica para restaurar el trabajo activo a DESPUÉS de cargar los pedidos.
+  restoreActiveJob();
 
   if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
     supabaseConfig.client
@@ -563,91 +671,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   } else {
     // Fallback: refrescar periódicamente desde localStorage
     setInterval(async () => {
-      const latest = await supabaseConfig.getOrders();
-      all = (latest || []).filter(o => ['Pendiente', 'En proceso'].includes(o.status));
+      // En modo Supabase, el refresco es manejado por el listener de tiempo real.
+      // Si se quiere un refresco forzado, se llamaría a loadInitialOrders() de nuevo.
       filterAndRender();
     }, 5000);
   }
 });
 
-// Endpoint de envío de Web Push (configurable). Si no está definido, se usa sólo la notificación local.
-const PUSH_ENDPOINT = 'http://localhost:3000/api/push';
-
-// Mensajes personalizados según estado del colaborador
-function buildStatusMessage(order, statusKey) {
-  const name = order.name || 'cliente';
-  const map = {
-    en_camino_recoger: `Hola ${name}, vamos en camino a recoger tu pedido.`,
-    cargando: `Hola ${name}, tu pedido se encuentra siendo cargado en el vehículo.`,
-    en_camino_entregar: `Hola ${name}, tu pedido va en camino hacia el destino.`,
-    entregado: `Hola ${name}, tu pedido ha sido entregado. ¡Gracias por confiar en nosotros!`
-  };
-  const fallbackLabel = STATUS_MAP[statusKey]?.label || statusKey;
-  return map[statusKey] || `Hola ${name}, tu pedido está en estado: ${fallbackLabel}.`;
-}
-
-// Notificación local (colaborador) y fallback
-async function showBrowserNotification(order, statusKey) {
-  try {
-    const title = `Actualización de tu pedido ${order.id}`;
-    const body = buildStatusMessage(order, statusKey);
-    const icon = '/img/android-chrome-192x192.png';
-    const badge = '/img/favicon-32x32.png';
-    const data = { url: `/index.html?order=${order.id}` };
-
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.ready;
-      await reg.showNotification(title, { body, icon, badge, data });
-      return true;
+/**
+ * ✅ NUEVA FUNCIÓN: Busca y muestra el trabajo activo guardado en localStorage
+ * o encuentra el primer trabajo activo asignado al colaborador.
+ */
+function restoreActiveJob() {
+  if (state.activeJobId) {
+    const order = state.allOrders.find(o => o.id === state.activeJobId);
+    const assignedId = order?.assigned_to;
+    const lastStatus = order?.last_collab_status;
+    
+    if (order && assignedId === state.collabSession.user.id && lastStatus !== 'entregado') {
+      showActiveJob(order);
+      return; // Salir si se encontró un trabajo activo válido
     }
-
-    if ('Notification' in window) {
-      if (Notification.permission === 'granted') {
-        const n = new Notification(title, { body, icon, data });
-        n.onclick = () => { window.open(`/index.html?order=${order.id}`, '_blank'); };
-        return true;
-      } else {
-        const perm = await Notification.requestPermission();
-        if (perm === 'granted') {
-          const n = new Notification(title, { body, icon, data });
-          n.onclick = () => { window.open(`/index.html?order=${order.id}`, '_blank'); };
-          return true;
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('No se pudo mostrar notificación local:', e);
   }
-  return false;
-}
 
-// Enviar notificación Web Push al cliente mediante servidor
-async function sendPushToClient(order, statusKey) {
-  try {
-    if (!PUSH_ENDPOINT) return false; // Aún no configurado
-    if (!order.pushSubscription) return false; // Cliente no se suscribió
-    const payload = {
-      subscription: order.push_subscription,
-      notification: {
-        title: `Actualización de tu pedido ${order.id}`,
-        body: buildStatusMessage(order, statusKey),
-        icon: '/img/android-chrome-192x192.png',
-        data: { url: `/index.html?order=${order.id}` }
-      }
-    };
-    const res = await fetch(PUSH_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return res.ok;
-  } catch (e) {
-    console.warn('Error enviando Web Push al cliente:', e);
-    return false;
-  }
-}
-
-// Cambiar estado de la orden (colaborador)
-async function changeStatus(orderId, newStatusKey) {
-  await handleStatusChange(orderId, newStatusKey);
+  // Si no hay un trabajo activo guardado o es inválido, buscar uno nuevo.
+  state.activeJobId = null;
+  localStorage.removeItem('tlc_collab_active_job');
+  document.getElementById('activeJobSection').classList.add('hidden');
 }

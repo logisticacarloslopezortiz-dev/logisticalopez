@@ -38,6 +38,10 @@
         <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-6 h-6"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
       </button>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded hover:bg-red-100 text-red-600 mt-2">
+        <i data-lucide="log-out" class="w-6 h-6"></i>
+        <span class="sidebar-text font-medium">Cerrar Sesión</span>
+      </button>
     </div>
   </aside>
 
@@ -127,8 +131,10 @@
     </div>
   </main>
 
-  <script src="js/ganancias.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
   <script src="js/sidebar.js"></script>
+  <script src="js/ganancias.js"></script>
 
 </body>
 </html>

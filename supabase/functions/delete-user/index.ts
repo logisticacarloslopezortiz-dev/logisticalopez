@@ -1,10 +1,11 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+// deno-lint-ignore-file no-explicit-any
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // Headers para permitir CORS desde tu aplicación web
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 Deno.serve(async (req) => {
@@ -14,9 +15,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { userId } = await req.json()
-    if (!userId) {
-      throw new Error("Se requiere el ID del usuario (userId).")
+    const body = await req.json()
+    let userId: string = (body?.userId || '').toString()
+    const email: string = (body?.email || '').toString().toLowerCase().trim()
+    if (!userId && !email) {
+      throw new Error('Se requiere userId o email para eliminar al usuario.')
     }
 
     // Crear un cliente de Supabase con permisos de administrador
@@ -25,22 +28,35 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Eliminar el usuario del sistema de autenticación
-    const { error: authError } = await adminClient.auth.admin.deleteUser(userId)
-
-    if (authError) {
-      // Si el usuario ya no existe en auth, no lo consideramos un error fatal
-      if (authError.message !== 'User not found') {
-        throw authError
-      }
+    // Resolver ID por email si es necesario
+    if (!userId && email) {
+      const { data: profile, error: pErr } = await adminClient
+        .from('profiles')
+        .select('id,email')
+        .eq('email', email)
+        .maybeSingle()
+      if (pErr) throw new Error(`Fallo al buscar perfil: ${pErr.message}`)
+      if (!profile) throw new Error('No se encontró perfil para ese email')
+      userId = profile.id
     }
 
-    return new Response(JSON.stringify({ message: `Usuario ${userId} eliminado del sistema de autenticación.` }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
+    // Eliminar el usuario del sistema de autenticación
+    const { error: authError } = await adminClient.auth.admin.deleteUser(userId)
+    if (authError && authError.message !== 'User not found') {
+      throw authError
+    }
+
+    // Eliminar registros relacionados (best-effort)
+    const { error: profErr } = await adminClient.from('profiles').delete().eq('id', userId)
+    const { error: collabErr } = await adminClient.from('collaborators').delete().eq('id', userId)
+    const { error: ordersErr } = await adminClient.from('orders').update({ assigned_to: null }).eq('assigned_to', userId)
+
+    return new Response(
+      JSON.stringify({ message: `Usuario ${userId} eliminado.`, details: { profiles: profErr?.message, collaborators: collabErr?.message, orders: ordersErr?.message } }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+    )
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     })

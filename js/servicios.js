@@ -18,23 +18,102 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Carga de Datos ---
     async function loadInitialData() {
         try {
-            const [servicesResponse, vehiclesResponse] = await Promise.all([
+            const [services, vehicles, orders] = await Promise.all([
                 supabaseConfig.getServices(),
-                supabaseConfig.getVehicles()
+                supabaseConfig.getVehicles(),
+                supabaseConfig.getOrders() 
             ]);
 
-            allServices = servicesResponse.data || [];
-            allVehicles = vehiclesResponse.data || [];
-
+            allServices = services || [];
+            allVehicles = vehicles || [];
+            
             renderServices();
             renderVehicles();
             updateSummary();
+            updateCharts(orders || []);
+
         } catch (error) {
             console.error("Error cargando datos iniciales:", error);
-            alert("No se pudieron cargar los servicios y vehículos. Revisa la conexión.");
+            alert("No se pudieron cargar los datos del panel. Revisa la conexión.");
         }
     }
 
+    // --- Gráficos y Estadísticas ---
+    function updateCharts(orders) {
+        if (!allServices.length || !allVehicles.length) return;
+
+        const serviceCounts = {};
+        const vehicleCounts = {};
+
+        allServices.forEach(s => { serviceCounts[s.id] = { name: s.name, count: 0 }; });
+        allVehicles.forEach(v => { vehicleCounts[v.id] = { name: v.name, count: 0 }; });
+
+        orders.forEach(order => {
+            if (order.service_id && serviceCounts[order.service_id]) {
+                serviceCounts[order.service_id].count++;
+            }
+            if (order.vehicle_id && vehicleCounts[order.vehicle_id]) {
+                vehicleCounts[order.vehicle_id].count++;
+            }
+        });
+
+        const sortedServices = Object.values(serviceCounts).sort((a, b) => b.count - a.count);
+        const sortedVehicles = Object.values(vehicleCounts).sort((a, b) => b.count - a.count);
+
+        // Actualizar tarjetas de resumen
+        document.getElementById('mostRequestedService').textContent = sortedServices[0]?.name || 'N/A';
+        document.getElementById('mostUsedVehicle').textContent = sortedVehicles[0]?.name || 'N/A';
+
+        // Gráfico de Servicios
+        const serviceChartCtx = document.getElementById('serviceChart')?.getContext('2d');
+        if (serviceChartCtx) {
+            new Chart(serviceChartCtx, {
+                type: 'bar',
+                data: {
+                    labels: sortedServices.map(s => s.name),
+                    datasets: [{
+                        label: 'No. de Solicitudes',
+                        data: sortedServices.map(s => s.count),
+                        backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                        borderColor: 'rgba(239, 68, 68, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        // Gráfico de Vehículos
+        const vehicleChartCtx = document.getElementById('vehicleChart')?.getContext('2d');
+        if (vehicleChartCtx) {
+            new Chart(vehicleChartCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: sortedVehicles.map(v => v.name),
+                    datasets: [{
+                        label: 'No. de Usos',
+                        data: sortedVehicles.map(v => v.count),
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(16, 185, 129, 0.7)',
+                            'rgba(249, 115, 22, 0.7)',
+                            'rgba(139, 92, 246, 0.7)',
+                        ],
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+        }
+    }
     // --- Renderizado ---
     function renderServices() {
         serviceList.innerHTML = '';
@@ -176,23 +255,21 @@ document.addEventListener('DOMContentLoaded', () => {
     serviceList.addEventListener('click', handleDelete);
     vehicleList.addEventListener('click', handleDelete);
 
-    // Carga inicial
-    loadInitialData();
-});// c:\Users\usuario\Documents\tlc\js\servicios.js
-
-async function loadInitialData() {
-    try {
-        // 1. Llama a Supabase para obtener los datos
-        [allServices, allVehicles] = await Promise.all([
-            supabaseConfig.getServices(), // <-- Pide los servicios a la base de datos
-            supabaseConfig.getVehicles()  // <-- Pide los vehículos a la base de datos
-        ]);
-        // 2. Dibuja los datos en la pantalla
-        renderServices();
-        renderVehicles();
-        updateSummary();
-    } catch (error) {
-        console.error("Error cargando datos iniciales:", error);
-        alert("No se pudieron cargar los servicios y vehículos. Revisa la conexión.");
+    // Evitar doble carga
+    let initialDataLoaded = false;
+    function safeLoadInitialData() {
+        if (initialDataLoaded) return;
+        initialDataLoaded = true;
+        loadInitialData();
     }
-}
+
+    // Carga inicial condicionada a sesión admin
+    window.addEventListener('admin-session-ready', () => {
+        safeLoadInitialData();
+    });
+    supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
+        if (session && localStorage.getItem('userRole') === 'administrador') {
+            safeLoadInitialData();
+        }
+    }).catch(() => {});
+});

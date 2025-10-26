@@ -42,7 +42,7 @@
   <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white shadow-md z-30 flex flex-col transition-all duration-300 ease-in-out">
     <div class="flex items-center justify-center py-6 px-4 border-b">
       <img src="img/1vertical.png" alt="Logo" class="w-10 sidebar-text">
-      <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">TLC Admin</h2>
+      <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">LLO Admin</h2>
     </div>
     <nav class="flex-1 flex flex-col gap-3 py-4">
       <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 rounded-r-full hover:bg-blue-50 text-blue-700 font-semibold"><i data-lucide="home" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Inicio</span></a>
@@ -218,12 +218,14 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> <!-- 1. Librería de Supabase -->
   <script src="js/supabase-config.js"></script> <!-- 2. Configuración de Supabase -->
-  <script src="js/notifications.js"></script> <!-- 3. Scripts de utilidad -->
+  <script src="js/notifications.js"></script> <!-- 3. Scripts de notificaciones -->
   
-  <!-- Lógica de carga de datos para el panel -->
-  <script src="js/sidebar.js"></script> <!-- 4. Scripts de la página -->
-  <script src="js/pwa.js"></script> <!-- 5. Otros scripts -->
-  <script src="js/admin.js"></script> <!-- 6. Lógica principal -->
+  <!-- Scripts de UI y PWA -->
+  <script src="js/sidebar.js"></script> <!-- 4. Script de la barra lateral -->
+  <script src="js/pwa.js"></script> <!-- 5. Script para PWA -->
+
+  <!-- Lógica principal de la página de inicio -->
+  <script src="js/inicio.js"></script> <!-- 6. Lógica principal -->
 
 </body>
 </html>

@@ -9,7 +9,8 @@ let currentAssigningOrder = null;
 async function loadOrders() {
   const { data, error } = await supabaseConfig.client
     .from('orders')
-    .select('*')
+    // ✅ MEJORA: Cargar los nombres de las tablas relacionadas directamente.
+    .select('*, service:services(name), vehicle:vehicles(name), collaborator:collaborators(name)')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -36,11 +37,11 @@ function filterAndRender() {
   let filtered = allOrders.filter(order => {
     const matchesSearch = !searchInput ||
       order.name.toLowerCase().includes(searchInput) ||
-      order.service.toLowerCase().includes(searchInput) ||
-      order.id.toLowerCase().includes(searchInput);
+      (order.service?.name || '').toLowerCase().includes(searchInput) || // ✅ CORREGIDO: Buscar por nombre de servicio
+      String(order.id).includes(searchInput);
 
     const matchesStatus = !statusFilter || order.status === statusFilter;
-    const matchesService = !serviceFilter || order.service === serviceFilter;
+    const matchesService = !serviceFilter || order.service?.name === serviceFilter; // ✅ CORREGIDO: Filtrar por nombre de servicio
     const matchesDate = !dateFilter || order.date === dateFilter;
 
     return matchesSearch && matchesStatus && matchesService && matchesDate;
@@ -77,8 +78,8 @@ function renderOrders(orders) {
           <div class="font-medium">${order.name}</div>
           <div class="text-xs text-gray-500">${order.phone}</div>
         </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.vehicle || 'N/A'}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service?.name || 'N/A'}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.vehicle?.name || 'N/A'}</td>
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-xs truncate" title="${order.pickup} → ${order.delivery}">
           ${order.pickup} → ${order.delivery}
         </td>
@@ -159,6 +160,12 @@ function sortData(data, column, order) {
       valB = new Date(`${b.date}T${b.time}`);
     }
 
+    // ✅ MEJORA: Asegurar que los IDs se ordenen numéricamente.
+    if (column === 'id') {
+      valA = Number(valA);
+      valB = Number(valB);
+    }
+    
     if (valA < valB) return order === 'asc' ? -1 : 1;
     if (valA > valB) return order === 'asc' ? 1 : -1;
     return 0;
@@ -204,7 +211,7 @@ async function loadCollaboratorsForModal() {
  * @param {string} orderId - El ID de la orden a gestionar.
  */
 function openAssignModal(orderId) {
-  currentAssigningOrder = allOrders.find(o => o.id === orderId);
+  currentAssigningOrder = allOrders.find(o => o.id === Number(orderId));
   if (!currentAssigningOrder) return;
 
   const modal = document.getElementById('assignModal');
@@ -218,7 +225,7 @@ function openAssignModal(orderId) {
   modalBody.innerHTML = `
     <p><strong>ID:</strong> ${currentAssigningOrder.id}</p>
     <p><strong>Cliente:</strong> ${currentAssigningOrder.name}</p>
-    <p><strong>Servicio:</strong> ${currentAssigningOrder.service}</p>
+    <p><strong>Servicio:</strong> ${currentAssigningOrder.service?.name || 'N/A'}</p>
   `;
   assignSelect.value = currentAssigningOrder.assigned_to || '';
   modal.classList.remove('hidden');
@@ -374,30 +381,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     return; // Detener la ejecución si no hay sesión
   }
   // --- FIN: Verificación de Sesión Obligatoria ---
-
-    // Carga inicial de datos
-    const userRole = localStorage.getItem('userRole');
-    const userDataString = localStorage.getItem('userData');
-
-    if (userRole === 'colaborador' && userDataString) {
-        try {
-            const userData = JSON.parse(userDataString);
-            // Ocultar elementos del menú que no son para colaboradores
-            document.querySelector('a[href="ganancias.html"]')?.remove();
-            document.querySelector('a[href="mi-negocio.html"]')?.remove();
-            document.querySelector('a[href="colaboradores.html"]')?.remove();
-            document.querySelector('a[href="historial-solicitudes.html"]')?.remove();
-
-            // Cargar solo las órdenes asignadas a este colaborador
-            const assignedOrders = await supabaseConfig.getOrdersForCollaborator(userData.id);
-            allOrders = assignedOrders;
-            filterAndRender();
-        } catch (error) {
-            console.error('Error al procesar datos del colaborador:', error);
-        }
-    } else {
-        loadOrders(); // Cargar todas las órdenes para el dueño
-    }
+  
+  // ✅ MEJORA: La lógica de roles ahora se maneja con RLS de Supabase.
+  // El `admin.js` es solo para administradores, por lo que siempre cargamos todo.
+  loadOrders();
+    
     // Listeners para filtros
     document.getElementById('searchInput')?.addEventListener('input', filterAndRender);
     document.getElementById('statusFilter')?.addEventListener('change', filterAndRender);

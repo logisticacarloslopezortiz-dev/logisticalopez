@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorMessage = document.getElementById('errorMessage');
     const newOrderButton = document.getElementById('newOrderButton');
     let currentSubscription = null; // Para gestionar la suscripción en tiempo real
+    let trackingMap = null; // ✅ NUEVO: Variable para la instancia del mapa
 
     // --- Event Listeners ---
     trackButton.addEventListener('click', findOrder);
@@ -26,8 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Función para buscar la orden en Supabase
     async function findOrder() {
-        const orderId = orderIdInput.value.trim().toUpperCase();
-        if (!orderId) {
+        const orderIdValue = orderIdInput.value.trim();
+        if (!orderIdValue) {
             showError('Por favor, ingresa un ID de orden.');
             return;
         }
@@ -47,8 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { data: order, error } = await supabaseConfig.client
                 .from('orders')
-                .select('*')
-                .eq('id', orderId)
+                .select('*, service:services(name), vehicle:vehicles(name)') // ✅ MEJORA: Cargar nombres relacionados
+                .eq('id', orderIdValue) // ✅ CORREGIDO: Buscar por el ID como texto (UUID).
                 .single(); // .single() espera un solo resultado o ninguno
 
             if (error || !order) {
@@ -59,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
             displayOrderDetails(order);
 
             // Suscribirse a cambios en tiempo real para esta orden
-            subscribeToOrderUpdates(orderId);
+            subscribeToOrderUpdates(orderIdValue);
 
         } catch (err) {
             showError(err.message);
@@ -111,11 +112,11 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div>
                 <p class="text-sm text-gray-500">Servicio</p>
-                <p class="font-semibold text-gray-800">${order.service}</p>
+                <p class="font-semibold text-gray-800">${order.service?.name || 'No especificado'}</p>
             </div>
             <div>
                 <p class="text-sm text-gray-500">Vehículo</p>
-                <p class="font-semibold text-gray-800">${order.vehicle}</p>
+                <p class="font-semibold text-gray-800">${order.vehicle?.name || 'No especificado'}</p>
             </div>
             <div>
                 <p class="text-sm text-gray-500">Fecha Programada</p>
@@ -134,25 +135,93 @@ document.addEventListener('DOMContentLoaded', () => {
         const timelineContainer = document.getElementById('timeline');
         timelineContainer.innerHTML = ''; // Limpiar
 
-        const statuses = [
-            { name: 'Solicitud Creada', date: order.created_at, active: true, isMain: true },
-            { name: 'Servicio Asignado', date: order.assigned_at, active: !!order.assigned_at, isMain: true },
-            { name: 'En camino a recoger', date: order.last_collab_status === 'en_camino_recoger' ? new Date() : null, active: order.last_collab_status === 'en_camino_recoger', isMain: false },
-            { name: 'En camino a entregar', date: order.last_collab_status === 'en_camino_entregar' ? new Date() : null, active: order.last_collab_status === 'en_camino_entregar', isMain: false },
-            { name: 'Servicio Completado', date: order.completed_at, active: !!order.completed_at, isMain: true }
-        ];
+        // ✅ MEJORA: Lógica de timeline más robusta y precisa
+        const timelineEvents = [];
+        
+        // 1. Solicitud Creada (siempre existe)
+        timelineEvents.push({ name: 'Solicitud Creada', date: order.created_at });
 
-        statuses.forEach(status => {
-            if (status.active && status.date) {
-                const item = document.createElement('div');
-                item.className = 'timeline-item active';
-                item.innerHTML = `
-                    <h4 class="font-semibold text-gray-800">${status.name}</h4>
-                    <p class="text-sm text-gray-500">${new Date(status.date).toLocaleString('es-ES')}</p>
-                `;
-                timelineContainer.appendChild(item);
+        // 2. Servicio Asignado
+        if (order.assigned_at) {
+            timelineEvents.push({ name: 'Servicio Asignado', date: order.assigned_at });
+        }
+
+        // 3. Estados del colaborador (si existen en el tracking)
+        if (order.tracking && Array.isArray(order.tracking)) {
+            order.tracking.forEach(trackPoint => {
+                timelineEvents.push({ name: trackPoint.status, date: trackPoint.date });
+            });
+        }
+
+        // 4. Servicio Completado
+        if (order.completed_at) {
+            timelineEvents.push({ name: 'Servicio Completado', date: order.completed_at });
+        }
+
+        // Ordenar y renderizar
+        timelineEvents.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(event => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item active';
+            item.innerHTML = `
+                <h4 class="font-semibold text-gray-800">${event.name}</h4>
+                <p class="text-sm text-gray-500">${new Date(event.date).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+            `;
+            timelineContainer.appendChild(item);
+        });
+
+        // ✅ NUEVO: Inicializar el mapa con las coordenadas de la orden
+        initializeMap(order);
+
+        // ✅ NUEVO: Mostrar galería de fotos si existen
+        const photoSection = document.getElementById('photoSection');
+        const photoGallery = document.getElementById('photoGallery');
+        const photos = order.evidence_photos || []; // Asumimos que las URLs están en un campo 'evidence_photos'
+
+        if (photos.length > 0) {
+            photoGallery.innerHTML = photos.map(url => `
+                <a href="${url}" target="_blank" rel="noopener noreferrer" class="block rounded-lg overflow-hidden border-2 border-gray-200 hover:border-blue-500 transition">
+                    <img src="${url}" alt="Evidencia del servicio" class="w-full h-32 object-cover">
+                </a>
+            `).join('');
+            photoSection.classList.remove('hidden');
+        } else {
+            photoSection.classList.add('hidden');
+        }
+    }
+
+    // ✅ NUEVO: Función para inicializar y dibujar en el mapa
+    function initializeMap(order) {
+        if (!trackingMap) { // Inicializar el mapa solo una vez
+            trackingMap = L.map('trackingMap').setView([18.4861, -69.9312], 9); // Vista por defecto en RD
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(trackingMap);
+        }
+
+        // Limpiar marcadores y líneas anteriores
+        trackingMap.eachLayer(layer => {
+            if (!!layer.toGeoJSON) { // Solo remover capas de datos (marcadores, polilíneas)
+                trackingMap.removeLayer(layer);
             }
         });
+
+        const origin = order.origin_coords;
+        const destination = order.destination_coords;
+
+        if (origin && destination) {
+            const originLatLng = [origin.lat, origin.lng];
+            const destLatLng = [destination.lat, destination.lng];
+
+            // Marcadores
+            L.marker(originLatLng).addTo(trackingMap).bindPopup('Punto de Origen');
+            L.marker(destLatLng).addTo(trackingMap).bindPopup('Punto de Destino');
+
+            // Línea de ruta
+            L.polyline([originLatLng, destLatLng], { color: '#2563eb', weight: 5 }).addTo(trackingMap);
+
+            // Ajustar el mapa para mostrar la ruta completa
+            trackingMap.fitBounds([originLatLng, destLatLng], { padding: [50, 50] });
+        }
     }
 
     // --- Funciones de Utilidad ---

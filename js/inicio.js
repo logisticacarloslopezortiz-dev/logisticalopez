@@ -1,39 +1,59 @@
 // Variables globales
 let allOrders = [];
 let filteredOrders = [];
-let sortColumn = '';
-let sortDirection = 'asc';
-let selectedOrderIdForAssign = null;
+let sortColumn = 'created_at'; // ✅ MEJORA: Ordenar por defecto por fecha de creación
+let sortDirection = 'desc';
+let selectedOrderIdForAssign = null; // Guardará el ID del pedido a asignar
 
-// Funciones utilitarias
+// --- INICIO: Carga y Filtrado de Datos ---
 
 // Carga inicial de órdenes
 async function loadOrders() {
-  const { data, error } = await supabaseConfig.client.from('orders').select('*').order('created_at', { ascending: false });
-  if (error) {
-    console.error("Error al cargar las órdenes:", error);
-    return;
+  try {
+    const [ordersRes, services, vehicles] = await Promise.all([
+      supabaseConfig.client
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      supabaseConfig.getServices(),
+      supabaseConfig.getVehicles()
+    ]);
+
+    const { data: orders, error } = ordersRes || {};
+    if (error) {
+      console.error("Error al cargar las órdenes:", error?.message || error);
+      if (window.showError) {
+        window.showError('No se pudieron cargar las solicitudes. Reintenta en unos segundos.', { title: 'Error de carga' });
+      }
+      return;
+    }
+
+    const serviceMap = Object.fromEntries((services || []).map(s => [s.id, s]));
+    const vehicleMap = Object.fromEntries((vehicles || []).map(v => [v.id, v]));
+
+    allOrders = (orders || []).map(o => ({
+      ...o,
+      service: o.service || serviceMap[o.service_id] || null,
+      vehicle: o.vehicle || vehicleMap[o.vehicle_id] || null
+    }));
+
+    filterOrders();
+  } catch (err) {
+    console.error('Fallo inesperado al cargar órdenes:', err?.message || err);
+    if (window.showError) {
+      window.showError('Fallo inesperado al cargar solicitudes.', { title: 'Error inesperado' });
+    }
   }
-  allOrders = data || [];
-  filterOrders(); // Llama a filterOrders para aplicar filtros iniciales y renderizar
 }
 
 // Carga de colaboradores desde Supabase
 async function loadCollaborators() {
-  const { data, error } = await supabaseConfig.client.from('colaboradores').select('*');
+  const { data, error } = await supabaseConfig.client.from('collaborators').select('*');
   if (error) {
     console.error("Error al cargar colaboradores:", error);
     return [];
   }
   return data;
-}
-
-// Guardar colaboradores (si fuera necesario, aunque ahora se gestiona en su propia página)
-async function saveCollaborators(collaborators) {
-  // Esta función ahora podría usarse para hacer un upsert masivo si se necesitara.
-  const { data, error } = await supabaseConfig.client.from('colaboradores').upsert(collaborators);
-  if (error) console.error("Error al guardar colaboradores:", error);
-  return !error;
 }
 
 // Función para filtrar pedidos
@@ -45,31 +65,34 @@ function filterOrders() {
 
   filteredOrders = (allOrders || []).filter(order => {
     const matchesSearch = !searchTerm || 
-      order.name.toLowerCase().includes(searchTerm) ||
-      order.phone.includes(searchTerm) ||
-      order.email.toLowerCase().includes(searchTerm);
-    
-    // Por defecto, no mostrar "Completado" a menos que se filtre explícitamente por ese estado
+      (order.name || '').toLowerCase().includes(searchTerm) ||
+      (order.phone || '').includes(searchTerm) ||
+      ((order.email || '').toLowerCase().includes(searchTerm)) ||
+      String(order.id).includes(searchTerm);
+
     const matchesStatus = statusFilter
       ? order.status === statusFilter
-      : order.status !== 'Completado';
+      : !['Completado', 'Cancelado'].includes(order.status);
 
-    const matchesService = !serviceFilter || order.service === serviceFilter;
+    const matchesService = !serviceFilter || ((order.service?.name || order.service || '').toLowerCase() === serviceFilter.toLowerCase());
     const matchesDate = !dateFilter || order.date === dateFilter;
 
     return matchesSearch && matchesStatus && matchesService && matchesDate;
   });
 
+  sortTable(sortColumn, null, true); // Re-aplicar ordenamiento sin cambiar dirección
   renderOrders();
 }
 
 // Función para ordenar tabla
 function sortTable(column, element) {
-  if (sortColumn === column) {
-    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-  } else {
-    sortColumn = column;
-    sortDirection = 'asc';
+  if (element) { // Solo cambiar dirección si se hace clic en un header
+    if (sortColumn === column) {
+      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortColumn = column;
+      sortDirection = 'asc';
+    }
   }
   
   filteredOrders.sort((a, b) => {
@@ -89,12 +112,16 @@ function sortTable(column, element) {
   renderOrders();
 
   // Actualizar íconos de ordenación
-  document.querySelectorAll('th i[data-lucide="chevron-up-down"], th i[data-lucide="chevron-up"], th i[data-lucide="chevron-down"]').forEach(icon => {
-    icon.setAttribute('data-lucide', 'chevron-up-down');
-  });
-  const icon = element.querySelector('i');
-  icon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
-  lucide.createIcons();
+  if (element) {
+    document.querySelectorAll('th i[data-lucide]').forEach(icon => {
+      icon.setAttribute('data-lucide', 'chevrons-up-down');
+      icon.classList.remove('text-blue-600');
+    });
+    const icon = element.querySelector('i');
+    icon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+    icon.classList.add('text-blue-600');
+    lucide.createIcons();
+  }
 }
 
 // Función para renderizar pedidos
@@ -113,12 +140,7 @@ function renderOrders(){
   if (totalCount) totalCount.textContent = allOrders.length;
   
   // Actualizar paneles de resumen
-  if (typeof updateSummaryPanels === 'function') {
-    updateSummaryPanels();
-  } else {
-    // Fallback si la función no está definida
-    updateResumen();
-  }
+  updateResumen();
 
   if(filteredOrders.length === 0){
     ordersTableBody.innerHTML='<tr><td colspan="9" class="text-center py-6 text-gray-500">No hay pedidos que coincidan con los filtros.</td></tr>';
@@ -133,7 +155,8 @@ function renderOrders(){
     const statusColor = {
       'Pendiente': 'bg-yellow-100 text-yellow-800',
       'En proceso': 'bg-blue-100 text-blue-800', // Corregido
-      'Completado': 'bg-green-100 text-green-800'
+      'Completado': 'bg-green-100 text-green-800',
+      'Cancelado': 'bg-red-100 text-red-800'
     }[o.status] || 'bg-gray-100 text-gray-800';
 
     const tr = document.createElement('tr');
@@ -144,18 +167,18 @@ function renderOrders(){
         <div class="text-sm font-medium text-gray-900">${o.name}</div>
         <div class="text-sm text-gray-500">${o.phone}</div>
         ${o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.email}">${o.email}</div>` : ''}
-        ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block">RNC: ${o.rnc} (${o.empresa || 'N/A'})</div>` : ''}
+        ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block" title="Empresa: ${o.empresa || 'N/A'}">RNC: ${o.rnc}</div>` : ''}
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
-        <div class="text-sm text-gray-900">${o.service}</div>
-        ${o.serviceQuestions && Object.keys(o.serviceQuestions).length > 0 ?
-          `<button onclick="showServiceDetails('${o.id}')" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">
+        <div class="text-sm text-gray-900">${o.service?.name || 'N/A'}</div>
+        ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
+          `<button onclick="showServiceDetails(${o.id})" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">
             <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>Ver detalles
           </button>`
           : ''
         }
       </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle}</td>
+      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle?.name || 'N/A'}</td>
       <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">
         ${o.pickup} → ${o.delivery}
       </td>
@@ -168,8 +191,9 @@ function renderOrders(){
           <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
           <option value="En proceso" ${o.status === 'En proceso' ? 'selected' : ''}>En Proceso</option>
           <option value="Completado" ${o.status === 'Completado' ? 'selected' : ''}>Completado</option>
+          <option value="Cancelado" ${o.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
         </select>
-        ${o.assignedTo ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.assignedTo}</div>` : ''}
+        ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
       </td>
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
         <span class="editable-price cursor-pointer hover:bg-yellow-100 px-2 py-1 rounded" 
@@ -181,7 +205,7 @@ function renderOrders(){
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
         <div class="relative inline-block text-left">
           <div>
-            <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-3 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500" onclick="toggleActionsMenu(this)">
+            <button type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-3 py-1 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500" onclick="toggleActionsMenu(this, event)">
               Acciones
               <i data-lucide="chevron-down" class="ml-2 -mr-1 h-5 w-5"></i>
             </button>
@@ -207,28 +231,20 @@ function renderOrders(){
   });
 
   lucide.createIcons();
-  // Solo llamar a estas funciones si existen los elementos necesarios
-  try {
-    if (typeof updateResumen === 'function') updateResumen();
-    if (typeof updateCharts === 'function') updateCharts();
-    if (typeof checkAlertas === 'function') checkAlertas();
-  } catch (error) {
-    console.warn('Error al actualizar gráficos o alertas:', error.message);
-  }
+  updateCharts();
 }
 
 // --- INICIO: Lógica de Menú de Acciones Corregida ---
-function toggleActionsMenu(button) {
+function toggleActionsMenu(button, e) {
+  if (e) e.stopPropagation();
   const dropdown = button.nextElementSibling;
   if (!dropdown) return;
 
   const isHidden = dropdown.classList.contains('hidden');
-  // Cerrar otros menús abiertos
   document.querySelectorAll('.origin-top-right').forEach(menu => {
     menu.classList.add('hidden');
   });
-
-  if (isHidden) dropdown.classList.remove('hidden'); // Abrir el actual si estaba cerrado
+  if (isHidden) dropdown.classList.remove('hidden');
 }
 
 // Cerrar menús si se hace clic fuera
@@ -239,6 +255,8 @@ window.addEventListener('click', (e) => {
 });
 
 // --- FIN: Lógica de Menú de Acciones Corregida ---
+
+// --- INICIO: Funciones de Actualización y UI ---
 // Función para actualizar el estado de una orden en Supabase
 async function updateOrderStatus(orderId, newStatus) {
   const { data, error } = await supabaseConfig.client
@@ -253,24 +271,24 @@ async function updateOrderStatus(orderId, newStatus) {
     loadOrders();
   } else {
     // Actualizar el estado en el array local para no tener que recargar toda la data
-    const orderIndex = allOrders.findIndex(o => o.id === orderId);
+    const orderIndex = allOrders.findIndex(o => o.id == orderId);
     if (orderIndex !== -1) allOrders[orderIndex].status = newStatus;
     filterOrders(); // Re-renderizar con el nuevo estado
-    showSuccess('Estado actualizado', `El estado del pedido ${orderId} es ahora ${newStatus}`);
+    notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
   }}
 
 // Función para mostrar detalles del servicio
 function showServiceDetails(orderId) {
-  const order = allOrders.find(o => o.id === orderId);
-  if (!order || !order.serviceQuestions || Object.keys(order.serviceQuestions).length === 0) {
-    showError('Sin detalles', 'Esta orden no tiene detalles adicionales de servicio.');
+  const order = allOrders.find(o => o.id === Number(orderId));
+  if (!order || !order.service_questions || Object.keys(order.service_questions).length === 0) {
+    notifications.info('Esta orden no tiene detalles adicionales de servicio.');
     return;
   }
 
-  let detailsHtml = `<h3 class="text-lg font-semibold mb-4 text-gray-800">Detalles del Servicio: ${order.service}</h3>`;
+  let detailsHtml = `<h3 class="text-lg font-semibold mb-4 text-gray-800">Detalles del Servicio: ${order.service?.name || 'N/A'}</h3>`;
   detailsHtml += '<div class="space-y-3 text-sm">';
 
-  for (const [question, answer] of Object.entries(order.serviceQuestions)) {
+  for (const [question, answer] of Object.entries(order.service_questions)) {
     // Formatear la pregunta para que sea más legible
     const formattedQuestion = question.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     detailsHtml += `
@@ -300,10 +318,10 @@ function showServiceDetails(orderId) {
 function updateResumen(){
   const today = new Date().toISOString().split('T')[0];
   const todayOrders = allOrders.filter(o => o.date === today);
-  const completedOrders = allOrders.filter(o => o.status === 'Completado');
-  const pendingOrders = allOrders.filter(o => o.status !== 'Completado');
+  const completedOrders = allOrders.filter(o => o.status === 'Completado').length;
+  const pendingOrders = allOrders.filter(o => !['Completado', 'Cancelado'].includes(o.status));
   const urgentOrders = pendingOrders.filter(o => {
-    const serviceTime = new Date(`${o.date}T${o.time}`);
+    const serviceTime = new Date(`${o.date}T${o.time || '00:00'}`);
     const now = new Date();
     const diffHours = (serviceTime - now) / (1000 * 60 * 60);
     return diffHours > 0 && diffHours <= 24;
@@ -311,7 +329,7 @@ function updateResumen(){
 
   // Calcular ganancias
   const totalEarnings = allOrders.reduce((sum, o) => {
-    if (o.estimated_price) {
+    if (o.status === 'Completado' && o.estimated_price) {
       const price = parseInt(o.estimated_price.replace(/[^0-9]/g, '')) || 0;
       return sum + price;
     }
@@ -319,7 +337,7 @@ function updateResumen(){
   }, 0);
 
   const todayEarnings = todayOrders.reduce((sum, o) => {
-    if (o.estimated_price) {
+    if (o.status === 'Completado' && o.estimated_price) {
       const price = parseInt(o.estimated_price.replace(/[^0-9]/g, '')) || 0;
       return sum + price;
     }
@@ -328,31 +346,34 @@ function updateResumen(){
 
   document.getElementById('totalPedidos').textContent = allOrders.length;
   document.getElementById('pedidosHoy').textContent = todayOrders.length;
-  document.getElementById('pedidosCompletados').textContent = completedOrders.length;
-  document.getElementById('porcentajeCompletados').textContent = allOrders.length > 0 ? Math.round((completedOrders.length / allOrders.length) * 100) : 0;
+  document.getElementById('pedidosCompletados').textContent = completedOrders;
+  document.getElementById('porcentajeCompletados').textContent = allOrders.length > 0 ? Math.round((completedOrders / allOrders.length) * 100) : 0;
   document.getElementById('pedidosPendientes').textContent = pendingOrders.length;
   document.getElementById('urgentes').textContent = urgentOrders.length;
-  document.getElementById('gananciaTotal').textContent = `$${totalEarnings.toLocaleString('es-CO')}`;
-  document.getElementById('gananciaHoy').textContent = todayEarnings.toLocaleString('es-CO');
+  document.getElementById('gananciaTotal').textContent = `$${totalEarnings.toLocaleString('es-DO')}`;
+  document.getElementById('gananciaHoy').textContent = `$${todayEarnings.toLocaleString('es-DO')}`;
 }
 
 // Función para actualizar gráficos
 function updateCharts() {
   const servicesChartEl = document.getElementById('servicesChart');
   const vehiclesChartEl = document.getElementById('vehiclesChart');
+  const alertasEl = document.getElementById('alertasLista');
+
   if (!servicesChartEl || !vehiclesChartEl) return; // No hacer nada si los gráficos no están en la página
   // Gráfico de servicios
   const serviceStats = {};
   allOrders.forEach(o => {
-    serviceStats[o.service] = (serviceStats[o.service] || 0) + 1;
+    const serviceName = o.service?.name || 'Sin Servicio';
+    serviceStats[serviceName] = (serviceStats[serviceName] || 0) + 1;
   });
 
   servicesChartEl.innerHTML = '';
-  const maxService = Math.max(...Object.values(serviceStats));
+  const maxService = Math.max(1, ...Object.values(serviceStats)); // Evitar división por cero
 
   Object.entries(serviceStats).forEach(([service, count]) => {
     const percentage = maxService > 0 ? (count / maxService) * 100 : 0;
-    servicesChart.innerHTML += `
+    servicesChartEl.innerHTML += `
       <div class="flex items-center justify-between mb-2">
         <span class="text-sm font-medium text-gray-700">${service}</span>
         <span class="text-sm text-gray-500">${count}</span>
@@ -366,15 +387,16 @@ function updateCharts() {
   // Gráfico de vehículos
   const vehicleStats = {};
   allOrders.forEach(o => {
-    vehicleStats[o.vehicle] = (vehicleStats[o.vehicle] || 0) + 1;
+    const vehicleName = o.vehicle?.name || 'Sin Vehículo';
+    vehicleStats[vehicleName] = (vehicleStats[vehicleName] || 0) + 1;
   });
 
   vehiclesChartEl.innerHTML = '';
-  const maxVehicle = Math.max(...Object.values(vehicleStats));
+  const maxVehicle = Math.max(1, ...Object.values(vehicleStats)); // Evitar división por cero
 
   Object.entries(vehicleStats).forEach(([vehicle, count]) => {
     const percentage = maxVehicle > 0 ? (count / maxVehicle) * 100 : 0;
-    vehiclesChart.innerHTML += `
+    vehiclesChartEl.innerHTML += `
       <div class="flex items-center justify-between mb-2">
         <span class="text-sm font-medium text-gray-700">${vehicle}</span>
         <span class="text-sm text-gray-500">${count}</span>
@@ -384,51 +406,53 @@ function updateCharts() {
       </div>
     `;
   });
-}
 
-// Función para verificar alertas
-function checkAlertas(){
-  const alertas = document.getElementById('alertasLista');
-  if (!alertas) return;
-  
-  alertas.innerHTML = '';
-  const now = new Date();
-  const proximos = allOrders.filter(o=>{
-    const serviceTime = new Date(`${o.date}T${o.time}`);
-    const diffMin = (serviceTime-now)/60000;
-    return diffMin>0 && diffMin<=60;
-  });
+  // Alertas
+  if (alertasEl) {
+    alertasEl.innerHTML = '';
+    const now = new Date();
+    const proximos = allOrders.filter(o => {
+      const serviceTime = new Date(`${o.date}T${o.time || '00:00'}`);
+      const diffMin = (serviceTime - now) / 60000;
+      return diffMin > 0 && diffMin <= 60;
+    });
 
-  if(proximos.length===0){
-    alertas.innerHTML='<li class="text-gray-500">No hay alertas por ahora.</li>';
-    return;
+    if (proximos.length === 0) {
+      alertasEl.innerHTML = '<li class="text-gray-500">No hay alertas por ahora.</li>';
+    } else {
+      proximos.forEach(o => {
+        const li = document.createElement('li');
+        li.innerHTML = `<strong>${o.service?.name}</strong> para <strong>${o.name}</strong> comienza a las <strong>${o.time}</strong>`;
+        alertasEl.appendChild(li);
+      });
+    }
   }
-
-  proximos.forEach(o=>{
-    const li=document.createElement('li');
-    li.innerHTML=`<strong>${o.service}</strong> para <strong>${o.name}</strong> comienza a las <strong>${o.time}</strong>`;
-    alertas.appendChild(li);
-  });
 }
-
 // Gestión de asignación y eliminación de pedidos desde modal
 async function openAssignModal(orderId){
-  selectedOrderIdForAssign = orderId;
+  selectedOrderIdForAssign = Number(orderId);
   const modal = document.getElementById('assignModal');
   const body = document.getElementById('assignModalBody');
   const select = document.getElementById('assignSelect');
   const assignBtn = document.getElementById('assignConfirmBtn');
 
-  const order = allOrders.find(o => o.id === orderId);
+  const order = allOrders.find(o => o.id === selectedOrderIdForAssign);
   const colaboradores = await loadCollaborators();
 
   body.innerHTML = `
     <div class="space-y-1 text-sm text-gray-700">
-      <div><span class="font-semibold">ID:</span> ${order.id}</div>
-      <div><span class="font-semibold">Cliente:</span> ${order.name} (${order.phone})</div>
-      <div><span class="font-semibold">Servicio:</span> ${order.service} — ${order.vehicle}</div>
-      <div><span class="font-semibold">Ruta:</span> ${order.pickup} → ${order.delivery}</div>
-      <div><span class="font-semibold">Fecha/Hora:</span> ${order.date} ${order.time}</div>
+      <p><strong>ID:</strong> ${order.id}</p>
+      <p><strong>Cliente:</strong> ${order.name} (${order.phone})</p>
+      ${order.rnc ? `<p><strong>RNC:</strong> ${order.rnc} (${order.empresa || 'N/A'})</p>` : ''}
+      <p><strong>Servicio:</strong> ${order.service?.name || 'N/A'}</p>
+      <p><strong>Ruta:</strong> ${order.pickup} → ${order.delivery}</p>
+      <p><strong>Fecha/Hora:</strong> ${order.date} ${order.time}</p>
+      ${order.service_questions && Object.keys(order.service_questions).length > 0 ? `
+        <div class="mt-2 pt-2 border-t">
+          <strong class="block mb-1">Detalles Adicionales:</strong>
+          <div class="text-xs space-y-1">${Object.entries(order.service_questions).map(([q, a]) => `<div><strong>${q.replace(/_/g, ' ')}:</strong> ${a}</div>`).join('')}</div>
+        </div>
+      ` : ''}
     </div>
   `;
 
@@ -443,7 +467,7 @@ async function openAssignModal(orderId){
   } else {
     colaboradores.forEach(c => {
       const opt = document.createElement('option');
-      opt.value = c.email;
+      opt.value = c.id; // ✅ CORREGIDO: Usar el ID (UUID) del colaborador
       opt.textContent = `${c.name} — ${c.role}`;
       select.appendChild(opt);
     });
@@ -464,22 +488,21 @@ function closeAssignModal(){
 }
 
 async function assignSelectedCollaborator(){
-  const email = document.getElementById('assignSelect').value;
-  if (!email) { 
-    showError('Error', 'Selecciona un colaborador'); 
+  const collaboratorId = document.getElementById('assignSelect').value;
+  if (!collaboratorId) { 
+    notifications.error('Selecciona un colaborador.'); 
     return; 
   }
   
   const colaboradores = await loadCollaborators();
-  const col = colaboradores.find(c => c.email === email);
+  const col = colaboradores.find(c => c.id === collaboratorId);
   if (!col) { 
-    showError('Error', 'Colaborador no encontrado'); 
+    notifications.error('Colaborador no encontrado.'); 
     return; 
   }
 
   const updateData = {
-    assigned_to: col.name,
-    assigned_email: col.email,
+    assigned_to: collaboratorId, // ✅ CORREGIDO: Asignar por ID (UUID)
     assigned_at: new Date().toISOString(),
     status: 'En proceso' // Cambio automático a "En proceso"
   };
@@ -490,7 +513,7 @@ async function assignSelectedCollaborator(){
     .eq('id', selectedOrderIdForAssign);
 
   if (error) {
-    showError('Error de asignación', error.message);
+    notifications.error('Error de asignación', error.message);
   } else {
     // Actualizar el array local para reflejar el cambio inmediatamente
     const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
@@ -498,7 +521,7 @@ async function assignSelectedCollaborator(){
       allOrders[orderIndex] = { ...allOrders[orderIndex], ...updateData };
     }
     filterOrders();
-    showSuccess('Asignación exitosa', `El pedido ha sido asignado a ${col.name} y marcado como "En proceso"`);
+    notifications.success(`Pedido asignado a ${col.name} y marcado como "En proceso".`);
   }
   
   closeAssignModal();
@@ -510,27 +533,26 @@ async function deleteSelectedOrder(){
   const { error } = await supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign);
   
   if (error) {
-    showError('Error al eliminar', error.message);
+    notifications.error('Error al eliminar', error.message);
   } else {
     allOrders = allOrders.filter(o => o.id !== selectedOrderIdForAssign);
     filterOrders();
-    showSuccess('Solicitud eliminada', `La solicitud ${selectedOrderIdForAssign} ha sido eliminada.`);
+    notifications.success(`La solicitud #${selectedOrderIdForAssign} ha sido eliminada.`);
   }
   closeAssignModal();
 }
 
 // Función para generar y enviar factura
 async function generateAndSendInvoice(orderId) {
-  showNotification('Generando Factura...', 'Por favor, espera un momento.', 'info');
-
-  const order = allOrders.find(o => o.id === orderId);
+  notifications.info('Generando Factura...', 'Por favor, espera un momento.');
+  const order = allOrders.find(o => o.id === orderId); // ✅ CORREGIDO: El ID ahora es UUID (texto), no se convierte a número.
   if (!order) {
-    showError('Error', 'Orden no encontrada.');
+    notifications.error('Orden no encontrada.');
     return;
   }
 
   if (!order.estimated_price || order.estimated_price === 'Por confirmar') {
-    showError('Acción requerida', 'Debes establecer un precio antes de generar la factura.');
+    notifications.warning('Debes establecer un precio antes de generar la factura.');
     return;
   }
 
@@ -578,8 +600,8 @@ async function generateAndSendInvoice(orderId) {
       startY: 100,
       head: [['Descripción', 'Detalle']],
       body: [
-        ['Servicio', order.service],
-        ['Vehículo', order.vehicle],
+        ['Servicio', order.service?.name || 'N/A'],
+        ['Vehículo', order.vehicle?.name || 'N/A'],
         ['Fecha Programada', `${order.date} a las ${order.time}`],
         ['Origen', order.pickup],
         ['Destino', order.delivery],
@@ -611,11 +633,11 @@ async function generateAndSendInvoice(orderId) {
 
     if (functionError) throw functionError;
 
-    showSuccess('Factura Enviada', `La factura para la orden #${order.id} ha sido enviada por correo.`);
+    notifications.success('Factura Enviada', `La factura para la orden #${order.id} ha sido enviada por correo.`);
 
   } catch (error) {
     console.error('Error al generar o enviar la factura:', error);
-    showError('Error de Factura', 'No se pudo generar o enviar el PDF. Revisa la consola.');
+    notifications.error('Error de Factura', 'No se pudo generar o enviar el PDF. Revisa la consola.');
   }
 }
 
@@ -633,13 +655,13 @@ function exportToCSV() {
   filteredOrders.forEach(order => {
     const row = [
       order.id,
-      `"${order.name}"`,
+      `"${order.name}"`, // Escaped quotes for CSV
       order.phone,
       order.email,
-      `"${order.service}"`,
-      `"${order.vehicle}"`,
-      `"${order.pickup}"`,
-      `"${order.delivery}"`,
+      `"${order.service}"`, // Escaped quotes for CSV
+      `"${order.vehicle}"`, // Escaped quotes for CSV
+      `"${order.pickup}"`, // Escaped quotes for CSV
+      `"${order.delivery}"`, // Escaped quotes for CSV
       order.date,
       order.time,
       order.status,
@@ -674,10 +696,9 @@ function handleRealtimeUpdate(payload) {
       filterOrders();
       // Mostrar una notificación persistente con el ID para copiar
       if (window.notifications) {
-        notifications.persistent(
-          `ID de solicitud: ${newRecord.id}. Cliente: ${newRecord.name}.`, 
-          'info', 
-          { title: 'Nueva Solicitud Recibida', isCopyable: true }
+        notifications.info( // La data relacionada (service.name) no viene en el payload de realtime, por eso no se muestra
+          `Cliente: ${newRecord.name}.`,
+          { title: `Nueva Solicitud #${newRecord.id}`, duration: 10000 }
         );
       }
       break;
@@ -697,61 +718,6 @@ function handleRealtimeUpdate(payload) {
   }
 }
 
-function showNotification(title, body, type = 'info') {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-
-  const typeConfig = {
-    success: { icon: 'check-circle', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
-    error: { icon: 'x-circle', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
-    warning: { icon: 'alert-triangle', color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-    info: { icon: 'bell-ring', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' }
-  };
-
-  const config = typeConfig[type] || typeConfig.info;
-
-  const toastId = `toast-${Date.now()}`;
-  const toast = document.createElement('div');
-  toast.id = toastId;
-  toast.className = `toast-in border rounded-lg shadow-lg p-4 flex items-start gap-3 ${config.bg} ${config.border}`;
-
-  toast.innerHTML = `
-    <div>
-      <i data-lucide="${config.icon}" class="w-6 h-6 ${config.color}"></i>
-    </div>
-    <div class="flex-1">
-      <p class="font-semibold text-gray-800">${title}</p>
-      <p class="text-sm text-gray-600 whitespace-pre-wrap">${body}</p>
-    </div>
-    <div>
-      <button onclick="this.closest('.toast-in').classList.add('toast-out')" class="text-gray-400 hover:text-gray-600">
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
-  `;
-
-  container.appendChild(toast);
-  lucide.createIcons(); // Renderizar el nuevo ícono
-
-  // Auto-dismiss after 7 seconds
-  setTimeout(() => {
-    const activeToast = document.getElementById(toastId);
-    if (activeToast && !activeToast.classList.contains('toast-out')) {
-      activeToast.classList.add('toast-out');
-    }
-  }, 7000);
-
-  // Eliminar el elemento del DOM después de la animación de salida
-  toast.addEventListener('animationend', (e) => {
-    if (e.animationName.includes('toast-out')) {
-      toast.remove();
-    }
-  });
-}
-
-const showSuccess = (title, body) => showNotification(title, body, 'success');
-const showError = (title, body) => showNotification(title, body, 'error');
-const showWarning = (title, body) => showNotification(title, body, 'warning');
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('searchInput').addEventListener('input', filterOrders);
@@ -778,6 +744,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.openAssignModal = openAssignModal;
   window.generateAndSendInvoice = generateAndSendInvoice;
   window.toggleActionsMenu = toggleActionsMenu;
+  window.showServiceDetails = showServiceDetails;
 
   // Suscribirse a los cambios en tiempo real de la tabla 'orders'
   const ordersSubscription = supabaseConfig.client
@@ -785,49 +752,6 @@ document.addEventListener('DOMContentLoaded', function() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
     .subscribe();
 
-  // Función para actualizar los paneles de resumen
-  function updateSummaryPanels() {
-    if (!allOrders) return;
-
-    // Actualizar contadores en los paneles de resumen
-    const totalPedidos = document.getElementById('totalPedidos');
-    const pedidosCompletados = document.getElementById('pedidosCompletados');
-    const pedidosPendientes = document.getElementById('pedidosPendientes');
-    const pedidosHoy = document.getElementById('pedidosHoy');
-    const porcentajeCompletados = document.getElementById('porcentajeCompletados');
-    const urgentes = document.getElementById('urgentes');
-    
-    if (totalPedidos) totalPedidos.textContent = allOrders.length;
-    
-    // Contar pedidos completados
-    const completados = allOrders.filter(o => o.status === 'Completado').length;
-    if (pedidosCompletados) pedidosCompletados.textContent = completados;
-    
-    // Calcular porcentaje de completados
-    const porcentaje = allOrders.length > 0 ? Math.round((completados / allOrders.length) * 100) : 0;
-    if (porcentajeCompletados) porcentajeCompletados.textContent = porcentaje;
-    
-    // Contar pedidos pendientes
-    const pendientes = allOrders.filter(o => o.status !== 'Completado').length;
-    if (pedidosPendientes) pedidosPendientes.textContent = pendientes;
-    
-    // Contar pedidos de hoy
-    const hoy = new Date().toISOString().split('T')[0];
-    const pedidosDeHoy = allOrders.filter(o => o.date === hoy).length;
-    if (pedidosHoy) pedidosHoy.textContent = pedidosDeHoy;
-    
-    // Contar urgentes (pedidos para hoy o mañana que no están completados)
-    const manana = new Date();
-    manana.setDate(manana.getDate() + 1);
-    const mananaStr = manana.toISOString().split('T')[0];
-    
-    const urgentesCount = allOrders.filter(o => 
-      (o.date === hoy || o.date === mananaStr) && o.status !== 'Completado'
-    ).length;
-    
-    if (urgentes) urgentes.textContent = urgentesCount;
-  }
-  
   // Función para editar precio
   function editPrice(orderId, element) {
     const currentPrice = element.textContent.trim();
@@ -844,7 +768,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function savePrice() {
         const newPrice = input.value.trim() || 'Por confirmar';
         
-        supabaseConfig.client
+        supabaseConfig.client // ✅ CORREGIDO: Usar supabaseConfig.client
           .from('orders')
           .update({ estimated_price: newPrice })
           .eq('id', orderId)
@@ -854,8 +778,8 @@ document.addEventListener('DOMContentLoaded', function() {
               element.innerHTML = currentPrice; // Revertir
             } else {
               element.innerHTML = newPrice;
-              showSuccess('Precio actualizado', `Precio actualizado a ${newPrice}`);
-              const orderIndex = allOrders.findIndex(o => o.id === orderId);
+              notifications.success(`Precio actualizado a ${newPrice}`);
+              const orderIndex = allOrders.findIndex(o => o.id == orderId);
               if (orderIndex !== -1) allOrders[orderIndex].estimated_price = newPrice;
               updateResumen();
             }
@@ -870,87 +794,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Función para generar y enviar factura
-  function generateAndSendInvoice(orderId) {
-    const order = allOrders.find(o => o.id === orderId);
-    if (!order) {
-      showError('Error', 'Pedido no encontrado');
-      return;
-    }
-    
-    const price = order.estimatedPrice || 'Por confirmar';
-    if (price === 'Por confirmar') {
-      showError('Error', 'Debe establecer un precio antes de generar la factura');
-      return;
-    }
-    
-    // Generar contenido de la factura
-    const invoiceDate = new Date().toLocaleDateString('es-CO');
-    const invoiceNumber = `TLC-${order.id}-${Date.now().toString().slice(-6)}`;
-    
-    const invoiceContent = `
-=== FACTURA DE SERVICIO ===
-Transporte Logístico Carlos López
-
-Factura N°: ${invoiceNumber}
-Fecha: ${invoiceDate}
-
---- DATOS DEL CLIENTE ---
-Nombre: ${order.name}
-Teléfono: ${order.phone}
-Email: ${order.email}
-
---- DETALLES DEL SERVICIO ---
-Servicio: ${order.service}
-Vehículo: ${order.vehicle}
-Ruta: ${order.pickup} → ${order.delivery}
-Fecha programada: ${order.date}
-Hora: ${order.time}
-Estado: ${order.status}
-
---- FACTURACIÓN ---
-Monto total: ${price}
-
---- INFORMACIÓN DE PAGO ---
-Formas de pago aceptadas:
-• Efectivo
-• Transferencia bancaria
-• Nequi/Daviplata
-
-Gracias por confiar en nuestros servicios.
-
---- CONTACTO ---
-TLC - Transporte Logístico Carlos López
-Teléfono: +57 300 123 4567
-Email: info@tlc-transporte.com
-    `;
-    
-    // Crear enlace de Gmail con la factura
-    const subject = encodeURIComponent(`Factura de Servicio - ${order.service} - ${invoiceNumber}`);
-    const body = encodeURIComponent(invoiceContent);
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${order.email}&su=${subject}&body=${body}`;
-    
-    // Abrir Gmail en nueva ventana
-    window.open(gmailUrl, '_blank');
-    
-    // Mostrar notificación de éxito
-    showSuccess('Factura generada', `Factura ${invoiceNumber} lista para enviar por Gmail`);
-    
-    // Actualizar el estado del pedido si está pendiente
-    if (order.status === 'Pendiente') {
-      const orderIndex = allOrders.findIndex(o => o.id === orderId);
-      if (orderIndex !== -1) {
-        allOrders[orderIndex].status = 'En proceso';
-        saveOrders(allOrders);
-        renderOrders();
-      }
-    }
-  }
-  
   // Hacer las funciones globales
   window.editPrice = editPrice;
-  window.generateAndSendInvoice = generateAndSendInvoice;
-  window.showServiceDetails = showServiceDetails;
 
   // Inicialización
   function init() {

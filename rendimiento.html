@@ -249,10 +249,25 @@
         <!-- Historial Reciente -->
         <div class="bg-white rounded-xl shadow-lg card-hover">
             <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                    <i data-lucide="history" class="w-5 h-5 mr-2 text-gray-600"></i>
-                    Historial Reciente
-                </h3>
+                <div class="flex items-center justify-between">
+                  <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                      <i data-lucide="history" class="w-5 h-5 mr-2 text-gray-600"></i>
+                      Historial Reciente
+                  </h3>
+                  <div class="flex items-center gap-2">
+                    <input id="historySearch" type="text" placeholder="Buscar servicio..." class="text-sm px-2 py-1 border rounded" />
+                    <select id="historyStatusFilter" class="text-sm px-2 py-1 border rounded">
+                      <option value="">Todos</option>
+                      <option value="Completado">Completados</option>
+                      <option value="Activo">Activos</option>
+                    </select>
+                    <div class="hidden sm:flex items-center gap-2">
+                      <label class="text-xs text-gray-600 flex items-center gap-1"><input id="toggleService" type="checkbox" checked> Servicio</label>
+                      <label class="text-xs text-gray-600 flex items-center gap-1"><input id="toggleVehicle" type="checkbox" checked> Vehículo</label>
+                      <label class="text-xs text-gray-600 flex items-center gap-1"><input id="toggleTime" type="checkbox" checked> Tiempo</label>
+                    </div>
+                  </div>
+                </div>
             </div>
             <div class="p-6">
                 <div class="overflow-x-auto -mx-4 sm:mx-0">
@@ -260,10 +275,10 @@
                         <thead>
                             <tr class="text-left text-sm text-gray-600 border-b">
                                 <th class="pb-3 px-2 md:px-3">Fecha</th>
-                                <th class="pb-3 px-2 md:px-3 hidden sm:table-cell">Servicio</th>
-                                <th class="pb-3 px-2 md:px-3 hidden md:table-cell">Vehículo</th>
+                                <th id="thService" class="pb-3 px-2 md:px-3 hidden sm:table-cell">Servicio</th>
+                                <th id="thVehicle" class="pb-3 px-2 md:px-3 hidden md:table-cell">Vehículo</th>
                                 <th class="pb-3 px-2 md:px-3">Estado</th>
-                                <th class="pb-3 px-2 md:px-3 hidden sm:table-cell">Tiempo</th>
+                                <th id="thTime" class="pb-3 px-2 md:px-3 hidden sm:table-cell">Tiempo</th>
                             </tr>
                         </thead>
                         <tbody id="recentHistory" class="text-sm">
@@ -349,8 +364,33 @@
     </div>
 
     <script src="js/notifications.js"></script>
-  <script src="js/backup.js"></script>
-  <script src="js/theme.js"></script>
-  <script src="js/rendimiento.js"></script>
+    <script src="js/backup.js"></script>
+    <script src="js/theme.js"></script>
+    <!-- Supabase client and config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <!-- Inline guard: redirect to login if no collaborator session -->
+    <script>
+      (async () => {
+        try {
+          const { data: { session }, error } = await supabaseConfig.client.auth.getSession();
+          if (error || !session) {
+            const msg = 'No hay sesión de colaborador activa. Redirigiendo al login.';
+            if (typeof window.showError === 'function') {
+              window.showError('Sesión requerida', msg);
+            } else {
+              const banner = document.createElement('div');
+              banner.textContent = msg;
+              banner.className = 'fixed top-0 left-0 right-0 z-50 bg-yellow-100 text-yellow-800 px-4 py-2 text-sm shadow';
+              document.body.prepend(banner);
+            }
+            setTimeout(() => { window.location.href = 'login-colaborador.html'; }, 400);
+          }
+        } catch (e) {
+          setTimeout(() => { window.location.href = 'login-colaborador.html'; }, 400);
+        }
+      })();
+    </script>
+    <script src="js/rendimiento.js"></script>
 </body>
 </html>

@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Panel — Colaborador</title>
+  <title>Panel — Colaborador</title> 
   
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1e3a8a">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes"> <!-- Para iOS -->
+  <meta name="mobile-web-app-capable" content="yes"> <!-- ✅ CORREGIDO: Para Android -->
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="TLC Colaborador">
   <meta name="description" content="Panel de colaborador para gestión de servicios TLC">
@@ -35,7 +36,6 @@
           TLC
         </div>
         <div>
-          <h2 class="text-lg font-bold text-white">TLC Colaborador</h2>
           <p class="text-xs text-gray-400">Panel de Control</p>
         </div>
       </div>
@@ -197,7 +197,8 @@
     </div>
   </main>
 
-  <script src="js/supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> <!-- ✅ AÑADIDO: Cargar la librería de Supabase primero -->
+  <script src="js/supabase-config.js"></script> <!-- Ahora este script puede usar la librería -->
   <script src="js/notifications.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/theme.js"></script>

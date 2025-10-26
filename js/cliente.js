@@ -30,37 +30,20 @@ function showStep(step) {
   progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
 }
 
-function getServiceOrder() {
-  return [
-    'Transporte Comercial',
-    'Paquetería',
-    'Carga Pesada',
-    'Flete',
-    'Mudanza',
-    'Grúa Vehículo',
-    'Botes Mineros',
-    'Grúa de Carga'
-  ];
-}
 // --- Carga dinámica de datos desde Supabase ---
 
 async function loadServices() {
   const serviceListContainer = document.getElementById('service-list');
   if (!serviceListContainer) return;
 
-  const { data: services, error } = await supabaseConfig.getServices();
+  // ✅ CORRECCIÓN: La función ahora devuelve el array directamente.
+  const services = await supabaseConfig.getServices();
 
-  if (error) {
-    console.error('Error al cargar servicios:', error);
+  if (!services) {
+    console.error('Error al cargar servicios: no se recibieron datos.');
     serviceListContainer.innerHTML = '<p class="text-red-500 col-span-full">No se pudieron cargar los servicios.</p>';
     return;
   }
-
-  const serviceOrder = getServiceOrder();
-  // Ordenar los servicios según el array `serviceOrder`
-  services.sort((a, b) => {
-    return serviceOrder.indexOf(a.name) - serviceOrder.indexOf(b.name);
-  });
 
   serviceListContainer.innerHTML = services.map(service => `
     <div class="service-item group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white text-center shadow-md transition-all duration-300 ease-in-out hover:shadow-xl hover:border-azulClaro hover:-translate-y-1" 
@@ -113,10 +96,11 @@ async function loadVehicles() {
   const vehicleListContainer = document.getElementById('vehicle-list');
   if (!vehicleListContainer) return;
 
-  const { data: vehicles, error } = await supabaseConfig.getVehicles();
+  // ✅ CORRECCIÓN: La función ahora devuelve el array directamente.
+  const vehicles = await supabaseConfig.getVehicles();
 
-  if (error) {
-    console.error('Error al cargar vehículos:', error);
+  if (!vehicles) {
+    console.error('Error al cargar vehículos: no se recibieron datos.');
     vehicleListContainer.innerHTML = '<p class="text-red-500 col-span-full">No se pudieron cargar los vehículos.</p>';
     return;
   }
@@ -152,12 +136,6 @@ async function loadVehicles() {
   });
 }
 
-// Función para generar ID consecutivo
-function generateOrderId() {
-  // Genera un ID más único basado en la fecha y un número aleatorio
-  return `TLC-${Date.now().toString().slice(-6)}`;
-}
-
 // Función para validar paso actual
 function validateCurrentStep() {
   if (currentStep === 1) {
@@ -165,8 +143,11 @@ function validateCurrentStep() {
     const telefonoInput = document.querySelector('input[placeholder="Teléfono"]');
     const emailInput = document.querySelector('input[placeholder="Correo"]');
     
+    // Validación mejorada para el nombre
     const isNombreValid = /^[a-zA-Z\s\u00C0-\u024F]+$/.test(nombreInput.value) && nombreInput.value.trim().length > 2;
-    const isTelefonoValid = /^[\d\s()-]+$/.test(telefonoInput.value) && telefonoInput.value.length > 6;
+    // Validación mejorada para el teléfono (formato dominicano)
+    const phoneRegex = /^(\+1|1)?[-\s]?8[0-9]{2}[-\s]?[0-9]{3}[-\s]?[0-9]{4}$/;
+    const isTelefonoValid = phoneRegex.test(telefonoInput.value.replace(/[-\s]/g, ''));
     const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value);
 
     // Actualizar UI de validación
@@ -178,25 +159,27 @@ function validateCurrentStep() {
     emailInput.classList.toggle('border-green-500', isEmailValid);
 
     if (!isNombreValid || !isTelefonoValid || !isEmailValid) {
-      let errorMessage = 'Por favor, corrija los siguientes campos:\n';
-      if (!isNombreValid) errorMessage += '- Nombre: debe tener más de 2 letras y solo puede contener letras y espacios.\n';
-      if (!isTelefonoValid) errorMessage += '- Teléfono: debe ser un número válido.\n';
-      if (!isEmailValid) errorMessage += '- Correo: debe ser un correo electrónico válido.\n';
-      alert(errorMessage);
+      notifications.warning('Por favor, revisa los campos marcados en rojo.', { title: 'Datos Personales Incompletos' });
       return false;
     }
   }
   
   if (currentStep === 2 && (!selectedService || !selectedService.name)) {
-    alert('Por favor seleccione un servicio');
+    notifications.warning('Debes seleccionar un servicio para continuar.', { title: 'Paso Incompleto' });
     return false;
   }
 
   // Nueva validación: Asegurarse de que el modal del servicio fue llenado
   if (currentStep === 2) {
     const modalId = `modal-${selectedService.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ /g, '-')}`;
-    if (document.getElementById(modalId) && !modalFilled) {
-      alert('Por favor, complete la información adicional del servicio seleccionado antes de continuar.');
+    const modalElement = document.getElementById(modalId);
+    // Solo validar si el modal existe y no ha sido llenado
+    if (modalElement && !modalElement.classList.contains('hidden') && !modalFilled) {
+      notifications.warning('Por favor, completa y guarda la información adicional del servicio antes de continuar.', { title: 'Información Requerida' });
+      return false;
+    } else if (modalElement && modalElement.classList.contains('hidden') && !modalFilled) {
+      // Si el modal existe pero fue cerrado sin guardar, también es inválido
+      notifications.warning('Parece que no guardaste la información adicional del servicio. Por favor, haz clic en "Continuar" dentro del formulario emergente.', { title: 'Información Requerida' });
       return false;
     }
   }
@@ -204,17 +187,17 @@ function validateCurrentStep() {
   if (currentStep === 3) {
     const selectedVehicle = document.querySelector('.vehicle-item.selected');
     if (!selectedVehicle) {
-      alert('Por favor seleccione un vehículo');
+      notifications.warning('Debes seleccionar un vehículo para continuar.', { title: 'Paso Incompleto' });
       return false;
     }
   }
   
   if (currentStep === 4) {
-    const origen = document.getElementById('pickupAddress').value;
-    const destino = document.getElementById('deliveryAddress').value;
+    const origen = document.getElementById('pickupAddress').value.trim();
+    const destino = document.getElementById('deliveryAddress').value.trim();
     
     if (!origen || !destino) {
-      alert('Por favor complete las direcciones de origen y destino');
+      notifications.warning('Debes establecer una dirección de origen y una de destino en el mapa.', { title: 'Paso Incompleto' });
       return false;
     }
   }
@@ -224,7 +207,7 @@ function validateCurrentStep() {
     const hora = document.querySelector('input[type="time"]').value;
     
     if (!fecha || !hora) {
-      alert('Por favor seleccione fecha y hora');
+      notifications.warning('Debes seleccionar una fecha y hora para el servicio.', { title: 'Paso Incompleto' });
       return false;
     }
   }
@@ -382,10 +365,8 @@ async function initMap() {
 
   // --- Iconos personalizados para los marcadores ---
   const originIcon = L.icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconUrl: 'img/marker-icon-2x-green.png', // Cambiado a ruta local
-    shadowUrl: 'img/marker-shadow.png',      // Cambiado a ruta local
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', // ✅ CORREGIDO: Usar URL de CDN
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', // ✅ CORREGIDO: Usar URL de CDN
     iconSize: [25, 41],
     iconAnchor: [12, 41],
     popupAnchor: [1, -34],
@@ -393,10 +374,8 @@ async function initMap() {
   });
 
   const destinationIcon = L.icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconUrl: 'img/marker-icon-2x-red.png', // Cambiado a ruta local
-    shadowUrl: 'img/marker-shadow.png',      // Cambiado a ruta local
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', // ✅ CORREGIDO: Usar URL de CDN
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', // ✅ CORREGIDO: Usar URL de CDN
     iconSize: [25, 41],
     iconAnchor: [12, 41],
     popupAnchor: [1, -34],
@@ -544,11 +523,31 @@ async function askForNotificationPermission(orderId) {
   showPushOptInCard(orderId);
 }
 
+// Utilidad: convertir Base64 URL-safe a Uint8Array para Push API
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 async function subscribeUserToPush(orderId) {
   const registration = await navigator.serviceWorker.ready;
+  // Obtener clave VAPID desde el backend (cacheada en supabaseConfig)
+  const vapidKey = await supabaseConfig.getVapidPublicKey();
+  if (!vapidKey) {
+    throw new Error('Registration failed - missing applicationServerKey (VAPID key)');
+  }
+  const applicationServerKey = urlBase64ToUint8Array(vapidKey);
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: supabaseConfig.vapidPublicKey // Usamos la clave desde la config
+    applicationServerKey
   });
 
   // Actualizar la orden en Supabase con la suscripción
@@ -742,14 +741,17 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (!validateCurrentStep()) return;
       
+      // Verificar conexión a Supabase antes de continuar
+      if (!supabaseConfig.client) {
+        notifications.error('No se pudo conectar con el servidor. Verifica tu conexión a internet.', { title: 'Error de Conexión' });
+        return;
+      }
+      
       // Construir el objeto de la orden para Supabase
       const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
       const originCoords = originMarker ? originMarker.getLatLng() : null;
       const destinationCoords = destinationMarker ? destinationMarker.getLatLng() : null;
-      const newOrderId = generateOrderId(); // Generar el ID una sola vez
       const orderData = {
-        id: newOrderId,
-        tracking_url: `${window.location.origin}/seguimiento.html?order=${newOrderId}`,
         // Datos del cliente (Paso 1)
         name: document.querySelector('input[placeholder="Nombre completo"]').value,
         phone: document.querySelector('input[placeholder="Teléfono"]').value,
@@ -757,8 +759,8 @@ document.addEventListener('DOMContentLoaded', function() {
         rnc: document.querySelector('input[name="rnc"]')?.value || null,
         empresa: document.querySelector('input[name="empresa"]')?.value || null,
         // Detalles del servicio (Pasos 2 y 3)
-        service: selectedService.name,
-        vehicle: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleName : null,
+        service_id: selectedService ? selectedService.id : null, // Correcto, es un string (UUID)
+        vehicle_id: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleId : null, // Correcto, es un string (UUID)
         service_questions: serviceQuestions,
         // Detalles de la ruta (Paso 4)
         pickup: document.getElementById('pickupAddress').value,
@@ -771,42 +773,197 @@ document.addEventListener('DOMContentLoaded', function() {
         // Estado y precio inicial
         status: 'Pendiente',
         estimated_price: 'Por confirmar',
-        tracking: [{ status: 'Solicitud Creada', date: new Date().toISOString() }] // Añadir el campo tracking inicial
+        tracking_data: [{ status: 'Solicitud Creada', date: new Date().toISOString() }]
       };
       
-      // Guardar orden en Supabase
+      // Guardar orden en Supabase con estrategia de reintento según esquema
       try {
-        const { data, error } = await supabaseConfig.client
-          .from('orders')
-          .insert([orderData])
-          .select();
+        // Base de datos: campos comunes
+        const baseOrder = {
+          // Datos del cliente (Paso 1)
+          name: orderData.name,
+          phone: orderData.phone,
+          email: orderData.email,
+          rnc: orderData.rnc,
+          empresa: orderData.empresa,
+          // Detalles del servicio (se añadirá service_id o service según esquema)
+          service_questions: orderData.service_questions,
+          // Detalles de la ruta (Paso 4)
+          pickup: orderData.pickup,
+          delivery: orderData.delivery,
+          // Fecha y Hora (Paso 5)
+          date: orderData.date,
+          time: orderData.time,
+          // Estado y precio inicial
+          status: orderData.status,
+          estimated_price: orderData.estimated_price,
+          tracking_data: orderData.tracking_data
+        };
 
-        if (error) throw error;
-        if (!data || data.length === 0) throw new Error("No se recibió confirmación al guardar la orden.");
+        const origin_coords = orderData.origin_coords;
+        const destination_coords = orderData.destination_coords;
 
-        const savedOrder = data[0];
+        // Variant A: usar service_id y vehicle_id (si la tabla tiene esas columnas)
+        const variantA = Object.assign({}, baseOrder, {
+          service_id: selectedService ? selectedService.id : null,
+          vehicle_id: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleId : null,
+          origin_coords,
+          destination_coords
+        });
 
-        // --- INICIO: Lógica de Notificación y Redirección Mejorada ---
+        // Variant B: usar service y vehicle (nombres) — fallback si Variant A falla por columnas
+        const variantB = Object.assign({}, baseOrder, {
+          service: selectedService ? selectedService.name : null,
+          vehicle: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleName : null,
+          origin_coords,
+          destination_coords
+        });
+
+        // Función auxiliar para intentar insertar y devolver resultado o lanzar error
+        async function tryInsert(payload) {
+          const { data, error } = await supabaseConfig.client
+            .from('orders')
+            .insert([payload])
+            .select();
+          if (error) throw error;
+          if (!data || data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
+          return data[0];
+        }
+
+        let savedOrder;
+        try {
+          savedOrder = await tryInsert(variantA);
+        } catch (err) {
+          // Si el error indica columna inexistente en Postgres (ej. 42703) o menciona "column" -> reintentar con variantB
+          const msg = (err && (err.message || err.error_description || JSON.stringify(err))) || '';
+          const isMissingColumn = /column\s+"?\w+"?\s+does not exist|42703/i.test(msg);
+          if (isMissingColumn) {
+            try {
+              // Verificar que variantB tenga la estructura correcta antes de intentar insertar
+              if (!variantB || typeof variantB !== 'object') {
+                throw new Error('Datos de solicitud inválidos');
+              }
+              
+              // Asegurar que todos los campos requeridos estén presentes
+              const requiredFields = ['client_name', 'client_phone', 'service_id', 'origin_address', 'destination_address'];
+              for (const field of requiredFields) {
+                if (!variantB[field]) {
+                  throw new Error(`Campo requerido faltante: ${field}`);
+                }
+              }
+              
+              savedOrder = await tryInsert(variantB);
+            } catch (err2) {
+              console.error('Error al guardar la solicitud (reintento con nombres):', err2);
+              // Mostrar mensaje más específico según el tipo de error
+              const errorMsg = err2.message.includes('Campo requerido') 
+                ? `Faltan datos obligatorios: ${err2.message}` 
+                : 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';
+              notifications.error(errorMsg, { title: 'Error al Procesar Solicitud' });
+              return;
+            }
+          } else {
+            console.error('Error al guardar la solicitud:', err);
+            // Mejorar el mensaje de error para ser más específico y manejar el caso de Object
+            let errorMsg = 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';
+            
+            if (err && typeof err === 'object') {
+              if (err.message && err.message.includes('duplicate key')) {
+                errorMsg = 'Ya existe una solicitud con estos datos. Por favor, verifica la información.';
+              } else if (err.message && (err.message.includes("Could not find the 'tracking' column") || err.message.includes("tracking"))) {
+                // Corregir el error específico de la columna tracking
+                errorMsg = 'Error de compatibilidad con la base de datos. Por favor, contacta al soporte.';
+                console.error('Error de columna tracking - se debe usar tracking_data en su lugar');
+              } else if (err.message) {
+                errorMsg = `Error específico: ${err.message}`;
+              } else if (err.code) {
+                errorMsg = `Error de código: ${err.code}`;
+              }
+            }
+            
+            notifications.error(errorMsg, { title: 'Error al Guardar Solicitud' });
+            return;
+          }
+        }
+
+        // Si llegamos aquí, savedOrder está presente
+        if (!savedOrder || !savedOrder.id) {
+          console.error('Error: No se pudo obtener el ID de la orden guardada');
+          notifications.error('No se pudo completar el proceso. Por favor, inténtalo de nuevo.', { title: 'Error de Procesamiento' });
+          return;
+        }
+        
+        const tracking_url = `${window.location.origin}/seguimiento.html?order=${savedOrder.id}`;
+        // Intentar actualizar tracking_url (si la columna existe)
+        try {
+          // Verificamos primero si la columna existe en la tabla
+          const { data: columnsData, error: columnsError } = await supabaseConfig.client
+            .rpc('get_table_columns', { table_name: 'orders' });
+            
+          if (!columnsError && columnsData && columnsData.includes('tracking_url')) {
+            // La columna existe, actualizamos
+            const { error: updateError } = await supabaseConfig.client.from('orders').update({ tracking_url }).eq('id', savedOrder.id);
+            if (updateError) {
+              console.warn('No se pudo actualizar la URL de seguimiento:', updateError);
+            }
+          } else {
+            console.warn('La columna tracking_url no existe en la tabla orders');
+          }
+          // Continuamos el proceso aunque falle esta actualización
+        } catch (e) {
+          // No crítico — ignorar si la columna no existe
+          console.warn('No se pudo actualizar tracking_url:', {
+            error: e,
+            message: e.message,
+            details: e.details,
+            hint: e.hint,
+            code: e.code
+          });
+        }
+
+        // Notificar al usuario y ofrecer copia del ID
         notifications.persistent(
           `Guarda este ID para dar seguimiento a tu servicio: <strong>${savedOrder.id}</strong>`,
           'success',
           {
             title: '¡Solicitud Enviada con Éxito!',
-            copyText: savedOrder.id, // El ID que se copiará
+            copyText: savedOrder.id,
             onCopy: () => {
-              // Redirige a index.html con un parámetro para mostrar el modal
               window.location.href = `index.html?highlight=status&orderId=${savedOrder.id}`;
             }
           }
         );
-        // --- FIN: Lógica de Notificación y Redirección Mejorada ---
 
         // Mostrar tarjeta de opt-in para notificaciones push
         askForNotificationPermission(savedOrder.id);
 
       } catch (error) {
-        console.error('Error al guardar la solicitud:', error);
-        alert(`Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.\n\nError: ${error.message}`);
+        // Log detallado del error para debugging
+        const errorDetails = {
+          error,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          response: error.response,
+          data: error.data,
+          status: error.status
+        };
+        console.error('Error al guardar la solicitud:', errorDetails);
+
+        // Mostrar error detallado en desarrollo
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          notifications.error(
+            `Error técnico: ${error.message || 'Error desconocido'}
+            ${error.hint ? `\nSugerencia: ${error.hint}` : ''}
+            ${error.code ? `\nCódigo: ${error.code}` : ''}`,
+            { title: 'Error al Guardar (Debug)' }
+          );
+        } else {
+          // Mensaje amigable en producción
+          notifications.error('Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.', 
+            { title: 'Error Inesperado' });
+        }
       }
     });
   }

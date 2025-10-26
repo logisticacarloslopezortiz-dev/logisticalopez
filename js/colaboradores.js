@@ -23,7 +23,8 @@ async function showMetricsModal(colaboradorId) {
   // Actualizar información del colaborador en el modal
   document.getElementById('modalCollabName').textContent = colaborador.name;
   document.getElementById('modalCollabEmail').textContent = colaborador.email;
-  document.getElementById('modalCollabAvatar').textContent = colaborador.name.charAt(0).toUpperCase();
+  const initials = (colaborador.name || colaborador.email || '?').toString().trim().charAt(0).toUpperCase();
+  document.getElementById('modalCollabAvatar').textContent = initials;
   
   // Mostrar un indicador de carga mientras se obtienen los datos
   metricsModal.classList.remove('hidden');
@@ -151,22 +152,27 @@ function renderModalVehicleStats(vehicleStats) {
 }
 
 // Función para renderizar horario en el modal
-function renderModalSchedule(schedule) {
+function renderModalSchedule(colaborador) {
   const container = document.getElementById('modalTimeStats');
-  if (!schedule) {
+  const schedule = getTimeStats(colaborador);
+  if (!schedule || typeof schedule !== 'object') {
     container.innerHTML = '<p class="text-gray-500 text-sm">No hay horario configurado</p>';
     return;
   }
+
+  const start = schedule.startTime || '—';
+  const end = schedule.endTime || '—';
+  const days = Array.isArray(schedule.workDays) ? schedule.workDays.join(', ') : '—';
 
   container.innerHTML = `
     <div class="space-y-2">
       <div class="flex justify-between items-center">
         <span class="text-sm text-gray-600">Horario:</span>
-        <span class="text-sm font-medium text-gray-800">${schedule.startTime} - ${schedule.endTime}</span>
+        <span class="text-sm font-medium text-gray-800">${start} - ${end}</span>
       </div>
       <div class="flex justify-between items-center">
         <span class="text-sm text-gray-600">Días:</span>
-        <span class="text-sm font-medium text-gray-800">${schedule.workDays.join(', ')}</span>
+        <span class="text-sm font-medium text-gray-800">${days}</span>
       </div>
     </div>
   `;
@@ -265,7 +271,7 @@ function renderColaboradores() {
       <td class="py-4 px-2">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-            ${c.name.charAt(0).toUpperCase()}
+            ${(c.name || c.email || '?').toString().trim().charAt(0).toUpperCase()}
           </div>
           <div>
             <div class="font-medium text-gray-900">${c.name}</div>
@@ -391,16 +397,18 @@ async function deleteColaborador(id) {
   const colaborador = colaboradores.find(c => c.id === id);
   if (!colaborador) return;
 
-  if (confirm(`¿Estás seguro de eliminar a ${colaborador.name}?`)) {
+  if (confirm(`¿Estás seguro de eliminar a ${colaborador.name}? Esta acción no se puede deshacer y eliminará su acceso.`)) {
     // Primero, eliminar de la tabla pública 'colaboradores'
     const { error } = await supabaseConfig.client.from('collaborators').delete().eq('id', id);
     
-    // Si tiene éxito, llamar a la Función Edge para eliminar el usuario de auth
+    // ✅ MEJORA: Si tiene éxito, llamar a la Función Edge para eliminar el usuario de auth.
+    // Esto mantiene la base de datos de usuarios sincronizada.
     if (!error) {
       try {
+        // Esta función debe ser creada en tu proyecto de Supabase.
         await supabaseConfig.client.functions.invoke('delete-user', { body: { userId: id } });
       } catch (functionError) {
-        // No es un error crítico si la función falla (ej. el usuario ya no existía en auth)
+        // No es un error crítico si la función falla (ej. el usuario ya no existía en auth o la función no existe aún)
         console.warn('Advertencia al eliminar usuario de auth:', functionError.message);
       }
     }
@@ -448,8 +456,9 @@ function filterColaboradores() {
   const statusFilter = document.getElementById('statusFilter').value;
   
   const filteredColaboradores = colaboradores.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchTerm) || 
-                         c.email.toLowerCase().includes(searchTerm);
+    const name = (c.name || '').toLowerCase();
+    const email = (c.email || '').toLowerCase();
+    const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
     const matchesRole = roleFilter === '' || c.role === roleFilter;
     const matchesStatus = statusFilter === '' || (c.status || 'activo') === statusFilter;
     
@@ -512,51 +521,75 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
-  // Proceso de creación en 2 pasos: 1. Auth, 2. Tabla de perfiles
+  // --- INICIO: LÓGICA DIRECTA SIN EDGE FUNCTION ---
   try {
-    // 1. Crear el usuario en Supabase Auth
+    // Paso 1: Crear usuario en Supabase Auth
     const { data: authData, error: authError } = await supabaseConfig.client.auth.signUp({
       email: email,
       password: password,
       options: {
         data: {
-          full_name: name,
+          name: name,
           role: role
         }
       }
     });
 
-    if (authError) throw authError;
-    if (!authData.user) throw new Error('No se pudo crear el usuario en el sistema de autenticación.');
-
-    // 2. Insertar el perfil en la tabla 'collaborators'
-    const { data: profileData, error: profileError } = await supabaseConfig.client
-      .from('collaborators')
-      .insert([{ id: authData.user.id, name, matricula, email, role, status: 'activo' }])
-      .select()
-      .single();
-
-    if (profileError) throw profileError;
-
-    colaboradores.push(profileData);
-    renderColaboradores();
-    form.reset();
-    showMessage('Colaborador agregado correctamente.', 'success');
-  } catch (error) {
-    if (error.message.includes('duplicate key value') || error.message.includes('already exists') || error.message.includes('unique constraint') || error.message.includes('User already registered')) {
-      showMessage('Error: El correo electrónico ya está en uso.', 'error');
-    } else if (error.message.includes('For security purposes')) {
-      showMessage('Error: Has intentado crear usuarios muy rápido. Por favor, espera un minuto antes de volver a intentarlo.', 'error');
-    } else {
-      showMessage(`Error al crear colaborador: ${error.message}`, 'error');
+    if (authError) {
+      throw new Error(authError.message);
     }
+
+    if (!authData.user) {
+      throw new Error('No se pudo crear el usuario');
+    }
+
+    // Paso 2: Insertar datos del colaborador en la tabla
+    const { error: insertError } = await supabaseConfig.client
+      .from('collaborators')
+      .insert({
+        id: authData.user.id,
+        name: name,
+        email: email,
+        matricula: matricula || null,
+        role: role,
+        status: 'activo',
+        created_at: new Date().toISOString()
+      });
+
+    if (insertError) {
+      console.error('Error al insertar colaborador:', insertError);
+      // Si falla la inserción, el usuario ya fue creado en Auth
+      // pero no tenemos forma de eliminarlo desde el frontend
+      throw new Error('Usuario creado pero error al guardar datos adicionales');
+    }
+
+    // Éxito
+    showMessage('¡Colaborador agregado exitosamente!', 'success');
+    form.reset();
+    // Recargamos la lista de colaboradores para mostrar el nuevo.
+    await init();
+
+  } catch (error) {
     console.error('Error detallado:', error);
+    let friendlyMessage = 'Ocurrió un error al agregar el colaborador.';
+    
+    if (error.message.includes('User already registered') || error.message.includes('already been registered')) {
+      friendlyMessage = 'Este correo electrónico ya está en uso.';
+    } else if (error.message.includes('Password should be at least 6 characters')) {
+      friendlyMessage = 'La contraseña debe tener al menos 6 caracteres.';
+    } else if (error.message.includes('Invalid email')) {
+      friendlyMessage = 'El formato del correo electrónico no es válido.';
+    } else if (error.message.includes('datos adicionales')) {
+      friendlyMessage = 'Usuario creado pero hubo un problema al guardar los datos. Contacta al administrador.';
+    }
+    
+    showMessage(friendlyMessage, 'error');
   } finally {
     // Restaurar el botón a su estado original
-    submitButton.disabled = false;
-    submitButton.innerHTML = originalButtonHTML;
-    lucide.createIcons();
+    restoreButton();
+    renderColaboradores();
   }
+  // --- FIN: LÓGICA REFACTORIZADA ---
 });
 
 // Event listeners para filtros

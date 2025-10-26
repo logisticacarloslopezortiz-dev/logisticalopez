@@ -4,17 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
     }
 
-    // Redirigir si ya hay una sesión activa
-    supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-            console.log('Sesión de colaborador activa encontrada, redirigiendo al panel.');
-            // Idealmente, aquí podrías verificar el rol y redirigir a la página correcta
-            window.location.href = 'panel-colaborador.html';
-        }
-    }).catch(error => {
-        console.error('Error al verificar la sesión en el login de colaborador:', error);
-    });
-
     const loginForm = document.getElementById('collabLoginForm');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
@@ -43,16 +32,47 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
 
             if (data.user) {
-                // Guardar datos del colaborador en localStorage para usarlos en el panel
-                localStorage.setItem('collaboratorData', JSON.stringify(data.user));
+                // ✅ MEJORA: Verificar el rol del usuario para asegurar que no es un administrador.
+                const { data: profile, error: profileError } = await supabaseConfig.client
+                    .from('collaborators')
+                    .select('role')
+                    .eq('id', data.user.id)
+                    .single();
+
+                if (profileError) {
+                    console.warn('No se pudo encontrar el perfil del colaborador. Usando user_metadata.role como fallback.');
+                }
+
+                let role = profile?.role?.toLowerCase();
+                if (!role) {
+                    const { data: userData } = await supabaseConfig.client.auth.getUser();
+                    role = (userData?.user?.user_metadata?.role || '').toLowerCase();
+                }
+
+                if (!role) {
+                    await supabaseConfig.client.auth.signOut(); // Cerrar sesión por seguridad
+                    throw new Error('No se pudo encontrar el perfil del colaborador.');
+                }
+
+                if (role === 'administrador') {
+                    await supabaseConfig.client.auth.signOut(); // Cerrar sesión por seguridad
+                    throw new Error('Los administradores deben iniciar sesión en el panel principal.');
+                }
+
                 window.location.href = 'panel-colaborador.html'; // Redirigir al panel del colaborador
             }
         } catch (error) {
             console.error('Error de inicio de sesión:', error.message);
-            if (error.message.includes('Invalid login credentials')) {
+            if (error.message.includes('Invalid API key')) {
+                errorMsg.textContent = 'Error de configuración. La clave de API no es válida.';
+            } else if (error.message.includes('Invalid login credentials')) {
                 errorMsg.textContent = 'Correo o contraseña incorrectos.';
             } else if (error.message.includes('Email not confirmed')) {
                 errorMsg.textContent = 'Tu correo no ha sido confirmado. Revisa tu bandeja de entrada.';
+            } else if (error.message.includes('administradores')) {
+                errorMsg.textContent = error.message;
+            } else if (error.message.includes('Failed to fetch')) {
+                errorMsg.textContent = 'No se pudo conectar con el servidor. Revisa tu conexión a internet o la configuración de CORS.';
             } else {
                 errorMsg.textContent = 'Ocurrió un error. Inténtalo de nuevo.';
             }

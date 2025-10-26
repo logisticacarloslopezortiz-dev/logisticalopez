@@ -6,10 +6,10 @@
   <title>Colaboradores — Panel del Dueño</title>
 
 <!-- ✅ Favicon -->
-<link rel="icon" type="imag/x-icon" href="/img/favicon.ico" />
-<link rel="icon" type="image/x-icon" href="/img/favicon-16x16.png" sizes="16x16" />
-<link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
-<link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/>
+<link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+<link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
+<link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
+<link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
 
 
   <script src="https://cdn.tailwindcss.com"></script>
@@ -21,7 +21,7 @@
   <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white shadow-md z-30 flex flex-col transition-all duration-300 ease-in-out">
     <div class="flex items-center justify-center py-6 px-4 border-b">
       <img src="img/1vertical.png" alt="Logo" class="w-10 sidebar-text">
-      <h2 class="text-xl font-bold text-red-700 ml-2 sidebar-text">TLC Admin</h2>
+      <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">LLO Admin</h2>
     </div>
     <nav class="flex-1 flex flex-col gap-3 py-4">
       <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="home" class="w-6 h-6"></i> <span class="sidebar-text">Inicio</span></a>
@@ -36,8 +36,12 @@
         <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-6 h-6"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
       </button>
-      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded mt-2 text-red-600 hover:bg-red-50">
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded hover:bg-red-100 text-red-600 mt-2">
         <i data-lucide="log-out" class="w-6 h-6"></i>
+        <span class="sidebar-text font-medium">Cerrar Sesión</span>
+      </button>
+      <button id="logout-button-secondary" type="button" data-action="logout" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded mt-2 text-red-600 hover:bg-red-50" aria-label="Cerrar sesión" title="Cerrar Sesión">
+        <i data-lucide="log-out" class="w-6 h-6" aria-hidden="true"></i>
         <span class="sidebar-text font-medium">Cerrar Sesión</span>
       </button>
     </div>
@@ -165,6 +169,8 @@
             <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"></i>
           </div>
         </div>
+
+        <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Filtrar por Rol</label>
           <select id="roleFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
             <option value="">Todos los roles</option>
@@ -173,6 +179,7 @@
             <option value="operador">Operador</option>
           </select>
         </div>
+
         <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Filtrar por Estado</label>
           <select id="statusFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
@@ -181,6 +188,7 @@
             <option value="inactivo">Inactivo</option>
           </select>
         </div>
+
         <div class="flex items-end">
           <button id="clearFilters" class="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center justify-center gap-2">
             <i data-lucide="x" class="w-5 h-5"></i>

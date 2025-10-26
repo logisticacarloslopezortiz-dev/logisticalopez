@@ -19,7 +19,7 @@
 <body class="bg-gray-100 flex justify-center items-center h-screen">
 
   <main class="bg-white p-8 rounded shadow w-full max-w-md">
-    <h1 class="text-2xl font-bold mb-6 text-center text-red-700">Panel TLC - Login</h1>
+    <h1 class="text-2xl font-bold mb-6 text-center text-red-700">Panel LLO - Login</h1>
 
     <form id="loginForm" class="flex flex-col gap-4">
       <div>
@@ -34,6 +34,10 @@
     </form>
 
     <p id="loginError" class="text-red-600 mt-4 text-center hidden">Usuario o contraseña incorrectos.</p>
+    
+    <div class="mt-6 text-center">
+      <a href="admin-register.html" class="text-red-700 hover:underline">Registrar nuevo administrador</a>
+    </div>
   </main>
 
   <script>
@@ -70,6 +74,23 @@
         // Reemplaza la simulación con la lógica de Supabase
         try {
           // --- INICIO: Lógica de Login Segura con Supabase Auth ---
+          console.log('Intentando iniciar sesión con:', username);
+          
+          // Verificar si el usuario existe antes de intentar iniciar sesión
+          const { data: userExists, error: checkError } = await supabaseConfig.client
+            .from('profiles')
+            .select('email')
+            .eq('email', username)
+            .maybeSingle();
+            
+          if (checkError) {
+            console.error('Error al verificar usuario:', checkError);
+          }
+          
+          if (!userExists) {
+            throw new Error('Usuario no encontrado. Verifica tus credenciales.');
+          }
+          
           const { data: authData, error } = await supabaseConfig.client.auth.signInWithPassword({
             email: username,
             password: password,

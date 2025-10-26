@@ -1,310 +1,205 @@
-// Configuración de Supabase
-class SupabaseConfig {
-    constructor() {
-        // Cargar variables de entorno desde .env o usar valores por defecto
-        this.supabaseUrl = this.getEnvVar('SUPABASE_URL') || 'https://fkprllkxyjtosjhtikxy.supabase.co';
-        this.supabaseKey = this.getEnvVar('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ';
-        this.vapidPublicKey = this.getEnvVar('VAPID_PUBLIC_KEY');
-        this.useLocalStorage = this.getEnvVar('USE_LOCAL_STORAGE') === 'true';
-        
-        // Inicializar cliente de Supabase si está disponible
-        if (typeof supabase !== 'undefined' && !this.useLocalStorage) {
-            this.client = supabase.createClient(this.supabaseUrl, this.supabaseKey);
-            console.log('Cliente Supabase inicializado correctamente');
-        } else {
-            console.log('Usando localStorage como fallback para datos');
-        }
-    }
+/**
+ * Configuración centralizada de Supabase.
+ * Este archivo inicializa el cliente de Supabase y lo exporta
+ * en un objeto `supabaseConfig` para ser usado en toda la aplicación.
+ */
 
-    // Método para obtener variables de entorno (simulado para frontend)
-    getEnvVar(name) {
-        // En un entorno real, esto vendría de process.env o configuración del servidor
-        const envVars = {
-            'USE_LOCAL_STORAGE': 'false', // <-- ¡CAMBIO IMPORTANTE! Forzamos el uso de Supabase.
-            'SUPABASE_URL': 'https://fkprllkxyjtosjhtikxy.supabase.co',
-            'SUPABASE_ANON_KEY': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ',
-            'GOOGLE_MAPS_API_KEY': 'AQUI_VA_TU_CLAVE_DE_API_REAL'
-        };
-        return envVars[name];
-    }
+const SUPABASE_URL = 'https://fkprllkxyjtosjhtikxy.supabase.co'; // Reemplaza con la URL de tu proyecto
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ';        
+let supabaseClient = null;
 
-    // Métodos para órdenes/pedidos
-    async getOrders(filters = {}) {
-        if (this.useLocalStorage) {
-            let orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-            if (filters.collaboratorId) {
-                orders = orders.filter(o => o.assigned_to === filters.collaboratorId);
-            }
-            return orders;
-        }
-        
-        try {
-            if (!this.client) {
-                return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-            }
-
-            let query = this.client
-                .from('orders')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            // Aplicar filtros si existen
-            if (filters.collaboratorId) {
-                query = query.eq('assigned_to', filters.collaboratorId);
-            }
-
-            const { data, error } = await query;
-            
-            if (error) throw error;
-            return data || [];
-        } catch (error) {
-            console.error('Error al obtener órdenes:', error);
-            return JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-        }
-    }
-
-    async getOrdersForCollaborator(collaboratorId) {
-        return this.getOrders({ collaboratorId });
-    }
-
-    async saveOrder(order) {
-        if (this.useLocalStorage) {
-            const orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-            orders.push(order);
-            localStorage.setItem('tlc_orders', JSON.stringify(orders));
-            return order;
-        }
-
-        try {
-            const { data, error } = await this.client
-                .from('orders')
-                .insert([order])
-                .select();
-            
-            if (error) throw error;
-            return data[0];
-        } catch (error) {
-            console.error('Error al guardar orden:', error);
-            // Fallback a localStorage
-            const orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-            orders.push(order);
-            localStorage.setItem('tlc_orders', JSON.stringify(orders));
-            return order;
-        }
-    }
-
-    async updateOrder(orderId, updates) {
-        if (this.useLocalStorage) {
-            const orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-            const index = orders.findIndex(o => o.id === orderId);
-            if (index !== -1) {
-                orders[index] = { ...orders[index], ...updates };
-                localStorage.setItem('tlc_orders', JSON.stringify(orders));
-                return orders[index];
-            }
-            return null;
-        }
-
-        try {
-            const { data, error } = await this.client
-                .from('orders')
-                .update(updates)
-                .eq('id', orderId)
-                .select();
-            
-            if (error) throw error;
-            return data[0];
-        } catch (error) {
-            console.error('Error al actualizar orden:', error);
-            return null;
-        }
-    }
-
-    // Métodos para colaboradores
-    async getCollaborators() {
-        if (this.useLocalStorage) {
-            return JSON.parse(localStorage.getItem('colaboradores') || '[]');
-        }
-
-        try {
-            const { data, error } = await this.client
-                .from('colaboradores')
-                .select('*');
-            
-            if (error) throw error;
-            return data || [];
-        } catch (error) {
-            console.error('Error al obtener colaboradores:', error);
-            return JSON.parse(localStorage.getItem('colaboradores') || '[]');
-        }
-    }
-
-    async saveCollaborator(collaborator) {
-        if (this.useLocalStorage) {
-            const collaborators = JSON.parse(localStorage.getItem('colaboradores') || '[]');
-            collaborators.push(collaborator);
-            localStorage.setItem('colaboradores', JSON.stringify(collaborators));
-            return collaborator;
-        }
-
-        try {
-            const { data, error } = await this.client
-                .from('colaboradores')
-                .insert([collaborator])
-                .select();
-            
-            if (error) throw error;
-            return data[0];
-        } catch (error) {
-            console.error('Error al guardar colaborador:', error);
-            // Fallback a localStorage
-            const collaborators = JSON.parse(localStorage.getItem('colaboradores') || '[]');
-            collaborators.push(collaborator);
-            localStorage.setItem('colaboradores', JSON.stringify(collaborators));
-            return collaborator;
-        }
-    }
-
-    async loginCollaborator(email, password) {
-        if (this.useLocalStorage) {
-            // El modo local no soporta autenticación segura. Se recomienda usar Supabase.
-            console.warn("El login en modo localStorage no es seguro y es solo para desarrollo.");
-            const localCollaborators = JSON.parse(localStorage.getItem('collaborators') || '[]');
-            const user = localCollaborators.find(c => c.email === email); // No se verifica password en local.
-            if (user) return { data: { user }, error: null };
-            return { data: { user: null }, error: { message: 'Credenciales inválidas en modo local.' } };
-        }
-
-        try {
-            // Usar el método de autenticación de Supabase
-            const { data, error } = await this.client.auth.signInWithPassword({ email, password });
-            if (error) throw error;
-            return { data, error: null };
-        } catch (error) {
-            return { data: null, error };
-        }
-    }
-    // Métodos para servicios y vehículos
-    async getServices() {
-        if (this.useLocalStorage) {
-            // Simular la estructura de Supabase para consistencia
-            return JSON.parse(localStorage.getItem('tlc_services') || '[]');
-        }
-
-        try {
-            const { data, error } = await this.client
-                .from('services')
-                .select('*') // Asegurarse de que se seleccionan todas las columnas
-                .eq('is_active', true)
-                .order('name');
-            
-            if (error) console.error('Error en getServices:', error);
-            return { data: data || [], error };
-        } catch (error) {
-            console.error('Error al obtener servicios:', error);
-            return { data: JSON.parse(localStorage.getItem('tlc_services') || '[]'), error };
-        }
-    }
-
-    async getVehicles() {
-        if (this.useLocalStorage) {
-            return JSON.parse(localStorage.getItem('tlc_vehicles') || '[]');
-        }
-
-        try {
-            const { data, error } = await this.client
-                .from('vehicles')
-                .select('*') // Asegurarse de que se seleccionan todas las columnas
-                .eq('is_active', true)
-                .order('name');
-            
-            if (error) console.error('Error en getVehicles:', error);
-            return { data: data || [], error };
-        } catch (error) {
-            console.error('Error al obtener vehículos:', error);
-            return { data: JSON.parse(localStorage.getItem('tlc_vehicles') || '[]'), error };
-        }
-    }
-
-    async addService(serviceData) {
-        if (this.useLocalStorage) return null; // No soportado en modo local por ahora
-        const { data, error } = await this.client.from('services').insert([serviceData]).select();
-        if (error) throw error;
-        return data[0];
-    }
-
-    async addVehicle(vehicleData) {
-        if (this.useLocalStorage) return null;
-        const { data, error } = await this.client.from('vehicles').insert([vehicleData]).select();
-        if (error) throw error;
-        return data[0];
-    }
-
-    async deleteService(serviceId) {
-        const { error } = await this.client.from('services').delete().eq('id', serviceId);
-        if (error) throw error;
-    }
-
-    async deleteVehicle(vehicleId) {
-        const { error } = await this.client.from('vehicles').delete().eq('id', vehicleId);
-        if (error) throw error;
-    }
-
-    async getBusinessSettings() {
-        if (this.useLocalStorage) {
-            return JSON.parse(localStorage.getItem('businessData') || '{}');
-        }
-        try {
-            const { data, error } = await this.client
-                .from('business_settings')
-                .select('*')
-                .eq('id', 1)
-                .single();
-            if (error) throw error;
-            return data;
-        } catch (error) { console.error('Error al obtener configuración del negocio:', error); return {}; }
-    }
-    // Método para sincronizar datos locales con Supabase
-    async syncLocalData() {
-        if (this.useLocalStorage) {
-            console.log('Sincronización omitida: usando localStorage');
-            return;
-        }
-
-        try {
-            // Sincronizar órdenes
-            const localOrders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-            for (const order of localOrders) {
-                if (!order.synced) {
-                    await this.saveOrder({ ...order, synced: true });
-                }
-            }
-
-            // Sincronizar colaboradores
-            const localCollaborators = JSON.parse(localStorage.getItem('colaboradores') || '[]');
-            for (const collaborator of localCollaborators) {
-                if (!collaborator.synced) {
-                    await this.saveCollaborator({ ...collaborator, synced: true });
-                }
-            }
-
-            console.log('Sincronización completada');
-        } catch (error) {
-            console.error('Error en sincronización:', error);
-        }
-    }
-
-    // Método para cambiar entre localStorage y Supabase
-    toggleStorageMode(useLocal = true) {
-        this.useLocalStorage = useLocal;
-        console.log(`Modo de almacenamiento cambiado a: ${useLocal ? 'localStorage' : 'Supabase'}`);
-    }
+try {
+  supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+  console.error("Error al inicializar el cliente de Supabase:", e);
 }
 
-// Crear instancia global
-const supabaseConfig = new SupabaseConfig();
+const supabaseConfig = {
+  client: supabaseClient,
+  useLocalStorage: false, // ✅ CORREGIDO: Forzar la lectura desde Supabase siempre.
+  vapidPublicKey: null,
 
-// Exportar para uso en otros archivos
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = SupabaseConfig;
-}
+  // --- INICIO: Funciones de acceso a datos ---
+
+  /**
+   * Obtiene la lista de servicios.
+   * @returns {Promise<Array>}
+   */
+  async getServices() {
+    if (this.useLocalStorage) {
+      try {
+        return JSON.parse(localStorage.getItem('tlc_services') || '[]');
+      } catch { return []; }
+    }
+    // ✅ MEJORA: Pedir los servicios ordenados directamente desde la base de datos.
+    const { data, error } = await this.client.from('services')
+      .select('*')
+      .order('display_order', { ascending: true, nullsFirst: false });
+    if (error) console.error('Error fetching services:', error);
+    return data || [];
+  },
+
+  /**
+   * Obtiene la lista de vehículos.
+   * @returns {Promise<Array>}
+   */
+  async getVehicles() {
+    if (this.useLocalStorage) {
+      try {
+        return JSON.parse(localStorage.getItem('tlc_vehicles') || '[]');
+      } catch { return []; }
+    }
+    const { data, error } = await this.client.from('vehicles').select('*');
+    if (error) console.error('Error fetching vehicles:', error);
+    return data || [];
+  },
+
+  /**
+   * Obtiene la lista de órdenes.
+   * @returns {Promise<Array>}
+   */
+  async getOrders() {
+    if (this.useLocalStorage) {
+      try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
+    }
+    const { data, error } = await this.client.from('orders').select('*');
+    if (error) console.error('Error fetching orders:', error);
+    return data || [];
+  },
+
+  /**
+   * Obtiene las órdenes asignadas a un colaborador específico.
+   * @param {string} collaboratorId - El ID del colaborador.
+   * @returns {Promise<Array>}
+   */
+  async getOrdersForCollaborator(collaboratorId) {
+    if (!this.client) return [];
+    const { data, error } = await this.client
+      .from('orders')
+      .select('*')
+      .eq('assigned_to', collaboratorId);
+    if (error) console.error(`Error fetching orders for collaborator ${collaboratorId}:`, error);
+    return data || [];
+  },
+
+  /**
+   * Agrega un nuevo servicio.
+   * @param {object} serviceData - Los datos del servicio a agregar.
+   * @returns {Promise<object>} El servicio recién creado.
+   */
+  async addService(serviceData) {
+    const { data, error } = await this.client.from('services').insert(serviceData).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Elimina un servicio por su ID.
+   * @param {string} serviceId - El ID del servicio a eliminar.
+   */
+  async deleteService(serviceId) {
+    const { error } = await this.client.from('services').delete().eq('id', serviceId);
+    if (error) throw error;
+  },
+
+  /**
+   * Agrega un nuevo vehículo.
+   * @param {object} vehicleData - Los datos del vehículo a agregar.
+   * @returns {Promise<object>} El vehículo recién creado.
+   */
+  async addVehicle(vehicleData) {
+    const { data, error } = await this.client.from('vehicles').insert(vehicleData).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Elimina un vehículo por su ID.
+   * @param {string} vehicleId - El ID del vehículo a eliminar.
+   */
+  async deleteVehicle(vehicleId) {
+    const { error } = await this.client.from('vehicles').delete().eq('id', vehicleId);
+    if (error) throw error;
+  },
+
+  /**
+   * Actualiza una orden por su ID.
+   * @param {string} orderId - El ID de la orden.
+   * @param {object} updates - Los campos a actualizar.
+   * @returns {Promise<object>} Los datos actualizados de la orden.
+   */
+  async updateOrder(orderId, updates) {
+    console.log('updateOrder called with:', { orderId, updates });
+    // Sanea payload: elimina campos que no existen en el esquema
+    const safeUpdates = { ...updates };
+    delete safeUpdates.last_collab_status;
+    delete safeUpdates.lastCollabStatus;
+
+    const { data, error } = await this.client
+      .from('orders')
+      .update(safeUpdates)
+      .eq('id', orderId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('updateOrder error:', error);
+      console.log('=== SUPABASE ERROR DETAILS ===');
+      console.log('Error type:', typeof error);
+      console.log('Error keys:', error ? Object.keys(error) : 'null');
+      try {
+        console.log('Error JSON:', JSON.stringify(error, null, 2));
+      } catch (jsonErr) {
+        console.log('Cannot stringify error:', jsonErr.message);
+      }
+      console.log('=== END SUPABASE ERROR ===');
+      throw error;
+    }
+    
+    console.log('updateOrder success:', data);
+    return data;
+  },
+
+  /**
+   * Obtiene la clave pública VAPID (para Web Push) desde el servidor y la cachea.
+   */
+  async getVapidPublicKey() {
+    try {
+      if (this.vapidPublicKey) return this.vapidPublicKey;
+      const resp = await fetch('/api/vapidPublicKey');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
+      this.vapidPublicKey = json?.key || null;
+      return this.vapidPublicKey;
+    } catch (e) {
+      console.warn('No se pudo obtener VAPID public key:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Obtiene la configuración del negocio.
+   * @returns {Promise<object>} La configuración del negocio.
+   */
+  async getBusinessSettings() {
+    if (!this.client) return {};
+    // Asumimos que solo hay una fila de configuración con id=1
+    const { data, error } = await this.client.from('business_settings').select('*').eq('id', 1).single();
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+      console.error('Error fetching business settings:', error);
+      return {};
+    }
+    return data || {};
+  },
+
+  /**
+   * Guarda o actualiza la configuración del negocio.
+   * @param {object} settingsData - Los datos de configuración a guardar.
+   */
+  async saveBusinessSettings(settingsData) {
+    if (!this.client) return;
+    // Usamos upsert para crear la fila si no existe, o actualizarla si ya existe.
+    const { error } = await this.client.from('business_settings').upsert({ id: 1, ...settingsData });
+    if (error) throw error;
+  }
+};

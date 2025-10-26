@@ -1,4 +1,25 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // --- INICIO: Auth Guard para el Panel de Administrador ---
+    const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
+
+    if (sessionError || !session) {
+        console.error('No hay sesión activa. Redirigiendo al login.');
+        window.location.href = '/login.html';
+        return;
+    }
+
+    const userRole = localStorage.getItem('userRole');
+    if (userRole !== 'administrador') {
+        console.error('Acceso denegado. Se requiere rol de administrador.');
+        await supabaseConfig.client.auth.signOut();
+        window.location.href = '/login.html';
+        return;
+    }
+    // --- FIN: Auth Guard ---
+
+    // Emitir evento global indicando que la sesión admin está lista
+    window.dispatchEvent(new Event('admin-session-ready'));
+
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('main-content');
     const toggleButton = document.getElementById('sidebar-toggle');
