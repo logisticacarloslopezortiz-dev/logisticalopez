@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prueba de Supabase</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    #results {
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      margin-top: 20px;
+      white-space: pre-wrap;
+      font-family: monospace;
+      height: 300px;
+      overflow-y: auto;
+    }
+    .success {
+      color: green;
+    }
+    .error {
+      color: red;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Prueba de Funciones de Supabase</h1>
+  <p>Esta página ejecutará pruebas para verificar que las funciones de Supabase estén funcionando correctamente.</p>
+  
+  <button id="runTest">Ejecutar Prueba</button>
+  
+  <div id="results">Los resultados de la prueba aparecerán aquí...</div>
+
+  <!-- Cargar Supabase JS desde CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <!-- Cargar la configuración de Supabase -->
+  <script src="js/supabase-config.js"></script>
+  
+  <!-- Cargar el script de prueba -->
+  <script src="js/test-supabase.js"></script>
+  
+  <script>
+    // Redirigir la salida de console.log al div de resultados
+    const resultsDiv = document.getElementById('results');
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    
+    console.log = function() {
+      const args = Array.from(arguments);
+      const message = args.join(' ');
+      resultsDiv.innerHTML += `<div>${message}</div>`;
+      originalConsoleLog.apply(console, args);
+    };
+    
+    console.error = function() {
+      const args = Array.from(arguments);
+      const message = args.join(' ');
+      resultsDiv.innerHTML += `<div class="error">${message}</div>`;
+      originalConsoleError.apply(console, args);
+    };
+    
+    // Configurar el botón de prueba
+    document.getElementById('runTest').addEventListener('click', function() {
+      resultsDiv.innerHTML = ''; // Limpiar resultados anteriores
+      console.log('Iniciando pruebas de Supabase...');
+      
+      // Verificar que supabaseConfig esté disponible
+      if (typeof supabaseConfig === 'undefined') {
+        console.error('Error: supabaseConfig no está definido');
+      } else {
+        console.log('✅ supabaseConfig está disponible');
+        
+        // Verificar que el cliente de Supabase esté inicializado
+        if (supabaseConfig.client) {
+          console.log('✅ Cliente de Supabase inicializado correctamente');
+          
+          // Probar conexión con una consulta simple
+          testSupabaseConnection();
+        } else {
+          console.error('❌ Error: Cliente de Supabase no inicializado');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
