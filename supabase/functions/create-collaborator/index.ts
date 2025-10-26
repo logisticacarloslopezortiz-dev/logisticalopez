@@ -67,6 +67,8 @@ Deno.serve(async (req) => {
 
     if (!existing || existing.length === 0) {
       logDebug('Creando perfil de colaborador', { userId: user.id });
+      
+      // 1. Insertar en tabla collaborators
       const { error: insErr } = await admin
         .from('collaborators')
         .insert({ 
@@ -83,6 +85,40 @@ Deno.serve(async (req) => {
       if (insErr) {
         logDebug('Error al insertar perfil de colaborador', insErr);
         return jsonResponse({ error: insErr.message }, 400);
+      }
+      
+      // 2. Insertar en tabla profiles
+      const { error: profileErr } = await admin
+        .from('profiles')
+        .insert({
+          id: user.id,
+          email,
+          full_name: name,
+          phone,
+          role,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+        
+      if (profileErr) {
+        logDebug('Error al insertar en profiles', profileErr);
+        return jsonResponse({ error: profileErr.message }, 400);
+      }
+      
+      // 3. Insertar en tabla matricula si se proporcionó
+      if (matricula) {
+        const { error: matriculaErr } = await admin
+          .from('matriculas')
+          .insert({
+            user_id: user.id,
+            matricula,
+            created_at: new Date().toISOString()
+          });
+          
+        if (matriculaErr) {
+          logDebug('Error al insertar en matriculas', matriculaErr);
+          return jsonResponse({ error: matriculaErr.message }, 400);
+        }
       }
     }
 

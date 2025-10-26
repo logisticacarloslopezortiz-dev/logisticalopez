@@ -139,6 +139,27 @@
       </div>
     </div>
 
+    <!-- Trabajo activo y mapa -->
+    <div class="flex flex-col md:flex-row gap-6 mb-6">
+      <div class="w-full md:w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-800">Trabajo Activo</h3>
+        </div>
+        <div class="p-6" id="trabajoActivoContainer">
+          <div class="flex flex-col items-center justify-center py-8 text-gray-500">
+            <i data-lucide="truck" class="w-12 h-12 mb-3 text-gray-300"></i>
+            <p>No hay trabajo activo en este momento</p>
+          </div>
+        </div>
+      </div>
+      <div class="w-full md:w-1/2 bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-800">Mapa de Operaciones</h3>
+        </div>
+        <div id="map" class="h-80"></div>
+      </div>
+    </div>
+
     <!-- Alertas -->
     <div class="mt-8 bg-white p-4 rounded shadow">
       <h2 class="text-xl font-semibold mb-3 flex items-center gap-2"><i data-lucide="bell"></i> Alertas del día</h2>
@@ -158,7 +179,8 @@
           </button>
         </div>
       </div>
-      <div class="overflow-x-auto">
+      <!-- Vista de tabla para pantallas medianas y grandes -->
+      <div class="hidden md:block overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
@@ -182,6 +204,11 @@
             <!-- Los pedidos se cargarán aquí dinámicamente -->
           </tbody>
         </table>
+      </div>
+      
+      <!-- Vista de tarjetas para móviles -->
+      <div class="md:hidden space-y-4" id="ordersCardContainer">
+        <!-- Las tarjetas de pedidos se cargarán aquí dinámicamente -->
       </div>
     </div>
   </main>

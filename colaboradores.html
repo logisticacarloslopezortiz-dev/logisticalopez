@@ -208,7 +208,8 @@
           <h2 class="text-xl font-semibold text-gray-900">Lista de Colaboradores</h2>
         </div>
       </div>
-      <div class="overflow-x-auto">
+      <!-- Vista de tabla para pantallas medianas y grandes -->
+      <div class="hidden md:block overflow-x-auto">
         <table class="w-full">
           <thead class="bg-gray-50">
             <tr>
@@ -224,6 +225,11 @@
             <!-- Los colaboradores se cargarán aquí -->
           </tbody>
         </table>
+      </div>
+      
+      <!-- Vista de tarjetas para móviles -->
+      <div class="md:hidden space-y-4" id="colaboradoresCardContainer">
+        <!-- Las tarjetas de colaboradores se cargarán aquí -->
       </div>
     </div>
   </main>

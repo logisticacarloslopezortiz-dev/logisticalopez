@@ -253,13 +253,22 @@ function getTimeStats(colaborador) {
 function renderColaboradores() {
   if (!tableBody) return; // ✅ DEFENSA: No hacer nada si la tabla no existe
   tableBody.innerHTML = ''; // Esta línea causaba el error si tableBody era null
+  
+  // Obtener el contenedor de tarjetas para móvil
+  const cardContainer = document.getElementById('colaboradoresCardContainer');
+  if (cardContainer) cardContainer.innerHTML = '';
+  
   if (colaboradores.length === 0) {
     tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="users" class="w-8 h-8 text-gray-400"></i><span>No hay colaboradores registrados</span></div></td></tr>';
+    if (cardContainer) {
+      cardContainer.innerHTML = '<div class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="users" class="w-8 h-8 text-gray-400"></i><span>No hay colaboradores registrados</span></div></div>';
+    }
     lucide.createIcons();
     return;
   }
   
   colaboradores.forEach((c, index) => {
+    // Renderizar fila para vista de escritorio
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50 transition-colors';
     
@@ -309,6 +318,57 @@ function renderColaboradores() {
       </td>
     `;
     tableBody.appendChild(tr);
+    
+    // Renderizar tarjeta para vista móvil
+    if (cardContainer) {
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-lg shadow p-4 mb-4';
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+              ${(c.name || c.email || '?').toString().trim().charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div class="font-medium text-gray-900">${c.name}</div>
+              <div class="text-sm text-gray-500">Registrado: ${createdDate}</div>
+            </div>
+          </div>
+          ${roleBadge}
+        </div>
+        
+        <div class="grid grid-cols-2 gap-2 mb-3 text-sm">
+          <div>
+            <p class="text-gray-500">Matrícula:</p>
+            <p class="font-mono">${c.matricula || 'N/A'}</p>
+          </div>
+          <div>
+            <p class="text-gray-500">Email:</p>
+            <p class="truncate">${c.email || 'N/A'}</p>
+          </div>
+          <div>
+            <p class="text-gray-500">Estado:</p>
+            ${statusBadge}
+          </div>
+        </div>
+        
+        <div class="flex justify-end gap-2 border-t pt-3">
+          <button onclick="showMetricsModal('${c.id}')" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver métricas">
+            <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+          </button>
+          <button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
+            <i data-lucide="edit-2" class="w-4 h-4"></i>
+          </button>
+          <button onclick="toggleStatus('${c.id}')" class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors" title="Cambiar estado">
+            <i data-lucide="${c.status === 'inactivo' ? 'user-check' : 'user-x'}" class="w-4 h-4"></i>
+          </button>
+          <button onclick="deleteColaborador('${c.id}')" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `;
+      cardContainer.appendChild(card);
+    }
   });
   
   lucide.createIcons();

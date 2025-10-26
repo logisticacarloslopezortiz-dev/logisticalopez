@@ -538,19 +538,24 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function subscribeUserToPush(orderId) {
-  const registration = await navigator.serviceWorker.ready;
-  // Obtener clave VAPID desde el backend (cacheada en supabaseConfig)
-  let vapidKey = await supabaseConfig.getVapidPublicKey();
-  if (!vapidKey) {
-    console.warn('No se pudo obtener la clave VAPID, usando clave de respaldo');
-    // Usar una clave de respaldo para desarrollo
-    vapidKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
-  }
-  const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    console.log("Service Worker listo para suscripción");
+    
+    // Clave VAPID fija para desarrollo (reemplazar en producción)
+    const vapidKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
+    console.log("Usando clave VAPID:", vapidKey);
+    
+    const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+    console.log("applicationServerKey generada correctamente");
   const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey
-  });
+      userVisibleOnly: true,
+      applicationServerKey
+    });
+  } catch (error) {
+    console.error("Error en subscribeUserToPush:", error);
+    throw error;
+  }
 
   // Actualizar la orden en Supabase con la suscripción
   await supabaseConfig.client.from('orders').update({ push_subscription: subscription }).eq('id', orderId);
