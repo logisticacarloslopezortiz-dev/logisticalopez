@@ -583,18 +583,16 @@ form.addEventListener('submit', async (e) => {
 
   // --- USANDO EDGE FUNCTION PARA CREAR COLABORADORES ---
   try {
-    // Usar la Edge Function process-collaborator-requests
-    const { data, error } = await supabaseConfig.client.functions.invoke('process-collaborator-requests', {
+    // Usar directamente la Edge Function create-collaborator
+    const normalizedRole = role.toLowerCase(); // Usar el rol seleccionado directamente
+    const { data, error } = await supabaseConfig.client.functions.invoke('create-collaborator', {
       body: {
-        action: 'create_collaborator',
-        collaboratorData: {
-          name: name,
-          email: email,
-          password: password,
-          matricula: matricula || null,
-          role: role,
-          status: 'activo'
-        }
+        name: name,
+        email: email,
+        password: password,
+        matricula: matricula || null,
+        role: normalizedRole,
+        phone: '' // Campo requerido en la función
       }
     });
 
@@ -625,6 +623,10 @@ form.addEventListener('submit', async (e) => {
       friendlyMessage = 'El formato del correo electrónico no es válido.';
     } else if (error.message.includes('datos adicionales')) {
       friendlyMessage = 'Usuario creado pero hubo un problema al guardar los datos. Contacta al administrador.';
+    } else if (error.message.toLowerCase().includes('collaborators') || error.message.toLowerCase().includes('relation')) {
+      friendlyMessage = 'La tabla de colaboradores no existe o tiene políticas que impiden el acceso.';
+    } else if (error.message.toLowerCase().includes('rls') || error.message.toLowerCase().includes('policy')) {
+      friendlyMessage = 'Políticas de seguridad bloquean esta operación. Consulte al administrador.';
     }
     
     showMessage(friendlyMessage, 'error');

@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
           phone, 
           role, 
           matricula,
-          status: 'Activo',
+          status: 'activo', // Corregido: 'activo' en minúsculas para consistencia
           created_at: new Date().toISOString()
         });
 

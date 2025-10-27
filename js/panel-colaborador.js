@@ -409,6 +409,13 @@ function render(){
   });
 
   if (window.lucide) lucide.createIcons();
+
+  // Renderizado móvil en forma de tarjetas
+  try {
+    renderMobileCards(state.filteredOrders);
+  } catch(err) {
+    console.warn('No se pudo renderizar tarjetas móviles:', err);
+  }
 }
 
 /**
@@ -436,6 +443,86 @@ function filterAndRender(){
   });
   render();
   updateCollaboratorStats(state.collabSession.user.id);
+}
+
+// === Soporte móvil: tarjetas de solicitudes asignadas ===
+function ensureMobileContainer(){
+  let container = document.getElementById('ordersCardContainer');
+  if (container) return container;
+  const tableEl = document.querySelector('table');
+  if (!tableEl || !tableEl.parentElement) return null;
+  container = document.createElement('div');
+  container.id = 'ordersCardContainer';
+  container.className = 'md:hidden space-y-4';
+  // Insertar el contenedor antes del bloque de tabla
+  try {
+    tableEl.parentElement.parentElement.insertAdjacentElement('beforebegin', container);
+  } catch (_) {
+    tableEl.parentElement.insertAdjacentElement('beforebegin', container);
+  }
+  return container;
+}
+
+function renderMobileCards(orders){
+  const container = ensureMobileContainer();
+  if (!container) return;
+  if (!orders || orders.length === 0){
+    container.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
+    return;
+  }
+  container.innerHTML = orders.map(o => {
+    const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
+    const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
+    return `
+      <div class="bg-white rounded-lg shadow p-4 border border-gray-100">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-semibold text-gray-900">#${o.id}</div>
+          <span class="px-2 py-1 rounded-full text-xs font-semibold ${status.badge}">${status.label}</span>
+        </div>
+        <div class="text-sm text-gray-800 font-medium">${o.name}</div>
+        <div class="text-xs text-gray-500 mb-2">${o.phone}</div>
+        <div class="text-sm text-gray-700">${o.service}</div>
+        <div class="text-xs text-gray-600 truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</div>
+        <div class="text-xs text-gray-600">${o.date} <span class="text-gray-400">•</span> ${o.time}</div>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <button data-id="${o.id}" data-next="en_camino_recoger" class="mob-step-btn px-2 py-2 text-xs bg-blue-600 text-white rounded">Recoger</button>
+          <button data-id="${o.id}" data-next="cargando" class="mob-step-btn px-2 py-2 text-xs bg-yellow-600 text-white rounded">Cargando</button>
+          <button data-id="${o.id}" data-next="en_camino_entregar" class="mob-step-btn px-2 py-2 text-xs bg-indigo-600 text-white rounded">Entregar</button>
+          <button data-id="${o.id}" data-next="retraso_tapon" class="mob-step-btn px-2 py-2 text-xs bg-orange-600 text-white rounded">Retraso</button>
+          <button data-id="${o.id}" data-next="entregado" class="mob-step-btn col-span-2 px-2 py-2 text-xs bg-green-600 text-white rounded">Finalizar</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.mob-step-btn').forEach(btn => {
+    btn.addEventListener('click', () => changeStatus(Number(btn.dataset.id), btn.dataset.next));
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+// === Toggle de sidebar en móvil (hamburguesa) ===
+function setupMobileSidebarToggle(){
+  const sidebar = document.getElementById('sidebar') || document.getElementById('collabSidebar');
+  const toggleBtn = document.getElementById('mobileSidebarToggle') || document.getElementById('mobileMenuBtn');
+  if (!sidebar || !toggleBtn) return;
+  // Estado inicial: oculto en móvil
+  sidebar.classList.add('md:translate-x-0');
+  sidebar.classList.add('-translate-x-full');
+  sidebar.classList.add('md:static');
+  sidebar.classList.add('fixed');
+  sidebar.classList.add('top-0');
+  sidebar.classList.add('left-0');
+  sidebar.classList.add('h-screen');
+  sidebar.classList.add('z-40');
+  sidebar.classList.add('transition-transform');
+  toggleBtn.addEventListener('click', () => {
+    if (sidebar.classList.contains('-translate-x-full')){
+      sidebar.classList.remove('-translate-x-full');
+    } else {
+      sidebar.classList.add('-translate-x-full');
+    }
+  });
 }
 
 // Funciones para actualizar el sidebar
@@ -568,6 +655,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   state.collabSession = session;
+
+  // Configurar toggle de sidebar en móvil si existe
+  try { setupMobileSidebarToggle(); } catch(_) {}
 
   // Suscribirse a cambios de auth para mantener sesión fresca
   supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {

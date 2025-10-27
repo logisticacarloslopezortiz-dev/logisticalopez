@@ -636,6 +636,59 @@ async function generateAndSendInvoice(orderId) {
     doc.setFont(undefined, 'bold');
     doc.text(order.estimated_price, 170, finalY + 15);
 
+    // --- Subir PDF a Storage e insertar en tabla invoices ---
+    // Helper local para interpretar monto numérico
+    const parseAmount = (val) => {
+      if (typeof val === 'number') return val;
+      if (!val) return 0;
+      const n = String(val).replace(/[^0-9.,-]/g, '').replace(/,/g, '.');
+      const num = Number(n);
+      return isNaN(num) ? 0 : num;
+    };
+
+    // Obtener PDF como Blob
+    const arrayBuffer = doc.output('arraybuffer');
+    const pdfBlob = new Blob([arrayBuffer], { type: 'application/pdf' });
+
+    let pdfUrl = null;
+    try {
+      const fileName = `Factura-${order.id}-${Date.now()}.pdf`;
+      const filePath = `public/${fileName}`;
+      const { error: uploadErr } = await supabaseConfig.client.storage
+        .from('invoices')
+        .upload(filePath, pdfBlob, { contentType: 'application/pdf', upsert: true });
+      if (uploadErr) {
+        console.warn('No se pudo subir el PDF al bucket invoices:', uploadErr.message || uploadErr);
+      } else {
+        const { data: pub } = supabaseConfig.client.storage.from('invoices').getPublicUrl(filePath);
+        pdfUrl = pub?.publicUrl || null;
+      }
+    } catch (e) {
+      console.warn('Error al subir el PDF a Storage:', e?.message || e);
+    }
+
+    // Insertar registro de factura en la tabla invoices
+    try {
+      const { error: insertErr } = await supabaseConfig.client
+        .from('invoices')
+        .insert({
+          order_id: String(order.id),
+          client_name: order.name || null,
+          client_phone: order.phone || null,
+          client_email: order.email || null,
+          rnc: order.rnc || null,
+          company_name: order.empresa || null,
+          amount: parseAmount(order.estimated_price),
+          currency: 'DOP',
+          pdf_url: pdfUrl || null
+        });
+      if (insertErr) {
+        console.warn('No se pudo insertar la factura en la tabla invoices:', insertErr.message || insertErr);
+      }
+    } catch (e) {
+      console.warn('Error inesperado al insertar la factura:', e?.message || e);
+    }
+
     // --- Envío por Correo ---
     const pdfBase64 = doc.output('datauristring').split(',')[1];
 

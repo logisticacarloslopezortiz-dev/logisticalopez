@@ -17,8 +17,16 @@
 </head>
 <body class="bg-gray-100">
 
+  <!-- Overlay para móvil -->
+  <div id="sidebarOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-20 hidden md:hidden"></div>
+  
+  <!-- Botón de menú móvil -->
+  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-20 p-2 rounded-lg bg-white shadow-md text-gray-700 md:hidden">
+    <i data-lucide="menu" class="w-6 h-6"></i>
+  </button>
+  
   <!-- Sidebar -->
-  <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white shadow-md z-30 flex flex-col transition-all duration-300 ease-in-out">
+  <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white shadow-md z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
     <div class="flex items-center justify-center py-6 px-4 border-b">
       <img src="img/1vertical.png" alt="Logo" class="w-10 sidebar-text">
       <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">LLO Admin</h2>

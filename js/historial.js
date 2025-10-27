@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadFromSupabase() {
     const tableBody = document.getElementById('historyTableBody');
-    tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="loader" class="w-8 h-8 animate-spin"></i><span>Cargando historial...</span></div></td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="loader" class="w-8 h-8 animate-spin"></i><span>Cargando historial...</span></div></td></tr>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     try {
@@ -37,8 +37,8 @@ async function loadFromSupabase() {
         displayRequests();
     } catch (error) {
         console.error('Error cargando desde Supabase:', error);
-        tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-red-500">No se pudo cargar el historial.</td></tr>`;
-    }
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-red-500">No se pudo cargar el historial.</td></tr>`;
+}
 }
 
 function displayRequests() {
@@ -49,7 +49,7 @@ function displayRequests() {
     if (!tbody) return;
 
     if (filteredRequests.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-gray-500">No se encontraron solicitudes en el historial.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-500">No se encontraron solicitudes en el historial.</td></tr>`;
         if (showingCount) showingCount.textContent = 0;
         if (totalCount) totalCount.textContent = allRequests.length;
         return;
@@ -59,7 +59,12 @@ function displayRequests() {
     const endIndex = startIndex + requestsPerPage;
     const pageRequests = filteredRequests.slice(startIndex, endIndex);
 
-    tbody.innerHTML = pageRequests.map(request => `
+    tbody.innerHTML = pageRequests.map(request => {
+        const evidence = Array.isArray(request.photos) ? request.photos : (Array.isArray(request.evidence_urls) ? request.evidence_urls : []);
+        const evidenceCell = evidence.length > 0
+            ? `<button class="view-evidence px-3 py-1 bg-blue-600 text-white rounded text-sm" data-id="${request.id}">Ver</button>`
+            : '<span class="text-gray-400">N/A</span>';
+        return `
         <tr data-id="${request.id}" class="hover:bg-gray-50">
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${request.id}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${request.name}</td>
@@ -67,13 +72,51 @@ function displayRequests() {
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.completed_at ? new Date(request.completed_at).toLocaleDateString('es-DO') : 'N/A'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.collaborator?.name || 'No asignado'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${request.status === 'Completado' ? 'text-green-600' : 'text-red-600'}">${request.estimated_price || 'N/A'}</td>
-        </tr>
-    `).join('');
+            <td class="px-6 py-4 whitespace-nowrap text-sm">${evidenceCell}</td>
+        </tr>`;
+    }).join('');
 
     if (showingCount) showingCount.textContent = pageRequests.length;
     if (totalCount) totalCount.textContent = filteredRequests.length;
     // Aquí iría la lógica de paginación si se implementa
+
+    // Vincular botones de evidencia
+    document.querySelectorAll('.view-evidence').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.currentTarget.getAttribute('data-id');
+            const req = filteredRequests.find(r => String(r.id) === String(id));
+            openEvidenceModal(req);
+        });
+    });
 }
+
+function openEvidenceModal(request) {
+    const modal = document.getElementById('evidenceModal');
+    const gallery = document.getElementById('evidenceGallery');
+    if (!modal || !gallery || !request) return;
+    const evidence = Array.isArray(request.photos) ? request.photos : (Array.isArray(request.evidence_urls) ? request.evidence_urls : []);
+    if (evidence.length === 0) {
+        gallery.innerHTML = '<div class="text-gray-500">No hay evidencia disponible para esta solicitud.</div>';
+    } else {
+        gallery.innerHTML = evidence.map(url => `
+            <div class="border rounded-lg overflow-hidden">
+              <img src="${url}" alt="Evidencia" class="w-full h-40 object-cover" />
+            </div>
+        `).join('');
+    }
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'closeEvidenceModal') {
+        const modal = document.getElementById('evidenceModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    }
+});
 
 function applyFilters() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
