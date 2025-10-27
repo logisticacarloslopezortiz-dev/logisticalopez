@@ -74,11 +74,16 @@ async function changeStatus(orderId, newKey){
   const order = state.allOrders.find(o => o.id === orderId);
   if (!order) return;
 
-  const updates = { last_collab_status: newKey };
+  const trackingEvent = { status: STATUS_MAP[newKey]?.label || newKey, date: new Date().toISOString() };
+
+  const updates = { 
+    last_collab_status: newKey,
+    tracking: Array.isArray(order.tracking) ? [...order.tracking, trackingEvent] : [trackingEvent]
+  };
 
   if (newKey === 'entregado') {
     updates.status = 'Completado';
-    updates.completed_at = new Date().toISOString(); // ✅ CORREGIDO: Usar el ID del colaborador
+    updates.completed_at = new Date().toISOString();
     updates.completed_by = state.collabSession.user.id;
   }
 
@@ -89,34 +94,35 @@ async function changeStatus(orderId, newKey){
     const idx = state.allOrders.findIndex(o => o.id === orderId);
     if (idx !== -1) state.allOrders[idx] = { ...state.allOrders[idx], ...updates };
 
-    showSuccess('Estado actualizado', `El estado del pedido ahora es: ${STATUS_MAP[newKey]?.label || newKey}`);
-
-    // Enviar notificación push si el cliente se suscribió
-    if (order.push_subscription) {
-      await showBrowserNotification(order, newKey);
-      showInfo('Notificación enviada', 'El cliente ha sido notificado del cambio de estado.');
+    // Notificación push al cliente vía función Edge
+    try {
+      const bodyMsg = buildStatusMessage(order, newKey);
+      await supabaseConfig.client.functions.invoke('send-push-notification', {
+        body: { orderId: orderId, body: bodyMsg }
+      });
+    } catch (pushErr) {
+      console.warn('Fallo al invocar push server:', pushErr);
     }
 
-    if (newKey === 'entregado' && state.activeJobId === orderId) {
+    // Notificación del navegador como refuerzo
+    if (order.push_subscription) {
+      showBrowserNotification(order, newKey);
+    }
+
+    showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
+    filterAndRender();
+
+    // Si el estado implica trabajo activo, actualizar la vista
+    if (newKey !== 'entregado') {
+      updateActiveJobView();
+    } else {
+      // Limpiar trabajo activo al finalizar
       state.activeJobId = null;
       localStorage.removeItem('tlc_collab_active_job');
-      document.getElementById('activeJobSection').classList.add('hidden');
+      updateActiveJobView();
     }
-
-    filterAndRender();
-  } catch (e) {
-    console.error('Error al actualizar estado:', e);
-    
-    let errorMessage = 'No se pudo actualizar el estado.';
-    if (e.code === 'ORDER_NOT_FOUND') {
-      errorMessage = 'La orden no existe o ya fue eliminada.';
-    } else if (e.message && e.message.includes('not found')) {
-      errorMessage = 'La orden no fue encontrada.';
-    } else if (e.message) {
-      errorMessage = `Error: ${e.message}`;
-    }
-    
-    showError('Error al actualizar', errorMessage);
+  } catch (err) {
+    showError('No se pudo actualizar el estado', err?.message || err);
   }
 }
 
@@ -724,4 +730,16 @@ function restoreActiveJob() {
   state.activeJobId = null;
   localStorage.removeItem('tlc_collab_active_job');
   document.getElementById('activeJobSection').classList.add('hidden');
+}
+
+// Helper para construir el mensaje de notificación según estado
+function buildStatusMessage(order, statusKey) {
+  const map = {
+    en_camino_recoger: `Tu pedido #${order.id} está en camino a recoger.`,
+    cargando: `Estamos cargando tu pedido #${order.id}.`,
+    en_camino_entregar: `Tu pedido #${order.id} va en camino a entregar.`,
+    retraso_tapon: `Tu pedido #${order.id} tiene retraso por tapón.`,
+    entregado: `Tu pedido #${order.id} fue entregado. ¡Gracias!`
+  };
+  return map[statusKey] || `Actualización del pedido #${order.id}: ${STATUS_MAP[statusKey]?.label || statusKey}`;
 }

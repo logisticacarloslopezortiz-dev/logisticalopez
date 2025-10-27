@@ -144,17 +144,18 @@ function renderOrders(){
 
   if(filteredOrders.length === 0){
     ordersTableBody.innerHTML='<tr><td colspan="9" class="text-center py-6 text-gray-500">No hay pedidos que coincidan con los filtros.</td></tr>';
+    // Render vacío en tarjetas móviles
+    const cardContainer = document.getElementById('ordersCardContainer');
+    if (cardContainer) {
+      cardContainer.innerHTML = '<div class="text-center py-6 text-gray-500"><i data-lucide="package" class="w-6 h-6 text-gray-400"></i> No hay pedidos</div>';
+    }
     return;
   }
 
   filteredOrders.forEach(o=>{
-    const mensaje = encodeURIComponent(
-      `Hola ${o.name},\n\nHemos recibido tu solicitud de ${o.service}. Nos contactaremos pronto para afinar detalles.\n\n¡Gracias!`
-    );
-
     const statusColor = {
       'Pendiente': 'bg-yellow-100 text-yellow-800',
-      'En proceso': 'bg-blue-100 text-blue-800', // Corregido
+      'En proceso': 'bg-blue-100 text-blue-800',
       'Completado': 'bg-green-100 text-green-800',
       'Cancelado': 'bg-red-100 text-red-800'
     }[o.status] || 'bg-gray-100 text-gray-800';
@@ -202,13 +203,54 @@ function renderOrders(){
           ${o.estimated_price || 'Por confirmar'}
         </span>
       </td>
-
     `;
     tr.addEventListener('dblclick', () => openAssignModal(o.id));
     ordersTableBody.appendChild(tr);
   });
 
-  lucide.createIcons();
+  // Render tarjetas en móvil
+  const cardContainer = document.getElementById('ordersCardContainer');
+  if (cardContainer) {
+    cardContainer.innerHTML = '';
+    filteredOrders.forEach(o => {
+      const badge = {
+        'Pendiente': 'bg-yellow-100 text-yellow-800',
+        'En proceso': 'bg-blue-100 text-blue-800',
+        'Completado': 'bg-green-100 text-green-800',
+        'Cancelado': 'bg-red-100 text-red-800'
+      }[o.status] || 'bg-gray-100 text-gray-800';
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-lg shadow p-4';
+      card.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <div class="text-sm text-gray-500">#${o.id}</div>
+            <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
+            <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
+          </div>
+          <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm mb-3">
+          <div>
+            <p class="text-gray-500">Cliente</p>
+            <p class="text-gray-900">${o.name}</p>
+          </div>
+          <div>
+            <p class="text-gray-500">Fecha</p>
+            <p class="text-gray-900">${o.date} ${o.time || ''}</p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
+            `<button class="px-3 py-1 rounded bg-gray-100 text-gray-700 text-xs" onclick="showServiceDetails('${o.id}')">Detalles</button>` : ''}
+          <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs" onclick="openAssignModal('${o.id}')">Gestionar</button>
+        </div>
+      `;
+      cardContainer.appendChild(card);
+    });
+  }
+
+  if (window.lucide) lucide.createIcons();
   updateCharts();
 }
 
@@ -435,7 +477,27 @@ async function openAssignModal(orderId){
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
-  lucide.createIcons();
+  
+  // Handlers de botones del modal
+  const whatsappBtn = document.getElementById('whatsappBtn');
+  const invoiceBtn = document.getElementById('generateInvoiceBtn');
+  const cancelBtn = document.getElementById('assignCancelBtn');
+  const deleteBtn = document.getElementById('deleteOrderBtn');
+  if (whatsappBtn) whatsappBtn.onclick = () => openWhatsApp(order);
+  if (invoiceBtn) invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
+  if (cancelBtn) cancelBtn.onclick = () => closeAssignModal();
+  if (deleteBtn) deleteBtn.onclick = () => deleteSelectedOrder();
+
+  // Doble clic para expandir el cuerpo del modal
+  const modalBody = document.getElementById('assignModalBody');
+  if (modalBody) {
+    modalBody.addEventListener('dblclick', () => {
+      modalBody.classList.toggle('max-h-[70vh]');
+      modalBody.classList.toggle('overflow-y-auto');
+    });
+  }
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function closeAssignModal(){

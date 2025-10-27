@@ -1,0 +1,7 @@
+{
+  "name": "LogisticaIonic",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}

@@ -19,6 +19,19 @@ const supabaseConfig = {
   useLocalStorage: false, // ✅ CORREGIDO: Forzar la lectura desde Supabase siempre.
   vapidPublicKey: null,
 
+  // Asegura que la sesión JWT esté fresca antes de consultas
+  ensureFreshSession: async function() {
+    try {
+      const { data: { session } } = await this.client.auth.getSession();
+      if (!session) return;
+      const now = Math.floor(Date.now() / 1000);
+      const exp = session.expires_at || 0;
+      if (exp <= now + 60) { // renovar si expira en 60s
+        await this.client.auth.refreshSession();
+      }
+    } catch (_) { /* no-op */ }
+  },
+
   // --- INICIO: Funciones de acceso a datos ---
 
   /**
@@ -31,7 +44,7 @@ const supabaseConfig = {
         return JSON.parse(localStorage.getItem('tlc_services') || '[]');
       } catch { return []; }
     }
-    // ✅ MEJORA: Pedir los servicios ordenados directamente desde la base de datos.
+    await this.ensureFreshSession();
     const { data, error } = await this.client.from('services')
       .select('*')
       .order('display_order', { ascending: true, nullsFirst: false });
@@ -49,6 +62,7 @@ const supabaseConfig = {
         return JSON.parse(localStorage.getItem('tlc_vehicles') || '[]');
       } catch { return []; }
     }
+    await this.ensureFreshSession();
     const { data, error } = await this.client.from('vehicles').select('*');
     if (error) console.error('Error fetching vehicles:', error);
     return data || [];
@@ -62,6 +76,7 @@ const supabaseConfig = {
     if (this.useLocalStorage) {
       try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
     }
+    await this.ensureFreshSession();
     const { data, error } = await this.client.from('orders').select('*');
     if (error) console.error('Error fetching orders:', error);
     return data || [];
@@ -239,20 +254,33 @@ const supabaseConfig = {
    */
   async saveBusinessSettings(settingsData) {
     if (!this.client) throw new Error('Cliente de Supabase no inicializado');
-    
     console.log('Guardando configuración del negocio:', settingsData);
-    
-    // Usamos upsert para crear la fila si no existe, o actualizarla si ya existe.
+
+    // Saneamiento defensivo
+    const payload = { id: 1, ...settingsData };
+    // rnc puede ser string o null; evitar tipos inválidos
+    if (Object.prototype.hasOwnProperty.call(payload, 'rnc')) {
+      const val = payload.rnc;
+      payload.rnc = (val === undefined || val === null) ? null : String(val).trim() || null;
+    }
+    // quotation_rates debe ser objeto JSON serializable
+    if (Object.prototype.hasOwnProperty.call(payload, 'quotation_rates')) {
+      const qr = payload.quotation_rates;
+      if (qr && typeof qr === 'object') {
+        // No hacer nada, dejarlo como objeto
+      } else {
+        payload.quotation_rates = null;
+      }
+    }
+
     const { data, error } = await this.client
       .from('business_settings')
-      .upsert({ id: 1, ...settingsData })
+      .upsert(payload)
       .select();
-    
     if (error) {
       console.error('Error detallado al guardar business_settings:', error);
       throw new Error(`Error al guardar configuración: ${error.message}`);
     }
-    
     console.log('Configuración guardada exitosamente:', data);
     return data;
   }

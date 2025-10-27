@@ -587,7 +587,7 @@ form.addEventListener('submit', async (e) => {
     const { data, error } = await supabaseConfig.client.functions.invoke('process-collaborator-requests', {
       body: {
         action: 'create_collaborator',
-        collaborator_data: {
+        collaboratorData: {
           name: name,
           email: email,
           password: password,
