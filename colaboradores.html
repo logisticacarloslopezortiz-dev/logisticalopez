@@ -111,10 +111,10 @@
           </div>
         </div>
       </div>
-    </div>
-    
-    <!-- Formulario para agregar colaborador -->
-    <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+  </div>
+  
+  <!-- Formulario para agregar colaborador -->
+  <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
       <div class="flex items-center gap-3 mb-6">
         <div class="bg-blue-100 rounded-lg p-2">
           <i data-lucide="user-plus" class="w-6 h-6 text-blue-600"></i>
@@ -316,6 +316,54 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Editar colaborador -->
+  <div id="editCollaboratorModal" class="fixed inset-0 z-40 hidden">
+    <div id="editCollabOverlay" class="absolute inset-0 bg-black bg-opacity-40"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-lg">
+        <div class="px-6 py-4 border-b flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Editar Colaborador</h3>
+          <button id="closeEditModalBtn" class="text-gray-500 hover:text-gray-700">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+        <form id="editCollaboratorForm" class="px-6 py-4 space-y-4">
+          <input type="hidden" id="editUserId">
+          <div>
+            <label class="text-sm text-gray-700">Nombre</label>
+            <input type="text" id="editName" class="w-full border border-gray-300 rounded-lg px-4 py-2" required>
+          </div>
+          <div>
+            <label class="text-sm text-gray-700">Correo</label>
+            <input type="email" id="editEmail" class="w-full border border-gray-300 rounded-lg px-4 py-2" required>
+          </div>
+          <div>
+            <label class="text-sm text-gray-700">Matrícula</label>
+            <input type="text" id="editMatricula" class="w-full border border-gray-300 rounded-lg px-4 py-2">
+          </div>
+          <div>
+            <label class="text-sm text-gray-700">Contraseña (dejar vacío para no cambiar)</label>
+            <input type="password" id="editPassword" class="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="••••••">
+          </div>
+          <div>
+            <label class="text-sm text-gray-700">Rol</label>
+            <select id="editRole" class="w-full border border-gray-300 rounded-lg px-4 py-2">
+              <option value="administrador">Administrador</option>
+              <option value="colaborador">Colaborador</option>
+              <option value="chofer">Chofer</option>
+              <option value="operador">Operador</option>
+            </select>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" id="cancelEditBtn" class="px-4 py-2 bg-gray-100 rounded-lg">Cancelar</button>
+            <button type="button" id="resetPasswordBtn" class="px-4 py-2 bg-orange-600 text-white rounded-lg">Restablecer contraseña</button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

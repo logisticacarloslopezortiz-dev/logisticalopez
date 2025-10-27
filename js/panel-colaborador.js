@@ -375,7 +375,12 @@ function render(){
         <div class="text-sm font-medium text-gray-900">${o.name}</div>
         <div class="text-sm text-gray-500">${o.phone}</div>
       </td>
-      <td class="px-3 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">${o.service}</td>
+      <td class="px-3 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
+        <div>${o.service}</div>
+        ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
+          ? `<button onclick="showServiceDetailsCollab('${o.id}')" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline"><i data-lucide='info' class='w-3 h-3 inline-block mr-1'></i>Ver detalles</button>`
+          : ''}
+      </td>
       <td class="px-3 md:px-6 py-4 text-sm text-gray-900 max-w-xs truncate hidden md:table-cell" title="${o.pickup} → ${o.delivery}">
         ${o.pickup} → ${o.delivery}
       </td>
@@ -389,6 +394,9 @@ function render(){
       </td>
       <td class="px-3 md:px-6 py-4 whitespace-nowrap text-sm">
         <div class="flex flex-col sm:flex-row items-center gap-1 sm:gap-2">
+          ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
+            ? `<button onclick="showServiceDetailsCollab('${o.id}')" class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full sm:w-auto">Detalles</button>`
+            : ''}
           <button data-next="en_camino_recoger" class="step-btn px-2 py-1 text-xs bg-blue-600 text-white rounded w-full sm:w-auto">Recoger</button>
           <button data-next="cargando" class="step-btn px-2 py-1 text-xs bg-yellow-600 text-white rounded w-full sm:w-auto">Cargando</button>
           <button data-next="en_camino_entregar" class="step-btn px-2 py-1 text-xs bg-indigo-600 text-white rounded w-full sm:w-auto">Entregar</button>
@@ -484,6 +492,9 @@ function renderMobileCards(orders){
         <div class="text-sm text-gray-700">${o.service}</div>
         <div class="text-xs text-gray-600 truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</div>
         <div class="text-xs text-gray-600">${o.date} <span class="text-gray-400">•</span> ${o.time}</div>
+        ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
+          ? `<div class='mt-3'><button class='px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full' onclick="showServiceDetailsCollab('${o.id}')">Detalles</button></div>`
+          : ''}
         <div class="mt-3 grid grid-cols-2 gap-2">
           <button data-id="${o.id}" data-next="en_camino_recoger" class="mob-step-btn px-2 py-2 text-xs bg-blue-600 text-white rounded">Recoger</button>
           <button data-id="${o.id}" data-next="cargando" class="mob-step-btn px-2 py-2 text-xs bg-yellow-600 text-white rounded">Cargando</button>
@@ -833,3 +844,38 @@ function buildStatusMessage(order, statusKey) {
   };
   return map[statusKey] || `Actualización del pedido #${order.id}: ${STATUS_MAP[statusKey]?.label || statusKey}`;
 }
+// --- Modal de Detalles del Servicio (similar a inicio.js) ---
+function showServiceDetailsCollab(orderId){
+  const order = state.allOrders.find(o => o.id === Number(orderId));
+  const details = order && (order.service_questions || order.serviceQuestions);
+  if (!order || !details || Object.keys(details).length === 0){
+    try { if (window.notifications?.info) window.notifications.info('Esta orden no tiene detalles adicionales de servicio.'); } catch(_){}
+    return;
+  }
+
+  let detailsHtml = `<h3 class="text-lg font-semibold mb-4 text-gray-800">Detalles del Servicio: ${order.service || 'N/A'}</h3>`;
+  detailsHtml += '<div class="space-y-3 text-sm">';
+  for (const [question, answer] of Object.entries(details)){
+    const formatted = String(question).replace(/_/g,' ').replace(/\b\w/g, l=>l.toUpperCase());
+    detailsHtml += `
+      <div>
+        <p class="font-medium text-gray-600">${formatted}</p>
+        <p class="text-gray-900 pl-2">${answer ?? 'No especificado'}</p>
+      </div>
+    `;
+  }
+  detailsHtml += '</div>';
+
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4';
+  modal.innerHTML = `
+    <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto shadow-xl">
+      ${detailsHtml}
+      <button onclick="this.closest('.fixed').remove()" class="mt-6 w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">Cerrar</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+// Hacer accesible globalmente
+window.showServiceDetailsCollab = showServiceDetailsCollab;

@@ -1,7 +1,98 @@
--- Migración: Crear tablas faltantes para funcionalidades del proyecto
+-- Migración: Crear tablas y constraints según BLOQUES 1–3
 -- Fecha: 2025-10-27
 
--- Tabla de notificaciones (log y auditoría de envíos)
+-- 🧩 BLOQUE 1 – Extensión y tablas base
+-- Extensión requerida para UUIDs
+create extension if not exists "pgcrypto";
+
+-- Tabla de perfiles (base vacía)
+create table if not exists public.profiles (
+  id uuid primary key,
+  email text,
+  name text,
+  created_at timestamptz not null default now()
+);
+
+-- Tabla de colaboradores (base vacía)
+create table if not exists public.collaborators (
+  id uuid primary key,
+  email text,
+  name text,
+  phone text,
+  matricula text,
+  created_at timestamptz not null default now()
+);
+
+-- ✅ Esto solo crea las tablas vacías base sin errores.
+
+-- 🧩 BLOQUE 2 – Columnas y ajustes
+-- Añadir columnas a profiles
+alter table public.profiles add column if not exists full_name text;
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists updated_at timestamptz not null default now();
+alter table public.profiles add column if not exists role text;
+
+-- Añadir columnas a collaborators
+alter table public.collaborators add column if not exists role text;
+alter table public.collaborators add column if not exists status text default 'activo';
+
+-- Normalizar datos nulos
+update public.collaborators set status = coalesce(status, 'activo');
+update public.collaborators set role = coalesce(role, 'colaborador');
+
+-- 🧩 BLOQUE 3 – Constraints y validaciones
+-- Validar roles de profiles
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'profiles_role_chk'
+  ) then
+    alter table public.profiles
+      add constraint profiles_role_chk
+      check (lower(role) in ('administrador','colaborador','chofer','operador','cliente'));
+  end if;
+end$$;
+
+-- Validar roles de collaborators
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'collaborators_role_chk'
+  ) then
+    alter table public.collaborators
+      add constraint collaborators_role_chk
+      check (lower(role) in ('administrador','colaborador','chofer','operador'));
+  end if;
+end$$;
+
+-- Validar estados de collaborators
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'collaborators_status_chk'
+  ) then
+    alter table public.collaborators
+      add constraint collaborators_status_chk
+      check (status in ('activo','inactivo'));
+  end if;
+end$$;
+
+-- Índices para rendimiento
+-- Índices de profiles
+create index if not exists profiles_email_idx on public.profiles(email);
+create index if not exists profiles_role_idx on public.profiles(role);
+create index if not exists profiles_updated_at_idx on public.profiles(updated_at);
+
+-- Índices de collaborators
+create index if not exists collaborators_email_idx on public.collaborators(email);
+create index if not exists collaborators_role_idx on public.collaborators(role);
+create index if not exists collaborators_status_idx on public.collaborators(status);
+
+-- =========================
+-- Tablas adicionales
+-- =========================
+
+-- Tabla de notificaciones
 create table if not exists public.notifications (
   id bigserial primary key,
   user_id uuid not null,
@@ -13,7 +104,7 @@ create table if not exists public.notifications (
 );
 create index if not exists notifications_user_id_idx on public.notifications(user_id);
 
--- Tabla de suscripciones push (Web Push)
+-- Tabla de suscripciones push
 create table if not exists public.push_subscriptions (
   id bigserial primary key,
   user_id uuid not null,
@@ -26,52 +117,17 @@ create table if not exists public.push_subscriptions (
 );
 create index if not exists push_subscriptions_user_id_idx on public.push_subscriptions(user_id);
 
--- Nota: Si existe el esquema de autenticación de Supabase, se puede agregar FK:
--- alter table public.push_subscriptions
---   add constraint push_subscriptions_user_fk foreign key (user_id)
---   references auth.users (id) on delete cascade;
-
--- Tabla de perfiles (rol y metadatos)
-create table if not exists public.profiles (
-  id uuid primary key,
-  email text,
-  name text,
-  role text check (role in ('administrador','colaborador','cliente')),
-  created_at timestamptz not null default now()
-);
-create index if not exists profiles_role_idx on public.profiles(role);
-create index if not exists profiles_email_idx on public.profiles(email);
-
--- Tabla de colaboradores (requerida por varias funciones Edge)
-create table if not exists public.collaborators (
-  id uuid primary key,
-  email text,
-  name text,
-  phone text,
-  role text,
-  matricula text,
-  status text not null default 'activo',
-  created_at timestamptz not null default now()
-);
-create index if not exists collaborators_role_idx on public.collaborators(role);
-create index if not exists collaborators_status_idx on public.collaborators(status);
-
--- Tabla de matrículas (vehículos vinculados a colaboradores)
+-- Tabla de matrículas
 create table if not exists public.matriculas (
   id bigserial primary key,
-  collaborator_id uuid not null,
+  user_id uuid not null,
   matricula text not null,
   status text not null default 'activo',
   created_at timestamptz not null default now()
 );
-create index if not exists matriculas_collaborator_id_idx on public.matriculas(collaborator_id);
+create index if not exists matriculas_user_id_idx on public.matriculas(user_id);
 
--- FK opcional si existe public.collaborators
--- alter table public.matriculas
---   add constraint matriculas_collaborator_fk foreign key (collaborator_id)
---   references public.collaborators (id) on delete cascade;
-
--- Tabla de facturas generadas (para soporte de PDF)
+-- Tabla de facturas
 create table if not exists public.invoices (
   id bigserial primary key,
   order_id text not null,
@@ -87,54 +143,6 @@ create table if not exists public.invoices (
 );
 create index if not exists invoices_order_id_idx on public.invoices(order_id);
 
--- =========================
--- Mejoras y tablas faltantes
--- =========================
-
--- Ajustes en profiles para alinear con el backend (Edge Functions)
-alter table if exists public.profiles
-  add column if not exists full_name text;
-alter table if exists public.profiles
-  add column if not exists phone text;
-alter table if exists public.profiles
-  add column if not exists updated_at timestamptz not null default now();
-
--- Índices útiles
-create index if not exists collaborators_email_idx on public.collaborators(email);
-create index if not exists profiles_updated_at_idx on public.profiles(updated_at);
-
--- Normalización del estado de colaboradores (solo 'activo'/'inactivo')
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint 
-    where conname = 'collaborators_status_chk'
-  ) then
-    alter table public.collaborators
-      add constraint collaborators_status_chk
-      check (status in ('activo','inactivo'));
-  end if;
-end$$;
-
--- Corregir inconsistencia en matriculas: usar user_id (uuid) en lugar de collaborator_id
-do $$
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'matriculas' and column_name = 'collaborator_id'
-  ) and not exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'matriculas' and column_name = 'user_id'
-  ) then
-    alter table public.matriculas
-      add column user_id uuid;
-    update public.matriculas set user_id = collaborator_id;
-    alter table public.matriculas
-      drop column collaborator_id;
-  end if;
-end$$;
-create index if not exists matriculas_user_id_idx on public.matriculas(user_id);
-
 -- Tabla de servicios
 create table if not exists public.services (
   id bigserial primary key,
@@ -146,7 +154,7 @@ create table if not exists public.services (
 );
 create index if not exists services_active_idx on public.services(active);
 
--- Tabla de órdenes (incluye evidencia y asignación a colaboradores)
+-- Tabla de órdenes
 create table if not exists public.orders (
   id text primary key,
   client_name text,
@@ -158,8 +166,8 @@ create table if not exists public.orders (
   assigned_to uuid references public.collaborators(id) on delete set null,
   status text not null check (status in ('pendiente','en_proceso','completado','cancelado')),
   price numeric(12,2),
-  photos jsonb,              -- fotos capturadas en proceso
-  evidence_urls jsonb,       -- evidencia final (urls)
+  photos jsonb,
+  evidence_urls jsonb,
   created_at timestamptz not null default now(),
   completed_at timestamptz
 );
@@ -167,7 +175,7 @@ create index if not exists orders_status_idx on public.orders(status);
 create index if not exists orders_assigned_to_idx on public.orders(assigned_to);
 create index if not exists orders_created_at_idx on public.orders(created_at);
 
--- Tabla de negocio/empresa (incluye RNC)
+-- Tabla de negocio
 create table if not exists public.business (
   id bigserial primary key,
   owner_user_id uuid,

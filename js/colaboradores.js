@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Inicializar iconos de Lucide
   lucide.createIcons();
   init();
+  setupEditModal();
 });
 
 // Función para mostrar modal de métricas
@@ -305,7 +306,7 @@ function renderColaboradores() {
           <button onclick="showMetricsModal('${c.id}')" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver métricas">
             <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
           </button>
-          <button onclick="editColaborador('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
+          <button onclick="openEditModal('${c.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
             <i data-lucide="edit-2" class="w-4 h-4"></i>
           </button>
           <button onclick="toggleStatus('${c.id}')" class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors" title="Cambiar estado">
@@ -407,29 +408,92 @@ function updateSummary() {
   document.getElementById('totalChoferes').textContent = choferCount;
 }
 
-// Función para editar colaborador
-async function editColaborador(id) {
-  const colaborador = colaboradores.find(c => c.id === id);
-  if (!colaborador) return;
+// Modal de edición de colaborador
+function setupEditModal() {
+  const modal = document.getElementById('editCollaboratorModal');
+  const overlay = document.getElementById('editCollabOverlay');
+  const closeBtn = document.getElementById('closeEditModalBtn');
+  const cancelBtn = document.getElementById('cancelEditBtn');
+  const formEl = document.getElementById('editCollaboratorForm');
+  const roleEl = document.getElementById('editRole');
+  const resetBtn = document.getElementById('resetPasswordBtn');
 
-  const newName = prompt('Nuevo nombre:', colaborador.name);
-  if (newName && newName.trim()) {
-    const { data, error } = await supabaseConfig.client
-      .from('collaborators')
-      .update({ name: newName.trim() })
-      .eq('id', id)
-      .select()
-      .single();
+  const close = () => modal && modal.classList.add('hidden');
+  const open = () => modal && modal.classList.remove('hidden');
+  if (overlay) overlay.addEventListener('click', close);
+  if (closeBtn) closeBtn.addEventListener('click', close);
+  if (cancelBtn) cancelBtn.addEventListener('click', close);
 
-    if (error) {
-      showMessage(`Error al actualizar: ${error.message}`, 'error');
-    } else {
-      const index = colaboradores.findIndex(c => c.id === id);
-      if (index !== -1) colaboradores[index] = data;
-      renderColaboradores();
-      showMessage('Colaborador actualizado correctamente.', 'success');
-    }
+  if (formEl) {
+    formEl.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const user_id = document.getElementById('editUserId').value;
+      const name = document.getElementById('editName').value.trim();
+      const email = document.getElementById('editEmail').value.trim();
+      const matricula = document.getElementById('editMatricula').value.trim();
+      const password = document.getElementById('editPassword').value;
+      const role = (roleEl?.value || '').toLowerCase();
+
+      if (!name || !email) {
+        showMessage('Nombre y correo son obligatorios.', 'error');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabaseConfig.client.functions.invoke('update-collaborator', {
+          body: {
+            user_id,
+            name,
+            email,
+            matricula: matricula || null,
+            password: password || undefined,
+            role: role || undefined,
+          }
+        });
+        if (error) throw error;
+        if (data && data.error) throw new Error(data.error);
+        showMessage('Colaborador actualizado correctamente.', 'success');
+        close();
+        await init();
+      } catch (err) {
+        console.error(err);
+        showMessage('Error al actualizar el colaborador.', 'error');
+      }
+    });
   }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', async () => {
+      const user_id = document.getElementById('editUserId').value;
+      if (!user_id) return;
+      // Generar una contraseña temporal segura
+      const temp = Math.random().toString(36).slice(-10) + 'A1!';
+      try {
+        const { data, error } = await supabaseConfig.client.functions.invoke('update-collaborator', {
+          body: { user_id, password: temp }
+        });
+        if (error) throw error;
+        if (data && data.error) throw new Error(data.error);
+        showMessage(`Contraseña restablecida. Nueva temporal: ${temp}`, 'success');
+        document.getElementById('editPassword').value = '';
+      } catch (err) {
+        console.error(err);
+        showMessage('No se pudo restablecer la contraseña.', 'error');
+      }
+    });
+  }
+
+  window.openEditModal = (id) => {
+    const c = colaboradores.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('editUserId').value = c.id;
+    document.getElementById('editName').value = c.name || '';
+    document.getElementById('editEmail').value = c.email || '';
+    document.getElementById('editMatricula').value = c.matricula || '';
+    document.getElementById('editPassword').value = '';
+    if (roleEl) roleEl.value = (c.role || 'colaborador').toLowerCase();
+    open();
+  };
 }
 
 // Función para cambiar estado del colaborador
@@ -689,7 +753,7 @@ async function init() {
 }
 
 // Hacer funciones globales para los botones
-window.editColaborador = editColaborador;
+// La función openEditModal se declara dentro de setupEditModal
 window.toggleStatus = toggleStatus;
 window.deleteColaborador = deleteColaborador;
 window.clearFilters = clearFilters;
