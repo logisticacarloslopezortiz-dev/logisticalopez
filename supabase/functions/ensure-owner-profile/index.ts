@@ -23,11 +23,11 @@ Deno.serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SUPABASE_ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    const anon = createClient(SUPABASE_URL, SUPABASE_ANON);
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+    const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const authHeader = req.headers.get('authorization') || '';
     if (!authHeader.toLowerCase().startsWith('bearer ')) {
