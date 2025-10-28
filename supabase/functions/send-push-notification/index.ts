@@ -73,10 +73,10 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Se requiere orderId y body para la notificación' }, 400);
     }
     
-    // Buscar la orden y su suscripción push
+    // Buscar la orden
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('id, push_subscription')
+      .select('id, client_id, name, phone')
       .eq('id', orderId)
       .single();
     
@@ -85,44 +85,74 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'No se encontró la orden especificada' }, 404);
     }
     
-    if (!order.push_subscription) {
+    // Buscar suscripciones push para el cliente
+    let pushSubscriptions = [];
+    
+    if (order.client_id) {
+      // Cliente registrado - buscar en push_subscriptions
+      const { data: subscriptions, error: subError } = await supabase
+        .from('push_subscriptions')
+        .select('endpoint, keys')
+        .eq('user_id', order.client_id);
+      
+      if (!subError && subscriptions) {
+        pushSubscriptions = subscriptions;
+      }
+    }
+    
+    if (pushSubscriptions.length === 0) {
       return jsonResponse({ 
         success: false, 
-        message: 'No hay suscripción push registrada para esta orden' 
+        message: 'No hay suscripciones push registradas para este cliente' 
       }, 200);
     }
     
-    // Preparar la notificación
-    const pushSubscription = order.push_subscription;
-    const notificationPayload = {
-      notification: {
-        title,
-        body,
-        icon,
-        vibrate: [100, 50, 100],
-        data: {
-          orderId,
-          timestamp: new Date().toISOString(),
-          ...data
+    // Enviar notificación a todas las suscripciones del cliente
+    const results = [];
+    for (const subscription of pushSubscriptions) {
+      const pushSubscription = {
+        endpoint: subscription.endpoint,
+        keys: subscription.keys
+      };
+      const notificationPayload = {
+        notification: {
+          title,
+          body,
+          icon,
+          vibrate: [100, 50, 100],
+          data: {
+            orderId,
+            timestamp: new Date().toISOString(),
+            ...data
+          }
         }
+      };
+      
+      try {
+        // Enviar la notificación
+        await sendPushNotification(pushSubscription, notificationPayload);
+        results.push({ success: true, endpoint: subscription.endpoint });
+      } catch (error) {
+        logDebug('Error enviando a suscripción', { endpoint: subscription.endpoint, error });
+        results.push({ success: false, endpoint: subscription.endpoint, error: error.message });
       }
-    };
-    
-    // Enviar la notificación
-    await sendPushNotification(pushSubscription, notificationPayload);
+    }
     
     // Registrar la notificación en la base de datos
     await supabase.from('notifications').insert({
-      order_id: orderId,
+      user_id: order.client_id,
       title,
       body,
-      sent_at: new Date().toISOString(),
-      status: 'sent'
+      data: { orderId, results },
+      created_at: new Date().toISOString()
     });
     
+    const successCount = results.filter(r => r.success).length;
+    
     return jsonResponse({ 
-      success: true, 
-      message: 'Notificación enviada correctamente' 
+      success: successCount > 0, 
+      message: `Notificación enviada a ${successCount} de ${results.length} suscripciones`,
+      results
     });
     
   } catch (error) {

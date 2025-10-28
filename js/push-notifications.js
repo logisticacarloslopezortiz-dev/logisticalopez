@@ -40,7 +40,7 @@ class PushNotificationManager {
         } catch (error) {
             console.error('Error loading VAPID key:', error);
             // Fallback: usar clave hardcodeada (solo para desarrollo)
-            this.vapidPublicKey = 'BNWcrd9ADB4gyKLxP4CRZfnTnS3EmYWmTHd6OP4BNZH5ZaB3QoEj6Dh9PMAvpTgpt6SjjFW0VCXr2TzVAhK2MfE';
+            this.vapidPublicKey = 'BMuGvI89RtY2N2hFDLwkCmNitzvYP9iDrRCQlq8JmFfGtDjgFQWJGLaEHX9O8lF8Vl9WsXOYMbBq94vKwpWoXVE';
         }
     }
 

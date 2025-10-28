@@ -87,6 +87,10 @@ async function changeStatus(orderId, newKey){
   }
 
   try {
+    // Agregar evento de tracking
+    const existingTracking = Array.isArray(order.tracking_data) ? order.tracking_data : [];
+    updates.tracking_data = [...existingTracking, trackingEvent];
+
     await supabaseConfig.updateOrder(orderId, updates);
 
     // Actualizar en memoria para reflejar inmediatamente
@@ -103,10 +107,7 @@ async function changeStatus(orderId, newKey){
       console.warn('Fallo al invocar push server:', pushErr);
     }
 
-    // Notificación del navegador como refuerzo
-    if (order.push_subscription) {
-      showBrowserNotification(order, newKey);
-    }
+    // Notificaciones sólo para el cliente (se quita notificación del panel del colaborador)
 
     showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
     filterAndRender();
@@ -353,14 +354,34 @@ async function handlePhotoUpload(event) {
 
 let baseVisibleCount = 0;
 function render(){
+  const ordersGrid = document.getElementById('ordersGrid');
+  const emptyState = document.getElementById('emptyState');
   const tbody = document.getElementById('ordersTableBody');
-  tbody.innerHTML = '';
+  
+  if (ordersGrid) {
+    ordersGrid.innerHTML = '';
+  }
+  if (tbody) {
+    tbody.innerHTML = '';
+  }
+  
   document.getElementById('showingCount').textContent = state.filteredOrders.length;
   document.getElementById('totalCount').textContent = baseVisibleCount;
 
   if (state.filteredOrders.length === 0){
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-500">Sin solicitudes</td></tr>';
+    if (ordersGrid) {
+      ordersGrid.classList.add('hidden');
+      emptyState?.classList.remove('hidden');
+    }
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-500">Sin solicitudes</td></tr>';
+    }
     return;
+  }
+  
+  if (ordersGrid) {
+    ordersGrid.classList.remove('hidden');
+    emptyState?.classList.add('hidden');
   }
 
   state.filteredOrders.forEach(o => {
@@ -717,8 +738,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       // Paso 2: Actualizar estado (removido last_collab_status por no existir en la BD)
+      const trackingEvent = { status: 'Servicio Asignado', date: new Date().toISOString() };
+      const existingTracking = Array.isArray(state.allOrders.find(o => o.id === orderId)?.tracking_data) 
+        ? state.allOrders.find(o => o.id === orderId).tracking_data 
+        : [];
       await supabaseConfig.updateOrder(orderId, {
-        status: 'En proceso'
+        status: 'En proceso',
+        tracking_data: [...existingTracking, trackingEvent]
       });
 
       // Actualizar el estado local y mostrar el trabajo activo.
@@ -734,6 +760,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
+
+      // Notificar al cliente que su solicitud fue aceptada
+      try {
+        await supabaseConfig.client.functions.invoke('send-push-notification', {
+          body: { orderId, body: 'Tu solicitud ha sido aceptada y está en proceso.' }
+        });
+      } catch (pushErr) {
+        console.warn('Fallo al invocar push server (aceptación):', pushErr);
+      }
     } catch (err) {
       console.error('Error al aceptar la solicitud:', err);
       

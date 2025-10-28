@@ -20,7 +20,7 @@ async function loadAndProcessOrders() {
     try {
         const { data, error } = await supabaseConfig.client
             .from('orders')
-            .select('id, completed_at, estimated_price, service:services(name), vehicle:vehicles(name), collaborator:collaborators(name)')
+            .select('id, completed_at, estimated_price, service:services(name), vehicle:vehicles(name), completed:profiles!orders_completed_by_fkey(full_name)')
             .eq('status', 'Completado')
             .not('completed_at', 'is', null);
 
@@ -226,7 +226,7 @@ function exportToExcel() {
         'Fecha Completado': new Date(order.completed_at).toLocaleString('es-DO'),
         'Servicio': order.service?.name || 'N/A',
         'Vehículo': order.vehicle?.name || 'N/A',
-        'Completado por': order.collaborator?.name || 'N/A',
+        'Completado por': order.completed?.full_name || 'N/A',
         'Precio': parsePrice(order.estimated_price)
     }));
 

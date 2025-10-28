@@ -196,9 +196,9 @@ document.addEventListener('DOMContentLoaded', () => {
             timelineEvents.push({ name: 'Servicio Asignado', date: order.assigned_at });
         }
 
-        // 3. Estados del colaborador (si existen en el tracking)
-        if (order.tracking && Array.isArray(order.tracking)) {
-            order.tracking.forEach(trackPoint => {
+        // 3. Estados del colaborador (si existen en el tracking_data)
+        if (order.tracking_data && Array.isArray(order.tracking_data)) {
+            order.tracking_data.forEach(trackPoint => {
                 timelineEvents.push({ name: trackPoint.status, date: trackPoint.date });
             });
         }

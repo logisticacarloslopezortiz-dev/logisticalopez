@@ -25,7 +25,7 @@ async function loadFromSupabase() {
         // ✅ MEJORA: Cargar solo las órdenes completadas/canceladas y los datos relacionados.
         const { data, error } = await supabaseConfig.client
             .from('orders')
-            .select('*, service:services(name), collaborator:collaborators!completed_by(name)')
+            .select('*, service:services(name), completed:profiles!orders_completed_by_fkey(full_name)')
             .in('status', ['Completado', 'Cancelado'])
             .order('completed_at', { ascending: false, nullsLast: true })
             .order('created_at', { ascending: false });
@@ -70,7 +70,7 @@ function displayRequests() {
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${request.name}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.service?.name || 'N/A'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.completed_at ? new Date(request.completed_at).toLocaleDateString('es-DO') : 'N/A'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.collaborator?.name || 'No asignado'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.completed?.full_name || 'No asignado'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${request.status === 'Completado' ? 'text-green-600' : 'text-red-600'}">${request.estimated_price || 'N/A'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm">${evidenceCell}</td>
         </tr>`;

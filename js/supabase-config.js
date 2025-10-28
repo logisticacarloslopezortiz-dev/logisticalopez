@@ -242,7 +242,7 @@ const supabaseConfig = {
   async getBusinessSettings() {
     if (!this.client) return {};
     // Asumimos que solo hay una fila de configuración con id=1
-    const { data, error } = await this.client.from('business_settings').select('*').eq('id', 1).single();
+    const { data, error } = await this.client.from('business').select('*').eq('id', 1).single();
     if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
       console.error('Error fetching business settings:', error);
       return {};
@@ -276,11 +276,11 @@ const supabaseConfig = {
     }
 
     const { data, error } = await this.client
-      .from('business_settings')
+      .from('business')
       .upsert(payload)
       .select();
     if (error) {
-      console.error('Error detallado al guardar business_settings:', error);
+      console.error('Error detallado al guardar business:', error);
       throw new Error(`Error al guardar configuración: ${error.message}`);
     }
     console.log('Configuración guardada exitosamente:', data);
