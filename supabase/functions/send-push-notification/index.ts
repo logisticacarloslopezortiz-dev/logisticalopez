@@ -8,8 +8,17 @@ function logDebug(message: string, data?: any) {
   console.log(`[DEBUG] ${message}`, data ? JSON.stringify(data) : '');
 }
 
+// Tipo de suscripción esperado por web-push (evita conflicto con el DOM PushSubscription)
+interface WebPushSubscription {
+  endpoint: string;
+  keys: {
+    auth: string;
+    p256dh: string;
+  };
+}
+
 // Función para enviar notificación push usando la API Web Push
-async function sendPushNotification(subscription: PushSubscription, payload: any) {
+async function sendPushNotification(subscription: WebPushSubscription, payload: any) {
   try {
     // Importar la biblioteca web-push de forma dinámica
     const webpush = await import('https://esm.sh/web-push@3.6.1');
@@ -134,7 +143,11 @@ Deno.serve(async (req: Request) => {
         results.push({ success: true, endpoint: subscription.endpoint });
       } catch (error) {
         logDebug('Error enviando a suscripción', { endpoint: subscription.endpoint, error });
-        results.push({ success: false, endpoint: subscription.endpoint, error: error.message });
+        results.push({ 
+          success: false, 
+          endpoint: subscription.endpoint, 
+          error: error instanceof Error ? error.message : String(error) 
+        });
       }
     }
     
