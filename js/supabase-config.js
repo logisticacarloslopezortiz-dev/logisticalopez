@@ -168,6 +168,8 @@ const supabaseConfig = {
     const safeUpdates = { ...updates };
     delete safeUpdates.last_collab_status;
     delete safeUpdates.lastCollabStatus;
+    // El esquema actual de 'orders' no incluye 'tracking'
+    delete safeUpdates.tracking;
 
     const { data, error } = await this.client
       .from('orders')

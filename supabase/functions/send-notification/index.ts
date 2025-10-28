@@ -1,5 +1,6 @@
-import { serve } from 'http'
-import webpush from 'web-push'
+/// <reference path="../globals.d.ts" />
+import webpush from 'https://esm.sh/web-push@3.6.1'
+import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts'
 
 // --- Configuración de Claves VAPID ---
 // Estas claves debes configurarlas como "secrets" en tu panel de Supabase.
@@ -8,16 +9,9 @@ const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:example@example.com'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-serve(async (req: Request) => {
-  // Manejar la solicitud de pre-vuelo (preflight) de CORS
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+Deno.serve(async (req: Request) => {
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   try {
     const { subscription, notification } = await req.json();
@@ -41,15 +35,10 @@ serve(async (req: Request) => {
       options
     );
 
-    return new Response(JSON.stringify({ message: 'Notificación push enviada con éxito' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    });
+    return jsonResponse({ message: 'Notificación push enviada con éxito' }, 200);
   } catch (error) {
     console.error('Error al enviar notificación push:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    });
+    const msg = error instanceof Error ? error.message : 'Fallo inesperado';
+    return jsonResponse({ error: msg }, 500);
   }
 });

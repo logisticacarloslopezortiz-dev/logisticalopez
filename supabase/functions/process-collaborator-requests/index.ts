@@ -1,16 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+/// <reference path="../globals.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+Deno.serve(async (req: Request) => {
+  const corsPreflight = handleCors(req)
+  if (corsPreflight) return corsPreflight
 
   try {
     // Create Supabase client with Service Role key for admin operations
@@ -74,17 +68,11 @@ serve(async (req) => {
             .eq('id', requestId)
         }
 
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: 'Colaborador creado exitosamente',
-            collaborator_id: authUser.user.id
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200 
-          }
-        )
+        return jsonResponse({ 
+          success: true, 
+          message: 'Colaborador creado exitosamente',
+          collaborator_id: authUser.user.id
+        }, 200)
 
       case 'reject_request':
         // Update the request status to 'rejected'
@@ -102,37 +90,18 @@ serve(async (req) => {
           throw new Error(`Error rejecting request: ${rejectError.message}`)
         }
 
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: 'Solicitud rechazada exitosamente'
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200 
-          }
-        )
+        return jsonResponse({ 
+          success: true, 
+          message: 'Solicitud rechazada exitosamente'
+        }, 200)
 
       default:
-        return new Response(
-          JSON.stringify({ error: 'Acción no válida' }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 400 
-          }
-        )
+        return jsonResponse({ error: 'Acción no válida' }, 400)
     }
 
   } catch (error) {
     console.error('Error in process-collaborator-requests:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: error.message || 'Error interno del servidor'
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
-      }
-    )
+    const message = (error as Error)?.message || 'Error interno del servidor'
+    return jsonResponse({ error: message }, 500)
   }
 })

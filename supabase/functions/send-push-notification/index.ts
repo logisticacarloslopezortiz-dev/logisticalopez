@@ -1,6 +1,6 @@
+/// <reference path="../globals.d.ts" />
 // Implementación de la función de notificaciones push para TLC
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
 
 // Función para registrar logs
@@ -42,7 +42,7 @@ async function sendPushNotification(subscription: PushSubscription, payload: any
 }
 
 // Manejador principal de la función
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // Manejar solicitudes OPTIONS (preflight CORS)
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;

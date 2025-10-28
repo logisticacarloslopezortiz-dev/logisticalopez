@@ -87,6 +87,24 @@
           if (error) throw error;
 
           if (authData.user) {
+            // Asegurar perfil/colaborador del dueño antes de consultar
+            try {
+              const { data: sessionData } = await supabaseConfig.client.auth.getSession();
+              const token = sessionData?.session?.access_token;
+              if (token) {
+                await fetch(`${supabaseConfig.url}/functions/v1/ensure-owner-profile`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({})
+                });
+              }
+            } catch (ensureErr) {
+              console.warn('ensure-owner-profile fallo:', ensureErr);
+            }
+
             // Una vez autenticado, obtenemos los detalles del perfil desde la tabla 'colaboradores'
             const { data: collaboratorProfile, error: profileError } = await supabaseConfig.client
               .from('collaborators')

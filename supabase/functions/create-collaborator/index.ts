@@ -1,4 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
+/// <reference path="../globals.d.ts" />
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
 
 // Función para registrar logs detallados
@@ -6,7 +7,7 @@ function logDebug(message: string, data?: any) {
   console.log(`[DEBUG] ${message}`, data ? JSON.stringify(data) : '');
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // Manejar solicitudes OPTIONS (preflight CORS)
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;

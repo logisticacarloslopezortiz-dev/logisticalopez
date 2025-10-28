@@ -1,5 +1,5 @@
+/// <reference path="../globals.d.ts" />
 // Función Edge para proporcionar la clave VAPID pública
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
 
 // Función para registrar logs
@@ -8,7 +8,7 @@ function logDebug(message: string, data?: any) {
 }
 
 // Manejador principal de la función
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // Manejar solicitudes OPTIONS (preflight CORS)
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;

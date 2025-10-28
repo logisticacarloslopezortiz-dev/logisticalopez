@@ -77,8 +77,7 @@ async function changeStatus(orderId, newKey){
   const trackingEvent = { status: STATUS_MAP[newKey]?.label || newKey, date: new Date().toISOString() };
 
   const updates = { 
-    last_collab_status: newKey,
-    tracking: Array.isArray(order.tracking) ? [...order.tracking, trackingEvent] : [trackingEvent]
+    last_collab_status: newKey
   };
 
   if (newKey === 'entregado') {

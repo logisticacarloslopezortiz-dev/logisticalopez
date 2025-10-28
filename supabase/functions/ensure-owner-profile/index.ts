@@ -1,7 +1,8 @@
+/// <reference path="../globals.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
   if (req.method !== 'POST') {
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
     if (!existing || existing.length === 0) {
       const { error: insErr } = await admin
         .from('collaborators')
-        .insert({ id: userId, email, name, phone, status: 'activo' });
+        .insert({ id: userId, email, name, phone, status: 'activo', role: 'administrador' });
       if (insErr) return jsonResponse({ error: insErr.message }, 400);
     }
 
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
     if (!prof || prof.length === 0) {
       const { error: insProfErr } = await admin
         .from('profiles')
-        .insert({ id: userId, email, full_name: name, phone });
+        .insert({ id: userId, email, full_name: name, phone, role: 'administrador' });
       if (insProfErr) return jsonResponse({ error: insProfErr.message }, 400);
     }
 
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse({ created: false, id: userId, owner_set: true }, 200);
   } catch (e) {
-    const msg = e?.message || 'Fallo inesperado';
+    const msg = e instanceof Error ? e.message : 'Fallo inesperado';
     return jsonResponse({ error: msg }, 400);
   }
 });
