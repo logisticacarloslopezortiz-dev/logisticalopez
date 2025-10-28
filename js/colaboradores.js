@@ -274,7 +274,6 @@ function renderColaboradores() {
     tr.className = 'hover:bg-gray-50 transition-colors';
     
     const statusBadge = getStatusBadge(c.status || 'activo');
-    const roleBadge = getRoleBadge(c.role);
     const createdDate = new Date(c.created_at).toLocaleDateString('es-ES');
     
     tr.innerHTML = `
@@ -295,9 +294,7 @@ function renderColaboradores() {
       <td class="py-4 px-2">
         <div class="text-gray-900">${c.email}</div>
       </td>
-      <td class="py-4 px-2">
-        ${roleBadge}
-      </td>
+      
       <td class="py-4 px-2">
         ${statusBadge}
       </td>
@@ -335,7 +332,7 @@ function renderColaboradores() {
               <div class="text-sm text-gray-500">Registrado: ${createdDate}</div>
             </div>
           </div>
-          ${roleBadge}
+          
         </div>
         
         <div class="grid grid-cols-2 gap-2 mb-3 text-sm">
@@ -385,27 +382,15 @@ function getStatusBadge(status) {
   return badges[status] || badges['activo'];
 } 
 
-// Función para obtener badge de rol
-function getRoleBadge(role) {
-  const badges = {
-    'administrador': '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800"><i data-lucide="crown" class="w-3 h-3"></i>Administrador</span>',
-    'chofer': '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"><i data-lucide="car" class="w-3 h-3"></i>Chofer</span>',
-    'operador': '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"><i data-lucide="headphones" class="w-3 h-3"></i>Operador</span>'
-  };
-  return badges[role] || badges['operador'];
-}
+// Eliminado: badges de rol, no se usan roles en el sistema
 
 // Función para actualizar resumen
 function updateSummary() {
   const totalColaboradores = colaboradores.length;
   const activosCount = colaboradores.filter(c => (c.status || 'activo') === 'activo').length;
-  const adminCount = colaboradores.filter(c => c.role === 'administrador').length;
-  const choferCount = colaboradores.filter(c => c.role === 'chofer').length;
   
   document.getElementById('totalColaboradores').textContent = totalColaboradores;
   document.getElementById('colaboradoresActivos').textContent = activosCount;
-  document.getElementById('totalAdministradores').textContent = adminCount;
-  document.getElementById('totalChoferes').textContent = choferCount;
 }
 
 // Modal de edición de colaborador
@@ -415,7 +400,6 @@ function setupEditModal() {
   const closeBtn = document.getElementById('closeEditModalBtn');
   const cancelBtn = document.getElementById('cancelEditBtn');
   const formEl = document.getElementById('editCollaboratorForm');
-  const roleEl = document.getElementById('editRole');
   const resetBtn = document.getElementById('resetPasswordBtn');
 
   const close = () => modal && modal.classList.add('hidden');
@@ -432,7 +416,7 @@ function setupEditModal() {
       const email = document.getElementById('editEmail').value.trim();
       const matricula = document.getElementById('editMatricula').value.trim();
       const password = document.getElementById('editPassword').value;
-      const role = (roleEl?.value || '').toLowerCase();
+      // Sin roles
 
       if (!name || !email) {
         showMessage('Nombre y correo son obligatorios.', 'error');
@@ -447,7 +431,7 @@ function setupEditModal() {
             email,
             matricula: matricula || null,
             password: password || undefined,
-            role: role || undefined,
+            
           }
         });
         if (error) throw error;
@@ -491,7 +475,7 @@ function setupEditModal() {
     document.getElementById('editEmail').value = c.email || '';
     document.getElementById('editMatricula').value = c.matricula || '';
     document.getElementById('editPassword').value = '';
-    if (roleEl) roleEl.value = (c.role || 'colaborador').toLowerCase();
+    // Sin roles en edición
     open();
   };
 }
@@ -576,17 +560,15 @@ function isValidEmail(email) {
 // Función para filtrar colaboradores
 function filterColaboradores() {
   const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-  const roleFilter = document.getElementById('roleFilter').value;
   const statusFilter = document.getElementById('statusFilter').value;
   
   const filteredColaboradores = colaboradores.filter(c => {
     const name = (c.name || '').toLowerCase();
     const email = (c.email || '').toLowerCase();
     const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
-    const matchesRole = roleFilter === '' || c.role === roleFilter;
     const matchesStatus = statusFilter === '' || (c.status || 'activo') === statusFilter;
     
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
   
   // En lugar de duplicar el código de renderizado, simplemente llama a la función principal
@@ -619,7 +601,7 @@ form.addEventListener('submit', async (e) => {
   const matricula = document.getElementById('colaboradorMatricula').value.trim();
   const email = document.getElementById('colaboradorEmail').value.trim();
   const password = document.getElementById('colaboradorPassword').value;
-  const role = document.getElementById('colaboradorRole').value;
+  // Sin roles
 
   // Validaciones
   if (!name || !email || !password) {
@@ -648,14 +630,14 @@ form.addEventListener('submit', async (e) => {
   // --- USANDO EDGE FUNCTION PARA CREAR COLABORADORES ---
   try {
     // Usar directamente la Edge Function create-collaborator
-    const normalizedRole = role.toLowerCase(); // Usar el rol seleccionado directamente
+    
     const { data, error } = await supabaseConfig.client.functions.invoke('create-collaborator', {
       body: {
         name: name,
         email: email,
         password: password,
         matricula: matricula || null,
-        role: normalizedRole,
+        
         phone: '' // Campo requerido en la función
       }
     });
@@ -704,13 +686,13 @@ form.addEventListener('submit', async (e) => {
 
 // Event listeners para filtros
 document.getElementById('searchInput').addEventListener('input', filterColaboradores);
-document.getElementById('roleFilter').addEventListener('change', filterColaboradores);
+
 document.getElementById('statusFilter').addEventListener('change', filterColaboradores);
 
 // Función para limpiar filtros
 function clearFilters() {
   document.getElementById('searchInput').value = '';
-  document.getElementById('roleFilter').value = '';
+  
   document.getElementById('statusFilter').value = '';
   renderColaboradores();
 }

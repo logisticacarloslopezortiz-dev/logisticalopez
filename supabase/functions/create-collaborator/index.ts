@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
 
 // Función para registrar logs detallados
@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     logDebug('Datos recibidos', body);
     
-    const { email, password, name, phone, role = 'Colaborador', matricula } = body || {};
+    const { email, password, name, phone, matricula } = body || {};
 
     // Validar campos requeridos
     if (!email || !password || !name) {
@@ -37,12 +37,12 @@ Deno.serve(async (req) => {
     }
 
     // Crear usuario en Auth
-    logDebug('Creando usuario en Auth', { email, name, role });
+    logDebug('Creando usuario en Auth', { email, name });
     const { data: userRes, error: signUpError } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { name, phone, role, matricula }
+      user_metadata: { full_name: name, phone, matricula }
     });
 
     if (signUpError) {
@@ -76,7 +76,6 @@ Deno.serve(async (req) => {
           email, 
           name, 
           phone, 
-          role, 
           matricula,
           status: 'activo', // Corregido: 'activo' en minúsculas para consistencia
           created_at: new Date().toISOString()
@@ -95,7 +94,6 @@ Deno.serve(async (req) => {
           email,
           full_name: name,
           phone,
-          role,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });

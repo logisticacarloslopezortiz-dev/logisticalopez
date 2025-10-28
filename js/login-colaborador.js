@@ -32,34 +32,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
 
             if (data.user) {
-                // ✅ MEJORA: Verificar el rol del usuario para asegurar que no es un administrador.
-                const { data: profile, error: profileError } = await supabaseConfig.client
-                    .from('collaborators')
-                    .select('role')
-                    .eq('id', data.user.id)
-                    .single();
+                // ✅ Sin roles: cualquier usuario válido accede al panel de colaborador
+                // Guardar datos básicos para utilizar en el panel si fuera necesario
+                const fullName = data.user.user_metadata?.name || data.user.user_metadata?.full_name || '';
+                const placa = data.user.user_metadata?.matricula || '';
+                if (fullName) localStorage.setItem('collabName', fullName);
+                if (placa) localStorage.setItem('collabMatricula', placa);
 
-                if (profileError) {
-                    console.warn('No se pudo encontrar el perfil del colaborador. Usando user_metadata.role como fallback.');
-                }
-
-                let role = profile?.role?.toLowerCase();
-                if (!role) {
-                    const { data: userData } = await supabaseConfig.client.auth.getUser();
-                    role = (userData?.user?.user_metadata?.role || '').toLowerCase();
-                }
-
-                if (!role) {
-                    await supabaseConfig.client.auth.signOut(); // Cerrar sesión por seguridad
-                    throw new Error('No se pudo encontrar el perfil del colaborador.');
-                }
-
-                if (role === 'administrador') {
-                    await supabaseConfig.client.auth.signOut(); // Cerrar sesión por seguridad
-                    throw new Error('Los administradores deben iniciar sesión en el panel principal.');
-                }
-
-                window.location.href = 'panel-colaborador.html'; // Redirigir al panel del colaborador
+                window.location.href = 'panel-colaborador.html';
             }
         } catch (error) {
             console.error('Error de inicio de sesión:', error.message);

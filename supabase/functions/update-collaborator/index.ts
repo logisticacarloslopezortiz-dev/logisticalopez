@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     const body = await req.json();
-    const { user_id, email, password, name, matricula, phone, role } = body || {};
+    const { user_id, email, password, name, matricula, phone } = body || {};
 
     if (!user_id) {
       return jsonResponse({ error: 'Falta user_id' }, 400);
@@ -30,9 +30,8 @@ Deno.serve(async (req) => {
       email: email ?? undefined,
       password: password ?? undefined,
       user_metadata: {
-        name: name ?? undefined,
+        full_name: name ?? undefined,
         phone: phone ?? undefined,
-        role: role ?? undefined,
         matricula: matricula ?? undefined,
       },
     });
@@ -50,12 +49,11 @@ Deno.serve(async (req) => {
       if (collabErr) return jsonResponse({ error: collabErr.message }, 400);
     }
 
-    // 3) Actualizar profiles (incluye 'role' si existe en el schema)
+    // 3) Actualizar profiles (sin campo 'role' para coherencia con esquema)
     const updateProfile: any = {};
     if (email !== undefined) updateProfile.email = email;
-    if (name !== undefined) updateProfile.name = name;
+    if (name !== undefined) updateProfile.full_name = name;
     if (phone !== undefined) updateProfile.phone = phone;
-    if (role !== undefined) updateProfile.role = role;
     if (Object.keys(updateProfile).length > 0) {
       updateProfile.updated_at = new Date().toISOString();
       const { error: profErr } = await admin.from('profiles').update(updateProfile).eq('id', user_id);

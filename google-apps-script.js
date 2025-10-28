@@ -13,8 +13,10 @@
  */
 
 // Configuration
-const SHEET_ID = '1022684582341-6sjgfrurg8gujjda7m7m61fh2is6otnh.apps.googleusercontent.com'; // Replace with your actual Google Sheet ID
-const SHEET_NAME = 'TLC Orders'; // Name of the sheet tab
+// IMPORTANTE: Reemplaza por el ID real del Google Sheet (lo ves en la URL entre /d/ y /edit)
+// Ejemplo: https://docs.google.com/spreadsheets/d/1AbCDefGHIjklMNopQRstuVWxyz1234567890/edit
+const SHEET_ID = 'REPLACE_WITH_YOUR_SHEET_ID';
+const SHEET_NAME = 'TLC Orders'; // Nombre de la pestaña de la hoja
 
 /**
  * Handle POST requests from the web application

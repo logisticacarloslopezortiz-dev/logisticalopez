@@ -63,7 +63,7 @@
     </div>
     
     <!-- Tarjetas de resumen -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
       <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
         <div class="flex items-center justify-between">
           <div>
@@ -88,29 +88,6 @@
         </div>
       </div>
       
-      <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-purple-100 text-sm font-medium">Administradores</p>
-            <p class="text-3xl font-bold" id="totalAdministradores">0</p>
-          </div>
-          <div class="bg-white bg-opacity-20 rounded-lg p-3">
-            <i data-lucide="crown" class="w-8 h-8"></i>
-          </div>
-        </div>
-      </div>
-      
-      <div class="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 text-white">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-orange-100 text-sm font-medium">Choferes</p>
-            <p class="text-3xl font-bold" id="totalChoferes">0</p>
-          </div>
-          <div class="bg-white bg-opacity-20 rounded-lg p-3">
-            <i data-lucide="car" class="w-8 h-8"></i>
-          </div>
-        </div>
-      </div>
   </div>
   
   <!-- Formulario para agregar colaborador -->
@@ -138,15 +115,7 @@
           <label class="text-sm font-medium text-gray-700">Contraseña</label>
           <input type="password" id="colaboradorPassword" placeholder="Mínimo 6 caracteres" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
         </div>
-        <div class="space-y-2 lg:col-span-1">
-          <label class="text-sm font-medium text-gray-700">Rol</label>
-          <select id="colaboradorRole" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
-            <option value="">Seleccionar rol</option>
-            <option value="administrador">Administrador</option>
-            <option value="chofer">Chofer</option>
-            <option value="operador">Operador</option>
-          </select>
-        </div>
+        
         <div class="flex items-end gap-2 lg:col-span-1">
           <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium flex items-center justify-center gap-2">
             <i data-lucide="user-plus" class="w-5 h-5"></i>
@@ -169,7 +138,7 @@
         </div>
         <h3 class="text-lg font-semibold text-gray-900">Filtros y Búsqueda</h3>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Buscar</label>
           <div class="relative">
@@ -178,15 +147,7 @@
           </div>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700">Filtrar por Rol</label>
-          <select id="roleFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-            <option value="">Todos los roles</option>
-            <option value="administrador">Administrador</option>
-            <option value="chofer">Chofer</option>
-            <option value="operador">Operador</option>
-          </select>
-        </div>
+        
 
         <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Filtrar por Estado</label>
@@ -224,7 +185,7 @@
               <th class="text-left py-4 px-6 font-semibold text-gray-700 w-1/4">Colaborador</th>
               <th class="hidden md:table-cell text-left py-4 px-6 font-semibold text-gray-700">Matrícula</th>
               <th class="hidden lg:table-cell text-left py-4 px-6 font-semibold text-gray-700">Email</th>
-              <th class="text-left py-4 px-6 font-semibold text-gray-700">Rol</th>
+              
               <th class="hidden sm:table-cell text-left py-4 px-6 font-semibold text-gray-700">Estado</th>
               <th class="text-left py-4 px-6 font-semibold text-gray-700">Acciones</th>
             </tr>
@@ -349,15 +310,7 @@
             <label class="text-sm text-gray-700">Contraseña (dejar vacío para no cambiar)</label>
             <input type="password" id="editPassword" class="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="••••••">
           </div>
-          <div>
-            <label class="text-sm text-gray-700">Rol</label>
-            <select id="editRole" class="w-full border border-gray-300 rounded-lg px-4 py-2">
-              <option value="administrador">Administrador</option>
-              <option value="colaborador">Colaborador</option>
-              <option value="chofer">Chofer</option>
-              <option value="operador">Operador</option>
-            </select>
-          </div>
+          
           <div class="flex justify-end gap-2 pt-2">
             <button type="button" id="cancelEditBtn" class="px-4 py-2 bg-gray-100 rounded-lg">Cancelar</button>
             <button type="button" id="resetPasswordBtn" class="px-4 py-2 bg-orange-600 text-white rounded-lg">Restablecer contraseña</button>
