@@ -49,6 +49,52 @@ async function loadSettings() {
 // Cargar datos al iniciar
 document.addEventListener('DOMContentLoaded', loadSettings);
 
+// Búsqueda rápida por ID/short_id
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('businessOrderSearchInput');
+  const btn = document.getElementById('businessOrderSearchBtn');
+  const result = document.getElementById('businessOrderSearchResult');
+  if (btn && input && result) {
+    btn.addEventListener('click', async () => {
+      const val = (input.value || '').trim();
+      result.textContent = '';
+      if (!val) { result.textContent = 'Ingresa un ID o short_id.'; return; }
+      try {
+        const looksLikeShortId = /^ORD-\w+/i.test(val);
+        const numericId = Number(val);
+        let query = supabaseConfig.client
+          .from('orders')
+          .select('id, short_id, name, service:services(name), status, created_at')
+          .limit(1);
+        if (looksLikeShortId) {
+          query = query.eq('short_id', val);
+        } else if (!Number.isNaN(numericId)) {
+          query = query.eq('id', numericId);
+        } else {
+          query = query.eq('short_id', val);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        const order = (data || [])[0];
+        if (!order) { result.textContent = 'No se encontró ninguna solicitud.'; return; }
+        result.innerHTML = `
+          <div class="p-3 border rounded bg-gray-50">
+            <div><span class="font-semibold">ID:</span> ${order.id} <span class="ml-2 text-gray-500">${order.short_id || ''}</span></div>
+            <div><span class="font-semibold">Cliente:</span> ${order.name}</div>
+            <div><span class="font-semibold">Servicio:</span> ${order.service?.name || 'N/A'}</div>
+            <div><span class="font-semibold">Estado:</span> ${order.status}</div>
+            <div><span class="font-semibold">Creado:</span> ${order.created_at ? new Date(order.created_at).toLocaleString('es-DO') : 'N/A'}</div>
+          </div>
+        `;
+        lucide.createIcons();
+      } catch (err) {
+        console.error('Error buscando orden:', err);
+        result.textContent = 'Error al buscar la solicitud.';
+      }
+    });
+  }
+});
+
 // Guardar datos del negocio
 businessForm.addEventListener('submit', async (e) => {
   e.preventDefault();

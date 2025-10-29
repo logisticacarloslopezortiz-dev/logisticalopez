@@ -565,7 +565,8 @@ function filterColaboradores() {
   const filteredColaboradores = colaboradores.filter(c => {
     const name = (c.name || '').toLowerCase();
     const email = (c.email || '').toLowerCase();
-    const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
+    const idStr = String(c.id || '').toLowerCase();
+    const matchesSearch = !searchTerm || name.includes(searchTerm) || email.includes(searchTerm) || idStr.includes(searchTerm);
     const matchesStatus = statusFilter === '' || (c.status || 'activo') === statusFilter;
     
     return matchesSearch && matchesStatus;

@@ -137,6 +137,40 @@ VALUES (1, 'Mi Negocio', '', '', '')
 ON CONFLICT (id) DO NOTHING;
 
 -- --------------------------------------------------------------
+-- 4.b COMPATIBILIDAD: business_settings (para proyectos antiguos)
+-- --------------------------------------------------------------
+-- Nota: Algunos entornos/migraciones anteriores referencian public.business_settings.
+-- Para evitar errores al pegar este esquema en Supabase, se crea una tabla
+-- de compatibilidad con las mismas columnas básicas que "business".
+-- Las políticas se basan en el dueño definido en public.business.owner_user_id.
+
+DROP TABLE IF EXISTS public.business_settings CASCADE;
+CREATE TABLE public.business_settings (
+  id integer primary key default 1,
+  business_name text,
+  address text,
+  phone text,
+  email text,
+  rnc text,
+  quotation_rates jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+COMMENT ON TABLE public.business_settings IS 'Tabla de compatibilidad para configuraciones del negocio; preferir public.business.';
+
+-- Trigger updated_at (reutiliza la función touch_updated_at)
+DROP TRIGGER IF EXISTS trg_business_settings_touch_updated ON public.business_settings;
+CREATE TRIGGER trg_business_settings_touch_updated
+BEFORE UPDATE ON public.business_settings
+FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+-- Seed inicial de compatibilidad
+INSERT INTO public.business_settings (id, business_name, address, phone, email)
+VALUES (1, 'Mi Negocio', '', '', '')
+ON CONFLICT (id) DO NOTHING;
+
+-- --------------------------------------------------------------
 -- 5. ÓRDENES Y NOTIFICACIONES
 -- --------------------------------------------------------------
 DROP SEQUENCE IF EXISTS public.orders_short_id_seq;
@@ -224,6 +258,7 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.collaborators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matriculas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.business ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.business_settings ENABLE ROW LEVEL SECURITY;
 
 -- Limpieza previa de políticas antiguas
 DROP POLICY IF EXISTS "public_read_vehicles" ON public.vehicles;
@@ -243,6 +278,7 @@ DROP POLICY IF EXISTS "owner_manage_collaborators" ON public.collaborators;
 DROP POLICY IF EXISTS "collaborator_read_own_matriculas" ON public.matriculas;
 DROP POLICY IF EXISTS "owner_manage_matriculas" ON public.matriculas;
 DROP POLICY IF EXISTS "owner_full_access_business" ON public.business;
+DROP POLICY IF EXISTS "owner_full_access_business_settings" ON public.business_settings;
 
 -- Vehículos y servicios
 CREATE POLICY "public_read_vehicles" ON public.vehicles FOR SELECT USING (true);
@@ -281,6 +317,14 @@ CREATE POLICY "owner_manage_matriculas" ON public.matriculas FOR ALL USING (
 
 -- Business
 CREATE POLICY "owner_full_access_business" ON public.business
+FOR ALL USING (
+  owner_user_id = auth.uid()
+) WITH CHECK (
+  owner_user_id = auth.uid()
+);
+
+-- Business Settings (compatibilidad)
+CREATE POLICY "owner_full_access_business_settings" ON public.business_settings
 FOR ALL USING (
   exists (select 1 from public.business where owner_user_id = auth.uid())
 ) WITH CHECK (

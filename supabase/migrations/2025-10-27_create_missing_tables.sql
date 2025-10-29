@@ -187,5 +187,12 @@ create table if not exists public.business (
   logo_url text,
   created_at timestamptz not null default now()
 );
+
+-- Habilitar RLS y política no recursiva para business
+alter table public.business enable row level security;
+drop policy if exists "owner_full_access_business" on public.business;
+create policy "owner_full_access_business" on public.business
+for all using (owner_user_id = auth.uid())
+with check (owner_user_id = auth.uid());
 create index if not exists business_owner_user_id_idx on public.business(owner_user_id);
 create index if not exists business_rnc_idx on public.business(rnc);

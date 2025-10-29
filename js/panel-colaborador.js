@@ -357,6 +357,7 @@ function render(){
   const ordersGrid = document.getElementById('ordersGrid');
   const emptyState = document.getElementById('emptyState');
   const tbody = document.getElementById('ordersTableBody');
+  const tableContainer = document.getElementById('requestsTableContainer');
   
   if (ordersGrid) {
     ordersGrid.innerHTML = '';
@@ -376,12 +377,26 @@ function render(){
     if (tbody) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-500">Sin solicitudes</td></tr>';
     }
+    if (tableContainer && state.activeJobId) {
+      // Si hay trabajo activo, mantener oculto el contenedor de tabla
+      tableContainer.classList.add('hidden');
+    } else {
+      tableContainer?.classList.remove('hidden');
+    }
     return;
   }
   
   if (ordersGrid) {
     ordersGrid.classList.remove('hidden');
     emptyState?.classList.add('hidden');
+  }
+  // Ocultar contenedor de solicitudes si hay trabajo activo
+  if (tableContainer) {
+    if (state.activeJobId) {
+      tableContainer.classList.add('hidden');
+    } else {
+      tableContainer.classList.remove('hidden');
+    }
   }
 
   state.filteredOrders.forEach(o => {
@@ -460,11 +475,19 @@ function filterAndRender(){
     const isAssignedToMe = o.assigned_to === state.collabSession.user.id && o.status !== 'Completado';
     return isPendingAndUnassigned || isAssignedToMe;
   };
-  const base = state.allOrders.filter(visibleForCollab);
+  let base = state.allOrders.filter(visibleForCollab);
+  // Si hay trabajo activo, mostrar solo ese trabajo
+  if (state.activeJobId) {
+    base = base.filter(o => o.id === state.activeJobId);
+  }
   baseVisibleCount = base.length;
   state.filteredOrders = base.filter(o => {
     // ✅ CORRECCIÓN: Convertir el ID a String para evitar errores al buscar.
-    const m1 = !term || o.name.toLowerCase().includes(term) || String(o.id).includes(term) || o.service.toLowerCase().includes(term);
+    const m1 = !term 
+      || o.name.toLowerCase().includes(term) 
+      || String(o.id).toLowerCase().includes(term)
+      || String(o.short_id || '').toLowerCase().includes(term)
+      || o.service.toLowerCase().includes(term);
     const currentStatus = o.last_collab_status || o.status;
     const m2 = !statusFilter || statusFilter === currentStatus;
     return m1 && m2;
@@ -757,6 +780,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           status: 'En proceso'
         };
         showActiveJob(state.allOrders[idx]);
+        // Ocultar otras solicitudes y centrar en el trabajo activo
+        state.activeJobId = orderId;
+        localStorage.setItem('tlc_collab_active_job', String(orderId));
+        filterAndRender();
       }
 
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
@@ -829,6 +856,48 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ✅ CORRECCIÓN: Mover la lógica para restaurar el trabajo activo a DESPUÉS de cargar los pedidos.
   restoreActiveJob();
+
+  // Botón cancelar trabajo activo
+  const cancelBtn = document.getElementById('cancelActiveJobBtn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', async () => {
+      if (!state.activeJobId) return;
+      const order = state.allOrders.find(o => o.id === state.activeJobId);
+      if (!order) return;
+      const ok = confirm('¿Cancelar este trabajo activo? Esto marcará la solicitud como Cancelado.');
+      if (!ok) return;
+      try {
+        const trackingEvent = { status: 'Trabajo cancelado por colaborador', date: new Date().toISOString() };
+        const existingTracking = Array.isArray(order.tracking_data) ? order.tracking_data : [];
+        await supabaseConfig.updateOrder(state.activeJobId, {
+          status: 'Cancelado',
+          assigned_to: null,
+          assigned_at: null,
+          tracking_data: [...existingTracking, trackingEvent]
+        });
+        // Actualizar local
+        const idx = state.allOrders.findIndex(o => o.id === state.activeJobId);
+        if (idx !== -1) {
+          state.allOrders[idx] = {
+            ...state.allOrders[idx],
+            status: 'Cancelado',
+            assigned_to: null,
+            assigned_at: null,
+            tracking_data: [...existingTracking, trackingEvent]
+          };
+        }
+        // Limpiar trabajo activo y volver a mostrar solicitudes
+        state.activeJobId = null;
+        localStorage.removeItem('tlc_collab_active_job');
+        document.getElementById('activeJobSection')?.classList.add('hidden');
+        filterAndRender();
+        showSuccess('Trabajo cancelado', 'La solicitud ha sido marcada como cancelada.');
+      } catch (err) {
+        console.error('Error al cancelar trabajo activo:', err);
+        showError('Error al cancelar', err?.message || 'No se pudo cancelar el trabajo.');
+      }
+    });
+  }
 
   if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
     supabaseConfig.client

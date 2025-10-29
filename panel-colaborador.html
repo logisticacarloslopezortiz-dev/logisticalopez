@@ -174,7 +174,7 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+    <div id="requestsTableContainer" class="bg-white rounded-lg shadow-md overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
         <h3 class="text-lg font-semibold text-gray-800">Solicitudes de clientes <span class="ml-2 hidden sm:inline text-xs font-normal text-gray-400">(disponibles y asignadas a ti)</span></h3>
         <span class="text-sm text-gray-500">Mostrando <span id="showingCount">0</span> de <span id="totalCount">0</span></span>
@@ -200,7 +200,14 @@
       <div class="bg-white rounded-lg shadow-md p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-semibold flex items-center gap-2"><i data-lucide="briefcase"></i> Trabajo activo</h2>
-          <span id="activeJobStatus" class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">En camino a recoger pedido</span>
+          <div class="flex items-center gap-2">
+            <span id="activeJobStatus" class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">En camino a recoger pedido</span>
+            <!-- Botón para cancelar trabajo activo -->
+            <button id="cancelActiveJobBtn" class="px-3 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="Cancelar trabajo activo">
+              <i data-lucide="x-circle" class="w-4 h-4 inline-block mr-1"></i>
+              Cancelar
+            </button>
+          </div>
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div id="activeJobInfo"></div>

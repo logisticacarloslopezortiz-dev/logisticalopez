@@ -12,14 +12,20 @@ const closeScheduleModal = document.getElementById('closeScheduleModal');
 const cancelSchedule = document.getElementById('cancelSchedule');
 const scheduleForm = document.getElementById('scheduleForm');
 
-// Función para requerir sesión
-function requireSession() {
-    const session = JSON.parse(localStorage.getItem('tlc_collab_session') || 'null');
-    if (!session) {
+// Sesión: usar Supabase Auth en lugar de localStorage custom
+async function getSupabaseSession() {
+    try {
+        const { data: { session } } = await supabaseConfig.client.auth.getSession();
+        if (!session) {
+            window.location.href = 'login-colaborador.html';
+            return null;
+        }
+        return session;
+    } catch (err) {
+        console.error('Error obteniendo sesión Supabase:', err);
         window.location.href = 'login-colaborador.html';
         return null;
     }
-    return session;
 }
 
 // Función para cargar órdenes y métricas
@@ -433,19 +439,21 @@ function loadPerformanceData() {
 }
 
 // Inicialización
-document.addEventListener('DOMContentLoaded', () => {
-    const session = requireSession();
+document.addEventListener('DOMContentLoaded', async () => {
+    const session = await getSupabaseSession();
     if (!session) return;
-    
-    currentCollabEmail = session.email;
-    updateCollaboratorProfile(session);
-    
+
+    currentCollabEmail = session.user?.email || '';
+    updateCollaboratorProfile({ email: currentCollabEmail });
+
     // Inicializar iconos de Lucide
-    lucide.createIcons();
-    
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+
     // Cargar datos de rendimiento
     loadPerformanceData();
-    
+
     // Actualizar cada 30 segundos
     setInterval(loadPerformanceData, 30000);
 });

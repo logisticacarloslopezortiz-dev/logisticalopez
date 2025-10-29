@@ -126,7 +126,8 @@ function applyFilters() {
         const matchSearch = !searchTerm ||
             request.name.toLowerCase().includes(searchTerm) ||
             (request.service?.name || '').toLowerCase().includes(searchTerm) ||
-            String(request.id).includes(searchTerm);
+            String(request.id).toLowerCase().includes(searchTerm) ||
+            String(request.short_id || '').toLowerCase().includes(searchTerm);
 
         const matchDate = !dateFilter || request.completed_at?.startsWith(dateFilter);
 
