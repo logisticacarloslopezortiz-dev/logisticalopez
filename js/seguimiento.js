@@ -46,11 +46,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const { data: order, error } = await supabaseConfig.client
+            // Detectar si el input parece un short_id (ej. "ORD-1234") o un id numérico
+            const looksLikeShortId = /^ORD-\w+/i.test(orderIdValue);
+            const numericId = Number(orderIdValue);
+
+            let query = supabaseConfig.client
                 .from('orders')
-                .select('*, service:services(name), vehicle:vehicles(name)') // ✅ MEJORA: Cargar nombres relacionados
-                .eq('id', orderIdValue) // ✅ CORREGIDO: Buscar por el ID como texto (UUID).
-                .single(); // .single() espera un solo resultado o ninguno
+                .select('*, service:services(name), vehicle:vehicles(name)');
+
+            if (looksLikeShortId) {
+                query = query.eq('short_id', orderIdValue);
+            } else if (!Number.isNaN(numericId)) {
+                query = query.eq('id', numericId);
+            } else {
+                // Último recurso: intentar por short_id si el formato no es numérico
+                query = query.eq('short_id', orderIdValue);
+            }
+
+            const { data: order, error } = await query.single(); // .single() espera un solo resultado o ninguno
 
             if (error || !order) {
                 throw new Error('No se encontró ninguna solicitud con ese ID.');

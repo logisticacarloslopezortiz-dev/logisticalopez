@@ -287,6 +287,16 @@ FOR ALL USING (
   exists (select 1 from public.business where owner_user_id = auth.uid())
 );
 
+-- Push Subscriptions
+DROP POLICY IF EXISTS "user_manage_own_push_subscriptions" ON public.push_subscriptions;
+CREATE POLICY "user_manage_own_push_subscriptions" ON public.push_subscriptions
+FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- Notifications
+DROP POLICY IF EXISTS "user_read_own_notifications" ON public.notifications;
+CREATE POLICY "user_read_own_notifications" ON public.notifications
+FOR SELECT USING (user_id = auth.uid());
+
 -- --------------------------------------------------------------
 -- 7. SEED DE CATÁLOGOS
 -- --------------------------------------------------------------

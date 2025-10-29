@@ -152,11 +152,17 @@ class PushNotificationManager {
                 throw new Error('User not authenticated');
             }
 
+            const raw = typeof subscription.toJSON === 'function' ? subscription.toJSON() : null;
+            const keys = (raw && raw.keys) ? raw.keys : (subscription.keys || {});
+
             const subscriptionData = {
                 user_id: user.id,
                 endpoint: subscription.endpoint,
-                p256dh: subscription.keys.p256dh,
-                auth: subscription.keys.auth,
+                // Adaptar a esquema: guardar llaves en JSONB `keys`
+                keys: {
+                    p256dh: keys.p256dh,
+                    auth: keys.auth
+                },
                 user_agent: navigator.userAgent
             };
 

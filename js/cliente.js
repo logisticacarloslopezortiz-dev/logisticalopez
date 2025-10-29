@@ -791,8 +791,8 @@ document.addEventListener('DOMContentLoaded', function() {
           rnc: document.querySelector('input[name="rnc"]')?.value || null,
           empresa: document.querySelector('input[name="empresa"]')?.value || null,
           // Detalles del servicio (Pasos 2 y 3)
-          service_id: selectedService ? selectedService.id : null, // Correcto, es un string (UUID)
-          vehicle_id: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleId : null, // Correcto, es un string (UUID)
+          service_id: selectedService ? parseInt(selectedService.id, 10) : null,
+          vehicle_id: selectedVehicleCard ? parseInt(selectedVehicleCard.dataset.vehicleId, 10) : null,
           service_questions: serviceQuestions,
           // Detalles de la ruta (Paso 4)
           pickup: document.getElementById('pickupAddress').value,
@@ -834,18 +834,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const origin_coords2 = orderData.origin_coords;
         const destination_coords2 = orderData.destination_coords;
 
-        // Variant A: usar service_id y vehicle_id (si la tabla tiene esas columnas)
         const variantA = Object.assign({}, baseOrder, {
-          service_id: selectedService ? selectedService.id : null,
-          vehicle_id: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleId : null,
-          origin_coords: origin_coords2,
-          destination_coords: destination_coords2
-        });
-
-        // Variant B: usar service y vehicle (nombres) — fallback si Variant A falla por columnas
-        const variantB = Object.assign({}, baseOrder, {
-          service: selectedService ? selectedService.name : null,
-          vehicle: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleName : null,
+          service_id: orderData.service_id,
+          vehicle_id: orderData.vehicle_id,
           origin_coords: origin_coords2,
           destination_coords: destination_coords2
         });
@@ -865,56 +856,19 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
           savedOrder = await tryInsert(variantA);
         } catch (err) {
-          // Si el error indica columna inexistente en Postgres (ej. 42703) o menciona "column" -> reintentar con variantB
-          const msg = (err && (err.message || err.error_description || JSON.stringify(err))) || '';
-          const isMissingColumn = /column\s+"?\w+"?\s+does not exist|42703/i.test(msg);
-          if (isMissingColumn) {
-            try {
-              // Verificar que variantB tenga la estructura correcta antes de intentar insertar
-              if (!variantB || typeof variantB !== 'object') {
-                throw new Error('Datos de solicitud inválidos');
-              }
-              
-              // Asegurar que todos los campos requeridos estén presentes
-              const requiredFields = ['client_name', 'client_phone', 'service_id', 'origin_address', 'destination_address'];
-              for (const field of requiredFields) {
-                if (!variantB[field]) {
-                  throw new Error(`Campo requerido faltante: ${field}`);
-                }
-              }
-              
-              savedOrder = await tryInsert(variantB);
-            } catch (err2) {
-              console.error('Error al guardar la solicitud (reintento con nombres):', err2);
-              // Mostrar mensaje más específico según el tipo de error
-              const errorMsg = err2.message.includes('Campo requerido') 
-                ? `Faltan datos obligatorios: ${err2.message}` 
-                : 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';
-              notifications.error(errorMsg, { title: 'Error al Procesar Solicitud' });
-              return;
+          console.error('Error al guardar la solicitud:', err);
+          let errorMsg = 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';
+          if (err && typeof err === 'object') {
+            if (err.message && err.message.includes('duplicate key')) {
+              errorMsg = 'Ya existe una solicitud con estos datos. Verifica la información.';
+            } else if (err.message) {
+              errorMsg = `Error específico: ${err.message}`;
+            } else if (err.code) {
+              errorMsg = `Error de código: ${err.code}`;
             }
-          } else {
-            console.error('Error al guardar la solicitud:', err);
-            // Mejorar el mensaje de error para ser más específico y manejar el caso de Object
-            let errorMsg = 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';
-            
-            if (err && typeof err === 'object') {
-              if (err.message && err.message.includes('duplicate key')) {
-                errorMsg = 'Ya existe una solicitud con estos datos. Por favor, verifica la información.';
-              } else if (err.message && (err.message.includes("Could not find the 'tracking' column") || err.message.includes("tracking"))) {
-                // Corregir el error específico de la columna tracking
-                errorMsg = 'Error de compatibilidad con la base de datos. Por favor, contacta al soporte.';
-                console.error('Error de columna tracking - se debe usar tracking_data en su lugar');
-              } else if (err.message) {
-                errorMsg = `Error específico: ${err.message}`;
-              } else if (err.code) {
-                errorMsg = `Error de código: ${err.code}`;
-              }
-            }
-            
-            notifications.error(errorMsg, { title: 'Error al Guardar Solicitud' });
-            return;
           }
+          notifications.error(errorMsg, { title: 'Error al Guardar Solicitud' });
+          return;
         }
 
         // Si llegamos aquí, savedOrder está presente
@@ -925,39 +879,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const tracking_url = `${window.location.origin}/seguimiento.html?order=${savedOrder.id}`;
-        // Intentar actualizar tracking_url o tracking_link (si alguna columna existe)
+        // Actualizar tracking_url (sin RPC, acorde al esquema actual)
         try {
-          // Verificamos primero si las columnas existen en la tabla
-          const { data: columnsData, error: columnsError } = await supabaseConfig.client
-            .rpc('get_table_columns', { table_name: 'orders' });
-
-          if (!columnsError && columnsData) {
-            if (columnsData.includes('tracking_url')) {
-              // La columna tracking_url existe, actualizamos
-              const { error: updateError } = await supabaseConfig.client.from('orders').update({ tracking_url }).eq('id', savedOrder.id);
-              if (updateError) {
-                console.warn('No se pudo actualizar la URL de seguimiento:', updateError);
-              }
-            } else if (columnsData.includes('tracking_link')) {
-              // Intentar con tracking_link como alternativa
-              const { error: updateError } = await supabaseConfig.client.from('orders').update({ tracking_link: tracking_url }).eq('id', savedOrder.id);
-              if (updateError) {
-                console.warn('No se pudo actualizar el enlace de seguimiento:', updateError);
-              }
-            } else {
-              console.warn('Ni tracking_url ni tracking_link existen en la tabla orders');
-            }
+          const { error: updateError } = await supabaseConfig.client
+            .from('orders')
+            .update({ tracking_url })
+            .eq('id', savedOrder.id);
+          if (updateError) {
+            console.warn('No se pudo actualizar la URL de seguimiento:', updateError);
           }
-          // Continuamos el proceso aunque falle esta actualización
         } catch (e) {
-          // No crítico — ignorar si la columna no existe
-          console.warn('No se pudo actualizar tracking_url:', {
-            error: e,
-            message: e.message,
-            details: e.details,
-            hint: e.hint,
-            code: e.code
-          });
+          console.warn('No se pudo actualizar tracking_url:', e);
         }
 
         // Notificar al usuario y ofrecer copia del ID
