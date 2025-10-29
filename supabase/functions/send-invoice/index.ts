@@ -93,13 +93,17 @@ Deno.serve(async (req: Request) => {
       emailResult = await sendEmailWithInvoice(recipientEmail, invoiceData);
     }
     
-    // Registrar la generación de factura
+    // Registrar la generación de factura en notifications (esquema actual)
     await supabase.from('notifications').insert({
-      order_id: orderId,
+      user_id: order.client_id ?? null,
       title: 'Factura generada',
       body: `Factura ${invoiceData.invoiceNumber} generada correctamente`,
-      sent_at: new Date().toISOString(),
-      status: 'sent'
+      data: {
+        order_id: orderId,
+        invoice_number: invoiceData.invoiceNumber,
+        email_sent: !!emailResult?.success,
+        recipient_email: recipientEmail
+      }
     });
     
     return jsonResponse({ 

@@ -632,14 +632,16 @@ form.addEventListener('submit', async (e) => {
   try {
     // Usar directamente la Edge Function create-collaborator
     
-    const { data, error } = await supabaseConfig.client.functions.invoke('create-collaborator', {
+    const { data, error } = await supabaseConfig.client.functions.invoke('process-collaborator-requests', {
       body: {
-        name: name,
-        email: email,
-        password: password,
-        matricula: matricula || null,
-        
-        phone: '' // Campo requerido en la función
+        action: 'create_collaborator',
+        collaboratorData: {
+          name: name,
+          email: email,
+          password: password,
+          matricula: matricula || null,
+          phone: ''
+        }
       }
     });
 

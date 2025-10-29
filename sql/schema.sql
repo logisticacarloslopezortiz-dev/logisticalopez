@@ -175,8 +175,14 @@ ON CONFLICT (id) DO NOTHING;
 -- --------------------------------------------------------------
 -- 5.a FUNCIONES DE ROL (helpers)
 -- --------------------------------------------------------------
+-- Helper seguro: determina si el usuario es el dueño del negocio sin recursión
 CREATE OR REPLACE FUNCTION public.is_owner(uid uuid)
-RETURNS boolean LANGUAGE sql AS $$
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
   SELECT EXISTS(
     SELECT 1 FROM public.business b WHERE b.owner_user_id = uid
   );

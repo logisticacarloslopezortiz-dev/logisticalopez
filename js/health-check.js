@@ -21,17 +21,20 @@
     const testEmail = `test.collab.${Date.now()}@example.com`;
     const testPassword = 'Test1234!';
     try {
-      const { data, error } = await supabaseConfig.client.functions.invoke('create-collaborator', {
+      const { data, error } = await supabaseConfig.client.functions.invoke('process-collaborator-requests', {
         body: {
-          email: testEmail,
-          password: testPassword,
-          name: 'Tester Auto',
-          phone: '8090000000',
-          matricula: `TST-${Date.now()}`
+          action: 'create_collaborator',
+          collaboratorData: {
+            email: testEmail,
+            password: testPassword,
+            name: 'Tester Auto',
+            phone: '8090000000',
+            matricula: `TST-${Date.now()}`
+          }
         }
       });
-      results.createCollab = { ok: !error, data, error: error?.message };
-      const newUserId = data?.user?.id || data?.user_id || null;
+      results.createCollab = { ok: !error && !!data?.success, data, error: error?.message };
+      const newUserId = data?.collaborator_id || data?.user?.id || data?.user_id || null;
 
       // Actualizar colaborador (si se obtuvo user_id)
       if (newUserId) {

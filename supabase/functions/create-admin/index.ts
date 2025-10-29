@@ -104,10 +104,10 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Failed to insert profile", details: profileErr.message }, 400);
   }
 
-  // Insertar en collaborators con rol Administrador
+  // Insertar en collaborators con columnas válidas y valores coherentes
   const { error: collabInsErr } = await supabaseAdmin
     .from("collaborators")
-    .insert({ id: newUser.id, full_name, email, phone, role: "Administrador", status: "Activo" });
+    .insert({ id: newUser.id, name: full_name, email, phone, role: "administrador", status: "activo" });
   if (collabInsErr) {
     return jsonResponse({ error: "Failed to insert collaborator", details: collabInsErr.message }, 400);
   }
