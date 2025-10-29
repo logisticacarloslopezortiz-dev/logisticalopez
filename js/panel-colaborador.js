@@ -135,15 +135,13 @@ const state = {
   collabSession: null,
 };
 
+let activeJobMap = null; // Variable para la instancia del mapa de trabajo activo
+
 function collabDisplayName(email){
   try {
     const base = (email || '').split('@')[0] || 'colaborador';
     return base.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   } catch { return 'Colaborador'; }
-}
-
-function gmapEmbed(addr){
-  return 'https://www.google.com/maps?q=' + encodeURIComponent(addr) + '&output=embed';
 }
 
 function openAcceptModal(order){
@@ -183,10 +181,11 @@ function showActiveJob(order){
   const section = document.getElementById('activeJobSection');
   section.classList.remove('hidden');
   const info = document.getElementById('activeJobInfo');
+  // ✅ MEJORA: Diseño de información de trabajo activo más limpio y organizado
   info.innerHTML = /*html*/`
     <div class="space-y-4">
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="px-2 py-1 text-xs rounded bg-gray-100 font-mono">ID: ${order.id}</span>
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-800 font-bold font-mono shadow-sm">ID: ${order.id}</span>
         ${order.assigned_to ? `<span class=\"px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800 inline-flex items-center gap-1\"><i data-lucide=\"user\" class=\"w-3 h-3\"></i> ${order.assigned_to}</span>` : ''}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -194,10 +193,10 @@ function showActiveJob(order){
           <i data-lucide="user" class="w-5 h-5 text-gray-500 mt-0.5"></i>
           <div>
             <div class="font-semibold text-gray-800">${order.name}</div>
-            <div class="text-gray-600 flex flex-wrap gap-2">
-              <a class="text-blue-600 underline" href="tel:${order.phone}">${order.phone}</a>
+            <div class="text-gray-600 flex items-center gap-2">
+              <a class="text-blue-600 hover:underline" href="tel:${order.phone}">${order.phone}</a>
               <span>•</span>
-              <a class="text-blue-600 underline" href="mailto:${order.email}">${order.email}</a>
+              <a class="text-blue-600 hover:underline" href="mailto:${order.email}">${order.email}</a>
             </div>
           </div>
         </div>
@@ -211,12 +210,12 @@ function showActiveJob(order){
         <div class="flex items-start gap-3 sm:col-span-2">
           <i data-lucide="route" class="w-5 h-5 text-gray-500 mt-0.5"></i>
           <div class="w-full">
-            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-              <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs"><i data-lucide="map-pin" class="w-3 h-3"></i> Recogida</span>
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-medium"><i data-lucide="map-pin" class="w-3 h-3"></i> Recogida</span>
               <div class="text-gray-800">${order.pickup}</div>
             </div>
-            <div class="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-              <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-green-50 text-green-700 text-xs"><i data-lucide="flag" class="w-3 h-3"></i> Entrega</span>
+            <div class="mt-2 flex items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-50 text-green-700 text-xs font-medium"><i data-lucide="flag" class="w-3 h-3"></i> Entrega</span>
               <div class="text-gray-800">${order.delivery}</div>
             </div>
           </div>
@@ -228,23 +227,14 @@ function showActiveJob(order){
             <div class="text-gray-600">${order.time}</div>
           </div>
         </div>
-        <!-- Precio oculto para colaboradores -->
-        <div class="hidden">
-          <i data-lucide="badge-dollar-sign" class="w-5 h-5 text-gray-500 mt-0.5"></i>
-          <div>
-            <div class="font-semibold text-gray-800">Precio estimado</div>
-            <div class="text-green-700 font-bold">${order.estimated_price || 'Por confirmar'}</div>
-          </div>
-        </div>
-        
-        ${order.serviceQuestions && Object.keys(order.serviceQuestions).length > 0 ? `
+        ${(order.service_questions || order.serviceQuestions) && Object.keys(order.service_questions || order.serviceQuestions).length > 0 ? `
         <div class="sm:col-span-2 border-t pt-4 mt-4">
           <div class="flex items-start gap-3">
             <i data-lucide="clipboard-list" class="w-5 h-5 text-gray-500 mt-0.5"></i>
             <div>
               <div class="font-semibold text-gray-800 mb-2">Detalles Adicionales del Servicio</div>
               <div class="space-y-2 text-sm">
-                ${Object.entries(order.serviceQuestions).map(([key, value]) => `
+                ${Object.entries(order.service_questions || order.serviceQuestions).map(([key, value]) => `
                   <div class="text-gray-600"><span class="font-medium text-gray-700">${key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}:</span> ${value}</div>
                 `).join('')}
               </div>
@@ -256,26 +246,74 @@ function showActiveJob(order){
     </div>
   `;
   updateActiveJobView();
-  if (window.lucide) lucide.createIcons();
-  renderPhotoGallery(order.photos || []);
+  if (window.lucide) lucide.createIcons(); // Renderizar iconos
+  renderPhotoGallery(order.evidence_photos || []); // Renderizar fotos
 }
 
 function updateActiveJobView(){
   if (!state.activeJobId) return;
   const order = state.allOrders.find(o => o.id === state.activeJobId);
   if (!order) return;
+
+  // ✅ MEJORA: Actualizar barra de progreso y estado visual
   const statusKey = order.last_collab_status || 'en_camino_recoger';
   const statusLabel = STATUS_MAP[statusKey]?.label || statusKey;
   const badge = document.getElementById('activeJobStatus');
   badge.textContent = statusLabel;
-  const mapEl = document.getElementById('activeJobMap');
+
+  const progressBar = document.getElementById('jobProgressBar');
+  const progressValues = {
+    'en_camino_recoger': '25%',
+    'cargando': '50%',
+    'en_camino_entregar': '75%',
+    'entregado': '100%',
+    'retraso_tapon': progressBar.style.width // Mantener el progreso actual en caso de retraso
+  };
+  progressBar.style.width = progressValues[statusKey] || '25%';
+
+  // ✅ MEJORA: Usar Leaflet directamente en lugar de un iframe
+  const mapContainer = document.getElementById('activeJobMap');
   const hintEl = document.getElementById('activeJobMapHint');
+
+  // Inicializar mapa si no existe
+  if (!activeJobMap) {
+    activeJobMap = L.map(mapContainer).setView([18.4861, -69.9312], 9);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(activeJobMap);
+  }
+
+  // Limpiar capas anteriores
+  activeJobMap.eachLayer(layer => {
+    if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+      activeJobMap.removeLayer(layer);
+    }
+  });
+
+  const origin = order.origin_coords;
+  const destination = order.destination_coords;
+  let targetLatLng, hintText;
+
   if (statusKey === 'cargando' || statusKey === 'en_camino_entregar' || statusKey === 'entregado') {
-    mapEl.src = gmapEmbed(order.delivery);
-    hintEl.textContent = 'Dirígete a la dirección de entrega';
+    targetLatLng = destination ? [destination.lat, destination.lng] : null;
+    hintText = 'Dirígete a la dirección de entrega';
   } else {
-    mapEl.src = gmapEmbed(order.pickup);
-    hintEl.textContent = 'Dirígete a la dirección de recogida';
+    targetLatLng = origin ? [origin.lat, origin.lng] : null;
+    hintText = 'Dirígete a la dirección de recogida';
+  }
+
+  hintEl.textContent = hintText;
+
+  if (origin && destination) {
+    const originLatLng = [origin.lat, origin.lng];
+    const destLatLng = [destination.lat, destination.lng];
+    L.marker(originLatLng, { title: 'Origen' }).addTo(activeJobMap);
+    L.marker(destLatLng, { title: 'Destino' }).addTo(activeJobMap);
+    L.polyline([originLatLng, destLatLng], { color: '#2563eb', weight: 4 }).addTo(activeJobMap);
+    activeJobMap.fitBounds([originLatLng, destLatLng], { padding: [40, 40] });
+  } else if (targetLatLng) {
+    L.marker(targetLatLng).addTo(activeJobMap);
+    activeJobMap.setView(targetLatLng, 15);
   }
 }
 
@@ -459,6 +497,13 @@ function render(){
   } catch(err) {
     console.warn('No se pudo renderizar tarjetas móviles:', err);
   }
+
+  // Renderizado de tarjetas en escritorio (asignadas al colaborador)
+  try {
+    renderDesktopAssignedCards(state.filteredOrders);
+  } catch (err) {
+    console.warn('No se pudo renderizar tarjetas de escritorio:', err);
+  }
 }
 
 /**
@@ -555,27 +600,100 @@ function renderMobileCards(orders){
   if (window.lucide) lucide.createIcons();
 }
 
+// === Tarjetas de escritorio para órdenes asignadas ===
+function renderDesktopAssignedCards(orders){
+  // ✅ CORRECCIÓN: Apuntar al nuevo contenedor de tarjetas
+  const container = document.getElementById('assignedOrdersContainer');
+  if (!container) return;
+  const myId = state.collabSession?.user?.id;
+  const assigned = (orders || []).filter(o => o.assigned_to === myId && o.status !== 'Completado');
+  if (assigned.length === 0){
+    container.classList.add('hidden');
+    return;
+  }
+  container.classList.remove('hidden');
+  container.innerHTML = assigned.map(o => {
+    const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
+    const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
+    // ✅ MEJORA: Diseño de tarjeta mejorado con ID destacado
+    return `
+      <!-- ✅ MEJORA: Tarjeta flotante y estandarizada que abre el modal al hacer clic -->
+      <div class="order-card bg-white rounded-xl shadow-lg border border-gray-200/80 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 cursor-pointer" 
+           onclick="openAcceptModal({id: ${o.id}, name: '${o.name}', phone: '${o.phone}', service: '${o.service}', vehicle: '${o.vehicle}', pickup: '${o.pickup}', delivery: '${o.delivery}', date: '${o.date}', time: '${o.time}'})">
+        <div class="p-5">
+          <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <span class="px-3 py-1.5 text-sm rounded-lg bg-blue-100 text-blue-800 font-bold font-mono shadow-sm">ID: ${o.id}</span>
+              <span class="px-2 py-1 text-xs rounded-full ${status.badge}">${status.label}</span>
+            </div>
+            <i data-lucide="arrow-right" class="w-5 h-5 text-gray-400"></i>
+          </div>
+          <div class="space-y-3 text-sm">
+            <div class="font-semibold text-gray-900 text-base">${o.name} <span class="font-normal text-gray-500">- ${o.phone || ''}</span></div>
+            <div class="text-gray-700"><strong class="font-medium">Servicio:</strong> ${o.service}</div>
+            <div class="text-gray-600"><strong class="font-medium">Ruta:</strong> <span class="truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</span></div>
+            <div class="text-gray-600"><strong class="font-medium">Fecha:</strong> ${o.date} <span class="text-gray-400">•</span> ${o.time}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.desk-step-btn').forEach(btn => {
+    btn.addEventListener('click', () => changeStatus(Number(btn.dataset.id), btn.dataset.next));
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
 // === Toggle de sidebar en móvil (hamburguesa) ===
 function setupMobileSidebarToggle(){
-  const sidebar = document.getElementById('sidebar') || document.getElementById('collabSidebar');
-  const toggleBtn = document.getElementById('mobileSidebarToggle') || document.getElementById('mobileMenuBtn');
-  if (!sidebar || !toggleBtn) return;
-  // Estado inicial: oculto en móvil
-  sidebar.classList.add('md:translate-x-0');
-  sidebar.classList.add('-translate-x-full');
-  sidebar.classList.add('md:static');
-  sidebar.classList.add('fixed');
-  sidebar.classList.add('top-0');
-  sidebar.classList.add('left-0');
-  sidebar.classList.add('h-screen');
-  sidebar.classList.add('z-40');
-  sidebar.classList.add('transition-transform');
+  // ✅ MEJORA: Lógica de sidebar móvil con overlay
+  const sidebar = document.getElementById('collabSidebar');
+  const toggleBtn = document.getElementById('mobileMenuBtn');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  if (!sidebar || !toggleBtn || !overlay) return;
+
+  const openSidebar = () => {
+    sidebar.classList.remove('-translate-x-full');
+    overlay.classList.remove('hidden');
+    overlay.classList.add('opacity-100');
+  };
+
+  const closeSidebar = () => {
+    sidebar.classList.add('-translate-x-full');
+    overlay.classList.remove('opacity-100');
+    overlay.classList.add('hidden');
+  };
+
   toggleBtn.addEventListener('click', () => {
-    if (sidebar.classList.contains('-translate-x-full')){
-      sidebar.classList.remove('-translate-x-full');
+    sidebar.classList.contains('-translate-x-full') ? openSidebar() : closeSidebar();
+  });
+
+  overlay.addEventListener('click', closeSidebar);
+}
+
+// ✅ MEJORA: Lógica para el sidebar plegable en escritorio
+function setupDesktopSidebarToggle() {
+  const sidebar = document.getElementById('collabSidebar');
+  const mainContent = document.getElementById('mainContent');
+  const toggleBtn = document.getElementById('desktopSidebarToggle');
+  const icon = toggleBtn.querySelector('i');
+
+  if (!sidebar || !mainContent || !toggleBtn) return;
+
+  toggleBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('-translate-x-full');
+    const isHidden = sidebar.classList.contains('-translate-x-full');
+    if (isHidden) {
+      mainContent.classList.remove('md:ml-72');
+      icon.setAttribute('data-lucide', 'panel-right-close');
     } else {
-      sidebar.classList.add('-translate-x-full');
+      mainContent.classList.add('md:ml-72');
+      icon.setAttribute('data-lucide', 'panel-left-close');
     }
+    lucide.createIcons();
+    setTimeout(() => activeJobMap?.invalidateSize(), 350); // Redibujar mapa si está activo
   });
 }
 

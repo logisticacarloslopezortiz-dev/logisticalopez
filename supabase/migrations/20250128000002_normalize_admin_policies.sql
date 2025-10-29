@@ -3,7 +3,8 @@
 
 -- Vehículos
 drop policy if exists "owner_all_access_vehicles" on public.vehicles;
-create policy if not exists "admin_all_access_vehicles" on public.vehicles
+drop policy if exists "admin_all_access_vehicles" on public.vehicles;
+create policy "admin_all_access_vehicles" on public.vehicles
 for all using (
   exists (
     select 1 from public.collaborators c
@@ -18,7 +19,8 @@ for all using (
 
 -- Servicios
 drop policy if exists "owner_all_access_services" on public.services;
-create policy if not exists "admin_all_access_services" on public.services
+drop policy if exists "admin_all_access_services" on public.services;
+create policy "admin_all_access_services" on public.services
 for all using (
   exists (
     select 1 from public.collaborators c
@@ -33,7 +35,8 @@ for all using (
 
 -- Órdenes
 drop policy if exists "owner_all_orders" on public.orders;
-create policy if not exists "admin_all_orders" on public.orders
+drop policy if exists "admin_all_orders" on public.orders;
+create policy "admin_all_orders" on public.orders
 for all using (
   exists (
     select 1 from public.collaborators c
@@ -48,7 +51,8 @@ for all using (
 
 -- Colaboradores (gestión completa por administradores)
 drop policy if exists "owner_manage_collaborators" on public.collaborators;
-create policy if not exists "admin_manage_collaborators" on public.collaborators
+drop policy if exists "admin_manage_collaborators" on public.collaborators;
+create policy "admin_manage_collaborators" on public.collaborators
 for all using (
   exists (
     select 1 from public.collaborators c
@@ -63,7 +67,8 @@ for all using (
 
 -- Matrículas
 drop policy if exists "owner_manage_matriculas" on public.matriculas;
-create policy if not exists "admin_manage_matriculas" on public.matriculas
+drop policy if exists "admin_manage_matriculas" on public.matriculas;
+create policy "admin_manage_matriculas" on public.matriculas
 for all using (
   exists (
     select 1 from public.collaborators c

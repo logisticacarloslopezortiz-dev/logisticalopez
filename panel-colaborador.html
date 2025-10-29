@@ -56,9 +56,9 @@
 </head>
 <body class="bg-gray-50 min-h-screen">
   <!-- Mobile Header with Hamburger -->
-  <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+  <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
     <div class="flex items-center justify-between px-4 py-3">
-      <button id="sidebarToggle" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+      <button id="mobileMenuBtn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
         <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
       </button>
       <div class="flex items-center gap-2">
@@ -71,11 +71,11 @@
     </div>
   </header>
 
-  <!-- Sidebar Overlay for Mobile -->
-  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden hidden"></div>
+  <!-- ✅ MEJORA: Sidebar Overlay for Mobile -->
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden hidden transition-opacity duration-300"></div>
 
-  <!-- Sidebar -->
-  <aside id="sidebar" class="fixed md:static top-0 left-0 w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-full md:h-screen flex flex-col sidebar-transition sidebar-hidden md:transform-none z-50">
+  <!-- ✅ MEJORA: Sidebar rediseñado -->
+  <aside id="collabSidebar" class="fixed md:static top-0 left-0 w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-full md:h-screen flex flex-col sidebar-transition -translate-x-full md:translate-x-0 z-40">
     <!-- Header del Sidebar -->
     <div class="p-6 border-b border-gray-700">
       <div class="flex items-center gap-3 mb-4">
@@ -149,7 +149,15 @@
   </aside>
 
   <!-- Contenido principal -->
-  <main class="flex-1 p-4 md:p-8">
+  <!-- ✅ MEJORA: El margen izquierdo (ml-72) ahora se controla con JS para el sidebar plegable -->
+  <main id="mainContent" class="flex-1 p-4 md:p-8 md:ml-72 transition-all duration-300">
+    <!-- ✅ MEJORA: Botón para colapsar el sidebar en escritorio -->
+    <div class="fixed top-4 right-4 z-20">
+      <button id="desktopSidebarToggle" class="hidden md:flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full shadow-md hover:bg-gray-100 transition-colors" title="Ocultar/Mostrar menú">
+        <i data-lucide="panel-left-close" class="w-5 h-5 text-gray-600"></i>
+      </button>
+    </div>
+
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
       <h1 class="text-2xl font-bold text-gray-900">Solicitudes asignadas</h1>
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
@@ -174,6 +182,10 @@
       </div>
     </div>
 
+    <!-- ✅ MEJORA: Contenedor para las tarjetas de órdenes asignadas -->
+    <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 mb-8">
+      <!-- Las tarjetas se insertarán aquí dinámicamente -->
+    </div>
     <div id="requestsTableContainer" class="bg-white rounded-lg shadow-md overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
         <h3 class="text-lg font-semibold text-gray-800">Solicitudes de clientes <span class="ml-2 hidden sm:inline text-xs font-normal text-gray-400">(disponibles y asignadas a ti)</span></h3>
@@ -196,40 +208,64 @@
         </table>
       </div>
     </div>
-    <div id="activeJobSection" class="mt-8 hidden">
-      <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-semibold flex items-center gap-2"><i data-lucide="briefcase"></i> Trabajo activo</h2>
-          <div class="flex items-center gap-2">
-            <span id="activeJobStatus" class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">En camino a recoger pedido</span>
-            <!-- Botón para cancelar trabajo activo -->
-            <button id="cancelActiveJobBtn" class="px-3 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700" title="Cancelar trabajo activo">
-              <i data-lucide="x-circle" class="w-4 h-4 inline-block mr-1"></i>
-              Cancelar
-            </button>
+    
+    
+    <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada -->
+    <div id="activeJobSection" class="mt-8 hidden animate-fade-in">
+      <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
+        <!-- Header de la tarjeta de trabajo activo -->
+        <div class="p-5 bg-gray-50/70 border-b border-gray-200/80">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3">
+              <i data-lucide="briefcase" class="w-6 h-6 text-blue-600"></i>
+              <span>Trabajo Activo</span>
+            </h2>
+            <div class="flex items-center gap-3">
+              <span id="activeJobStatus" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">En camino a recoger</span>
+              <button id="cancelActiveJobBtn" class="p-2 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-full transition-colors" title="Cancelar trabajo activo">
+                <i data-lucide="x-circle" class="w-5 h-5"></i>
+              </button>
+            </div>
+          </div>
+          <!-- Barra de progreso visual -->
+          <div class="mt-4">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div id="jobProgressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style="width: 25%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-500 mt-1">
+              <span>Recogida</span>
+              <span>Cargando</span>
+              <span>Entrega</span>
+              <span>Finalizado</span>
+            </div>
           </div>
         </div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div id="activeJobInfo"></div>
-          <div>
-            <div class="aspect-video w-full rounded-lg overflow-hidden border">
-              <iframe id="activeJobMap" src="about:blank" class="w-full h-full border-0" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+
+        <!-- Contenido principal de la tarjeta -->
+        <div class="p-5 grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <!-- Columna de Información (ocupa 3/5) -->
+          <div id="activeJobInfo" class="lg:col-span-3"></div>
+
+          <!-- Columna de Mapa y Fotos (ocupa 2/5) -->
+          <div class="lg:col-span-2 space-y-6">
+            <!-- Mapa -->
+            <div>
+              <div class="aspect-w-16 aspect-h-9 w-full rounded-xl overflow-hidden border-2 border-gray-200 shadow-inner">
+                <div id="activeJobMap" class="w-full h-full"></div>
+              </div>
+              <div class="mt-2 text-sm text-gray-600 flex items-center gap-2">
+                <i data-lucide="navigation" class="w-4 h-4 text-blue-500"></i>
+                <span id="activeJobMapHint">Dirígete a la dirección de recogida</span>
+              </div>
             </div>
-            <div class="mt-2 text-sm text-gray-500" id="activeJobMapHint">Dirígete a la dirección de recogida</div>
-          </div>
-          <!-- Sección de Fotos -->
-          <div class="lg:col-span-2 border-t pt-4 mt-4">
-            <h3 class="text-md font-semibold text-gray-800 mb-3">Evidencia Fotográfica</h3>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="photoGallery">
-              <!-- Las fotos subidas aparecerán aquí -->
-            </div>
-            <div class="mt-4">
-              <label for="photoUpload" class="w-full text-center cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg border border-dashed border-gray-400 flex items-center justify-center gap-2">
-                <i data-lucide="camera" class="w-5 h-5"></i>
-                <span>Añadir Foto</span>
+            <!-- Evidencia Fotográfica -->
+            <div class="border-t border-gray-200 pt-4">
+              <h3 class="text-md font-semibold text-gray-800 mb-3">Evidencia Fotográfica</h3>
+              <div class="grid grid-cols-3 gap-3" id="photoGallery"></div>
+              <label for="photoUpload" class="mt-3 w-full text-center cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg border border-dashed border-gray-400 flex items-center justify-center gap-2 transition-colors">
+                <i data-lucide="camera" class="w-5 h-5"></i><span>Añadir Foto</span>
               </label>
-              <input type="file" id="photoUpload" class="hidden" accept="image/*">
-              <p class="text-xs text-gray-500 mt-2">Sube fotos como evidencia (recogida, entrega, etc.).</p>
+              <input type="file" id="photoUpload" class="hidden" accept="image/*" capture="environment">
             </div>
           </div>
         </div>
@@ -237,6 +273,7 @@
     </div>
 
     <div id="acceptModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+      <!-- ... (modal sin cambios) ... -->
       <div class="bg-white w-full max-w-md rounded-lg p-6 shadow-xl">
         <div class="flex items-center gap-2 mb-4">
           <i data-lucide="help-circle" class="w-5 h-5 text-blue-600"></i>

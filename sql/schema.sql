@@ -63,6 +63,7 @@ CREATE TABLE public.collaborators (
     phone TEXT,
     matricula TEXT,
     status TEXT DEFAULT 'activo' NOT NULL,
+    role TEXT DEFAULT 'colaborador' NOT NULL CHECK (lower(role) IN ('administrador','colaborador')),
     push_subscription JSONB,
     notes TEXT
 );
@@ -80,6 +81,7 @@ COMMENT ON TABLE public.matriculas IS 'Matrículas/placas de los colaboradores.'
 
 CREATE INDEX IF NOT EXISTS idx_matriculas_user_id ON public.matriculas(user_id);
 CREATE INDEX IF NOT EXISTS idx_collaborators_status ON public.collaborators(status);
+CREATE INDEX IF NOT EXISTS idx_collaborators_role ON public.collaborators(role);
 
 -- Trigger para updated_at
 CREATE OR REPLACE FUNCTION public.set_updated_at()
@@ -171,6 +173,24 @@ VALUES (1, 'Mi Negocio', '', '', '')
 ON CONFLICT (id) DO NOTHING;
 
 -- --------------------------------------------------------------
+-- 5.a FUNCIONES DE ROL (helpers)
+-- --------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.is_owner(uid uuid)
+RETURNS boolean LANGUAGE sql AS $$
+  SELECT EXISTS(
+    SELECT 1 FROM public.business b WHERE b.owner_user_id = uid
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_admin(uid uuid)
+RETURNS boolean LANGUAGE sql AS $$
+  SELECT EXISTS(
+    SELECT 1 FROM public.collaborators c
+    WHERE c.id = uid AND lower(coalesce(c.role, 'colaborador')) = 'administrador'
+  );
+$$;
+
+-- --------------------------------------------------------------
 -- 5. ÓRDENES Y NOTIFICACIONES
 -- --------------------------------------------------------------
 DROP SEQUENCE IF EXISTS public.orders_short_id_seq;
@@ -224,6 +244,22 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_date ON public.orders("date");
 CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON public.orders(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_orders_client_id ON public.orders(client_id);
+
+-- Trigger: setear tracking_url automáticamente al crear la orden
+CREATE OR REPLACE FUNCTION public.set_order_tracking_url()
+RETURNS trigger AS $$
+BEGIN
+  IF new.tracking_url IS NULL OR new.tracking_url = '' THEN
+    new.tracking_url := '/seguimiento.html?order=' || coalesce(new.short_id::text, new.id::text);
+  END IF;
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_orders_set_tracking ON public.orders;
+CREATE TRIGGER trg_orders_set_tracking
+BEFORE INSERT ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.set_order_tracking_url();
 
 -- Notificaciones
 DROP TABLE IF EXISTS public.notifications CASCADE;
@@ -284,10 +320,10 @@ DROP POLICY IF EXISTS "owner_full_access_business_settings" ON public.business_s
 CREATE POLICY "public_read_vehicles" ON public.vehicles FOR SELECT USING (true);
 CREATE POLICY "public_read_services" ON public.services FOR SELECT USING (true);
 CREATE POLICY "owner_all_access_vehicles" ON public.vehicles FOR ALL USING (
-  exists (select 1 from public.business where owner_user_id = auth.uid())
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
 CREATE POLICY "owner_all_access_services" ON public.services FOR ALL USING (
-  exists (select 1 from public.business where owner_user_id = auth.uid())
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
 
 -- Profiles
@@ -295,40 +331,55 @@ CREATE POLICY "public_read_profiles" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "users_update_own_profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Orders
-CREATE POLICY "public_create_orders" ON public.orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "public_insert_pending_orders" ON public.orders FOR INSERT
+  WITH CHECK (
+    status = 'Pendiente' AND (client_id IS NULL OR client_id = auth.uid())
+  );
 CREATE POLICY "clients_read_own_orders" ON public.orders FOR SELECT USING (client_id = auth.uid());
+CREATE POLICY "collaborator_read_pending_orders" ON public.orders FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.collaborators c
+    WHERE c.id = auth.uid() AND c.status = 'activo'
+  ) AND status = 'Pendiente'
+);
 CREATE POLICY "collaborator_read_assigned_orders" ON public.orders FOR SELECT USING (assigned_to = auth.uid());
 CREATE POLICY "collaborator_update_own_orders" ON public.orders FOR UPDATE USING (assigned_to = auth.uid());
-CREATE POLICY "owner_all_orders" ON public.orders FOR ALL USING (
-  exists (select 1 from public.business where owner_user_id = auth.uid())
+CREATE POLICY "owner_admin_all_orders" ON public.orders FOR ALL USING (
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
 
 -- Collaborators y Matrículas
 CREATE POLICY "collaborator_self_select" ON public.collaborators FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "collaborator_self_update" ON public.collaborators FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "owner_manage_collaborators" ON public.collaborators FOR ALL USING (
-  exists (select 1 from public.business where owner_user_id = auth.uid())
+  public.is_owner(auth.uid())
+);
+CREATE POLICY "admin_manage_collaborators" ON public.collaborators FOR ALL USING (
+  public.is_admin(auth.uid())
 );
 
 CREATE POLICY "collaborator_read_own_matriculas" ON public.matriculas FOR SELECT USING (user_id = auth.uid());
 CREATE POLICY "owner_manage_matriculas" ON public.matriculas FOR ALL USING (
-  exists (select 1 from public.business where owner_user_id = auth.uid())
+  public.is_owner(auth.uid())
+);
+CREATE POLICY "admin_manage_matriculas" ON public.matriculas FOR ALL USING (
+  public.is_admin(auth.uid())
 );
 
 -- Business
 CREATE POLICY "owner_full_access_business" ON public.business
 FOR ALL USING (
-  owner_user_id = auth.uid()
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 ) WITH CHECK (
-  owner_user_id = auth.uid()
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
 
 -- Business Settings (compatibilidad)
 CREATE POLICY "owner_full_access_business_settings" ON public.business_settings
 FOR ALL USING (
-  exists (select 1 from public.business where owner_user_id = auth.uid())
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 ) WITH CHECK (
-  exists (select 1 from public.business where owner_user_id = auth.uid())
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
 
 -- Push Subscriptions
@@ -400,6 +451,11 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.collaborators WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
 );
+
+-- Asegurar rol de administrador para el usuario dueño
+UPDATE public.collaborators
+SET role = 'administrador'
+WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71';
 
 -- Matrícula asociada al colaborador
 INSERT INTO public.matriculas (user_id, matricula, status, created_at)

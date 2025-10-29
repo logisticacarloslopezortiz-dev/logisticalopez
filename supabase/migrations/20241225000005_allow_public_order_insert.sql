@@ -1,9 +1,11 @@
--- Allow public order insertion for the contact form
--- This enables the public form to create orders without authentication
-
+-- Align with schema.sql: only allow inserting 'Pendiente' and client owned/anonymous
+drop policy if exists "public insert orders" on public.orders;
 create policy "public insert orders" on public.orders
-for insert with check (true);
+for insert
+to public
+with check (
+  status = 'Pendiente' and (client_id is null or client_id = auth.uid())
+);
 
--- Note: This allows anyone to insert orders, which is needed for the public contact form
--- The orders will be created without assigned_to (null) and with status 'pendiente'
--- Only authenticated collaborators/admins can then assign and update these orders
+-- The public contact form inserts orders as 'Pendiente' with client_id null
+-- Collaborators/admins (authenticated) can later claim and update the orders
