@@ -639,6 +639,8 @@ document.addEventListener('DOMContentLoaded', function() {
   nextBtn = document.getElementById('nextBtn');
   prevBtn = document.getElementById('prevBtn');
   progressBar = document.getElementById('progress-bar');
+  // Evitar doble envío del formulario
+  let isSubmittingOrder = false;
   
   // Cargar datos dinámicos
   loadServices();
@@ -748,46 +750,65 @@ document.addEventListener('DOMContentLoaded', function() {
   if (serviceForm) {
     serviceForm.addEventListener('submit', async function(e) {
       e.preventDefault();
-      
+
       if (!validateCurrentStep()) return;
-      
-      // Verificar conexión a Supabase antes de continuar
-      if (!supabaseConfig.client) {
-        notifications.error('No se pudo conectar con el servidor. Verifica tu conexión a internet.', { title: 'Error de Conexión' });
+
+      // Botón de envío y guardia de doble clic
+      const submitBtn = serviceForm.querySelector('button[type="submit"], input[type="submit"]');
+      if (isSubmittingOrder) {
+        notifications.info('Tu solicitud ya se está enviando...', { title: 'Procesando' });
         return;
       }
-      
-      // Construir el objeto de la orden para Supabase
-      const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
-      const originCoords = originMarker ? originMarker.getLatLng() : null;
-      const destinationCoords = destinationMarker ? destinationMarker.getLatLng() : null;
-      const orderData = {
-        // Datos del cliente (Paso 1)
-        name: document.querySelector('input[placeholder="Nombre completo"]').value,
-        phone: document.querySelector('input[placeholder="Teléfono"]').value,
-        email: document.querySelector('input[placeholder="Correo"]').value,
-        rnc: document.querySelector('input[name="rnc"]')?.value || null,
-        empresa: document.querySelector('input[name="empresa"]')?.value || null,
-        // Detalles del servicio (Pasos 2 y 3)
-        service_id: selectedService ? selectedService.id : null, // Correcto, es un string (UUID)
-        vehicle_id: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleId : null, // Correcto, es un string (UUID)
-        service_questions: serviceQuestions,
-        // Detalles de la ruta (Paso 4)
-        pickup: document.getElementById('pickupAddress').value,
-        delivery: document.getElementById('deliveryAddress').value,
-        origin_coords: originCoords ? { lat: originCoords.lat, lng: originCoords.lng } : null,
-        destination_coords: destinationCoords ? { lat: destinationCoords.lat, lng: destinationCoords.lng } : null,
-        // Fecha y Hora (Paso 5)
-        "date": document.querySelector('input[type="date"]').value,
-        "time": document.querySelector('input[type="time"]').value,
-        // Estado y precio inicial
-        status: 'Pendiente',
-        estimated_price: 'Por confirmar',
-        tracking_data: [{ status: 'Solicitud Creada', date: new Date().toISOString() }]
-      };
-      
-      // Guardar orden en Supabase con estrategia de reintento según esquema
+      isSubmittingOrder = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        // Guardar contenido original para restaurar luego
+        // @ts-ignore
+        submitBtn.dataset.originalHTML = submitBtn.innerHTML;
+        // Mostrar estado de carga
+        // @ts-ignore
+        submitBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 inline mr-2 animate-spin"></i> Enviando...';
+        // Refrescar iconos si está disponible
+        if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+      }
+
       try {
+        // Verificar conexión a Supabase antes de continuar
+        if (!supabaseConfig.client) {
+          notifications.error('No se pudo conectar con el servidor. Verifica tu conexión a internet.', { title: 'Error de Conexión' });
+          return;
+        }
+
+        // Construir el objeto de la orden para Supabase
+        const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
+        const originCoords = originMarker ? originMarker.getLatLng() : null;
+        const destinationCoords = destinationMarker ? destinationMarker.getLatLng() : null;
+        const orderData = {
+          // Datos del cliente (Paso 1)
+          name: document.querySelector('input[placeholder="Nombre completo"]').value,
+          phone: document.querySelector('input[placeholder="Teléfono"]').value,
+          email: document.querySelector('input[placeholder="Correo"]').value,
+          rnc: document.querySelector('input[name="rnc"]')?.value || null,
+          empresa: document.querySelector('input[name="empresa"]')?.value || null,
+          // Detalles del servicio (Pasos 2 y 3)
+          service_id: selectedService ? selectedService.id : null, // Correcto, es un string (UUID)
+          vehicle_id: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleId : null, // Correcto, es un string (UUID)
+          service_questions: serviceQuestions,
+          // Detalles de la ruta (Paso 4)
+          pickup: document.getElementById('pickupAddress').value,
+          delivery: document.getElementById('deliveryAddress').value,
+          origin_coords: originCoords ? { lat: originCoords.lat, lng: originCoords.lng } : null,
+          destination_coords: destinationCoords ? { lat: destinationCoords.lat, lng: destinationCoords.lng } : null,
+          // Fecha y Hora (Paso 5)
+          "date": document.querySelector('input[type="date"]').value,
+          "time": document.querySelector('input[type="time"]').value,
+          // Estado y precio inicial
+          status: 'Pendiente',
+          estimated_price: 'Por confirmar',
+          tracking_data: [{ status: 'Solicitud Creada', date: new Date().toISOString() }]
+        };
+
+        // Guardar orden en Supabase con estrategia de reintento según esquema
         // Base de datos: campos comunes
         const baseOrder = {
           // Datos del cliente (Paso 1)
@@ -810,23 +831,23 @@ document.addEventListener('DOMContentLoaded', function() {
           tracking_data: orderData.tracking_data
         };
 
-        const origin_coords = orderData.origin_coords;
-        const destination_coords = orderData.destination_coords;
+        const origin_coords2 = orderData.origin_coords;
+        const destination_coords2 = orderData.destination_coords;
 
         // Variant A: usar service_id y vehicle_id (si la tabla tiene esas columnas)
         const variantA = Object.assign({}, baseOrder, {
           service_id: selectedService ? selectedService.id : null,
           vehicle_id: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleId : null,
-          origin_coords,
-          destination_coords
+          origin_coords: origin_coords2,
+          destination_coords: destination_coords2
         });
 
         // Variant B: usar service y vehicle (nombres) — fallback si Variant A falla por columnas
         const variantB = Object.assign({}, baseOrder, {
           service: selectedService ? selectedService.name : null,
           vehicle: selectedVehicleCard ? selectedVehicleCard.dataset.vehicleName : null,
-          origin_coords,
-          destination_coords
+          origin_coords: origin_coords2,
+          destination_coords: destination_coords2
         });
 
         // Función auxiliar para intentar insertar y devolver resultado o lanzar error
@@ -902,14 +923,14 @@ document.addEventListener('DOMContentLoaded', function() {
           notifications.error('No se pudo completar el proceso. Por favor, inténtalo de nuevo.', { title: 'Error de Procesamiento' });
           return;
         }
-        
+
         const tracking_url = `${window.location.origin}/seguimiento.html?order=${savedOrder.id}`;
         // Intentar actualizar tracking_url o tracking_link (si alguna columna existe)
         try {
           // Verificamos primero si las columnas existen en la tabla
           const { data: columnsData, error: columnsError } = await supabaseConfig.client
             .rpc('get_table_columns', { table_name: 'orders' });
-            
+
           if (!columnsError && columnsData) {
             if (columnsData.includes('tracking_url')) {
               // La columna tracking_url existe, actualizamos
@@ -982,6 +1003,14 @@ document.addEventListener('DOMContentLoaded', function() {
           notifications.error('Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.', 
             { title: 'Error Inesperado' });
         }
+      } finally {
+        // Restaurar estado del botón y guardia
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          // @ts-ignore
+          submitBtn.innerHTML = submitBtn.dataset.originalHTML || submitBtn.innerHTML;
+        }
+        isSubmittingOrder = false;
       }
     });
   }

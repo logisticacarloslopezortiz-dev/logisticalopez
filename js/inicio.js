@@ -694,19 +694,22 @@ async function generateAndSendInvoice(orderId) {
 
     showNotification('Enviando Correo...', 'La factura se está enviando al cliente.', 'info');
 
-    const { error: functionError } = await supabaseConfig.client.functions.invoke('send-invoice', {
+    // Invocar la Edge Function con el contrato esperado: { orderId, email }
+    const { data: fnResp, error: functionError } = await supabaseConfig.client.functions.invoke('send-invoice', {
       body: {
-        to: order.email,
-        subject: `Factura de tu servicio TLC: Orden #${order.id}`,
-        html: `¡Hola ${order.name}! <br><br>Adjuntamos la factura de tu servicio. ¡Gracias por confiar en nosotros!<br><br>Equipo de Logística López Ortiz`,
-        pdfData: pdfBase64,
-        fileName: `Factura-${order.id}.pdf`
+        orderId: String(order.id),
+        email: order.email
       }
     });
 
     if (functionError) throw functionError;
 
-    notifications.success('Factura Enviada', `La factura para la orden #${order.id} ha sido enviada por correo.`);
+    const recipientInfo = fnResp?.data?.recipientEmail ? ` a ${fnResp.data.recipientEmail}` : '';
+    if (fnResp?.success) {
+      notifications.success('Factura Enviada', `La factura para la orden #${order.id} ha sido enviada${recipientInfo}.`);
+    } else {
+      notifications.success('Factura Generada', `La factura para la orden #${order.id} fue generada correctamente.`);
+    }
 
   } catch (error) {
     console.error('Error al generar o enviar la factura:', error);
