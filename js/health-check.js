@@ -4,18 +4,14 @@
     const results = { ensureOwner: null, createCollab: null, updateCollab: null, sheets: null };
 
     try {
-      // Obtener sesión para invocar ensure-owner-profile con Authorization
+      // Obtener sesión para invocar ensure-owner-profile usando supabase.functions.invoke
       const { data: { session } } = await supabaseConfig.client.auth.getSession();
       if (session?.access_token) {
-        const res = await fetch(`${supabaseConfig.url}/functions/v1/ensure-owner-profile`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({})
+        const { data, error } = await supabaseConfig.client.functions.invoke('ensure-owner-profile', {
+          body: {},
+          headers: { Authorization: `Bearer ${session.access_token}` }
         });
-        results.ensureOwner = { ok: res.ok, status: res.status };
+        results.ensureOwner = { ok: !error, data, error: error?.message };
       } else {
         results.ensureOwner = { ok: false, error: 'No session token' };
       }

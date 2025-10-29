@@ -169,23 +169,23 @@
             throw new Error(result?.error || 'Error desconocido al crear administrador');
           }
 
-          // Iniciar sesión con el nuevo administrador y asegurar perfil
+          // Iniciar sesión con el nuevo administrador
           showMessage('Administrador creado. Iniciando sesión...', 'success');
           await supabaseConfig.client.auth.signOut();
           const { data: loginData, error: loginErr } = await supabaseConfig.client.auth.signInWithPassword({ email, password });
           if (loginErr) throw loginErr;
 
-          // Obtener token y llamar ensure-owner-profile
-          const { data: sessionDataNew } = await supabaseConfig.client.auth.getSession();
-          const accessTokenNew = sessionDataNew?.session?.access_token;
-          if (!accessTokenNew) throw new Error('Sesión inválida tras crear administrador');
+          // Verificar que el perfil de colaborador existe (debería haber sido creado por create-admin)
+          const { data: collaboratorProfile, error: profileError } = await supabaseConfig.client
+            .from('collaborators')
+            .select('*')
+            .eq('id', loginData.user.id)
+            .single();
 
-          const { data: ensureResult, error: ensureErr } = await supabaseConfig.client.functions.invoke('ensure-owner-profile', {
-            body: { },
-            headers: { Authorization: `Bearer ${accessTokenNew}` }
-          });
-          if (ensureErr) throw ensureErr;
-          if (!ensureResult?.ok) throw new Error(ensureResult?.error || 'No se pudo asegurar el perfil');
+          if (profileError) {
+            console.error('Error al verificar perfil de colaborador:', profileError);
+            throw new Error('No se pudo verificar el perfil del administrador creado.');
+          }
 
           // Persistir rol y redirigir al panel
           localStorage.setItem('userRole', 'administrador');

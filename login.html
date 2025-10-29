@@ -79,9 +79,7 @@
           // --- INICIO: Lógica de Login Segura con Supabase Auth ---
           console.log('Intentando iniciar sesión con:', username);
           
-          // Intentar iniciar sesión directamente sin verificar profiles
-          // Esto evita el error de 'column profiles.email does not exist'
-          
+          // Iniciar sesión con Supabase Auth
           const { data: authData, error } = await supabaseConfig.client.auth.signInWithPassword({
             email: username,
             password: password,
@@ -90,34 +88,16 @@
           if (error) throw error;
 
           if (authData.user) {
-            // Asegurar perfil/colaborador del dueño antes de consultar
-            try {
-              const { data: sessionData } = await supabaseConfig.client.auth.getSession();
-              const token = sessionData?.session?.access_token;
-              if (token) {
-                await fetch(`${supabaseConfig.url}/functions/v1/ensure-owner-profile`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({})
-                });
-              }
-            } catch (ensureErr) {
-              console.warn('ensure-owner-profile fallo:', ensureErr);
-            }
-
             // Una vez autenticado, obtenemos los detalles del perfil desde la tabla 'colaboradores'
+            // usando supabase-js (no fetch directo) para aprovechar las políticas RLS corregidas
             const { data: collaboratorProfile, error: profileError } = await supabaseConfig.client
               .from('collaborators')
               .select('*')
-              .eq('id', authData.user.id) // Buscamos por el ID de usuario único
+              .eq('id', authData.user.id)
               .single();
 
             if (profileError) {
-              // Si no se encuentra el perfil, es un estado inconsistente.
-              // Por seguridad, cerramos la sesión de auth.
+              console.error('Error al obtener perfil de colaborador:', profileError);
               await supabaseConfig.client.auth.signOut();
               throw new Error('Perfil de colaborador no encontrado.');
             }
@@ -128,10 +108,9 @@
               throw new Error('Acceso denegado. Esta área es solo para administradores.');
             }
 
-            // Usuario y contraseña correctos. Supabase maneja la sesión en su propio localStorage.
-            // Ya no necesitamos 'loggedIn'. Guardamos el rol y los datos para usarlos en otras páginas.
+            // Guardar datos del colaborador para uso en otras páginas
             localStorage.setItem('userRole', collaboratorProfile.role);
-            localStorage.setItem('userData', JSON.stringify(collaboratorProfile)); // Guardar datos del colaborador
+            localStorage.setItem('userData', JSON.stringify(collaboratorProfile));
             window.location.href = 'inicio.html';
           } else {
             // Esto no debería ocurrir si no hay error, pero es una salvaguarda.

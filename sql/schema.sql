@@ -1,11 +1,11 @@
--- =============================================================
+- =============================================================
 --        ESQUEMA COMPLETO TLC (Versión lista para Supabase)
 -- =============================================================
 -- Incluye:
 -- - Tablas base (vehículos, servicios)
 -- - Perfiles, colaboradores y matrículas
 -- - Órdenes, notificaciones y suscripciones
--- - Configuración del negocio con RNC y dueño
+-- - Config-uración del negocio con RNC y dueño
 -- - Políticas RLS seguras y triggers automáticos
 -- =============================================================
 
@@ -182,13 +182,20 @@ RETURNS boolean LANGUAGE sql AS $$
   );
 $$;
 
+-- Helper seguro: determina si el usuario es administrador sin recursión RLS
 CREATE OR REPLACE FUNCTION public.is_admin(uid uuid)
-RETURNS boolean LANGUAGE sql AS $$
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
   SELECT EXISTS(
     SELECT 1 FROM public.collaborators c
     WHERE c.id = uid AND lower(coalesce(c.role, 'colaborador')) = 'administrador'
   );
 $$;
+
 
 -- --------------------------------------------------------------
 -- 5. ÓRDENES Y NOTIFICACIONES
@@ -348,6 +355,14 @@ CREATE POLICY "owner_admin_all_orders" ON public.orders FOR ALL USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
 
+-- Alineación: asegurar condición de inserción pública de órdenes
+DROP POLICY IF EXISTS "public_insert_pending_orders" ON public.orders;
+CREATE POLICY "public_insert_pending_orders" ON public.orders
+FOR INSERT
+WITH CHECK (
+  status = 'Pendiente' AND (client_id IS NULL OR client_id = auth.uid())
+);
+
 -- Collaborators y Matrículas
 CREATE POLICY "collaborator_self_select" ON public.collaborators FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "collaborator_self_update" ON public.collaborators FOR UPDATE USING (auth.uid() = id);
@@ -376,6 +391,15 @@ FOR ALL USING (
 
 -- Business Settings (compatibilidad)
 CREATE POLICY "owner_full_access_business_settings" ON public.business_settings
+FOR ALL USING (
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+) WITH CHECK (
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+);
+
+-- Alineación: política principal de business
+DROP POLICY IF EXISTS "owner_full_access_business" ON public.business;
+CREATE POLICY "owner_full_access_business" ON public.business
 FOR ALL USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 ) WITH CHECK (
