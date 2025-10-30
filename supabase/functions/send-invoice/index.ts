@@ -82,8 +82,45 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'No se encontraron los datos del negocio' }, 404);
     }
     
-    // Generar la factura
+    // Generar la factura (simulado)
     const invoiceData = await generateInvoicePDF(order, business);
+
+    // Subir archivo al bucket 'invoices'
+    const fileName = `Factura-${order.short_id || order.id}-${Date.now()}.pdf`;
+    const filePath = `${order.client_id ? `${order.client_id}/` : ''}${fileName}`;
+    const fileBytes = new TextEncoder().encode(JSON.stringify(invoiceData, null, 2));
+    let uploadError = null;
+    let uploadData = null;
+    try {
+      const res = await supabase.storage.from('invoices')
+        .upload(filePath, fileBytes, { contentType: 'application/pdf', upsert: true });
+      uploadError = res.error;
+      uploadData = res.data;
+    } catch (e) {
+      uploadError = e as any;
+    }
+    if (uploadError) {
+      // Intentar crear el bucket si no existe y reintentar
+      const msg = String(uploadError?.message || uploadError);
+      if (/Bucket not found|does not exist/i.test(msg)) {
+        try {
+          await supabase.storage.createBucket('invoices', { public: true });
+          const retry = await supabase.storage.from('invoices')
+            .upload(filePath, fileBytes, { contentType: 'application/pdf', upsert: true });
+          uploadError = retry.error;
+          uploadData = retry.data;
+        } catch (createErr) {
+          logDebug('No se pudo crear el bucket invoices', createErr);
+        }
+      }
+      if (uploadError) {
+        logDebug('Error al subir al bucket invoices', uploadError);
+        return jsonResponse({ error: 'No se pudo subir la factura al bucket invoices' }, 500);
+      }
+    }
+
+    // Construir URL pública estándar
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/invoices/${filePath}`;
     
     // Enviar por email si se proporcionó
     let emailResult = null;
@@ -93,18 +130,24 @@ Deno.serve(async (req: Request) => {
       emailResult = await sendEmailWithInvoice(recipientEmail, invoiceData);
     }
     
-    // Registrar la generación de factura en notifications (esquema actual)
-    await supabase.from('notifications').insert({
-      user_id: order.client_id ?? null,
-      title: 'Factura generada',
-      body: `Factura ${invoiceData.invoiceNumber} generada correctamente`,
+    // Registrar la factura en tabla invoices
+    const { error: invError } = await supabase.from('invoices').insert({
+      order_id: orderId,
+      client_id: order.client_id ?? null,
+      file_path: filePath,
+      file_url: publicUrl,
+      total: order.monto_cobrado ?? 0,
+      status: 'generada',
       data: {
-        order_id: orderId,
         invoice_number: invoiceData.invoiceNumber,
         email_sent: !!emailResult?.success,
         recipient_email: recipientEmail
       }
     });
+    if (invError) {
+      logDebug('Error al registrar en invoices', invError);
+      return jsonResponse({ error: 'Factura generada pero no registrada en la tabla invoices' }, 500);
+    }
     
     return jsonResponse({ 
       success: true, 

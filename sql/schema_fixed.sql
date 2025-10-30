@@ -1,11 +1,11 @@
-- =============================================================
+-- =============================================================
 --        ESQUEMA COMPLETO TLC (Versión lista para Supabase)
 -- =============================================================
 -- Incluye:
 -- - Tablas base (vehículos, servicios)
 -- - Perfiles, colaboradores y matrículas
 -- - Órdenes, notificaciones y suscripciones
--- - Config-uración del negocio con RNC y dueño
+-- - Configuración del negocio con RNC y dueño
 -- - Políticas RLS seguras y triggers automáticos
 -- =============================================================
 
@@ -65,7 +65,8 @@ CREATE TABLE public.collaborators (
     status TEXT DEFAULT 'activo' NOT NULL,
     role TEXT DEFAULT 'colaborador' NOT NULL CHECK (lower(role) IN ('administrador','colaborador')),
     push_subscription JSONB,
-    notes TEXT
+    notes TEXT,
+    updated_at timestamptz not null default now()
 );
 COMMENT ON TABLE public.collaborators IS 'Datos operativos de colaboradores.';
 
@@ -82,6 +83,8 @@ COMMENT ON TABLE public.matriculas IS 'Matrículas/placas de los colaboradores.'
 CREATE INDEX IF NOT EXISTS idx_matriculas_user_id ON public.matriculas(user_id);
 CREATE INDEX IF NOT EXISTS idx_collaborators_status ON public.collaborators(status);
 CREATE INDEX IF NOT EXISTS idx_collaborators_role ON public.collaborators(role);
+CREATE INDEX IF NOT EXISTS idx_collaborators_email ON public.collaborators(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
 
 -- Trigger para updated_at
 CREATE OR REPLACE FUNCTION public.set_updated_at()
@@ -95,6 +98,11 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_profiles_set_updated ON public.profiles;
 CREATE TRIGGER trg_profiles_set_updated
 BEFORE UPDATE ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_collaborators_touch_updated ON public.collaborators;
+CREATE TRIGGER trg_collaborators_touch_updated
+BEFORE UPDATE ON public.collaborators
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- --------------------------------------------------------------
@@ -141,11 +149,6 @@ ON CONFLICT (id) DO NOTHING;
 -- --------------------------------------------------------------
 -- 4.b COMPATIBILIDAD: business_settings (para proyectos antiguos)
 -- --------------------------------------------------------------
--- Nota: Algunos entornos/migraciones anteriores referencian public.business_settings.
--- Para evitar errores al pegar este esquema en Supabase, se crea una tabla
--- de compatibilidad con las mismas columnas básicas que "business".
--- Las políticas se basan en el dueño definido en public.business.owner_user_id.
-
 DROP TABLE IF EXISTS public.business_settings CASCADE;
 CREATE TABLE public.business_settings (
   id integer primary key default 1,
@@ -167,6 +170,17 @@ CREATE TRIGGER trg_business_settings_touch_updated
 BEFORE UPDATE ON public.business_settings
 FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 
+-- Consistencia de RNC
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'business_settings_rnc_check'
+  ) THEN
+    ALTER TABLE public.business_settings
+      ADD CONSTRAINT business_settings_rnc_check
+      CHECK (rnc ~ '^[0-9]{9,11}$' OR rnc IS NULL);
+  END IF;
+END $$;
+
 -- Seed inicial de compatibilidad
 INSERT INTO public.business_settings (id, business_name, address, phone, email)
 VALUES (1, 'Mi Negocio', '', '', '')
@@ -175,7 +189,6 @@ ON CONFLICT (id) DO NOTHING;
 -- --------------------------------------------------------------
 -- 5.a FUNCIONES DE ROL (helpers)
 -- --------------------------------------------------------------
--- Helper seguro: determina si el usuario es el dueño del negocio sin recursión
 CREATE OR REPLACE FUNCTION public.is_owner(uid uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -188,7 +201,6 @@ AS $$
   );
 $$;
 
--- Helper seguro: determina si el usuario es administrador sin recursión RLS
 CREATE OR REPLACE FUNCTION public.is_admin(uid uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -201,7 +213,6 @@ AS $$
     WHERE c.id = uid AND lower(coalesce(c.role, 'colaborador')) = 'administrador'
   );
 $$;
-
 
 -- --------------------------------------------------------------
 -- 5. ÓRDENES Y NOTIFICACIONES
@@ -250,13 +261,25 @@ CREATE TABLE public.orders (
     monto_cobrado NUMERIC,
     metodo_pago TEXT,
     tracking_data JSONB,
-    tracking_url TEXT
+    tracking_url TEXT,
+    updated_at timestamptz not null default now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_date ON public.orders("date");
 CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON public.orders(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_orders_client_id ON public.orders(client_id);
+
+-- Constraint de estado permitido
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'orders_status_check'
+  ) THEN
+    ALTER TABLE public.orders
+      ADD CONSTRAINT orders_status_check
+      CHECK (status IN ('Pendiente','Aceptada','En curso','Completada','Cancelada'));
+  END IF;
+END $$;
 
 -- Trigger: setear tracking_url automáticamente al crear la orden
 CREATE OR REPLACE FUNCTION public.set_order_tracking_url()
@@ -274,6 +297,12 @@ CREATE TRIGGER trg_orders_set_tracking
 BEFORE INSERT ON public.orders
 FOR EACH ROW EXECUTE FUNCTION public.set_order_tracking_url();
 
+-- Trigger updated_at para orders
+DROP TRIGGER IF EXISTS trg_orders_touch_updated ON public.orders;
+CREATE TRIGGER trg_orders_touch_updated
+BEFORE UPDATE ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
 -- Notificaciones
 DROP TABLE IF EXISTS public.notifications CASCADE;
 CREATE TABLE public.notifications (
@@ -285,6 +314,7 @@ CREATE TABLE public.notifications (
   created_at timestamptz not null default now(),
   read_at timestamptz
 );
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id);
 
 -- Suscripciones push
 DROP TABLE IF EXISTS public.push_subscriptions CASCADE;
@@ -308,6 +338,8 @@ ALTER TABLE public.collaborators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matriculas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.business ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.business_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Limpieza previa de políticas antiguas
 DROP POLICY IF EXISTS "public_read_vehicles" ON public.vehicles;
@@ -316,18 +348,24 @@ DROP POLICY IF EXISTS "owner_all_access_vehicles" ON public.vehicles;
 DROP POLICY IF EXISTS "owner_all_access_services" ON public.services;
 DROP POLICY IF EXISTS "public_read_profiles" ON public.profiles;
 DROP POLICY IF EXISTS "users_update_own_profile" ON public.profiles;
-DROP POLICY IF EXISTS "public_create_orders" ON public.orders;
+DROP POLICY IF EXISTS "public_insert_pending_orders" ON public.orders;
 DROP POLICY IF EXISTS "clients_read_own_orders" ON public.orders;
+DROP POLICY IF EXISTS "collaborator_read_pending_orders" ON public.orders;
 DROP POLICY IF EXISTS "collaborator_read_assigned_orders" ON public.orders;
 DROP POLICY IF EXISTS "collaborator_update_own_orders" ON public.orders;
-DROP POLICY IF EXISTS "owner_all_orders" ON public.orders;
+DROP POLICY IF EXISTS "owner_admin_all_orders" ON public.orders;
 DROP POLICY IF EXISTS "collaborator_self_select" ON public.collaborators;
 DROP POLICY IF EXISTS "collaborator_self_update" ON public.collaborators;
 DROP POLICY IF EXISTS "owner_manage_collaborators" ON public.collaborators;
+DROP POLICY IF EXISTS "admin_manage_collaborators" ON public.collaborators;
 DROP POLICY IF EXISTS "collaborator_read_own_matriculas" ON public.matriculas;
 DROP POLICY IF EXISTS "owner_manage_matriculas" ON public.matriculas;
+DROP POLICY IF EXISTS "admin_manage_matriculas" ON public.matriculas;
 DROP POLICY IF EXISTS "owner_full_access_business" ON public.business;
 DROP POLICY IF EXISTS "owner_full_access_business_settings" ON public.business_settings;
+DROP POLICY IF EXISTS "user_manage_own_push_subscriptions" ON public.push_subscriptions;
+DROP POLICY IF EXISTS "user_read_own_notifications" ON public.notifications;
+DROP POLICY IF EXISTS "user_manage_own_notifications" ON public.notifications;
 
 -- Vehículos y servicios
 CREATE POLICY "public_read_vehicles" ON public.vehicles FOR SELECT USING (true);
@@ -344,10 +382,14 @@ CREATE POLICY "public_read_profiles" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "users_update_own_profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Orders
-CREATE POLICY "public_insert_pending_orders" ON public.orders FOR INSERT
-  WITH CHECK (
-    status = 'Pendiente' AND (client_id IS NULL OR client_id = auth.uid())
-  );
+-- Importante para evitar el error RLS en INSERT desde cliente anónimo o autenticado sin client_id
+-- Permitimos insertar órdenes en estado Pendiente, asignando client_id NULL o igual a auth.uid()
+CREATE POLICY "public_insert_pending_orders" ON public.orders
+FOR INSERT
+WITH CHECK (
+  status = 'Pendiente' AND (client_id IS NULL OR client_id = auth.uid())
+);
+
 CREATE POLICY "clients_read_own_orders" ON public.orders FOR SELECT USING (client_id = auth.uid());
 CREATE POLICY "collaborator_read_pending_orders" ON public.orders FOR SELECT USING (
   EXISTS (
@@ -359,14 +401,6 @@ CREATE POLICY "collaborator_read_assigned_orders" ON public.orders FOR SELECT US
 CREATE POLICY "collaborator_update_own_orders" ON public.orders FOR UPDATE USING (assigned_to = auth.uid());
 CREATE POLICY "owner_admin_all_orders" ON public.orders FOR ALL USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
-);
-
--- Alineación: asegurar condición de inserción pública de órdenes
-DROP POLICY IF EXISTS "public_insert_pending_orders" ON public.orders;
-CREATE POLICY "public_insert_pending_orders" ON public.orders
-FOR INSERT
-WITH CHECK (
-  status = 'Pendiente' AND (client_id IS NULL OR client_id = auth.uid())
 );
 
 -- Collaborators y Matrículas
@@ -403,56 +437,13 @@ FOR ALL USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
 
--- Alineación: política principal de business
-DROP POLICY IF EXISTS "owner_full_access_business" ON public.business;
-CREATE POLICY "owner_full_access_business" ON public.business
-FOR ALL USING (
-  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
-) WITH CHECK (
-  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
-);
-
 -- Push Subscriptions
-DROP POLICY IF EXISTS "user_manage_own_push_subscriptions" ON public.push_subscriptions;
 CREATE POLICY "user_manage_own_push_subscriptions" ON public.push_subscriptions
 FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- Notifications
-DROP POLICY IF EXISTS "user_read_own_notifications" ON public.notifications;
-CREATE POLICY "user_read_own_notifications" ON public.notifications
-FOR SELECT USING (user_id = auth.uid());
-
--- --------------------------------------------------------------
--- 6.b FACTURAS (INVOICES)
--- --------------------------------------------------------------
-DROP TABLE IF EXISTS public.invoices CASCADE;
-CREATE TABLE public.invoices (
-  id bigint generated by default as identity primary key,
-  created_at timestamptz not null default now(),
-  order_id bigint references public.orders(id) on delete set null,
-  client_id uuid references public.profiles(id) on delete set null,
-  file_path text not null,
-  file_url text,
-  total numeric,
-  status text default 'generada',
-  data jsonb
-);
-
-ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "owner_admin_all_invoices" ON public.invoices;
-CREATE POLICY "owner_admin_all_invoices" ON public.invoices
-FOR ALL USING (
-  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
-) WITH CHECK (
-  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
-);
-
-DROP POLICY IF EXISTS "client_read_own_invoices" ON public.invoices;
-CREATE POLICY "client_read_own_invoices" ON public.invoices
-FOR SELECT USING (
-  client_id = auth.uid()
-);
+CREATE POLICY "user_manage_own_notifications" ON public.notifications
+FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- --------------------------------------------------------------
 -- 7. SEED DE CATÁLOGOS
@@ -482,12 +473,7 @@ ON CONFLICT (name) DO NOTHING;
 --                      FIN DEL ESQUEMA
 -- =============================================================
 
-
---- ===========================================
--- 1️⃣ Crear o actualizar el usuario admin
--- ===========================================
-
--- Perfil admin
+-- Admin/owner opcional (requiere existir en auth.users para no romper FK)
 INSERT INTO public.profiles (id, full_name, email, phone, created_at, updated_at)
 SELECT
   'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
@@ -496,11 +482,9 @@ SELECT
   '8090000000',
   NOW(),
   NOW()
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
-);
+WHERE EXISTS (SELECT 1 FROM auth.users WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71')
+  AND NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71');
 
--- Colaborador admin
 INSERT INTO public.collaborators (id, name, email, phone, matricula, status, created_at)
 SELECT
   'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
@@ -510,52 +494,25 @@ SELECT
   '1338547',
   'activo',
   NOW()
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.collaborators WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
-);
+WHERE EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71')
+  AND NOT EXISTS (SELECT 1 FROM public.collaborators WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71');
 
--- Asegurar rol de administrador para el usuario dueño
 UPDATE public.collaborators
 SET role = 'administrador'
 WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71';
 
--- Matrícula asociada al colaborador
 INSERT INTO public.matriculas (user_id, matricula, status, created_at)
 SELECT
   'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
   '1338547',
   'activo',
   NOW()
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.matriculas WHERE user_id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
-);
+WHERE EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71')
+  AND NOT EXISTS (
+    SELECT 1 FROM public.matriculas WHERE user_id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
+  );
 
--- ===========================================
--- 2️⃣ Asignar admin como dueño del negocio
--- ===========================================
 UPDATE public.business
 SET owner_user_id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
-WHERE id = 1;
-
--- ===========================================
--- 3️⃣ Opcional: actualizar nombre/email/teléfono del negocio
--- ===========================================
-UPDATE public.business
-SET business_name = 'Mi Negocio',
-    email = 'carloslopez@gmail.com',
-    phone = '8090000000',
-    updated_at = NOW()
-WHERE id = 1;
-
--- ===========================================
--- 4️⃣ Asegurar RLS activado en todas las tablas relevantes
--- ===========================================
-ALTER TABLE public.business ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.collaborators ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.matriculas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+WHERE id = 1
+  AND EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71');

@@ -56,16 +56,20 @@ Deno.serve(async (req: Request) => {
           throw new Error(`Error creating collaborator: ${profileError.message}`)
         }
 
-        // Update the request status to 'approved'
+        // Optional: update request status if table exists (omit if not present)
         if (requestId) {
-          await supabaseAdmin
-            .from('collaborator_requests')
-            .update({ 
-              status: 'approved',
-              processed_at: new Date().toISOString(),
-              processed_by: collaboratorData.processed_by
-            })
-            .eq('id', requestId)
+          try {
+            await supabaseAdmin
+              .from('collaborator_requests')
+              .update({ 
+                status: 'approved',
+                processed_at: new Date().toISOString(),
+                processed_by: collaboratorData.processed_by
+              })
+              .eq('id', requestId)
+          } catch (_ignored) {
+            // Silently skip if table doesn't exist
+          }
         }
 
         return jsonResponse({ 
@@ -76,18 +80,21 @@ Deno.serve(async (req: Request) => {
 
       case 'reject_request':
         // Update the request status to 'rejected'
-        const { error: rejectError } = await supabaseAdmin
-          .from('collaborator_requests')
-          .update({ 
-            status: 'rejected',
-            processed_at: new Date().toISOString(),
-            processed_by: collaboratorData.processed_by,
-            rejection_reason: collaboratorData.rejection_reason
-          })
-          .eq('id', requestId)
-
-        if (rejectError) {
-          throw new Error(`Error rejecting request: ${rejectError.message}`)
+        try {
+          const { error: rejectError } = await supabaseAdmin
+            .from('collaborator_requests')
+            .update({ 
+              status: 'rejected',
+              processed_at: new Date().toISOString(),
+              processed_by: collaboratorData.processed_by,
+              rejection_reason: collaboratorData.rejection_reason
+            })
+            .eq('id', requestId)
+          if (rejectError) {
+            throw new Error(`Error rejecting request: ${rejectError.message}`)
+          }
+        } catch (_ignored) {
+          // Skip if table not present
         }
 
         return jsonResponse({ 

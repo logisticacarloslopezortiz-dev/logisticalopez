@@ -186,7 +186,7 @@ function showActiveJob(order){
     <div class="space-y-4">
       <div class="flex flex-wrap items-center gap-3">
         <span class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-800 font-bold font-mono shadow-sm">ID: ${order.id}</span>
-        ${order.assigned_to ? `<span class=\"px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800 inline-flex items-center gap-1\"><i data-lucide=\"user\" class=\"w-3 h-3\"></i> ${order.assigned_to}</span>` : ''}
+        ${order.assigned_to ? `<span class=\"px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800 inline-flex items-center gap-1\"><i data-lucide=\"user\" class=\"w-3 h-3\"></i> ${getCollaboratorName(order.assigned_to)}</span>` : ''}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
         <div class="flex items-start gap-3">
@@ -328,6 +328,14 @@ function renderPhotoGallery(photos) {
   });
 }
 
+// Cache de nombres de colaboradores para evitar mostrar UUIDs
+const collabNameCache = new Map();
+function getCollaboratorName(userId){
+  if (!userId) return '';
+  const cached = collabNameCache.get(userId);
+  return cached || userId; // Fallback al ID mientras se resuelve el nombre real
+}
+
 /**
  * ✅ REFACTORIZADO: Maneja la subida de fotos a Supabase Storage.
  * @param {Event} event - El evento del input de archivo.
@@ -394,16 +402,10 @@ let baseVisibleCount = 0;
 function render(){
   const ordersGrid = document.getElementById('ordersGrid');
   const emptyState = document.getElementById('emptyState');
-  const tbody = document.getElementById('ordersTableBody');
-  const tableContainer = document.getElementById('requestsTableContainer');
-  
   if (ordersGrid) {
     ordersGrid.innerHTML = '';
   }
-  if (tbody) {
-    tbody.innerHTML = '';
-  }
-  
+
   document.getElementById('showingCount').textContent = state.filteredOrders.length;
   document.getElementById('totalCount').textContent = baseVisibleCount;
 
@@ -412,98 +414,29 @@ function render(){
       ordersGrid.classList.add('hidden');
       emptyState?.classList.remove('hidden');
     }
-    if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-500">Sin solicitudes</td></tr>';
-    }
-    if (tableContainer && state.activeJobId) {
-      // Si hay trabajo activo, mantener oculto el contenedor de tabla
-      tableContainer.classList.add('hidden');
-    } else {
-      tableContainer?.classList.remove('hidden');
-    }
+    const container = document.getElementById('ordersCardContainer');
+    if (container) container.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
+    const assigned = document.getElementById('assignedOrdersContainer');
+    if (assigned) assigned.classList.add('hidden');
     return;
   }
-  
+
   if (ordersGrid) {
     ordersGrid.classList.remove('hidden');
     emptyState?.classList.add('hidden');
   }
-  // Ocultar contenedor de solicitudes si hay trabajo activo
-  if (tableContainer) {
-    if (state.activeJobId) {
-      tableContainer.classList.add('hidden');
-    } else {
-      tableContainer.classList.remove('hidden');
-    }
-  }
 
-  state.filteredOrders.forEach(o => {
-    const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
-    const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
-    const tr = document.createElement('tr');
-    tr.className = 'hover:bg-gray-50';
-    tr.innerHTML = `
-      <td class="px-3 md:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id}</td>
-      <td class="px-3 md:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
-        <div class="text-sm font-medium text-gray-900">${o.name}</div>
-        <div class="text-sm text-gray-500">${o.phone}</div>
-      </td>
-      <td class="px-3 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
-        <div>${o.service}</div>
-        ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
-          ? `<button onclick="showServiceDetailsCollab('${o.id}')" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline"><i data-lucide='info' class='w-3 h-3 inline-block mr-1'></i>Ver detalles</button>`
-          : ''}
-      </td>
-      <td class="px-3 md:px-6 py-4 text-sm text-gray-900 max-w-xs truncate hidden md:table-cell" title="${o.pickup} → ${o.delivery}">
-        ${o.pickup} → ${o.delivery}
-      </td>
-      <td class="px-3 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
-        <div>${o.date}</div>
-        <div class="text-gray-500">${o.time}</div>
-      </td>
-      <td class="px-3 md:px-6 py-4 whitespace-nowrap">
-        <span class="px-2 py-1 rounded-full text-xs font-semibold ${status.badge}">${status.label}</span>
-        ${o.assigned_to ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.assigned_to}</div>` : ''}
-      </td>
-      <td class="px-3 md:px-6 py-4 whitespace-nowrap text-sm">
-        <div class="flex flex-col sm:flex-row items-center gap-1 sm:gap-2">
-          ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
-            ? `<button onclick="showServiceDetailsCollab('${o.id}')" class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full sm:w-auto">Detalles</button>`
-            : ''}
-          <button data-next="en_camino_recoger" class="step-btn px-2 py-1 text-xs bg-blue-600 text-white rounded w-full sm:w-auto">Recoger</button>
-          <button data-next="cargando" class="step-btn px-2 py-1 text-xs bg-yellow-600 text-white rounded w-full sm:w-auto">Cargando</button>
-          <button data-next="en_camino_entregar" class="step-btn px-2 py-1 text-xs bg-indigo-600 text-white rounded w-full sm:w-auto">Entregar</button>
-          <button data-next="retraso_tapon" class="step-btn px-2 py-1 text-xs bg-orange-600 text-white rounded w-full sm:w-auto">Retraso</button>
-          <button data-next="entregado" class="step-btn px-2 py-1 text-xs bg-green-600 text-white rounded w-full sm:w-auto">Finalizar</button>
-        </div>
-      </td>
-    `;
-
-    if (o.assigned_to) { tr.className += ' bg-yellow-50'; }
-    tbody.appendChild(tr);
-    tr.addEventListener('dblclick', () => openAcceptModal(o));
-
-    // Wire buttons
-    tr.querySelectorAll('.step-btn').forEach(btn => {
-      btn.addEventListener('click', () => changeStatus(o.id, btn.dataset.next));
-    });
-  });
-
-  if (window.lucide) lucide.createIcons();
-
-  // Renderizado móvil en forma de tarjetas
   try {
     renderMobileCards(state.filteredOrders);
   } catch(err) {
     console.warn('No se pudo renderizar tarjetas móviles:', err);
   }
-
-  // Renderizado de tarjetas en escritorio (asignadas al colaborador)
   try {
     renderDesktopAssignedCards(state.filteredOrders);
   } catch (err) {
     console.warn('No se pudo renderizar tarjetas de escritorio:', err);
   }
+  if (window.lucide) lucide.createIcons();
 }
 
 /**
@@ -543,20 +476,8 @@ function filterAndRender(){
 
 // === Soporte móvil: tarjetas de solicitudes asignadas ===
 function ensureMobileContainer(){
-  let container = document.getElementById('ordersCardContainer');
-  if (container) return container;
-  const tableEl = document.querySelector('table');
-  if (!tableEl || !tableEl.parentElement) return null;
-  container = document.createElement('div');
-  container.id = 'ordersCardContainer';
-  container.className = 'md:hidden space-y-4';
-  // Insertar el contenedor antes del bloque de tabla
-  try {
-    tableEl.parentElement.parentElement.insertAdjacentElement('beforebegin', container);
-  } catch (_) {
-    tableEl.parentElement.insertAdjacentElement('beforebegin', container);
-  }
-  return container;
+  // El contenedor ya existe en el HTML refactorizado
+  return document.getElementById('ordersCardContainer');
 }
 
 function renderMobileCards(orders){
@@ -711,6 +632,27 @@ function updateCollaboratorProfile(session) {
   updateCollaboratorStats(user.id);
 }
 
+// Precarga nombres de colaboradores desde perfiles para IDs asignados
+async function preloadCollaboratorNames(orders){
+  try {
+    const ids = [...new Set((orders || []).map(o => o.assigned_to).filter(Boolean))];
+    if (ids.length === 0) return;
+    const { data, error } = await supabaseConfig.client
+      .from('profiles')
+      .select('id, full_name, name, email')
+      .in('id', ids);
+    if (error) {
+      console.warn('No se pudieron cargar nombres de colaboradores:', error);
+      return;
+    }
+    (data || []).forEach(p => {
+      collabNameCache.set(p.id, p.full_name || p.name || p.email || p.id);
+    });
+  } catch (err) {
+    console.warn('Fallo al precargar nombres de colaboradores:', err);
+  }
+}
+
 // Función para cargar órdenes
 async function loadInitialOrders() {
   try {
@@ -754,6 +696,7 @@ async function loadInitialOrders() {
       service: order.service?.name || order.service || 'Sin servicio',
       vehicle: order.vehicle?.name || order.vehicle || 'Sin vehículo'
     }));
+    await preloadCollaboratorNames(state.allOrders);
     
     filterAndRender();
   } catch (error) {

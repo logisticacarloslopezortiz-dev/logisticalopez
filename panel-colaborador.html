@@ -183,31 +183,9 @@
     </div>
 
     <!-- ✅ MEJORA: Contenedor para las tarjetas de órdenes asignadas -->
-    <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 mb-8">
-      <!-- Las tarjetas se insertarán aquí dinámicamente -->
-    </div>
-    <div id="requestsTableContainer" class="bg-white rounded-lg shadow-md overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-        <h3 class="text-lg font-semibold text-gray-800">Solicitudes de clientes <span class="ml-2 hidden sm:inline text-xs font-normal text-gray-400">(disponibles y asignadas a ti)</span></h3>
-        <span class="text-sm text-gray-500">Mostrando <span id="showingCount">0</span> de <span id="totalCount">0</span></span>
-      </div>
-      <div class="overflow-x-auto -mx-4 sm:mx-0">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Cliente</th>
-              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Servicio</th>
-              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Ruta</th>
-              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Fecha/Hora</th>
-              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-              <th scope="col" class="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="ordersTableBody" class="bg-white divide-y divide-gray-200"></tbody>
-        </table>
-      </div>
-    </div>
+    <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 mb-8"></div>
+    <!-- ✅ NUEVO: Contenedor de tarjetas principal para solicitudes (pendientes y asignadas) -->
+    <div id="ordersCardContainer" class="space-y-4 mb-6"></div>
     
     
     <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada -->
@@ -289,6 +267,9 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> <!-- ✅ AÑADIDO: Cargar la librería de Supabase primero -->
+  <!-- ✅ AÑADIDO: Leaflet para el mapa del trabajo activo -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="js/supabase-config.js"></script> <!-- Ahora este script puede usar la librería -->
   <script src="js/notifications.js"></script>
   <script src="js/backup.js"></script>
