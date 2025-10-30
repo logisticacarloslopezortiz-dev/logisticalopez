@@ -14,6 +14,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="js/colaboradores-cards.js"></script>
 </head>
 <body class="bg-gray-100">
 
@@ -177,26 +178,10 @@
           <h2 class="text-xl font-semibold text-gray-900">Lista de Colaboradores</h2>
         </div>
       </div>
-      <!-- Vista de tabla para pantallas medianas y grandes -->
-      <div class="hidden md:block overflow-x-auto">
-        <table class="w-full">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="text-left py-4 px-6 font-semibold text-gray-700 w-1/4">Colaborador</th>
-              <th class="hidden md:table-cell text-left py-4 px-6 font-semibold text-gray-700">Matrícula</th>
-              <th class="hidden lg:table-cell text-left py-4 px-6 font-semibold text-gray-700">Email</th>
-              
-              <th class="hidden sm:table-cell text-left py-4 px-6 font-semibold text-gray-700">Estado</th>
-              <th class="text-left py-4 px-6 font-semibold text-gray-700">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="colaboradoresTableBody" class="bg-white divide-y divide-gray-200">
-            <!-- Los colaboradores se cargarán aquí -->
-          </tbody>
-        </table>
-      </div>
+      <!-- Contenedor de tarjetas para todas las pantallas -->
+      <div id="ordersCardContainer" class="mt-6"></div>
       
-      <!-- Vista de tarjetas para móviles -->
+      <!-- Vista de tarjetas para móviles (mantener para compatibilidad) -->
       <div class="md:hidden space-y-4" id="colaboradoresCardContainer">
         <!-- Las tarjetas de colaboradores se cargarán aquí -->
       </div>

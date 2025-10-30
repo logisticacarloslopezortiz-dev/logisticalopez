@@ -164,20 +164,51 @@ const supabaseConfig = {
       throw notFoundError;
     }
     
-    // Sanea payload: elimina campos que no existen en el esquema
-    const safeUpdates = { ...updates };
+    // Sanea payload: elimina campos que no existen en el esquema conocidas y reintenta si la BD rechaza columnas
+    let safeUpdates = { ...updates };
     delete safeUpdates.last_collab_status;
     delete safeUpdates.lastCollabStatus;
-    // El esquema actual de 'orders' no incluye 'tracking'
-    delete safeUpdates.tracking;
 
-    const { data, error } = await this.client
-      .from('orders')
-      .update(safeUpdates)
-      .eq('id', orderId)
-      .select()
-      .maybeSingle();
-    
+    // Intentaremos la actualización; si falla por columna desconocida, quitamos la(s) columna(s) problemática(s) y reintentos.
+    let attempt = 0;
+    let data, error;
+    const maxAttempts = 2;
+
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      try {
+        const resp = await this.client
+          .from('orders')
+          .update(safeUpdates)
+          .eq('id', orderId)
+          .select()
+          .maybeSingle();
+        data = resp.data;
+        error = resp.error;
+      } catch (e) {
+        // Algunas versiones retornan error como excepción
+        error = e;
+      }
+
+      if (!error) break; // éxito
+
+      // Si el error contiene texto indicando que una columna no existe, remover esos campos y reintentar
+      const msg = String(error.message || error.error || '').toLowerCase();
+      const colsToCheck = ['tracking', 'tracking_data', 'last_collab_status', 'lastCollabStatus'];
+      let removed = false;
+      for (const col of colsToCheck) {
+        if (msg.includes(`column "${col.toLowerCase()}"`) || msg.includes(`column ${col.toLowerCase()}`)) {
+          if (Object.prototype.hasOwnProperty.call(safeUpdates, col)) {
+            delete safeUpdates[col];
+            removed = true;
+          }
+        }
+      }
+
+      // Si no se removió nada, no tiene sentido reintentar
+      if (!removed) break;
+    }
+
     if (error) {
       console.error('updateOrder error:', error);
       console.log('=== SUPABASE ERROR DETAILS ===');

@@ -252,6 +252,12 @@ function getTimeStats(colaborador) {
 
 // Función para renderizar colaboradores
 function renderColaboradores() {
+  // Renderizar solicitudes como tarjetas si existe el contenedor
+  const ordersCardContainer = document.getElementById('ordersCardContainer');
+  if (ordersCardContainer && state && state.requests) {
+    renderRequestsAsCards(state.requests, state);
+  }
+  
   if (!tableBody) return; // ✅ DEFENSA: No hacer nada si la tabla no existe
   tableBody.innerHTML = ''; // Esta línea causaba el error si tableBody era null
   
@@ -260,7 +266,9 @@ function renderColaboradores() {
   if (cardContainer) cardContainer.innerHTML = '';
   
   if (colaboradores.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="users" class="w-8 h-8 text-gray-400"></i><span>No hay colaboradores registrados</span></div></td></tr>';
+    if (tableBody) {
+      tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="users" class="w-8 h-8 text-gray-400"></i><span>No hay colaboradores registrados</span></div></td></tr>';
+    }
     if (cardContainer) {
       cardContainer.innerHTML = '<div class="text-center py-8 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="users" class="w-8 h-8 text-gray-400"></i><span>No hay colaboradores registrados</span></div></div>';
     }

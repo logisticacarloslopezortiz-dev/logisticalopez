@@ -24,49 +24,47 @@
   <meta name="theme-color" content="#2563eb">
 
 
-  <script src="https://cdn.tailwindcss.com"></script>
-
-
+  <!-- Reemplazado CDN por versión local para producción -->
+  <link href="css/tailwind.min.css" rel="stylesheet">
+  
   <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            azulOscuro: '#0C375D',   /* Azul oscuro del logo */
-            azulClaro: '#117D8B',    /* Azul turquesa del logo */
-            acento: '#FBBF24'        /* Amarillo cálido para acentos */
-          },
-          keyframes: {
-            fadeInUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },            
-            // --- INICIO: Keyframes para la animación del camión en bucle ---
-            truckLoop: {
-              '0%, 100%': { transform: 'translateX(-150%)', opacity: '0' },
-              '10%, 60%': { transform: 'translateX(0)', opacity: '1' },
-              '70%, 90%': { transform: 'translateX(150%)', opacity: '0' }
-            },
-            packageLoop: {
-              '0%, 15%, 100%': { transform: 'translateX(0)', opacity: '0' },
-              '25%, 55%': { transform: 'translateX(100%)', opacity: '1' },
-              '65%, 90%': { transform: 'translateX(200%)', opacity: '0' }
-            },
-            buttonLoop: {
-              '0%, 30%, 100%': { opacity: '0', transform: 'scale(0.8)' },
-              '40%, 90%': { opacity: '1', transform: 'scale(1)' }
-            }
-            // --- FIN: Keyframes para la animación del camión en bucle ---
-          },
-          animation: {
-            fadeInUp: 'fadeInUp 0.6s ease-out forwards',
-            // --- INICIO: Animaciones personalizadas en bucle ---
-            'truck-loop': 'truckLoop 8s ease-in-out infinite',
-            'package-loop-1': 'packageLoop 8s ease-in-out infinite',
-            'package-loop-2': 'packageLoop 8s ease-in-out infinite 0.2s', // Pequeño retraso
-            'button-loop': 'buttonLoop 8s ease-in-out infinite'
-            // --- FIN: Animaciones personalizadas en bucle ---
-          }
+    // Configuración de Tailwind ahora está en tailwind.config.js
+    // Los colores personalizados están definidos en el archivo CSS compilado
+    const tailwindTheme = {
+      colors: {
+        azulOscuro: '#0C375D',   /* Azul oscuro del logo */
+        azulClaro: '#117D8B',    /* Azul turquesa del logo */
+        acento: '#FBBF24'        /* Amarillo cálido para acentos */
+      },
+      keyframes: {
+        fadeInUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },            
+        // --- INICIO: Keyframes para la animación del camión en bucle ---
+        truckLoop: {
+          '0%, 100%': { transform: 'translateX(-150%)', opacity: '0' },
+          '10%, 60%': { transform: 'translateX(0)', opacity: '1' },
+          '70%, 90%': { transform: 'translateX(150%)', opacity: '0' }
+        },
+        packageLoop: {
+          '0%, 15%, 100%': { transform: 'translateX(0)', opacity: '0' },
+          '25%, 55%': { transform: 'translateX(100%)', opacity: '1' },
+          '65%, 90%': { transform: 'translateX(200%)', opacity: '0' }
+        },
+        buttonLoop: {
+          '0%, 30%, 100%': { opacity: '0', transform: 'scale(0.8)' },
+          '40%, 90%': { opacity: '1', transform: 'scale(1)' }
         }
+        // --- FIN: Keyframes para la animación del camión en bucle ---
+      },
+      animation: {
+        fadeInUp: 'fadeInUp 0.6s ease-out forwards',
+        // --- INICIO: Animaciones personalizadas en bucle ---
+        'truck-loop': 'truckLoop 8s ease-in-out infinite',
+        'package-loop-1': 'packageLoop 8s ease-in-out infinite',
+        'package-loop-2': 'packageLoop 8s ease-in-out infinite 0.2s', // Pequeño retraso
+        'button-loop': 'buttonLoop 8s ease-in-out infinite'
+        // --- FIN: Animaciones personalizadas en bucle ---
       }
-    }
+    };
   </script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <style>

@@ -14,17 +14,22 @@
   <meta name="apple-mobile-web-app-title" content="TLC Colaborador">
   <meta name="description" content="Panel de colaborador para gestión de servicios TLC">
   
-  <!-- Icons -->
-  <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192x192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="img/icon-512x512.png">
-  <link rel="apple-touch-icon" href="img/icon-192x192.png">
+  <!-- Icons (use canonical asset names present in project) -->
+  <link rel="icon" type="image/png" sizes="192x192" href="img/android-chrome-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="img/android-chrome-512x512.png">
+  <link rel="apple-touch-icon" href="img/android-chrome-192x192.png">
   <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
   <link rel="icon" type="image/x-icon" href="img/favicon-16x16.png" sizes="16x16" />
   <link rel="icon" type="image/x-icon" href="img/favicon-32x32.png" sizes="32x32" />
   <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
   
+  <!-- Leaflet CSS para el mapa -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  
+  <!-- Tailwind y Lucide -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="js/colaboradores-cards.js"></script>
   
   <style>
     /* Sidebar animations */
@@ -52,13 +57,22 @@
         margin-bottom: 1rem;
       }
     }
+    
+    /* Mapa estilos */
+    #activeJobMap {
+      min-height: 250px;
+      width: 100%;
+      z-index: 1;
+    }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
+  <!-- Skip link for keyboard users -->
+  <a href="#mainContent" class="sr-only" style="position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;" onfocus="this.style.position='static';this.style.left='1rem';this.style.top='1rem';this.style.width='auto';this.style.height='auto';this.style.padding='8px 12px';this.style.background='#fff';this.style.zIndex='9999';">Saltar al contenido</a>
   <!-- Mobile Header with Hamburger -->
   <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
     <div class="flex items-center justify-between px-4 py-3">
-      <button id="mobileMenuBtn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+      <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
         <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
       </button>
       <div class="flex items-center gap-2">
@@ -78,13 +92,19 @@
   <aside id="collabSidebar" class="fixed md:static top-0 left-0 w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-full md:h-screen flex flex-col sidebar-transition -translate-x-full md:translate-x-0 z-40">
     <!-- Header del Sidebar -->
     <div class="p-6 border-b border-gray-700">
-      <div class="flex items-center gap-3 mb-4">
-        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-          TLC
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+            TLC
+          </div>
+          <div>
+            <p class="text-xs text-gray-400">Panel de Control</p>
+          </div>
         </div>
-        <div>
-          <p class="text-xs text-gray-400">Panel de Control</p>
-        </div>
+        <!-- Botón para colapsar el sidebar -->
+        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 bg-blue-800 rounded-lg hover:bg-blue-700 transition-colors">
+          <i data-lucide="panel-left-close" class="w-4 h-4 text-white"></i>
+        </button>
       </div>
       
       <!-- Perfil del Colaborador -->
@@ -117,7 +137,7 @@
     </div>
     
     <!-- Navegación -->
-    <nav class="flex-1 p-6">
+    <nav class="flex-1 p-6" role="navigation" aria-label="Navegación principal">
       <div class="space-y-2">
         <a href="panel-colaborador.html" class="flex items-center gap-3 p-3 rounded-xl text-white hover:bg-blue-700/50 transition-all duration-200 group">
           <i data-lucide="list" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
@@ -135,13 +155,13 @@
     <!-- Footer del Sidebar -->
     <div class="p-6 border-t border-gray-700">
       <!-- Botón de cambio de tema -->
-      <button id="themeToggle" class="w-full flex items-center justify-center gap-2 p-3 mb-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
+      <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mb-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
         <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
         <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
         <span class="font-medium theme-text">Modo oscuro</span>
       </button>
       <!-- Cerrar sesión -->
-      <button id="logoutBtn" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
+      <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
         <i data-lucide="log-out" class="w-4 h-4"></i>
         <span class="font-medium">Cerrar Sesión</span>
       </button>
@@ -151,41 +171,40 @@
   <!-- Contenido principal -->
   <!-- ✅ MEJORA: El margen izquierdo (ml-72) ahora se controla con JS para el sidebar plegable -->
   <main id="mainContent" class="flex-1 p-4 md:p-8 md:ml-72 transition-all duration-300">
-    <!-- ✅ MEJORA: Botón para colapsar el sidebar en escritorio -->
-    <div class="fixed top-4 right-4 z-20">
-      <button id="desktopSidebarToggle" class="hidden md:flex items-center justify-center w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full shadow-md hover:bg-gray-100 transition-colors" title="Ocultar/Mostrar menú">
-        <i data-lucide="panel-left-close" class="w-5 h-5 text-gray-600"></i>
-      </button>
+    <!-- Contenedor principal con grid para colocar contenido junto al sidebar -->
+    <div class="grid grid-cols-1 gap-6">
     </div>
-
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Solicitudes asignadas</h1>
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
-        <div class="relative w-full sm:w-auto">
-          <input id="searchInput" type="text" placeholder="Buscar por cliente, ID o servicio" class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full">
-          <div class="absolute left-3 top-2.5">
-            <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
+      <!-- Sección de solicitudes asignadas -->
+      <div>
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <h1 class="text-2xl font-bold text-gray-900">Solicitudes asignadas</h1>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+            <div class="relative w-full sm:w-auto">
+              <input id="searchInput" aria-label="Buscar pedidos" type="text" placeholder="Buscar por cliente, ID o servicio" class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full">
+              <div class="absolute left-3 top-2.5">
+                <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
+              </div>
+            </div>
+            <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto" aria-label="Filtrar estado">
+              <option value="">Todos</option>
+              <option value="en_camino_recoger">En camino a recoger</option>
+              <option value="cargando">Cargando pedido</option>
+              <option value="en_camino_entregar">En camino a entregar</option>
+              <option value="retraso_tapon">Retraso por tapón</option>
+              <option value="entregado">Pedido finalizado</option>
+              <option value="Pendiente">Pendiente</option>
+              <option value="En proceso">En proceso</option>
+              <option value="Completado">Completado</option>
+            </select>
+            <button id="clearFilters" type="button" aria-label="Limpiar filtros" class="px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 self-end"><i data-lucide="x" class="w-4 h-4"></i></button>
           </div>
         </div>
-        <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto">
-          <option value="">Todos</option>
-          <option value="en_camino_recoger">En camino a recoger</option>
-          <option value="cargando">Cargando pedido</option>
-          <option value="en_camino_entregar">En camino a entregar</option>
-          <option value="retraso_tapon">Retraso por tapón</option>
-          <option value="entregado">Pedido finalizado</option>
-          <option value="Pendiente">Pendiente</option>
-          <option value="En proceso">En proceso</option>
-          <option value="Completado">Completado</option>
-        </select>
-        <button id="clearFilters" class="px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 self-end"><i data-lucide="x" class="w-4 h-4"></i></button>
-      </div>
-    </div>
 
-    <!-- ✅ MEJORA: Contenedor para las tarjetas de órdenes asignadas -->
-    <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 mb-8"></div>
-    <!-- ✅ NUEVO: Contenedor de tarjetas principal para solicitudes (pendientes y asignadas) -->
-    <div id="ordersCardContainer" class="space-y-4 mb-6"></div>
+        <!-- ✅ MEJORA: Contenedor para las tarjetas de órdenes asignadas -->
+        <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 mb-8"></div>
+        <!-- ✅ NUEVO: Contenedor de tarjetas principal para solicitudes (pendientes y asignadas) -->
+        <div id="ordersCardContainer" class="space-y-4 mb-6"></div>
+      </div>
     
     
     <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada -->
@@ -205,17 +224,24 @@
               </button>
             </div>
           </div>
-          <!-- Barra de progreso visual -->
-          <div class="mt-4">
-            <div class="w-full bg-gray-200 rounded-full h-2.5">
-              <div id="jobProgressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style="width: 25%"></div>
-            </div>
-            <div class="flex justify-between text-xs text-gray-500 mt-1">
-              <span>Recogida</span>
-              <span>Cargando</span>
-              <span>Entrega</span>
-              <span>Finalizado</span>
-            </div>
+          <!-- Botones de acción para el trabajo activo -->
+          <div class="mt-4 flex flex-wrap gap-2">
+              <button type="button" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              <span>Confirmar llegada</span>
+            </button>
+              <button type="button" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
+              <i data-lucide="package" class="w-4 h-4"></i>
+              <span>Iniciar carga</span>
+            </button>
+              <button type="button" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
+              <i data-lucide="truck" class="w-4 h-4"></i>
+              <span>En camino a entregar</span>
+            </button>
+              <button type="button" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2">
+              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+              <span>Reportar retraso</span>
+            </button>
           </div>
         </div>
 
@@ -228,7 +254,8 @@
           <div class="lg:col-span-2 space-y-6">
             <!-- Mapa -->
             <div>
-              <div class="aspect-w-16 aspect-h-9 w-full rounded-xl overflow-hidden border-2 border-gray-200 shadow-inner">
+              <h3 class="text-md font-semibold text-gray-800 mb-3">Ubicación</h3>
+              <div class="w-full h-64 rounded-xl overflow-hidden border-2 border-gray-200 shadow-inner">
                 <div id="activeJobMap" class="w-full h-full"></div>
               </div>
               <div class="mt-2 text-sm text-gray-600 flex items-center gap-2">
@@ -239,7 +266,9 @@
             <!-- Evidencia Fotográfica -->
             <div class="border-t border-gray-200 pt-4">
               <h3 class="text-md font-semibold text-gray-800 mb-3">Evidencia Fotográfica</h3>
-              <div class="grid grid-cols-3 gap-3" id="photoGallery"></div>
+              <div class="grid grid-cols-3 gap-3" id="photoGallery">
+                <!-- Las fotos se cargarán dinámicamente -->
+              </div>
               <label for="photoUpload" class="mt-3 w-full text-center cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg border border-dashed border-gray-400 flex items-center justify-center gap-2 transition-colors">
                 <i data-lucide="camera" class="w-5 h-5"></i><span>Añadir Foto</span>
               </label>
@@ -266,22 +295,113 @@
     </div>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> <!-- ✅ AÑADIDO: Cargar la librería de Supabase primero -->
-  <!-- ✅ AÑADIDO: Leaflet para el mapa del trabajo activo -->
+  <!-- Dependencias externas (una sola vez) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="js/supabase-config.js"></script> <!-- Ahora este script puede usar la librería -->
+
+  <!-- Scripts de la aplicación (ordenados y sin duplicados) -->
+  <script src="js/supabase-config.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/rating-system.js"></script>
   <script src="js/panel-colaborador.js"></script>
-  
   <script src="js/pwa.js"></script>
+  
   <script>
-    // Inicializar iconos
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', function() {
+      // Inicializar iconos Lucide
       lucide.createIcons();
+      
+      // Elementos del DOM
+      const sidebar = document.getElementById('collabSidebar');
+      const mainContent = document.getElementById('mainContent');
+      const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
+      const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+      const sidebarOverlay = document.getElementById('sidebarOverlay');
+      
+      // Función para colapsar/expandir el sidebar
+      function toggleSidebar() {
+        sidebar.classList.toggle('-translate-x-full');
+        mainContent.classList.toggle('md:ml-0');
+        mainContent.classList.toggle('md:ml-72');
+      }
+      
+      // Evento para el botón de colapso en el sidebar
+      if (sidebarCollapseBtn) {
+        sidebarCollapseBtn.addEventListener('click', toggleSidebar);
+      }
+      
+      // Evento para el botón de menú en móvil
+      if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener('click', function() {
+          sidebar.classList.toggle('-translate-x-full');
+          sidebarOverlay.classList.toggle('hidden');
+        });
+      }
+      
+      // Cerrar sidebar al hacer clic en el overlay (móvil)
+      if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', function() {
+          sidebar.classList.add('-translate-x-full');
+          sidebarOverlay.classList.add('hidden');
+        });
+      }
+      
+      // Ocultar automáticamente el sidebar en pantallas pequeñas al cargar
+      function handleResize() {
+        if (window.innerWidth < 768 && sidebar) {
+          sidebar.classList.add('-translate-x-full');
+          if (sidebarOverlay) {
+            sidebarOverlay.classList.add('hidden');
+          }
+        }
+      }
+      
+      // Función para inicializar el mapa
+      function initializeMap() {
+        const mapContainer = document.getElementById('activeJobMap');
+        if (!mapContainer) return;
+        
+        try {
+          const map = L.map('activeJobMap').setView([19.432608, -99.133209], 13);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          }).addTo(map);
+          
+          // Marcador de ejemplo (se actualizará con datos reales)
+          L.marker([19.432608, -99.133209]).addTo(map)
+            .bindPopup('Ubicación actual')
+            .openPopup();
+            
+          // Corregir el tamaño del mapa después de cargarlo
+          setTimeout(() => {
+            map.invalidateSize();
+          }, 100);
+        } catch (error) {
+          console.error('Error al inicializar el mapa:', error);
+        }
+      }
+      
+      // Inicializar el mapa si está visible
+      const activeJobSection = document.getElementById('activeJobSection');
+      if (activeJobSection && !activeJobSection.classList.contains('hidden')) {
+        initializeMap();
+      }
+      
+      // Ejecutar al cargar y al cambiar el tamaño de la ventana
+      window.addEventListener('resize', handleResize);
+      handleResize();
+      
+      // Configurar botones de acción del trabajo activo
+      const actionButtons = document.querySelectorAll('#activeJobSection button');
+      actionButtons.forEach(button => {
+        button.addEventListener('click', function() {
+          console.log('Acción:', this.textContent.trim());
+          // Aquí se implementará la lógica para cada acción
+        });
+      });
     });
   </script>
 </body>

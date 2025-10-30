@@ -87,15 +87,15 @@ async function changeStatus(orderId, newKey){
   }
 
   try {
-    // Agregar evento de tracking
-    const existingTracking = Array.isArray(order.tracking_data) ? order.tracking_data : [];
-    updates.tracking_data = [...existingTracking, trackingEvent];
+  // Agregar evento de tracking (usar campo `tracking` consistente con esquema)
+  const existingTracking = Array.isArray(order.tracking) ? order.tracking : [];
+  updates.tracking = [...existingTracking, trackingEvent];
 
     await supabaseConfig.updateOrder(orderId, updates);
 
     // Actualizar en memoria para reflejar inmediatamente
-    const idx = state.allOrders.findIndex(o => o.id === orderId);
-    if (idx !== -1) state.allOrders[idx] = { ...state.allOrders[idx], ...updates };
+  const idx = state.allOrders.findIndex(o => Number(o.id) === Number(orderId));
+  if (idx !== -1) state.allOrders[idx] = { ...state.allOrders[idx], ...updates };
 
     // Notificación push al cliente vía función Edge
     try {
@@ -169,6 +169,20 @@ function closeAcceptModal(){
   state.selectedOrderIdForAccept = null;
 }
 
+// Decide la acción al hacer clic en una tarjeta: aceptar (pendiente) o mostrar trabajo activo (asignado)
+function handleCardClick(orderId) {
+  const order = state.allOrders.find(o => o.id === Number(orderId));
+  if (!order) return;
+  if (!order.assigned_to && order.status === 'Pendiente') {
+    openAcceptModal(order);
+  } else {
+    showActiveJob(order);
+    // al mostrar trabajo activo, ocultar tarjetas
+    document.getElementById('ordersCardContainer')?.classList.add('hidden');
+    document.getElementById('assignedOrdersContainer')?.classList.add('hidden');
+  }
+}
+
 function showActiveJob(order){
   // Solo mostrar el trabajo activo si está asignado al colaborador actual o si acaba de ser aceptado
   const assignedId = order.assigned_to;
@@ -180,6 +194,9 @@ function showActiveJob(order){
   localStorage.setItem('tlc_collab_active_job', state.activeJobId);
   const section = document.getElementById('activeJobSection');
   section.classList.remove('hidden');
+  // Ocultar contenedores de tarjetas mientras hay trabajo activo visible
+  document.getElementById('ordersCardContainer')?.classList.add('hidden');
+  document.getElementById('assignedOrdersContainer')?.classList.add('hidden');
   const info = document.getElementById('activeJobInfo');
   // ✅ MEJORA: Diseño de información de trabajo activo más limpio y organizado
   info.innerHTML = /*html*/`
@@ -400,41 +417,21 @@ async function handlePhotoUpload(event) {
 
 let baseVisibleCount = 0;
 function render(){
-  const ordersGrid = document.getElementById('ordersGrid');
-  const emptyState = document.getElementById('emptyState');
-  if (ordersGrid) {
-    ordersGrid.innerHTML = '';
-  }
+  const cardsContainer = document.getElementById('ordersCardContainer');
+  const assignedContainer = document.getElementById('assignedOrdersContainer');
+  if (assignedContainer) assignedContainer.classList.add('hidden'); // unificamos en un solo contenedor
 
-  document.getElementById('showingCount').textContent = state.filteredOrders.length;
-  document.getElementById('totalCount').textContent = baseVisibleCount;
+  if (!cardsContainer) return;
 
   if (state.filteredOrders.length === 0){
-    if (ordersGrid) {
-      ordersGrid.classList.add('hidden');
-      emptyState?.classList.remove('hidden');
-    }
-    const container = document.getElementById('ordersCardContainer');
-    if (container) container.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
-    const assigned = document.getElementById('assignedOrdersContainer');
-    if (assigned) assigned.classList.add('hidden');
+    cardsContainer.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
     return;
-  }
-
-  if (ordersGrid) {
-    ordersGrid.classList.remove('hidden');
-    emptyState?.classList.add('hidden');
   }
 
   try {
     renderMobileCards(state.filteredOrders);
   } catch(err) {
     console.warn('No se pudo renderizar tarjetas móviles:', err);
-  }
-  try {
-    renderDesktopAssignedCards(state.filteredOrders);
-  } catch (err) {
-    console.warn('No se pudo renderizar tarjetas de escritorio:', err);
   }
   if (window.lucide) lucide.createIcons();
 }
@@ -490,8 +487,9 @@ function renderMobileCards(orders){
   container.innerHTML = orders.map(o => {
     const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
     const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
+    const onClickAttr = `onclick="handleCardClick(${o.id})"`;
     return `
-      <div class="bg-white rounded-lg shadow p-4 border border-gray-100">
+      <div class="bg-white rounded-lg shadow p-4 border border-gray-100 cursor-pointer" ${onClickAttr}>
         <div class="flex items-center justify-between mb-2">
           <div class="text-sm font-semibold text-gray-900">#${o.id}</div>
           <span class="px-2 py-1 rounded-full text-xs font-semibold ${status.badge}">${status.label}</span>
@@ -540,7 +538,7 @@ function renderDesktopAssignedCards(orders){
     return `
       <!-- ✅ MEJORA: Tarjeta flotante y estandarizada que abre el modal al hacer clic -->
       <div class="order-card bg-white rounded-xl shadow-lg border border-gray-200/80 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 cursor-pointer" 
-           onclick="openAcceptModal({id: ${o.id}, name: '${o.name}', phone: '${o.phone}', service: '${o.service}', vehicle: '${o.vehicle}', pickup: '${o.pickup}', delivery: '${o.delivery}', date: '${o.date}', time: '${o.time}'})">
+           onclick="handleCardClick(${o.id})">
         <div class="p-5">
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center gap-3">
@@ -639,14 +637,14 @@ async function preloadCollaboratorNames(orders){
     if (ids.length === 0) return;
     const { data, error } = await supabaseConfig.client
       .from('profiles')
-      .select('id, full_name, name, email')
+      .select('id, full_name, email')
       .in('id', ids);
     if (error) {
       console.warn('No se pudieron cargar nombres de colaboradores:', error);
       return;
     }
     (data || []).forEach(p => {
-      collabNameCache.set(p.id, p.full_name || p.name || p.email || p.id);
+      collabNameCache.set(p.id, p.full_name || p.email || p.id);
     });
   } catch (err) {
     console.warn('Fallo al precargar nombres de colaboradores:', err);
@@ -733,7 +731,7 @@ function handleRealtimeUpdate(payload) {
       break;
     case 'UPDATE':
       // ✅ CORRECCIÓN: Comparar IDs como números para evitar inconsistencias.
-      const index = state.allOrders.findIndex(o => o.id === newRecord.id);
+      const index = state.allOrders.findIndex(o => Number(o.id) === Number(newRecord.id));
       if (index !== -1) {
         state.allOrders[index] = { ...state.allOrders[index], ...newRecord };
       } else {
@@ -771,8 +769,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   state.collabSession = session;
 
-  // Configurar toggle de sidebar en móvil si existe
+  // Configurar toggle de sidebar en móvil y escritorio si existen
   try { setupMobileSidebarToggle(); } catch(_) {}
+  try { setupDesktopSidebarToggle(); } catch(_) {}
 
   // Suscribirse a cambios de auth para mantener sesión fresca
   supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
@@ -823,12 +822,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Paso 2: Actualizar estado (removido last_collab_status por no existir en la BD)
       const trackingEvent = { status: 'Servicio Asignado', date: new Date().toISOString() };
-      const existingTracking = Array.isArray(state.allOrders.find(o => o.id === orderId)?.tracking_data) 
-        ? state.allOrders.find(o => o.id === orderId).tracking_data 
-        : [];
+      // Normalizar: leer tracking desde cualquiera de las dos propiedades (tracking o tracking_data)
+      const existingOrder = state.allOrders.find(o => Number(o.id) === Number(orderId)) || {};
+      const existingTracking = Array.isArray(existingOrder.tracking)
+        ? existingOrder.tracking
+        : (Array.isArray(existingOrder.tracking_data) ? existingOrder.tracking_data : []);
+
+      // Intentar escribir ambos campos para mantener compatibilidad con esquemas antiguos y nuevos.
+      const newTracking = [...existingTracking, trackingEvent];
       await supabaseConfig.updateOrder(orderId, {
         status: 'En proceso',
-        tracking_data: [...existingTracking, trackingEvent]
+        tracking: newTracking,
+        tracking_data: newTracking
       });
 
       // Actualizar el estado local y mostrar el trabajo activo.
@@ -838,7 +843,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           ...state.allOrders[idx],
           assigned_to: myId,
           assigned_at: new Date().toISOString(),
-          status: 'En proceso'
+          status: 'En proceso',
+          // Actualizar localmente ambos campos para consistencia de lectura
+          tracking: newTracking,
+          tracking_data: newTracking
         };
         showActiveJob(state.allOrders[idx]);
         // Ocultar otras solicitudes y centrar en el trabajo activo
@@ -929,12 +937,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!ok) return;
       try {
         const trackingEvent = { status: 'Trabajo cancelado por colaborador', date: new Date().toISOString() };
-        const existingTracking = Array.isArray(order.tracking_data) ? order.tracking_data : [];
+        const existingTracking = Array.isArray(order.tracking)
+          ? order.tracking
+          : (Array.isArray(order.tracking_data) ? order.tracking_data : []);
+        const newTracking = [...existingTracking, trackingEvent];
+
         await supabaseConfig.updateOrder(state.activeJobId, {
           status: 'Cancelado',
           assigned_to: null,
           assigned_at: null,
-          tracking_data: [...existingTracking, trackingEvent]
+          tracking: newTracking,
+          tracking_data: newTracking
         });
         // Actualizar local
         const idx = state.allOrders.findIndex(o => o.id === state.activeJobId);
@@ -944,7 +957,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             status: 'Cancelado',
             assigned_to: null,
             assigned_at: null,
-            tracking_data: [...existingTracking, trackingEvent]
+            tracking: newTracking,
+            tracking_data: newTracking
           };
         }
         // Limpiar trabajo activo y volver a mostrar solicitudes

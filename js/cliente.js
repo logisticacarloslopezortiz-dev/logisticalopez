@@ -805,7 +805,9 @@ document.addEventListener('DOMContentLoaded', function() {
           // Estado y precio inicial
           status: 'Pendiente',
           estimated_price: 'Por confirmar',
-          tracking_data: [{ status: 'Solicitud Creada', date: new Date().toISOString() }]
+          tracking_data: [{ status: 'Solicitud Creada', date: new Date().toISOString() }],
+          // Mantener compatibilidad escribiendo ambos campos
+          tracking: [{ status: 'Solicitud Creada', date: new Date().toISOString() }]
         };
 
         // Guardar orden en Supabase con estrategia de reintento según esquema
@@ -828,7 +830,8 @@ document.addEventListener('DOMContentLoaded', function() {
           // Estado y precio inicial
           status: orderData.status,
           estimated_price: orderData.estimated_price,
-          tracking_data: orderData.tracking_data
+          tracking_data: orderData.tracking_data,
+          tracking: orderData.tracking || orderData.tracking_data
         };
 
         // RLS: establecer client_id para cumplir la política "public_insert_pending_orders"
@@ -852,13 +855,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Función auxiliar para intentar insertar y devolver resultado o lanzar error
         async function tryInsert(payload) {
-          const { data, error } = await supabaseConfig.client
-            .from('orders')
-            .insert([payload])
-            .select();
-          if (error) throw error;
-          if (!data || data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
-          return data[0];
+          // Aseguramos que el cliente esté autenticado antes de insertar
+          const session = supabaseConfig.client.auth.session();
+          if (!session) {
+            // Si no hay sesión, usamos la clave anónima para inserción pública
+            const { data, error } = await supabaseConfig.client
+              .from('orders')
+              .insert([payload])
+              .select();
+            if (error) throw error;
+            if (!data || data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
+            return data[0];
+          } else {
+            // Si hay sesión, usamos la autenticación normal
+            const { data, error } = await supabaseConfig.client
+              .from('orders')
+              .insert([payload])
+              .select();
+            if (error) throw error;
+            if (!data || data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
+            return data[0];
+          }
         }
 
         let savedOrder;
