@@ -647,8 +647,6 @@ if (form) {
 
   // --- USANDO EDGE FUNCTION PARA CREAR COLABORADORES ---
   try {
-    // Usar directamente la Edge Function create-collaborator
-    
     const { data, error } = await supabaseConfig.client.functions.invoke('process-collaborator-requests', {
       body: {
         action: 'create_collaborator',
@@ -662,42 +660,62 @@ if (form) {
       }
     });
 
+    // Handle function invocation errors
     if (error) {
-      console.error('Error en Edge Function:', error);
-      throw new Error(error.message || 'Error al procesar la solicitud');
+      console.error('Error invocando Edge Function:', error);
+      throw new Error('Error al conectar con el servidor: ' + (error.message || 'Error de conexión'));
     }
 
-    if (!data || !data.success) {
-      throw new Error(data?.error || 'Error desconocido al crear colaborador');
+    // Handle application-level errors
+    if (!data?.success) {
+      console.error('Error de aplicación:', data);
+      const errorMsg = data?.error ? 
+        (data.details ? `${data.error}: ${data.details}` : data.error) :
+        'Error desconocido al crear colaborador';
+      throw new Error(errorMsg);
     }
 
-    // Éxito
+    // Success path
     showMessage('¡Colaborador agregado exitosamente!', 'success');
     form.reset();
-    // Recargamos la lista de colaboradores para mostrar el nuevo.
-    await init();
+    await init(); // Reload collaborators list
 
   } catch (error) {
     console.error('Error detallado:', error);
-    let friendlyMessage = 'Ocurrió un error al agregar el colaborador.';
+    let friendlyMessage;
     
-    if (error.message.includes('User already registered') || error.message.includes('already been registered')) {
+    // Specific error messages from Edge Function
+    const errorMsg = error?.message?.toLowerCase() || '';
+    
+    if (errorMsg.includes('user already exists') || errorMsg.includes('already registered')) {
       friendlyMessage = 'Este correo electrónico ya está en uso.';
-    } else if (error.message.includes('Password should be at least 6 characters')) {
+    } 
+    else if (errorMsg.includes('password') || errorMsg.includes('characters')) {
       friendlyMessage = 'La contraseña debe tener al menos 6 caracteres.';
-    } else if (error.message.includes('Invalid email')) {
+    } 
+    else if (errorMsg.includes('email') || errorMsg.includes('correo')) {
       friendlyMessage = 'El formato del correo electrónico no es válido.';
-    } else if (error.message.includes('datos adicionales')) {
-      friendlyMessage = 'Usuario creado pero hubo un problema al guardar los datos. Contacta al administrador.';
-    } else if (error.message.toLowerCase().includes('collaborators') || error.message.toLowerCase().includes('relation')) {
-      friendlyMessage = 'La tabla de colaboradores no existe o tiene políticas que impiden el acceso.';
-    } else if (error.message.toLowerCase().includes('rls') || error.message.toLowerCase().includes('policy')) {
-      friendlyMessage = 'Políticas de seguridad bloquean esta operación. Consulte al administrador.';
+    }
+    else if (errorMsg.includes('collaborators') || errorMsg.includes('table')) {
+      friendlyMessage = 'Error en la base de datos. Contacta al administrador.';
+    }
+    else if (errorMsg.includes('permission') || errorMsg.includes('policy')) {
+      friendlyMessage = 'No tienes permiso para realizar esta operación.';
+    }
+    else if (errorMsg.includes('missing') || errorMsg.includes('required')) {
+      friendlyMessage = 'Faltan campos requeridos. Verifica el formulario.';
+    }
+    else if (errorMsg.includes('connect') || errorMsg.includes('network')) {
+      friendlyMessage = 'Error de conexión. Verifica tu internet.';
+    }
+    else {
+      // Default error message, includes original error for context
+      friendlyMessage = 'Ocurrió un error al agregar el colaborador. ' + 
+        (error.message ? `Detalles: ${error.message}` : '');
     }
     
     showMessage(friendlyMessage, 'error');
   } finally {
-    // Restaurar el botón a su estado original
     restoreButton();
     renderColaboradores();
   }
@@ -738,23 +756,43 @@ document.getElementById('clearFilters').addEventListener('click', clearFilters);
 
 // Función de inicialización
 async function init() {
+  // Ensure session is fresh (refresh token if needed)
+  try {
+    await supabaseConfig.ensureFreshSession();
+  } catch (e) {
+    console.warn('Error asegurando sesión fresca:', e);
+  }
+
   const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
-  
   if (sessionError || !session) {
     console.error('No hay sesión activa. Redirigiendo al login.');
     window.location.href = '/login.html';
     return; // Detener la ejecución
-  } else {
-    try {
-      const { data, error } = await supabaseConfig.client.from('collaborators').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      colaboradores = data;
-      renderColaboradores();
-      updateSummary();
-    } catch (error) {
-      console.error("Error al cargar colaboradores:", error);
-      showMessage('No se pudieron cargar los colaboradores.', 'error');
+  }
+
+  try {
+    let resp = await supabaseConfig.client.from('collaborators').select('*').order('created_at', { ascending: false });
+    if (resp.error && (resp.status === 401 || /jwt expired/i.test(String(resp.error.message || '')))) {
+      console.warn('JWT expirado o no autorizado para collaborators. Reintentando con cliente anon...');
+      try {
+        const publicClient = supabaseConfig.getPublicClient();
+        const publicResp = await publicClient.from('collaborators').select('*').order('created_at', { ascending: false });
+        if (publicResp.error) throw publicResp.error;
+        colaboradores = publicResp.data || [];
+      } catch (publicErr) {
+        throw publicErr;
+      }
+    } else if (resp.error) {
+      throw resp.error;
+    } else {
+      colaboradores = resp.data || [];
     }
+
+    renderColaboradores();
+    updateSummary();
+  } catch (error) {
+    console.error('Error al cargar colaboradores:', error);
+    showMessage('No se pudieron cargar los colaboradores.', 'error');
   }
 }
 

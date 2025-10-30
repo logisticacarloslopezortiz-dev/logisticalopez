@@ -65,8 +65,26 @@
       /* Ajustes para contenido principal en móvil */
       #mainContent {
         margin-left: 0 !important;
-        width: 100% !important;
         padding: 1rem;
+      }
+
+      #collabSidebar {
+        z-index: 50;
+        position: fixed;
+        height: 100vh;
+      }
+
+      #sidebarOverlay {
+        z-index: 40;
+      }
+    }
+
+    @media (min-width: 769px) {
+      #collabSidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        z-index: 30;
       }
     }
     
@@ -78,7 +96,7 @@
     }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen flex">
   <!-- Skip link for keyboard users -->
   <a href="#mainContent" class="sr-only" style="position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;" onfocus="this.style.position='static';this.style.left='1rem';this.style.top='1rem';this.style.width='auto';this.style.height='auto';this.style.padding='8px 12px';this.style.background='#fff';this.style.zIndex='9999';">Saltar al contenido</a>
   <!-- Mobile Header with Hamburger -->
@@ -98,10 +116,10 @@
   </header>
 
   <!-- ✅ MEJORA: Sidebar Overlay for Mobile -->
-  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden hidden transition-opacity duration-300"></div>
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden hidden transition-opacity duration-300"></div>
 
   <!-- ✅ MEJORA: Sidebar rediseñado -->
-  <aside id="collabSidebar" class="fixed md:static top-0 left-0 w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-full md:h-screen flex flex-col sidebar-transition -translate-x-full md:translate-x-0 z-40">
+  <aside id="collabSidebar" class="fixed md:sticky top-0 left-0 w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-screen flex flex-col sidebar-transition -translate-x-full md:translate-x-0 z-50">
     <!-- Header del Sidebar -->
     <div class="p-6 border-b border-gray-700">
       <div class="flex items-center justify-between mb-4">
@@ -180,18 +198,19 @@
     </div>
   </aside>
 
-  <!-- Contenido principal -->
-  <!-- ✅ MEJORA: El margen izquierdo (ml-72) ahora se controla con JS para el sidebar plegable -->
-  <main id="mainContent" class="flex-1 p-4 md:p-8 md:ml-72 transition-all duration-300">
-    <!-- Contenedor principal con grid para colocar contenido junto al sidebar -->
-    <div class="grid grid-cols-1 gap-6">
-      <!-- Sección de solicitudes asignadas: colocada al lado del sidebar en desktop -->
-      <div class="flex flex-col lg:flex-row lg:items-start gap-6">
-        <!-- Columna izquierda: filtros y tabla/órdenes asignadas -->
-        <div class="w-full lg:w-1/3">
-          <div class="flex items-center justify-between gap-4 mb-4">
-            <h1 class="text-2xl font-bold text-gray-900">Solicitudes asignadas</h1>
-          </div>
+  <!-- Contenedor principal -->
+  <div class="flex-1 min-w-0 relative">
+    <!-- Contenido principal -->
+    <main id="mainContent" class="ml-0 p-4 md:p-8 transition-all duration-300">
+      <!-- Contenedor principal con grid para colocar contenido junto al sidebar -->
+      <div class="grid grid-cols-1 gap-6">
+        <!-- Sección de solicitudes asignadas: colocada al lado del sidebar en desktop -->
+        <div class="flex flex-col lg:flex-row lg:items-start gap-6">
+          <!-- Columna izquierda: filtros y tabla/órdenes asignadas -->
+          <div class="w-full lg:w-1/3">
+            <div class="flex items-center justify-between gap-4 mb-4">
+              <h1 class="text-2xl font-bold text-gray-900">Solicitudes asignadas</h1>
+            </div>
 
           <!-- Contenedor para las tarjetas de órdenes asignadas (columna izquierda) -->
           <div id="assignedOrdersContainer" class="grid grid-cols-1 gap-4 mb-4"></div>
@@ -292,7 +311,8 @@
         </div>
       </div>
     </div>
-  </main>
+    </main>
+  </div>
 
   <!-- Dependencias externas (una sola vez) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -321,10 +341,23 @@
       const sidebarOverlay = document.getElementById('sidebarOverlay');
       
       // Función para colapsar/expandir el sidebar
+      function updateMainMargin() {
+        // En desktop (>=768px) el contenido debe tener margen cuando el sidebar está visible.
+        // En móvil el sidebar usa overlay y NO debe empujar el contenido.
+        const isDesktop = window.innerWidth >= 768;
+        const sidebarVisible = !sidebar.classList.contains('-translate-x-full');
+        // Eliminar ambas clases de margen primero
+        mainContent.classList.remove('ml-72', 'ml-80');
+        if (isDesktop && sidebarVisible) {
+          // Usar ml-72 en desktop (coincide con md:w-72 del sidebar)
+          mainContent.classList.add('ml-72');
+        }
+      }
+
       function toggleSidebar() {
         sidebar.classList.toggle('-translate-x-full');
-        mainContent.classList.toggle('md:ml-0');
-        mainContent.classList.toggle('md:ml-72');
+        // Ajustar margen según el nuevo estado y ancho de pantalla
+        updateMainMargin();
       }
       
       // Evento para el botón de colapso en el sidebar
@@ -337,6 +370,8 @@
         mobileMenuBtn.addEventListener('click', function() {
           if (sidebar) sidebar.classList.remove('-translate-x-full');
           if (sidebarOverlay) sidebarOverlay.classList.remove('hidden');
+          // En móvil no empujamos el contenido, así que no añadimos margen
+          mainContent.classList.remove('ml-72', 'ml-80');
         });
       }
       
@@ -345,22 +380,24 @@
         sidebarOverlay.addEventListener('click', function() {
           sidebar.classList.add('-translate-x-full');
           sidebarOverlay.classList.add('hidden');
+          // Asegurar que el contenido no tenga margen después de cerrar overlay
+          updateMainMargin();
         });
       }
       
       // Función para manejar el comportamiento responsivo
       function handleResize() {
         if (window.innerWidth < 768 && sidebar) {
-          // En móvil: ocultar sidebar por defecto
+          // En móvil: ocultar sidebar por defecto y usar overlay
           sidebar.classList.add('-translate-x-full');
           if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
-          if (mainContent) mainContent.classList.remove('md:ml-72');
-          if (mainContent) mainContent.classList.add('md:ml-0');
+          // Asegurar que el contenido no tenga margen en móvil
+          if (mainContent) mainContent.classList.remove('ml-72', 'ml-80');
         } else {
-          // En desktop: mostrar sidebar por defecto
+          // En desktop: mostrar sidebar por defecto y empujar el contenido
           if (sidebar) sidebar.classList.remove('-translate-x-full');
-          if (mainContent) mainContent.classList.add('md:ml-72');
-          if (mainContent) mainContent.classList.remove('md:ml-0');
+          // Forzar margen adecuado para desktop
+          updateMainMargin();
         }
       }
       

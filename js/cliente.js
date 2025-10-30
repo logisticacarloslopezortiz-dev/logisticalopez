@@ -855,27 +855,46 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Función auxiliar para intentar insertar y devolver resultado o lanzar error
         async function tryInsert(payload) {
-          // Aseguramos que el cliente esté autenticado antes de insertar
-          const session = supabaseConfig.client.auth.session();
-          if (!session) {
-            // Si no hay sesión, usamos la clave anónima para inserción pública
-            const { data, error } = await supabaseConfig.client
-              .from('orders')
-              .insert([payload])
-              .select();
-            if (error) throw error;
-            if (!data || data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
-            return data[0];
-          } else {
-            // Si hay sesión, usamos la autenticación normal
-            const { data, error } = await supabaseConfig.client
-              .from('orders')
-              .insert([payload])
-              .select();
-            if (error) throw error;
-            if (!data || data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
-            return data[0];
+          // Obtener la sesión actual de forma compatible con supabase-js v2
+          let session = null;
+          try {
+            const sessionResp = await supabaseConfig.client.auth.getSession();
+            session = sessionResp?.data?.session ?? null;
+          } catch (e) {
+            // No bloquear: asumimos sesión nula si falla
+            session = null;
           }
+
+          // Si no hay sesión válida, intentar con cliente público (anon) para operaciones de solo lectura/escritura pública
+          const usePublicClient = !session;
+          const clientToUse = usePublicClient && typeof supabaseConfig.getPublicClient === 'function'
+            ? supabaseConfig.getPublicClient()
+            : supabaseConfig.client;
+
+          // Intentar insertar; si falla por columna inexistente (p.ej. 'tracking'), reintentar sin ese campo
+          async function insertWithSanitize(candidatePayload) {
+            const resp = await clientToUse.from('orders').insert([candidatePayload]).select();
+            if (resp.error) {
+              // Detectar error de columna no encontrada o PGRST204
+              const msg = String(resp.error.message || '').toLowerCase();
+              const code = resp.error.code || '';
+              if (code === 'PGRST204' || /could not find the 'tracking' column/i.test(resp.error.message || '') || msg.includes("column \"tracking\"") || /tracking column/i.test(msg)) {
+                // Reintentar sin 'tracking'
+                const sanitized = { ...candidatePayload };
+                delete sanitized.tracking;
+                const retryResp = await clientToUse.from('orders').insert([sanitized]).select();
+                if (retryResp.error) throw retryResp.error;
+                if (!retryResp.data || retryResp.data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
+                return retryResp.data[0];
+              }
+              throw resp.error;
+            }
+            if (!resp.data || resp.data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
+            return resp.data[0];
+          }
+
+          // Ejecutar inserción
+          return await insertWithSanitize(payload);
         }
 
         let savedOrder;

@@ -25,6 +25,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Main Logic ---
 
+    // Limpiar suscripción al salir de la página
+    window.addEventListener('beforeunload', () => {
+        if (currentSubscription) {
+            try { if (typeof currentSubscription.unsubscribe === 'function') currentSubscription.unsubscribe(); } catch (_) {}
+            currentSubscription = null;
+        }
+    });
+
     // Función para buscar la orden en Supabase
     async function findOrder() {
         const orderIdValue = orderIdInput.value.trim();
@@ -39,9 +47,18 @@ document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
         hideError();
 
-        // Cancelar suscripción anterior si existe
+        // Cancelar suscripción anterior si existe (usar unsubscribe si está disponible)
         if (currentSubscription) {
-            supabaseConfig.client.removeChannel(currentSubscription);
+            try {
+                if (typeof currentSubscription.unsubscribe === 'function') {
+                    currentSubscription.unsubscribe();
+                } else if (supabaseConfig.client && typeof supabaseConfig.client.removeChannel === 'function') {
+                    // fallback a método legacy
+                    supabaseConfig.client.removeChannel(currentSubscription);
+                }
+            } catch (e) {
+                console.warn('No se pudo remover la suscripción anterior:', e);
+            }
             currentSubscription = null;
         }
 
@@ -63,7 +80,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 query = query.eq('short_id', orderIdValue);
             }
 
-            const { data: order, error } = await query.single(); // .single() espera un solo resultado o ninguno
+            // Intentar asegurar sesión fresca antes de la consulta
+            try { await supabaseConfig.ensureFreshSession(); } catch (_) {}
+
+            let { data: order, error } = await query.single(); // .single() espera un solo resultado o ninguno
+
+            // Si fallo por JWT expirado, intentar con cliente público (anon) para lecturas públicas
+            if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
+                console.warn('JWT expirado o no autorizado para buscar orden. Reintentando con cliente anon...');
+                try {
+                    const publicClient = supabaseConfig.getPublicClient();
+                    const publicQuery = publicClient.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
+                    if (looksLikeShortId) publicQuery.eq('short_id', orderIdValue);
+                    else if (!Number.isNaN(numericId)) publicQuery.eq('id', numericId);
+                    else publicQuery.eq('short_id', orderIdValue);
+                    const resp = await publicQuery.single();
+                    order = resp.data;
+                    error = resp.error;
+                } catch (e) {
+                    console.error('Error al intentar con cliente anon:', e);
+                }
+            }
 
             if (error || !order) {
                 throw new Error('No se encontró ninguna solicitud con ese ID.');
@@ -72,8 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Orden encontrada, mostrar detalles
             displayOrderDetails(order);
 
-            // Suscribirse a cambios en tiempo real para esta orden
-            subscribeToOrderUpdates(orderIdValue);
+            // Suscribirse a cambios en tiempo real para esta orden (usar el id numérico real)
+            const orderNumericId = Number(order.id || numericId);
+            subscribeToOrderUpdates(orderNumericId);
 
         } catch (err) {
             showError(err.message);
@@ -87,30 +125,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Función para suscribirse a los cambios de una orden específica
     function subscribeToOrderUpdates(orderId) {
-        currentSubscription = supabaseConfig.client
-            .channel(`public:orders:id=eq.${orderId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'orders',
-                    filter: `id=eq.${orderId}`
-                },
-                (payload) => {
-                    // Verificar si el estado ha cambiado
-                    const newStatus = payload.new.status;
-                    const oldStatus = payload.old?.status;
-                    
-                    if (newStatus !== oldStatus) {
-                        // Mostrar notificación de cambio de estado
-                        showStatusNotification(newStatus);
-                    }
-                    
-                    // Actualizar la interfaz con los nuevos datos
-                    displayOrderDetails(payload.new);
+        try {
+            // Crear un canal único por orden para poder manejar unsubscribe fácilmente
+            const channelName = `orders:watch:${orderId}`;
+            const channel = supabaseConfig.client.channel(channelName);
+
+            // Manejar INSERT / UPDATE / DELETE para la orden específica
+            channel.on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'orders',
+                filter: `id=eq.${orderId}`
+            }, (payload) => {
+                // payload tiene .new y .old en eventos UPDATE/INSERT/DELETE
+                const newRecord = payload.new || null;
+                const oldRecord = payload.old || null;
+
+                // En UPDATE o INSERT, refrescar detalles en pantalla
+                if (newRecord) {
+                    // Si hay cambio de estado, notificar al usuario
+                    const newStatus = newRecord.status;
+                    const oldStatus = oldRecord?.status;
+                    if (newStatus && newStatus !== oldStatus) showStatusNotification(newStatus);
+
+                    // Si actualmente estamos viendo esa orden, actualizar la UI
+                    displayOrderDetails(newRecord);
                 }
-            ).subscribe();
+
+                // En DELETE, mostrar mensaje y volver al login/inicio
+                if (payload.eventType === 'DELETE') {
+                    showError('La orden fue eliminada.');
+                }
+
+                // También propagar cambio al arreglo local si existe (para mantener sincronía)
+                try { handleRealtimeUpdate({ eventType: payload.eventType, new: newRecord, old: oldRecord }); } catch (e) { /* noop */ }
+            });
+
+            // Suscribir y guardar referencia para poder anular más tarde
+            currentSubscription = channel.subscribe();
+            currentSubscription.channel = channel; // referencia al channel original
+        } catch (e) {
+            console.warn('No se pudo suscribir a cambios en tiempo real para la orden:', e);
+        }
     }
     
     // Función para mostrar notificación de cambio de estado

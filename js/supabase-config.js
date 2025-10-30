@@ -27,9 +27,26 @@ const supabaseConfig = {
       const now = Math.floor(Date.now() / 1000);
       const exp = session.expires_at || 0;
       if (exp <= now + 60) { // renovar si expira en 60s
-        await this.client.auth.refreshSession();
+        // Intentar refrescar la sesión; si falla, lo manejaremos en los queries
+        try {
+          if (this.client.auth.refreshSession) {
+            await this.client.auth.refreshSession();
+          }
+        } catch (e) {
+          console.warn('No se pudo refrescar la sesión automáticamente:', e?.message || e);
+        }
       }
     } catch (_) { /* no-op */ }
+  },
+
+  // Crea un cliente público (anon) para consultas que no requieran la sesión del usuario
+  getPublicClient() {
+    try {
+      return supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch (e) {
+      console.error('Error creando public client de Supabase:', e);
+      return this.client; // fallback al cliente principal
+    }
   },
 
   // --- INICIO: Funciones de acceso a datos ---
@@ -45,9 +62,23 @@ const supabaseConfig = {
       } catch { return []; }
     }
     await this.ensureFreshSession();
-    const { data, error } = await this.client.from('services')
+    let { data, error } = await this.client.from('services')
       .select('*')
       .order('display_order', { ascending: true, nullsFirst: false });
+
+    // Manejar JWT expirado: intentar consulta con cliente público (anon)
+    if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
+      console.warn('JWT expirado o no autorizado para obtener services. Reintentando con cliente anon...');
+      try {
+        const publicClient = this.getPublicClient();
+        const resp = await publicClient.from('services').select('*').order('display_order', { ascending: true, nullsFirst: false });
+        if (resp.error) console.error('Error fetching services (anon):', resp.error);
+        return resp.data || [];
+      } catch (e) {
+        console.error('Error fetching services with anon client:', e);
+      }
+    }
+
     if (error) console.error('Error fetching services:', error);
     return data || [];
   },
@@ -63,7 +94,20 @@ const supabaseConfig = {
       } catch { return []; }
     }
     await this.ensureFreshSession();
-    const { data, error } = await this.client.from('vehicles').select('*');
+    let { data, error } = await this.client.from('vehicles').select('*');
+
+    if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
+      console.warn('JWT expirado o no autorizado para obtener vehicles. Reintentando con cliente anon...');
+      try {
+        const publicClient = this.getPublicClient();
+        const resp = await publicClient.from('vehicles').select('*');
+        if (resp.error) console.error('Error fetching vehicles (anon):', resp.error);
+        return resp.data || [];
+      } catch (e) {
+        console.error('Error fetching vehicles with anon client:', e);
+      }
+    }
+
     if (error) console.error('Error fetching vehicles:', error);
     return data || [];
   },
@@ -77,7 +121,20 @@ const supabaseConfig = {
       try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
     }
     await this.ensureFreshSession();
-    const { data, error } = await this.client.from('orders').select('*');
+    let { data, error } = await this.client.from('orders').select('*');
+
+    if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
+      console.warn('JWT expirado o no autorizado para obtener orders. Reintentando con cliente anon...');
+      try {
+        const publicClient = this.getPublicClient();
+        const resp = await publicClient.from('orders').select('*');
+        if (resp.error) console.error('Error fetching orders (anon):', resp.error);
+        return resp.data || [];
+      } catch (e) {
+        console.error('Error fetching orders with anon client:', e);
+      }
+    }
+
     if (error) console.error('Error fetching orders:', error);
     return data || [];
   },

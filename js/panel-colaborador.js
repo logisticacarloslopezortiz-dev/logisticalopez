@@ -612,14 +612,24 @@ function setupDesktopSidebarToggle() {
 
   toggleBtn.addEventListener('click', () => {
     sidebar.classList.toggle('-translate-x-full');
-    const isHidden = sidebar.classList.contains('-translate-x-full');
-    if (isHidden) {
-      mainContent.classList.remove('md:ml-72');
-      if (icon && typeof icon.setAttribute === 'function') icon.setAttribute('data-lucide', 'panel-right-close');
-    } else {
-      mainContent.classList.add('md:ml-72');
-      if (icon && typeof icon.setAttribute === 'function') icon.setAttribute('data-lucide', 'panel-left-close');
+    // Actualizar el margen del contenido en función del estado del sidebar y el ancho de pantalla
+    // Nota: updateMainMargin se define en panel-colaborador.html inline script; si no existe, aplicar comportamiento por defecto.
+    try {
+      if (typeof updateMainMargin === 'function') {
+        updateMainMargin();
+      } else {
+        // Fallback: añadir/remover ml-72 en desktop
+        const isHidden = sidebar.classList.contains('-translate-x-full');
+        if (window.innerWidth >= 768) {
+          if (isHidden) mainContent.classList.remove('ml-72');
+          else mainContent.classList.add('ml-72');
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudo actualizar el margen del contenido:', e);
     }
+    const isHidden = sidebar.classList.contains('-translate-x-full');
+    if (icon && typeof icon.setAttribute === 'function') icon.setAttribute('data-lucide', isHidden ? 'panel-right-close' : 'panel-left-close');
     lucide.createIcons();
     setTimeout(() => activeJobMap?.invalidateSize(), 350); // Redibujar mapa si está activo
   });
