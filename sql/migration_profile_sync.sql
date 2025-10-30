@@ -6,15 +6,15 @@
 CREATE OR REPLACE FUNCTION public.sync_profile_name()
 RETURNS trigger AS $$
 BEGIN
-  -- Update the profile's full_name when collaborator name changes
-  UPDATE public.profiles
-  SET 
-    full_name = NEW.name,
-    email = NEW.email,
-    phone = NEW.phone,
-    updated_at = NOW()
-  WHERE id = NEW.id;
-  
+  -- Upsert into public.profiles to ensure a profile row always exists for the collaborator
+  INSERT INTO public.profiles (id, full_name, email, phone, created_at, updated_at)
+  VALUES (NEW.id, NEW.name, NEW.email, NEW.phone, NOW(), NOW())
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    email = EXCLUDED.email,
+    phone = EXCLUDED.phone,
+    updated_at = NOW();
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -25,6 +25,11 @@ AFTER INSERT OR UPDATE OF name, email, phone ON public.collaborators
 FOR EACH ROW EXECUTE FUNCTION public.sync_profile_name();
 
 -- 2. Fix RLS policies for orders
+-- Ensure RLS is enabled on the tables we will modify (safe to run multiple times)
+ALTER TABLE IF EXISTS public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.collaborators ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "public_insert_pending_orders" ON public.orders;
 CREATE POLICY "public_insert_pending_orders" ON public.orders
 FOR INSERT

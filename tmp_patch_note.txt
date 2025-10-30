@@ -1,0 +1,1 @@
+Applying changes: remove search/filter UI from panel-colaborador.html and remove listeners/logic in js/panel-colaborador.js to disable search by ID and filter by status for colaborador panel.

@@ -20,12 +20,20 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <!-- PWA Manifest -->
-  <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
 
+  <!-- Leaflet CSS para mapas -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 
   <!-- Reemplazado CDN por versión local para producción -->
   <link href="css/tailwind.min.css" rel="stylesheet">
+  <!-- Fallback CDN: si el archivo local está vacío o faltante, cargamos una versión CDN para
+    asegurar que las utilidades de Tailwind estén disponibles y la página no aparezca en blanco. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+  <!-- Custom animations -->
+  <link href="css/animations.css" rel="stylesheet">
   
   <script>
     // Configuración de Tailwind ahora está en tailwind.config.js
@@ -74,39 +82,129 @@
     body.is-pwa .pwa-hide {
       display: none !important;
     }
+    /* Fallback CSS para clases personalizadas usadas en plantillas Tailwind */
+    :root{
+      --azul-oscuro: #0C375D;
+      --azul-claro: #117D8B;
+      --acento: #FBBF24;
+    }
+    .text-azulOscuro{ color:var(--azul-oscuro) !important; }
+    .text-azulClaro{ color:var(--azul-claro) !important; }
+    .text-acento{ color:var(--acento) !important; }
+    .bg-azulOscuro{ background-color:var(--azul-oscuro) !important; color:#fff; }
+    .bg-azulClaro{ background-color:var(--azul-claro) !important; color:#fff; }
+    .bg-acento{ background-color:var(--acento) !important; color:#0f172a; }
+    .bg-acento:hover{ filter:brightness(.95); }
+    /* Asegurar botones legibles si Tailwind no carga el tema personalizado */
+    .btn-acento{ background-color:var(--acento); color:var(--azul-oscuro); }
+    
+    /* Estilos para mapas */
+    .map-container {
+      height: 300px;
+      width: 100%;
+      z-index: 1;
+    }
   </style>
 </head>
 <body class="bg-white text-gray-800">
 
   <!-- Header -->
-  <header id="main-header" class="fixed w-full bg-white/90 backdrop-blur-md shadow-md z-50 transition-transform duration-300 h-16">
-    <div class="container mx-auto flex justify-between items-center p-2 h-full">
-      <div class="flex items-center gap-3">
-        <img src="img/1vertical.png" alt="Logo LLO" class="h-10 w-10">
-        <h1 class="text-xl font-semibold text-azulOscuro">Logística López Ortiz</h1>
+  <header id="main-header" class="fixed w-full bg-white shadow-lg z-50 transition-all duration-300 h-20">
+    <div class="container mx-auto flex justify-between items-center px-4 h-full">
+      <!-- Logo & Brand -->
+      <div class="flex items-center gap-3 hover:opacity-90 transition-opacity">
+        <a href="index.html" class="flex items-center gap-3">
+          <div class="relative">
+            <img src="img/1vertical.png" alt="Logo LLO" class="h-12 w-12 object-contain">
+            <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-acento rounded-full border-2 border-white hidden md:block"></div>
+          </div>
+          <div class="flex flex-col">
+            <h1 class="text-xl font-bold text-azulOscuro tracking-tight">Logística López</h1>
+            <span class="text-sm text-azulClaro font-medium hidden md:block">Transporte Profesional</span>
+          </div>
+        </a>
       </div>
-      <nav class="hidden md:flex gap-4 text-azulOscuro font-medium text-sm">
-        <a href="#nosotros" class="hover:text-acento transition-colors">Nosotros</a>
-        <a href="#servicios" class="hover:text-acento transition-colors">Servicios</a>
-        <a href="cliente.html" class="hover:text-acento transition-colors">Solicitar Servicio</a>
-        <a href="seguimiento.html" class="hover:text-acento transition-colors">Ver Estado</a>
-        <button type="button" onclick="document.getElementById('install-app-btn')?.click()" title="Descarga nuestra app para realizar tu solicitud y seguimiento" aria-label="Descarga nuestra app para realizar tu solicitud y seguimiento" class="ml-2 inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white px-3 py-1.5 rounded-lg shadow-md">
-          <i class="fas fa-download text-xs"></i>
-          <span class="hidden lg:inline">Instalar App</span>
-        </button>
+
+      <!-- Desktop Navigation -->
+      <nav class="hidden md:flex items-center gap-6">
+        <div class="flex gap-6 text-sm font-semibold">
+          <a href="#nosotros" class="relative group">
+            <span class="text-gray-700 hover:text-azulOscuro transition-colors">Nosotros</span>
+            <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
+          </a>
+          <a href="#servicios" class="relative group">
+            <span class="text-gray-700 hover:text-azulOscuro transition-colors">Servicios</span>
+            <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
+          </a>
+          <a href="cliente.html" class="relative group">
+            <span class="text-gray-700 hover:text-azulOscuro transition-colors">Solicitar</span>
+            <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
+          </a>
+          <a href="seguimiento.html" class="relative group">
+            <span class="text-gray-700 hover:text-azulOscuro transition-colors">Ver Estado</span>
+            <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
+          </a>
+        </div>
+        
+        <!-- CTA Buttons -->
+        <div class="flex items-center gap-3">
+          <a href="cliente.html" class="inline-flex items-center justify-center gap-2 bg-azulOscuro hover:bg-azulOscuro/90 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105">
+            <i class="fas fa-truck text-xs"></i>
+            <span>Solicitar Ahora</span>
+          </a>
+          <button type="button" 
+            onclick="document.getElementById('install-app-btn')?.click()" 
+            title="Descarga nuestra app para realizar tu solicitud y seguimiento" 
+            aria-label="Descarga nuestra app para realizar tu solicitud y seguimiento" 
+            class="inline-flex items-center justify-center gap-2 bg-acento hover:bg-yellow-500 text-azulOscuro px-4 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 shadow-md">
+            <i class="fas fa-download text-xs"></i>
+            <span>Instalar App</span>
+          </button>
+        </div>
       </nav>
-      <button id="mobile-menu-btn" class="md:hidden text-azulOscuro text-xl" aria-label="Abrir menú">
+
+      <!-- Mobile Menu Button -->
+      <button id="mobile-menu-btn" class="md:hidden text-azulOscuro text-2xl p-2 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Abrir menú">
         <i class="fas fa-bars"></i>
       </button>
     </div>
 
-    <!-- Mobile Menu -->
-    <div id="mobile-menu" class="hidden md:hidden bg-white shadow-md">
-      <a href="#nosotros" class="block p-3 text-azulOscuro hover:bg-gray-100">Nosotros</a>
-      <a href="#servicios" class="block p-3 text-azulOscuro hover:bg-gray-100">Servicios</a>
-      <a href="cliente.html" class="block p-3 text-azulOscuro hover:bg-gray-100">Solicitar Servicio</a>
-      <a href="seguimiento.html" class="block p-3 text-azulOscuro hover:bg-gray-100">Ver Estado</a>
-      <button type="button" onclick="document.getElementById('install-app-btn')?.click()" class="block w-full text-left p-3 text-azulOscuro hover:bg-gray-100">Instalar App</button>
+    <!-- Mobile Menu (Improved) -->
+    <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-100 shadow-lg">
+      <div class="container mx-auto py-4 px-6 space-y-4">
+        <nav class="flex flex-col gap-3">
+          <a href="#nosotros" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
+            <i class="fas fa-users text-azulClaro group-hover:text-acento transition-colors"></i>
+            <span class="font-medium">Nosotros</span>
+          </a>
+          <a href="#servicios" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
+            <i class="fas fa-truck-fast text-azulClaro group-hover:text-acento transition-colors"></i>
+            <span class="font-medium">Servicios</span>
+          </a>
+          <a href="cliente.html" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
+            <i class="fas fa-clipboard-list text-azulClaro group-hover:text-acento transition-colors"></i>
+            <span class="font-medium">Solicitar Servicio</span>
+          </a>
+          <a href="seguimiento.html" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
+            <i class="fas fa-map-location-dot text-azulClaro group-hover:text-acento transition-colors"></i>
+            <span class="font-medium">Ver Estado</span>
+          </a>
+        </nav>
+        
+        <!-- Mobile CTA Buttons -->
+        <div class="grid grid-cols-1 gap-3 pt-3 border-t border-gray-100">
+          <a href="cliente.html" class="flex items-center justify-center gap-2 bg-azulOscuro hover:bg-azulOscuro/90 text-white p-3 rounded-lg font-semibold transition-all">
+            <i class="fas fa-truck"></i>
+            <span>Solicitar Ahora</span>
+          </a>
+          <button type="button" 
+            onclick="document.getElementById('install-app-btn')?.click()" 
+            class="flex items-center justify-center gap-2 bg-acento hover:bg-yellow-500 text-azulOscuro p-3 rounded-lg font-semibold transition-all shadow-md">
+            <i class="fas fa-download"></i>
+            <span>Instalar App</span>
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -330,10 +428,21 @@
       const package2 = document.getElementById('package-animation-2');
       const actionButtons = document.getElementById('action-buttons');
 
+      // Inicialmente ocultar los elementos
+      truck.style.opacity = '0';
+      package1.style.opacity = '0';
+      package2.style.opacity = '0';
+      actionButtons.style.opacity = '0';
+
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
             // Añadir clases de animación cuando la sección es visible
+            truck.style.opacity = '';
+            package1.style.opacity = '';
+            package2.style.opacity = '';
+            actionButtons.style.opacity = '';
+
             truck.classList.add('animate-truck-loop');
             package1.classList.add('animate-package-loop-1');
             package2.classList.add('animate-package-loop-2');

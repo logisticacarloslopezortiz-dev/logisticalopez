@@ -2,6 +2,9 @@
 const form = document.getElementById('colaboradorForm');
 const tableBody = document.getElementById('colaboradoresTableBody'); // ✅ CORREGIDO: El ID correcto es 'colaboradoresTableBody'
 let colaboradores = []; // Ahora se cargará desde Supabase
+// Variables defensivas para botones y estado del formulario (evita errores si el DOM cambia)
+let submitButton = null;
+let originalButtonHTML = '';
 
 // Variables para el modal de métricas
 const metricsModal = document.getElementById('metricsModal');
@@ -254,8 +257,13 @@ function getTimeStats(colaborador) {
 function renderColaboradores() {
   // Renderizar solicitudes como tarjetas si existe el contenedor
   const ordersCardContainer = document.getElementById('ordersCardContainer');
-  if (ordersCardContainer && state && state.requests) {
-    renderRequestsAsCards(state.requests, state);
+  // El objeto `state` pertenece a otras páginas; proteger la referencia para evitar ReferenceError
+  if (ordersCardContainer && typeof state !== 'undefined' && state && state.requests) {
+    try {
+      renderRequestsAsCards(state.requests, state);
+    } catch (e) {
+      console.warn('renderRequestsAsCards fallo o no existe en este contexto:', e);
+    }
   }
   
   if (!tableBody) return; // ✅ DEFENSA: No hacer nada si la tabla no existe
@@ -595,7 +603,8 @@ if (closeMetricsModal) {
   closeMetricsModal.addEventListener('click', hideMetricsModal);
 }
 
-form.addEventListener('submit', async (e) => {
+if (form) {
+  form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   // Desactivar botón y mostrar estado de carga
@@ -695,6 +704,8 @@ form.addEventListener('submit', async (e) => {
   // --- FIN: LÓGICA REFACTORIZADA ---
 });
 
+}
+
 // Event listeners para filtros
 document.getElementById('searchInput').addEventListener('input', filterColaboradores);
 
@@ -708,8 +719,10 @@ function clearFilters() {
   renderColaboradores();
 }
 
-const submitButton = form.querySelector('button[type="submit"]');
-const originalButtonHTML = submitButton.innerHTML;
+if (form) {
+  submitButton = form.querySelector('button[type="submit"]');
+  originalButtonHTML = submitButton?.innerHTML || '';
+}
 
 function restoreButton() {
   submitButton.disabled = false;

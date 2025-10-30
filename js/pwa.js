@@ -2,18 +2,21 @@
 (function () {
   if (!('serviceWorker' in navigator)) return;
 
-  // Register the service worker
+  // Register the service worker (use path relative to the page to avoid issues when the site
+  // is deployed to a subpath). Also make message sending robust from the window context.
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('/sw.js');
+      const reg = await navigator.serviceWorker.register('./sw.js');
       console.log('ServiceWorker registrado con éxito:', reg.scope);
 
-      // Listen for updates and notify the page
+      // If a waiting worker exists, notify the page
       if (reg.waiting) {
         sendMessageToClients({ type: 'sw-update-ready' });
       }
+
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
+        if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
             // New content is available; notify the client
@@ -41,11 +44,27 @@
     }
   };
 
+  // Safe messaging from window context to service worker(s).
   function sendMessageToClients(msg) {
-    clients.matchAll({ includeUncontrolled: true, type: 'window' }).then(windowClients => {
-      for (const client of windowClients) {
-        client.postMessage(msg);
+    try {
+      // Prefer posting to the active controller if available
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage(msg);
+        return;
       }
-    });
+
+      // Otherwise, iterate registrations and post to active/waiting workers
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          regs.forEach(r => {
+            if (r.waiting) r.waiting.postMessage(msg);
+            if (r.active) r.active.postMessage(msg);
+          });
+        }).catch(() => {});
+      }
+    } catch (e) {
+      // Silently ignore - this helper must not throw in the page context
+      console.warn('sendMessageToClients failed:', e);
+    }
   }
 })();

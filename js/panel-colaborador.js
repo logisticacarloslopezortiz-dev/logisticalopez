@@ -276,17 +276,20 @@ function updateActiveJobView(){
   const statusKey = order.last_collab_status || 'en_camino_recoger';
   const statusLabel = STATUS_MAP[statusKey]?.label || statusKey;
   const badge = document.getElementById('activeJobStatus');
-  badge.textContent = statusLabel;
-
+  if (badge) badge.textContent = statusLabel;
+  // Proteger acceso a `jobProgressBar` (puede no existir en el DOM).
   const progressBar = document.getElementById('jobProgressBar');
+  const currentWidth = progressBar && progressBar.style && progressBar.style.width ? progressBar.style.width : '25%';
   const progressValues = {
     'en_camino_recoger': '25%',
     'cargando': '50%',
     'en_camino_entregar': '75%',
     'entregado': '100%',
-    'retraso_tapon': progressBar.style.width // Mantener el progreso actual en caso de retraso
+    'retraso_tapon': currentWidth // Mantener el progreso actual en caso de retraso
   };
-  progressBar.style.width = progressValues[statusKey] || '25%';
+  if (progressBar && progressBar.style) {
+    progressBar.style.width = progressValues[statusKey] || '25%';
+  }
 
   // ✅ MEJORA: Usar Leaflet directamente en lugar de un iframe
   const mapContainer = document.getElementById('activeJobMap');
@@ -336,6 +339,7 @@ function updateActiveJobView(){
 
 function renderPhotoGallery(photos) {
   const gallery = document.getElementById('photoGallery');
+  if (!gallery) return;
   gallery.innerHTML = '';
   photos.forEach(photoSrc => {
     const imgContainer = document.createElement('div');
@@ -441,8 +445,9 @@ function render(){
  * Esta función es el punto central para actualizar la vista de la tabla.
  */
 function filterAndRender(){
-  const term = document.getElementById('searchInput').value.toLowerCase();
-  const statusFilter = document.getElementById('statusFilter').value;
+  // Búsqueda y filtrado deshabilitados en este panel para evitar problemas de layout.
+  const term = '';
+  const statusFilter = '';
   const visibleForCollab = (o) => {
     if (!state.collabSession) return false;
     // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador.
@@ -596,20 +601,24 @@ function setupMobileSidebarToggle(){
 function setupDesktopSidebarToggle() {
   const sidebar = document.getElementById('collabSidebar');
   const mainContent = document.getElementById('mainContent');
-  const toggleBtn = document.getElementById('desktopSidebarToggle');
-  const icon = toggleBtn.querySelector('i');
+  // Intentar encontrar el toggle específico de escritorio; si no existe, usar
+  // el botón de colapso existente `sidebarCollapseBtn` como fallback.
+  const toggleBtn = document.getElementById('desktopSidebarToggle') || document.getElementById('sidebarCollapseBtn');
 
+  // Si alguno de los elementos esenciales no existe, salir sin lanzar errores.
   if (!sidebar || !mainContent || !toggleBtn) return;
+
+  const icon = toggleBtn.querySelector && toggleBtn.querySelector('i');
 
   toggleBtn.addEventListener('click', () => {
     sidebar.classList.toggle('-translate-x-full');
     const isHidden = sidebar.classList.contains('-translate-x-full');
     if (isHidden) {
       mainContent.classList.remove('md:ml-72');
-      icon.setAttribute('data-lucide', 'panel-right-close');
+      if (icon && typeof icon.setAttribute === 'function') icon.setAttribute('data-lucide', 'panel-right-close');
     } else {
       mainContent.classList.add('md:ml-72');
-      icon.setAttribute('data-lucide', 'panel-left-close');
+      if (icon && typeof icon.setAttribute === 'function') icon.setAttribute('data-lucide', 'panel-left-close');
     }
     lucide.createIcons();
     setTimeout(() => activeJobMap?.invalidateSize(), 350); // Redibujar mapa si está activo
@@ -783,13 +792,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Actualizar perfil del colaborador
   updateCollaboratorProfile(session);
 
-  document.getElementById('searchInput').addEventListener('input', filterAndRender);
-  document.getElementById('statusFilter').addEventListener('change', filterAndRender);
-  document.getElementById('clearFilters').addEventListener('click', () => {
-    document.getElementById('searchInput').value = '';
-    document.getElementById('statusFilter').value = '';
-    filterAndRender();
-  });
+  // Search and status filter removed for this panel. Listeners intentionally omitted.
 
   document.getElementById('logoutBtn').addEventListener('click', (e) => {
     e.preventDefault();
