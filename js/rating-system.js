@@ -123,24 +123,29 @@ const ratingSystem = {
     modal.classList.add('hidden');
   },
   
-  saveRating(comment) {
+  async saveRating(comment) {
     if (!this.currentOrder || !this.currentRating) return;
-    
-    // Guardar valoración en el pedido
-    const orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-    const orderIndex = orders.findIndex(o => o.id === this.currentOrder.id);
-    
-    if (orderIndex !== -1) {
-      orders[orderIndex].rating = {
-        stars: this.currentRating,
-        comment: comment,
-        date: new Date().toISOString()
-      };
-      
-      localStorage.setItem('tlc_orders', JSON.stringify(orders));
-      
-      // Mostrar mensaje de agradecimiento
+
+    try {
+      const { data, error } = await supabaseConfig.client
+        .from('orders')
+        .update({
+          rating: this.currentRating,
+          rating_comment: comment
+        })
+        .eq('id', this.currentOrder.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Si la actualización es exitosa, mostrar mensaje de agradecimiento
       this.showThankYouMessage();
+
+    } catch (error) {
+      console.error('Error al guardar la calificación:', error);
+      // Aquí podrías mostrar una notificación de error al usuario
+      alert('No se pudo guardar tu calificación. Por favor, inténtalo de nuevo.');
     }
   },
   

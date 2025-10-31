@@ -32,61 +32,86 @@
   <script src="js/colaboradores-cards.js"></script>
   
   <style>
-    /* Clean, single source of truth for sidebar + main layout
-       Desktop (>=768px): sidebar width = 18rem (288px, matches md:w-72)
-       Mobile (<768px): sidebar shown as floating panel width = 20rem (320px, matches w-80)
-    */
-
-    /* Basic helpers */
+    /* --- Base Layout --- */
+    body {
+      display: flex;
+    }
     #collabSidebar {
-      transition: transform 0.28s ease-in-out, visibility 0.28s;
+      transition: transform 0.3s ease-in-out;
       will-change: transform;
-      background: linear-gradient(180deg,#0f172a,#022c6b);
+    }
+    #mainContent {
+      flex-grow: 1;
+      transition: margin-left 0.3s ease-in-out;
+    }
+    #sidebarOverlay {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 40;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease-in-out, visibility 0.3s;
     }
 
-    /* Cards / map small tweaks */
-    #activeJobMap { min-height: 250px; width: 100%; }
-    #ordersCardContainer .order-card, #ordersCardContainer > div { width:100%; min-height:110px; }
-
-    /* MOBILE: default state -> sidebar hidden off-canvas, overlay hidden */
-    @media (max-width: 767px) {
+    /* --- Vista Móvil (< 768px) --- */
+    @media (max-width: 767.98px) {
+      body {
+        flex-direction: column;
+      }
       #collabSidebar {
         position: fixed;
         top: 0;
         left: 0;
         height: 100vh;
-        width: 20rem; /* 320px = w-80 */
         transform: translateX(-100%);
         z-index: 50;
       }
+      #mainContent {
+        width: 100%;
+        margin-left: 0 !important; /* Asegurar que no haya margen */
+      }
 
-      /* main content should not be pushed on mobile */
-      #mainContent { margin-left: 0; }
-
-      /* make overlay available but hidden by default via the `hidden` class in markup */
-      #sidebarOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
-      #sidebarOverlay.hidden { display: none; }
-
-      body.overflow-hidden { overflow: hidden; }
+      /* Estado: sidebar abierto en móvil */
+      body.sidebar-mobile-open #collabSidebar {
+        transform: translateX(0);
+      }
+      body.sidebar-mobile-open #sidebarOverlay {
+        opacity: 1;
+        visibility: visible;
+      }
+      body.sidebar-mobile-open {
+        overflow: hidden;
+      }
     }
 
-    /* DESKTOP: sidebar visible and sticky; content is shifted by 18rem (288px) */
+    /* --- Vista de Escritorio (>= 768px) --- */
     @media (min-width: 768px) {
       #collabSidebar {
-        position: sticky;
+        position: fixed;
         top: 0;
         left: 0;
         height: 100vh;
-        width: 18rem; /* 288px = md:w-72 */
-        transform: translateX(0) !important;
-        z-index: 30;
+      }
+      #sidebarOverlay {
+        display: none !important; /* El overlay nunca se usa en escritorio */
       }
 
-      /* main uses an explicit margin-left that matches sidebar width */
-      #mainContent { margin-left: 18rem; }
+      /* Estado: sidebar abierto en escritorio (por defecto) */
+      body.sidebar-desktop-open #mainContent {
+        margin-left: 18rem; /* 288px, igual a md:w-72 */
+      }
+      body.sidebar-desktop-open #collabSidebar {
+        transform: translateX(0);
+      }
 
-      /* Overlay not used on desktop */
-      #sidebarOverlay { display: none !important; }
+      /* Estado: sidebar cerrado en escritorio */
+      body.sidebar-desktop-closed #mainContent {
+        margin-left: 0;
+      }
+      body.sidebar-desktop-closed #collabSidebar {
+        transform: translateX(-100%);
+      }
     }
   </style>
 </head>
@@ -113,7 +138,7 @@
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden hidden transition-opacity duration-300"></div>
 
   <!-- ✅ MEJORA: Sidebar rediseñado -->
-  <aside id="collabSidebar" class="fixed md:sticky top-0 left-0 w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-screen flex flex-col sidebar-transition -translate-x-full md:translate-x-0 z-50">
+  <aside id="collabSidebar" class="w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-screen flex flex-col z-50">
     <!-- Header del Sidebar -->
     <div class="p-6 border-b border-gray-700">
       <div class="flex items-center justify-between mb-4">
@@ -173,28 +198,30 @@
           <i data-lucide="bar-chart-3" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
           <span class="font-medium">Rendimiento</span>
         </a>
+
+        <!-- Botón de cambio de tema -->
+        <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mt-2 rounded-xl bg-blue-800/50 text-blue-400 hover:bg-blue-700/50 hover:text-blue-300 transition-all duration-200 group">
+            <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
+            <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
+            <span class="font-medium text-sm">Modo oscuro</span>
+        </button>
+        <!-- Cerrar sesión -->
+        <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-800/50 text-blue-400 hover:bg-blue-700/50 hover:text-blue-300 transition-all duration-200 group">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span class="font-medium text-sm">Cerrar Sesión</span>
+        </button>
       </div>
     </nav>
-    
-    <!-- Footer del Sidebar -->
-    <div class="p-6 border-t border-gray-700">
-      <!-- Botón de cambio de tema -->
-      <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mb-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
-        <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
-        <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
-        <span class="font-medium theme-text">Modo oscuro</span>
-      </button>
-      <!-- Cerrar sesión -->
-      <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
-        <i data-lucide="log-out" class="w-4 h-4"></i>
-        <span class="font-medium">Cerrar Sesión</span>
-      </button>
-    </div>
   </aside>
 
   <!-- Contenedor principal -->
   <!-- Sidebar and main are siblings for predictable layout and easier CSS control -->
-  <main id="mainContent" class="p-4 md:p-8 transition-all duration-300">
+  <main id="mainContent" class="p-4 md:p-8 transition-all duration-300 relative">
+      <!-- Botón para abrir el sidebar en escritorio cuando está colapsado -->
+      <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-lg hover:bg-gray-100 transition-colors hidden md:block absolute top-4 left-4 z-40">
+        <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
+      </button>
+
       <!-- Contenedor principal con grid para colocar contenido junto al sidebar -->
       <div class="grid grid-cols-1 gap-6">
         <!-- Sección de solicitudes -->
@@ -211,19 +238,6 @@
           </div>
         </div>
 
-        <!-- Sección de solicitudes asignadas -->
-        <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
-          <div class="p-5 bg-gray-50/70 border-b border-gray-200/80">
-            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3">
-              <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
-              <span>Mis Solicitudes Asignadas</span>
-            </h2>
-          </div>
-          <div class="p-5">
-            <!-- Contenedor de 'Solicitudes Asignadas' eliminado: se unifica todo en 'ordersCardContainer' -->
-            <div class="text-sm text-gray-500">Tus solicitudes asignadas ahora aparecen en el mismo listado de solicitudes pendientes cuando corresponda.</div>
-          </div>
-        </div>
     </div>
     
     
@@ -245,27 +259,23 @@
             </div>
           </div>
           <!-- Botones de acción para el trabajo activo -->
-          <div class="mt-4 flex flex-wrap gap-2">
-              <button type="button" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-              <i data-lucide="check-circle" class="w-4 h-4"></i>
-              <span>Confirmar llegada</span>
-            </button>
-              <button type="button" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
-              <i data-lucide="package" class="w-4 h-4"></i>
-              <span>Iniciar carga</span>
-            </button>
-              <button type="button" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
-              <i data-lucide="truck" class="w-4 h-4"></i>
-              <span>En camino a entregar</span>
-            </button>
-              <button type="button" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2">
-              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-              <span>Reportar retraso</span>
-            </button>
-              <button type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2">
-              <i data-lucide="check-square" class="w-4 h-4"></i>
-              <span>Finalizar</span>
-            </button>
+          <div id="activeJobActionButtons" class="mt-4 flex flex-wrap gap-2">
+              <button data-status="cargando" type="button" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+                <span>Confirmar Llegada</span>
+              </button>
+              <button data-status="en_camino_entregar" type="button" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
+                <i data-lucide="truck" class="w-4 h-4"></i>
+                <span>En Camino a Entregar</span>
+              </button>
+              <button data-status="retraso_tapon" type="button" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                <span>Reportar Retraso</span>
+              </button>
+              <button data-status="entregado" type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2">
+                <i data-lucide="check-square" class="w-4 h-4"></i>
+                <span>Finalizar</span>
+              </button>
           </div>
         </div>
 
@@ -330,11 +340,17 @@
   <script src="js/backup.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/rating-system.js"></script>
+  <script src="js/order-manager.js"></script>
   <script src="js/panel-colaborador.js"></script>
   <script src="js/pwa.js"></script>
   
-  <!-- Google Maps: replace YOUR_API_KEY with a valid API key. The API will call initGoogleMaps when loaded. -->
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initGoogleMaps"></script>
+  <!--
+    ================================================================================
+    IMPORTANTE: Pega tu clave de API de Google Maps aquí.
+    Reemplaza "TU_API_KEY_AQUI" con tu clave real para que el mapa funcione.
+    ================================================================================
+  -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=TU_API_KEY_AQUI&callback=initGoogleMaps"></script>
 
   <script>
     // initGoogleMaps is the callback used by the Google Maps script.

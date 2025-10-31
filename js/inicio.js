@@ -70,9 +70,10 @@ function filterOrders() {
       ((order.email || '').toLowerCase().includes(searchTerm)) ||
       String(order.id).includes(searchTerm);
 
-    const matchesStatus = statusFilter
-      ? order.status === statusFilter
-      : !['Completado', 'Cancelado'].includes(order.status);
+    // COMENTARIO: Lógica de filtrado actualizada.
+    // Por defecto, se ocultan las órdenes 'Completado' y 'Cancelado'.
+    // Si se selecciona un filtro de estado, se muestra solo ese estado.
+    const matchesStatus = statusFilter ? order.status === statusFilter : !['Completado', 'Cancelado'].includes(order.status);
 
     const matchesService = !serviceFilter || ((order.service?.name || order.service || '').toLowerCase() === serviceFilter.toLowerCase());
     const matchesDate = !dateFilter || order.date === dateFilter;
@@ -196,12 +197,11 @@ function renderOrders(){
         </select>
         ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
       </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-        <span class="editable-price cursor-pointer hover:bg-yellow-100 px-2 py-1 rounded" 
-              data-order-id="${o.id}" 
-              onclick="editPrice('${o.id}', this)">
-          ${o.estimated_price || 'Por confirmar'}
-        </span>
+      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+        <button onclick="openPriceModal('${o.id}')" class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+          <span class="font-semibold text-green-700">${o.monto_cobrado ? `$${Number(o.monto_cobrado).toLocaleString('es-DO')}` : 'Confirmar'}</span>
+          <div class="text-xs text-gray-500">${o.metodo_pago || 'No especificado'}</div>
+        </button>
       </td>
     `;
     tr.addEventListener('dblclick', () => openAssignModal(o.id));
@@ -259,23 +259,25 @@ function renderOrders(){
 // --- INICIO: Funciones de Actualización y UI ---
 // Función para actualizar el estado de una orden en Supabase
 async function updateOrderStatus(orderId, newStatus) {
-  const { data, error } = await supabaseConfig.client
-    .from('orders')
-    .update({ status: newStatus })
-    .eq('id', orderId);
+  // COMENTARIO: Esta función ahora utiliza el OrderManager centralizado.
+  console.log(`[Dueño] Solicitando cambio de estado para orden #${orderId} a "${newStatus}"`);
 
-  if (error) {
-    console.error('Error al actualizar el estado:', error);
-    alert('No se pudo actualizar el estado de la orden.');
-    // Revertir el cambio en la UI si falla
-    loadOrders();
-  } else {
-    // Actualizar el estado en el array local para no tener que recargar toda la data
-    const orderIndex = allOrders.findIndex(o => o.id == orderId);
-    if (orderIndex !== -1) allOrders[orderIndex].status = newStatus;
-    filterOrders(); // Re-renderizar con el nuevo estado
+  // El tercer parámetro (additionalData) está vacío porque el dueño solo cambia el estado principal.
+  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newStatus, {});
+
+  if (success) {
     notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
-  }}
+
+    // Si el estado se cambia a 'Completado', el filtro se encargará de ocultarlo.
+    // Forzamos la recarga para asegurar que la vista esté 100% sincronizada.
+    await loadOrders();
+
+  } else {
+    notifications.error('No se pudo actualizar el estado de la orden.', error);
+    // Si falla, recargamos para revertir cualquier cambio visual optimista.
+    await loadOrders();
+  }
+}
 
 // Función para mostrar detalles del servicio
 function showServiceDetails(orderId) {
@@ -327,31 +329,12 @@ function updateResumen(){
     return diffHours > 0 && diffHours <= 24;
   });
 
-  // Calcular ganancias
-  const totalEarnings = allOrders.reduce((sum, o) => {
-    if (o.status === 'Completado' && o.estimated_price) {
-      const price = parseInt(o.estimated_price.replace(/[^0-9]/g, '')) || 0;
-      return sum + price;
-    }
-    return sum + 150000; // Precio base estimado
-  }, 0);
-
-  const todayEarnings = todayOrders.reduce((sum, o) => {
-    if (o.status === 'Completado' && o.estimated_price) {
-      const price = parseInt(o.estimated_price.replace(/[^0-9]/g, '')) || 0;
-      return sum + price;
-    }
-    return sum + 150000;
-  }, 0);
-
   document.getElementById('totalPedidos').textContent = allOrders.length;
   document.getElementById('pedidosHoy').textContent = todayOrders.length;
   document.getElementById('pedidosCompletados').textContent = completedOrders;
   document.getElementById('porcentajeCompletados').textContent = allOrders.length > 0 ? Math.round((completedOrders / allOrders.length) * 100) : 0;
   document.getElementById('pedidosPendientes').textContent = pendingOrders.length;
   document.getElementById('urgentes').textContent = urgentOrders.length;
-  document.getElementById('gananciaTotal').textContent = `$${totalEarnings.toLocaleString('es-DO')}`;
-  document.getElementById('gananciaHoy').textContent = `$${todayEarnings.toLocaleString('es-DO')}`;
 }
 
 // Función para actualizar gráficos
@@ -432,6 +415,7 @@ function updateCharts() {
 async function openAssignModal(orderId){
   selectedOrderIdForAssign = Number(orderId);
   const modal = document.getElementById('assignModal');
+  const modalTitle = document.getElementById('assignModalTitle');
   const body = document.getElementById('assignModalBody');
   const select = document.getElementById('assignSelect');
   const assignBtn = document.getElementById('assignConfirmBtn');
@@ -439,6 +423,7 @@ async function openAssignModal(orderId){
   const order = allOrders.find(o => o.id === selectedOrderIdForAssign);
   const colaboradores = await loadCollaborators();
 
+  modalTitle.textContent = `Gestionar Orden #${order.short_id || order.id}`;
   body.innerHTML = `
     <div class="space-y-1 text-sm text-gray-700">
       <p><strong>ID:</strong> ${order.id}</p>
@@ -786,6 +771,9 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('assignCancelBtn').addEventListener('click', closeAssignModal);
   document.getElementById('assignConfirmBtn').addEventListener('click', assignSelectedCollaborator);
   document.getElementById('deleteOrderBtn').addEventListener('click', deleteSelectedOrder);
+  // Listeners para el modal de precio
+  document.getElementById('priceCancelBtn').addEventListener('click', closePriceModal);
+  document.getElementById('priceSaveBtn').addEventListener('click', savePriceData);
   
   document.getElementById('clearFilters').addEventListener('click', () => {
     document.getElementById('searchInput').value = '';
@@ -809,50 +797,75 @@ document.addEventListener('DOMContentLoaded', function() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
     .subscribe();
 
-  // Función para editar precio
-  function editPrice(orderId, element) {
-    const currentPrice = element.textContent.trim();
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentPrice === 'Por confirmar' ? '' : currentPrice;
-    input.className = 'w-full px-2 py-1 border rounded text-sm';
-    input.placeholder = 'Ej: $150,000';
-    
-    element.innerHTML = '';
-    element.appendChild(input);
-    input.focus();
-    
-    function savePrice() {
-        const newPrice = input.value.trim() || 'Por confirmar';
-        
-        supabaseConfig.client // ✅ CORREGIDO: Usar supabaseConfig.client
-          .from('orders')
-          .update({ estimated_price: newPrice })
-          .eq('id', orderId)
-          .then(({ error }) => {
-            if (error) {
-              showError('Error al guardar', error.message);
-              element.innerHTML = currentPrice; // Revertir
-            } else {
-              element.innerHTML = newPrice;
-              notifications.success(`Precio actualizado a ${newPrice}`);
-              const orderIndex = allOrders.findIndex(o => o.id == orderId);
-              if (orderIndex !== -1) allOrders[orderIndex].estimated_price = newPrice;
-              updateResumen();
-            }
-          });
+  let selectedOrderIdForPrice = null;
+
+  // --- Gestión del Modal de Precio ---
+  function openPriceModal(orderId) {
+    selectedOrderIdForPrice = orderId;
+    const order = allOrders.find(o => o.id == selectedOrderIdForPrice);
+    if (!order) {
+      notifications.error('Error', 'No se encontró la orden para actualizar el precio.');
+      return;
     }
-    
-    input.addEventListener('blur', savePrice);
-    input.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        savePrice();
-      }
-    });
+
+    document.getElementById('montoCobrado').value = order.monto_cobrado || '';
+    document.getElementById('metodoPago').value = order.metodo_pago || '';
+
+    const modal = document.getElementById('priceModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
   }
-  
-  // Hacer las funciones globales
-  window.editPrice = editPrice;
+
+  function closePriceModal() {
+    const modal = document.getElementById('priceModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    selectedOrderIdForPrice = null;
+  }
+
+  async function savePriceData() {
+    const monto = document.getElementById('montoCobrado').value;
+    const metodo = document.getElementById('metodoPago').value;
+
+    if (!monto) {
+      notifications.warning('Dato requerido', 'Debes ingresar un monto.');
+      return;
+    }
+
+    const { data, error } = await supabaseConfig.client
+      .from('orders')
+      .update({
+        monto_cobrado: parseFloat(monto),
+        metodo_pago: metodo
+      })
+      .eq('id', selectedOrderIdForPrice)
+      .select()
+      .single();
+
+    if (error) {
+      notifications.error('Error al guardar', error.message);
+    } else {
+      const orderIndex = allOrders.findIndex(o => o.id == selectedOrderIdForPrice);
+      if (orderIndex !== -1) {
+        allOrders[orderIndex].monto_cobrado = data.monto_cobrado;
+        allOrders[orderIndex].metodo_pago = data.metodo_pago;
+      }
+      renderOrders();
+      notifications.success('Éxito', 'El monto y método de pago han sido actualizados.');
+      closePriceModal();
+    }
+  }
+
+  // Hacer funciones globales
+  window.openPriceModal = openPriceModal;
+  window.closeAssignModal = closeAssignModal; // Hacerla global para el botón de cierre
+
+  function openWhatsApp(order) {
+    const phone = order.phone.replace(/[^0-9]/g, ''); // Limpiar número
+    const message = `Hola ${order.name}, te contacto sobre tu orden #${order.short_id || order.id} de ${order.service.name}.`;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  }
 
   // Inicialización
   function init() {
