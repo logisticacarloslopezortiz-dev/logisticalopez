@@ -12,7 +12,8 @@ export const corsHeaders = {
 export function handleCors(req: Request): Response | null {
   // Manejar solicitudes OPTIONS (preflight CORS)
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    // Es crucial devolver un status 200 OK en la respuesta preflight.
+    return new Response('ok', { status: 200, headers: corsHeaders });
   }
   
   return null;
