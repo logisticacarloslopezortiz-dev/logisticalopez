@@ -553,50 +553,77 @@ function renderDesktopAssignedCards(orders){
   if (window.lucide) lucide.createIcons();
 }
 
-// === Toggle de sidebar en móvil (hamburguesa) ===
-function setupMobileSidebarToggle() {
-  const sidebar = document.getElementById('collabSidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  const btn = document.getElementById('mobileMenuBtn');
-  
-  if (!sidebar || !overlay || !btn) return;
+// === Lógica Unificada del Sidebar (Móvil y Escritorio) ===
+function setupSidebarToggles() {
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const sidebarCloseBtn = document.getElementById('sidebarCollapseBtn');
+    const desktopOpenBtn = document.getElementById('desktopMenuBtn');
+    const overlay = document.getElementById('sidebarOverlay');
+    const body = document.body;
 
-  btn.onclick = () => {
-    sidebar.classList.remove('-translate-x-full');
-    overlay.classList.remove('hidden');
-    document.body.classList.add('overflow-hidden'); // bloquea scroll
-  };
-
-  overlay.onclick = () => {
-    sidebar.classList.add('-translate-x-full');
-    overlay.classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-  };
-}
-
-// ✅ MEJORA: Lógica para el sidebar plegable en escritorio
-function setupDesktopSidebarToggle() {
-  const sidebar = document.getElementById('collabSidebar');
-  const main = document.getElementById('mainContent');
-  const btn = document.getElementById('sidebarCollapseBtn');
-  
-  if (!sidebar || !main || !btn) return;
-
-  // Estado inicial en desktop: sidebar visible → margen activo
-  if (window.innerWidth >= 768) {
-    main.classList.add('ml-72');
-  }
-
-  btn.onclick = () => {
-    const isHidden = sidebar.classList.contains('-translate-x-full');
-    if (isHidden) {
-      sidebar.classList.remove('-translate-x-full');
-      main.classList.add('ml-72');
-    } else {
-      sidebar.classList.add('-translate-x-full');
-      main.classList.remove('ml-72');
+    if (!mobileMenuBtn || !sidebarCloseBtn || !desktopOpenBtn || !overlay) {
+        console.error("One or more sidebar control elements are missing.");
+        return;
     }
-  };
+
+    const updateUI = () => {
+        const isDesktop = window.innerWidth >= 768;
+
+        // Manage state transitions on resize
+        if (isDesktop) {
+            body.classList.remove('sidebar-mobile-open');
+            // Default to open sidebar on desktop if no state is set
+            if (!body.classList.contains('sidebar-desktop-open') && !body.classList.contains('sidebar-desktop-closed')) {
+                body.classList.add('sidebar-desktop-open');
+            }
+        }
+
+        // Centralize the logic for the desktop "open" button's visibility
+        const isSidebarClosed = body.classList.contains('sidebar-desktop-closed');
+        if (isDesktop && isSidebarClosed) {
+            desktopOpenBtn.classList.remove('hidden');
+        } else {
+            desktopOpenBtn.classList.add('hidden');
+        }
+    };
+
+    // --- Event Listeners only modify state, then call updateUI ---
+
+    // Open sidebar on mobile
+    mobileMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        body.classList.add('sidebar-mobile-open');
+        // No UI update needed here as it only affects mobile overlay
+    });
+
+    // Close sidebar with the button inside it (works for both views)
+    sidebarCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.innerWidth >= 768) { // isDesktop
+            body.classList.remove('sidebar-desktop-open');
+            body.classList.add('sidebar-desktop-closed');
+        } else {
+            body.classList.remove('sidebar-mobile-open');
+        }
+        updateUI(); // Update UI based on new state
+    });
+
+    // Close sidebar on mobile via overlay
+    overlay.addEventListener('click', () => {
+        body.classList.remove('sidebar-mobile-open');
+    });
+
+    // Re-open sidebar on desktop
+    desktopOpenBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        body.classList.remove('sidebar-desktop-closed');
+        body.classList.add('sidebar-desktop-open');
+        updateUI(); // Update UI based on new state
+    });
+
+    // --- Initialization ---
+    window.addEventListener('resize', updateUI);
+    updateUI(); // Set initial state on page load
 }
 
 // Funciones para actualizar el sidebar
@@ -752,9 +779,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   state.collabSession = session;
 
-  // Configurar toggle de sidebar en móvil y escritorio si existen
-  try { setupMobileSidebarToggle(); } catch(_) {}
-  try { setupDesktopSidebarToggle(); } catch(_) {}
+  // Render icons as soon as the DOM is ready to prevent issues with icon-based buttons.
+  if (window.lucide) {
+    try {
+      lucide.createIcons();
+    } catch (e) {
+      console.error('Error creating lucide icons on initial load:', e);
+    }
+  }
+
+  // Configurar la lógica del sidebar unificado
+  try {
+    setupSidebarToggles();
+  } catch(e) {
+    console.error('Error al inicializar el sidebar:', e);
+  }
 
   // Suscribirse a cambios de auth para mantener sesión fresca
   supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
