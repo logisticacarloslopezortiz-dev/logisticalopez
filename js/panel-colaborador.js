@@ -636,6 +636,9 @@ function updateCollaboratorProfile(session) {
   document.getElementById('collabName').textContent = name;
   document.getElementById('collabEmail').textContent = user.email;
   document.getElementById('collabAvatar').textContent = initials;
+
+  // ✅ CORRECCIÓN: Guardar el nombre del colaborador actual en la caché para mostrarlo en el trabajo activo.
+  collabNameCache.set(user.id, name);
   
   updateCollaboratorStats(user.id);
 }
@@ -821,6 +824,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   // ✅ CORRECCIÓN: Conectar el input de subida de fotos a su función.
   document.getElementById('photoUpload').addEventListener('change', handlePhotoUpload);
+
+  // ✅ NUEVO: Conectar los botones de acción del trabajo activo.
+  const actionButtonsContainer = document.getElementById('activeJobActionButtons');
+  if (actionButtonsContainer) {
+    actionButtonsContainer.addEventListener('click', (e) => {
+      const button = e.target.closest('button');
+      if (button && button.dataset.status) {
+        const newStatus = button.dataset.status;
+        if (state.activeJobId) {
+          changeStatus(state.activeJobId, newStatus);
+        } else {
+          showError('Error', 'No hay un trabajo activo seleccionado.');
+        }
+      }
+    });
+  }
 
   document.getElementById('confirmAcceptBtn').addEventListener('click', async (e) => {
     e.preventDefault();

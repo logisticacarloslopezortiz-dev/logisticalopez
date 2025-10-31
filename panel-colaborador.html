@@ -198,23 +198,20 @@
           <i data-lucide="bar-chart-3" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
           <span class="font-medium">Rendimiento</span>
         </a>
+
+        <!-- Botón de cambio de tema -->
+        <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mt-2 rounded-xl bg-blue-800/50 text-blue-400 hover:bg-blue-700/50 hover:text-blue-300 transition-all duration-200 group">
+            <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
+            <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
+            <span class="font-medium text-sm">Modo oscuro</span>
+        </button>
+        <!-- Cerrar sesión -->
+        <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-800/50 text-blue-400 hover:bg-blue-700/50 hover:text-blue-300 transition-all duration-200 group">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span class="font-medium text-sm">Cerrar Sesión</span>
+        </button>
       </div>
     </nav>
-    
-    <!-- Footer del Sidebar -->
-    <div class="p-6 border-t border-gray-700">
-      <!-- Botón de cambio de tema -->
-      <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mb-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
-        <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
-        <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
-        <span class="font-medium theme-text">Modo oscuro</span>
-      </button>
-      <!-- Cerrar sesión -->
-      <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-all duration-200 group">
-        <i data-lucide="log-out" class="w-4 h-4"></i>
-        <span class="font-medium">Cerrar Sesión</span>
-      </button>
-    </div>
   </aside>
 
   <!-- Contenedor principal -->
@@ -262,27 +259,23 @@
             </div>
           </div>
           <!-- Botones de acción para el trabajo activo -->
-          <div class="mt-4 flex flex-wrap gap-2">
-              <button type="button" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-              <i data-lucide="check-circle" class="w-4 h-4"></i>
-              <span>Confirmar llegada</span>
-            </button>
-              <button type="button" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
-              <i data-lucide="package" class="w-4 h-4"></i>
-              <span>Iniciar carga</span>
-            </button>
-              <button type="button" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
-              <i data-lucide="truck" class="w-4 h-4"></i>
-              <span>En camino a entregar</span>
-            </button>
-              <button type="button" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2">
-              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-              <span>Reportar retraso</span>
-            </button>
-              <button type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2">
-              <i data-lucide="check-square" class="w-4 h-4"></i>
-              <span>Finalizar</span>
-            </button>
+          <div id="activeJobActionButtons" class="mt-4 flex flex-wrap gap-2">
+              <button data-status="cargando" type="button" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+                <span>Confirmar Llegada</span>
+              </button>
+              <button data-status="en_camino_entregar" type="button" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
+                <i data-lucide="truck" class="w-4 h-4"></i>
+                <span>En Camino a Entregar</span>
+              </button>
+              <button data-status="retraso_tapon" type="button" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                <span>Reportar Retraso</span>
+              </button>
+              <button data-status="entregado" type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2">
+                <i data-lucide="check-square" class="w-4 h-4"></i>
+                <span>Finalizar</span>
+              </button>
           </div>
         </div>
 
@@ -350,8 +343,13 @@
   <script src="js/panel-colaborador.js"></script>
   <script src="js/pwa.js"></script>
   
-  <!-- Google Maps: replace YOUR_API_KEY with a valid API key. The API will call initGoogleMaps when loaded. -->
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initGoogleMaps"></script>
+  <!--
+    ================================================================================
+    IMPORTANTE: Pega tu clave de API de Google Maps aquí.
+    Reemplaza "TU_API_KEY_AQUI" con tu clave real para que el mapa funcione.
+    ================================================================================
+  -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=TU_API_KEY_AQUI&callback=initGoogleMaps"></script>
 
   <script>
     // initGoogleMaps is the callback used by the Google Maps script.
