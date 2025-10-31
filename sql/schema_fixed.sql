@@ -252,6 +252,7 @@ CREATE TABLE public.orders (
     "date" DATE,
     "time" TIME,
     status TEXT DEFAULT 'Pendiente' NOT NULL,
+    last_collab_status TEXT, -- Nuevo campo para el estado detallado del colaborador
     assigned_to UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     assigned_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
