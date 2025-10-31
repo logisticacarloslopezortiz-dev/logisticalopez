@@ -97,6 +97,17 @@ async function changeStatus(orderId, newKey){
   const idx = state.allOrders.findIndex(o => Number(o.id) === Number(orderId));
   if (idx !== -1) state.allOrders[idx] = { ...state.allOrders[idx], ...updates };
 
+    // Si el trabajo se completó, invocar la función para incrementar el contador
+    if (newKey === 'entregado') {
+      try {
+        await supabaseConfig.client.functions.invoke('increment-completed-jobs', {
+          body: { userId: state.collabSession.user.id }
+        });
+      } catch (invokeErr) {
+        console.warn('No se pudo incrementar el contador de trabajos completados:', invokeErr);
+      }
+    }
+
     // Notificación push al cliente vía función Edge
     try {
       const bodyMsg = buildStatusMessage(order, newKey);

@@ -50,7 +50,8 @@ CREATE TABLE public.profiles (
     email TEXT,
     phone TEXT,
     created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now()
+    updated_at timestamptz not null default now(),
+    completed_jobs INT DEFAULT 0
 );
 COMMENT ON TABLE public.profiles IS 'Datos públicos del usuario (sin roles, vinculados a auth.users).';
 
@@ -256,7 +257,8 @@ CREATE TABLE public.orders (
     completed_at TIMESTAMPTZ,
     completed_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     evidence_photos JSONB,
-    rating JSONB,
+    rating INT,
+    rating_comment TEXT,
     estimated_price TEXT DEFAULT 'Por confirmar',
     monto_cobrado NUMERIC,
     metodo_pago TEXT,

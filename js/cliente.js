@@ -542,15 +542,16 @@ async function subscribeUserToPush(orderId) {
     const registration = await navigator.serviceWorker.ready;
     console.log("Service Worker listo para suscripción");
     
-    // Clave VAPID fija para desarrollo (reemplazar en producción)
-    const vapidKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
-    console.log("Usando clave VAPID:", vapidKey);
+    // Clave VAPID pública
+    const vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
     
-    const applicationServerKey = urlBase64ToUint8Array(vapidKey);
-    console.log("applicationServerKey generada correctamente");
+    // Convertir la clave a un Uint8Array
+    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+
+    // Suscribirse
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey
+      applicationServerKey: applicationServerKey
     });
     
     // Actualizar la orden en Supabase con la suscripción
