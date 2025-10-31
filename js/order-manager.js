@@ -20,8 +20,9 @@ const OrderManager = {
     console.log(`[OrderManager] Iniciando actualización para orden #${orderId} a estado "${newStatus}"`);
 
     // 1. Construir el objeto de actualización para Supabase
+    // No sobrescribir el estado global con estados intermedios del colaborador.
+    // Solo aplicar 'status' si viene explícitamente en additionalData (p.ej. 'Completado' o 'Cancelado').
     const updatePayload = {
-      status: newStatus,
       ...additionalData
     };
 

@@ -103,40 +103,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Por ahora, simularemos la creación directa (requiere RLS permisivo)
 
     try {
-        // En un entorno de producción, la creación de usuarios con contraseña
-        // debería hacerse en una Edge Function para no exponer la service_role key.
-        // Aquí se asume que se está ejecutando como admin con los permisos necesarios.
-
-        // Primero, creamos el usuario en `auth.users`
-        const { data: authData, error: authError } = await supabaseConfig.client.auth.signUp({
-            email: emailInput.value,
-            password: passwordInput.value,
-            options: {
-                data: {
-                    full_name: nameInput.value
+        // Usar la Edge Function para crear colaboradores de forma segura
+        // Esto evita exponer la service_role key en el frontend
+        const response = await fetch(`${supabaseConfig.client.supabaseUrl}/functions/v1/process-collaborator-requests`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseConfig.client.supabaseKey}`
+            },
+            body: JSON.stringify({
+                action: 'create_collaborator',
+                collaboratorData: {
+                    email: emailInput.value,
+                    password: passwordInput.value,
+                    name: nameInput.value,
+                    matricula: matriculaInput.value || null
                 }
-            }
+            })
         });
 
-        if (authError) throw new Error(`Error en Auth: ${authError.message}`);
-        if (!authData.user) throw new Error('No se pudo crear el usuario en el sistema de autenticación.');
+        const result = await response.json();
 
-        // Luego, insertamos el perfil en `public.collaborators`
-        const { error: insertError } = await supabaseConfig.client
-            .from('collaborators')
-            .insert({
-                id: authData.user.id, // Vincula con el usuario de auth
-                name: nameInput.value,
-                email: emailInput.value,
-                matricula: matriculaInput.value,
-                status: 'activo',
-                role: 'colaborador' // rol por defecto
-            });
-
-        if (insertError) {
-            // Si falla la inserción, intentamos eliminar el usuario de auth para no dejar datos inconsistentes
-            await supabaseConfig.client.auth.admin.deleteUser(authData.user.id);
-            throw new Error(`Error al guardar en tabla: ${insertError.message}`);
+        if (!result.success) {
+            throw new Error(result.error || 'Error desconocido al crear colaborador');
         }
 
         msgDiv.textContent = '¡Colaborador creado con éxito!';

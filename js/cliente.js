@@ -853,14 +853,10 @@ document.addEventListener('DOMContentLoaded', function() {
           tracking: orderData.tracking || orderData.tracking_data
         };
 
-        // RLS: establecer client_id para cumplir la política "public_insert_pending_orders"
-        try {
-          const { data: { session } } = await supabaseConfig.client.auth.getSession();
-          // Para usuarios anónimos, debe ser null; para autenticados, su uid
-          baseOrder.client_id = session?.user?.id ?? null;
-        } catch (_) {
-          baseOrder.client_id = null;
-        }
+        // RLS: Para el formulario público, fuerza client_id = null
+        // Evita violación de FK si el usuario autenticado no tiene fila en public.profiles
+        // y cumple la política de inserción pública (status = 'Pendiente').
+        baseOrder.client_id = null;
 
         const origin_coords2 = orderData.origin_coords;
         const destination_coords2 = orderData.destination_coords;

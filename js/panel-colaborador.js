@@ -73,10 +73,7 @@ async function showBrowserNotification(order, statusKey) {
 async function changeStatus(orderId, newKey) {
   // COMENTARIO: Esta función ahora actúa como un intermediario (wrapper) hacia el OrderManager.
   console.log(`[Colaborador] Solicitando cambio de estado para orden #${orderId} a "${newKey}"`);
-
-  const additionalData = {
-    last_collab_status: newKey
-  };
+  const additionalData = {};
 
   // Si el colaborador marca como 'entregado', esto se traduce a 'Completado' en el estado general.
   if (newKey === 'entregado') {
@@ -89,6 +86,18 @@ async function changeStatus(orderId, newKey) {
   const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newKey, additionalData);
 
   if (success) {
+    // Actualizar localmente el último estado del colaborador y el tracking
+    const idx = state.allOrders.findIndex(o => o.id === orderId);
+    if (idx !== -1) {
+      const prev = state.allOrders[idx];
+      const prevTracking = Array.isArray(prev.tracking_data) ? prev.tracking_data : [];
+      state.allOrders[idx] = {
+        ...prev,
+        last_collab_status: newKey,
+        tracking_data: [...prevTracking, { status: newKey, date: new Date().toISOString() }]
+      };
+    }
+    updateActiveJobView();
     // Si el trabajo se completó, invocar la función para incrementar el contador
     if (newKey === 'entregado') {
       try {
@@ -690,10 +699,24 @@ async function loadInitialOrders() {
     }
 
     // ✅ CORRECCIÓN: Procesar los datos para asegurar que service y vehicle sean strings
+    // y derivar last_collab_status desde tracking/tracking_data si no existe
+    const deriveLastStatus = (order) => {
+      const track = Array.isArray(order.tracking_data) ? order.tracking_data
+        : (Array.isArray(order.tracking) ? order.tracking : []);
+      const keys = Object.keys(STATUS_MAP);
+      for (let i = track.length - 1; i >= 0; i--) {
+        const s = track[i]?.status;
+        if (s && keys.includes(s)) return s;
+      }
+      if (order.status === 'En proceso' && order.assigned_to) return 'en_camino_recoger';
+      return undefined;
+    };
+
     state.allOrders = (data || []).map(order => ({
       ...order,
       service: order.service?.name || order.service || 'Sin servicio',
-      vehicle: order.vehicle?.name || order.vehicle || 'Sin vehículo'
+      vehicle: order.vehicle?.name || order.vehicle || 'Sin vehículo',
+      last_collab_status: order.last_collab_status || deriveLastStatus(order)
     }));
     await preloadCollaboratorNames(state.allOrders);
     
@@ -858,6 +881,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.activeJobId = orderId;
       localStorage.setItem('tlc_collab_active_job', String(orderId));
       await loadInitialOrders();
+      const order = state.allOrders.find(o => o.id === orderId);
+      if (order) {
+        showActiveJob(order);
+      }
 
     } else {
       showError('Error al aceptar la solicitud', error);
