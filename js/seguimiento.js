@@ -11,8 +11,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const trackButton = document.getElementById('trackButton');
     const errorMessage = document.getElementById('errorMessage');
     const newOrderButton = document.getElementById('newOrderButton');
-    let currentSubscription = null; // Para gestionar la suscripción en tiempo real
-    let trackingMap = null; // ✅ NUEVO: Variable para la instancia del mapa
+    let currentSubscription = null;
+    let trackingMap = null;
+    let currentOrder = null; // ✅ NUEVO: Variable global para mantener el estado de la orden
 
     // --- Event Listeners ---
     trackButton.addEventListener('click', findOrder);
@@ -106,11 +107,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('No se encontró ninguna solicitud con ese ID.');
             }
 
-            // Orden encontrada, mostrar detalles
-            displayOrderDetails(order);
+            currentOrder = order; // ✅ CORRECCIÓN: Guardar la orden en la variable global
+            displayOrderDetails(currentOrder);
 
-            // Suscribirse a cambios en tiempo real para esta orden (usar el id numérico real)
-            const orderNumericId = Number(order.id || numericId);
+            // Suscribirse a cambios en tiempo real para esta orden
+            const orderNumericId = Number(currentOrder.id);
             subscribeToOrderUpdates(orderNumericId);
 
         } catch (err) {
@@ -141,15 +142,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newRecord = payload.new || null;
                 const oldRecord = payload.old || null;
 
-                // En UPDATE o INSERT, refrescar detalles en pantalla
-                if (newRecord) {
-                    // Si hay cambio de estado, notificar al usuario
-                    const newStatus = newRecord.status;
-                    const oldStatus = oldRecord?.status;
-                    if (newStatus && newStatus !== oldStatus) showStatusNotification(newStatus);
+                if (payload.eventType === 'UPDATE' && payload.new) {
+                    // ✅ CORRECCIÓN: Actualizar la orden global y volver a renderizar
+                    currentOrder = { ...currentOrder, ...payload.new };
+                    displayOrderDetails(currentOrder);
 
-                    // Si actualmente estamos viendo esa orden, actualizar la UI
-                    displayOrderDetails(newRecord);
+                    // Opcional: notificar si el estado principal cambió
+                    if (payload.new.status && payload.old.status !== payload.new.status) {
+                        showStatusNotification(payload.new.status);
+                    }
                 }
 
                 // En DELETE, mostrar mensaje y volver al login/inicio
@@ -254,39 +255,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const timelineContainer = document.getElementById('timeline');
         timelineContainer.innerHTML = ''; // Limpiar
 
-        // ✅ MEJORA: Lógica de timeline más robusta y precisa
-        const timelineEvents = [];
-        
-        // 1. Solicitud Creada (siempre existe)
-        timelineEvents.push({ name: 'Solicitud Creada', date: order.created_at });
+        const timelineEvents = new Map();
 
-        // 2. Servicio Asignado
-        if (order.assigned_at) {
-            timelineEvents.push({ name: 'Servicio Asignado', date: order.assigned_at });
+        // Función para añadir eventos evitando duplicados por nombre
+        const addEvent = (name, date) => {
+            if (name && date && !timelineEvents.has(name)) {
+                timelineEvents.set(name, new Date(date));
+            }
+        };
+
+        // 1. Añadir todos los eventos del tracking_data (fuente principal de verdad)
+        if (Array.isArray(order.tracking_data)) {
+            order.tracking_data.forEach(trackPoint => addEvent(trackPoint.status, trackPoint.date));
         }
 
-        // 3. Estados del colaborador (si existen en el tracking_data)
-        if (order.tracking_data && Array.isArray(order.tracking_data)) {
-            order.tracking_data.forEach(trackPoint => {
-                timelineEvents.push({ name: trackPoint.status, date: trackPoint.date });
+        // 2. Añadir eventos clave que podrían no estar en tracking_data, como respaldo
+        addEvent('Solicitud Creada', order.created_at);
+        if (order.assigned_at) addEvent('Servicio Asignado', order.assigned_at);
+        if (order.completed_at) addEvent('Servicio Completado', order.completed_at);
+
+        // Convertir el mapa a un array, ordenar por fecha y renderizar
+        Array.from(timelineEvents.entries())
+            .sort(([, dateA], [, dateB]) => dateA - dateB)
+            .forEach(([name, date]) => {
+                const item = document.createElement('div');
+                item.className = 'timeline-item active';
+                item.innerHTML = `
+                    <h4 class="font-semibold text-gray-800">${name}</h4>
+                    <p class="text-sm text-gray-500">${date.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                `;
+                timelineContainer.appendChild(item);
             });
-        }
-
-        // 4. Servicio Completado
-        if (order.completed_at) {
-            timelineEvents.push({ name: 'Servicio Completado', date: order.completed_at });
-        }
-
-        // Ordenar y renderizar
-        timelineEvents.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(event => {
-            const item = document.createElement('div');
-            item.className = 'timeline-item active';
-            item.innerHTML = `
-                <h4 class="font-semibold text-gray-800">${event.name}</h4>
-                <p class="text-sm text-gray-500">${new Date(event.date).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-            `;
-            timelineContainer.appendChild(item);
-        });
 
         // ✅ NUEVO: Inicializar el mapa con las coordenadas de la orden
         initializeMap(order);
