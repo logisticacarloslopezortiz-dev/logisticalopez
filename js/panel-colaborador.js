@@ -70,33 +70,25 @@ async function showBrowserNotification(order, statusKey) {
  * @param {number} orderId - El ID de la orden a actualizar.
  * @param {string} newKey - La nueva clave de estado (ej. 'en_camino_recoger').
  */
-async function changeStatus(orderId, newKey){
-  const order = state.allOrders.find(o => o.id === orderId);
-  if (!order) return;
+async function changeStatus(orderId, newKey) {
+  // COMENTARIO: Esta función ahora actúa como un intermediario (wrapper) hacia el OrderManager.
+  console.log(`[Colaborador] Solicitando cambio de estado para orden #${orderId} a "${newKey}"`);
 
-  const trackingEvent = { status: STATUS_MAP[newKey]?.label || newKey, date: new Date().toISOString() };
-
-  const updates = { 
+  const additionalData = {
     last_collab_status: newKey
   };
 
+  // Si el colaborador marca como 'entregado', esto se traduce a 'Completado' en el estado general.
   if (newKey === 'entregado') {
-    updates.status = 'Completado';
-    updates.completed_at = new Date().toISOString();
-    updates.completed_by = state.collabSession.user.id;
+    additionalData.status = 'Completado';
+    additionalData.completed_at = new Date().toISOString();
+    additionalData.completed_by = state.collabSession.user.id;
   }
 
-  try {
-  // Agregar evento de tracking (usar campo `tracking` consistente con esquema)
-  const existingTracking = Array.isArray(order.tracking) ? order.tracking : [];
-  updates.tracking = [...existingTracking, trackingEvent];
+  // Usar la función centralizada
+  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newKey, additionalData);
 
-    await supabaseConfig.updateOrder(orderId, updates);
-
-    // Actualizar en memoria para reflejar inmediatamente
-  const idx = state.allOrders.findIndex(o => Number(o.id) === Number(orderId));
-  if (idx !== -1) state.allOrders[idx] = { ...state.allOrders[idx], ...updates };
-
+  if (success) {
     // Si el trabajo se completó, invocar la función para incrementar el contador
     if (newKey === 'entregado') {
       try {
@@ -106,34 +98,19 @@ async function changeStatus(orderId, newKey){
       } catch (invokeErr) {
         console.warn('No se pudo incrementar el contador de trabajos completados:', invokeErr);
       }
-    }
 
-    // Notificación push al cliente vía función Edge
-    try {
-      const bodyMsg = buildStatusMessage(order, newKey);
-      await supabaseConfig.client.functions.invoke('send-push-notification', {
-        body: { orderId: orderId, body: bodyMsg }
-      });
-    } catch (pushErr) {
-      console.warn('Fallo al invocar push server:', pushErr);
-    }
-
-    // Notificaciones sólo para el cliente (se quita notificación del panel del colaborador)
-
-    showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
-    filterAndRender();
-
-    // Si el estado implica trabajo activo, actualizar la vista
-    if (newKey !== 'entregado') {
-      updateActiveJobView();
-    } else {
-      // Limpiar trabajo activo al finalizar
+      // Limpiar el trabajo activo de la vista
       state.activeJobId = null;
       localStorage.removeItem('tlc_collab_active_job');
-      updateActiveJobView();
+      document.getElementById('activeJobSection').classList.add('hidden');
     }
-  } catch (err) {
-    showError('No se pudo actualizar el estado', err?.message || err);
+
+    showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
+    // Forzar una recarga de datos para asegurar sincronización completa.
+    await loadInitialOrders();
+
+  } else {
+    showError('No se pudo actualizar el estado', error);
   }
 }
 
@@ -854,116 +831,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('confirmAcceptBtn').addEventListener('click', async (e) => {
     e.preventDefault();
-    if (!state.selectedOrderIdForAccept) { closeAcceptModal(); return; }
+    if (!state.selectedOrderIdForAccept) {
+      closeAcceptModal();
+      return;
+    }
 
     const orderId = state.selectedOrderIdForAccept;
     const myId = state.collabSession.user.id;
 
-    try {
-      // Paso 1: Reclamar la orden (solo asignar)
-      await supabaseConfig.updateOrder(orderId, {
-        assigned_to: myId,
-        assigned_at: new Date().toISOString()
-      });
+    // COMENTARIO: Se centraliza la lógica de aceptación usando OrderManager.
+    console.log(`[Colaborador] Aceptando orden #${orderId}`);
 
-      // Paso 2: Actualizar estado (removido last_collab_status por no existir en la BD)
-      const trackingEvent = { status: 'Servicio Asignado', date: new Date().toISOString() };
-      // Normalizar: leer tracking desde cualquiera de las dos propiedades (tracking o tracking_data)
-      const existingOrder = state.allOrders.find(o => Number(o.id) === Number(orderId)) || {};
-      const existingTracking = Array.isArray(existingOrder.tracking)
-        ? existingOrder.tracking
-        : (Array.isArray(existingOrder.tracking_data) ? existingOrder.tracking_data : []);
+    const additionalData = {
+      assigned_to: myId,
+      assigned_at: new Date().toISOString(),
+      status: 'En proceso' // Al aceptar, el estado general cambia a 'En proceso'.
+    };
 
-      // Intentar escribir ambos campos para mantener compatibilidad con esquemas antiguos y nuevos.
-      const newTracking = [...existingTracking, trackingEvent];
-      await supabaseConfig.updateOrder(orderId, {
-        status: 'En proceso',
-        tracking: newTracking,
-        tracking_data: newTracking
-      });
+    // La función centralizada se encarga de actualizar el tracking y notificar.
+    const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, 'en_camino_recoger', additionalData);
 
-      // Actualizar el estado local y mostrar el trabajo activo.
-      const idx = state.allOrders.findIndex(o => o.id === orderId);
-      if (idx !== -1) {
-        state.allOrders[idx] = {
-          ...state.allOrders[idx],
-          assigned_to: myId,
-          assigned_at: new Date().toISOString(),
-          status: 'En proceso',
-          // Actualizar localmente ambos campos para consistencia de lectura
-          tracking: newTracking,
-          tracking_data: newTracking
-        };
-        showActiveJob(state.allOrders[idx]);
-        // Ocultar otras solicitudes y centrar en el trabajo activo
-        state.activeJobId = orderId;
-        localStorage.setItem('tlc_collab_active_job', String(orderId));
-        filterAndRender();
-      }
-
+    if (success) {
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
+      
+      // Guardar como trabajo activo y forzar recarga.
+      state.activeJobId = orderId;
+      localStorage.setItem('tlc_collab_active_job', String(orderId));
+      await loadInitialOrders();
 
-      // Notificar al cliente que su solicitud fue aceptada
-      try {
-        await supabaseConfig.client.functions.invoke('send-push-notification', {
-          body: { orderId, body: 'Tu solicitud ha sido aceptada y está en proceso.' }
-        });
-      } catch (pushErr) {
-        console.warn('Fallo al invocar push server (aceptación):', pushErr);
-      }
-    } catch (err) {
-      console.error('Error al aceptar la solicitud:', err);
-      
-      // Logging detallado para depuración
-      console.log('=== ERROR DETAILS ===');
-      console.log('Error type:', typeof err);
-      console.log('Error constructor:', err?.constructor?.name);
-      console.log('Error keys:', err ? Object.keys(err) : 'null');
-      
-      try {
-        console.log('Error JSON:', JSON.stringify(err, null, 2));
-      } catch (jsonErr) {
-        console.log('Cannot stringify error:', jsonErr.message);
-      }
-      
-      let msg = 'Error desconocido';
-      
-      // Manejo específico para errores de Supabase
-      if (err && typeof err === 'object') {
-        // Intentar diferentes propiedades del error
-        const possibleMessages = [
-          err.message,
-          err.error,
-          err.details,
-          err.hint,
-          err.code,
-          err.statusText
-        ].filter(Boolean);
-        
-        if (possibleMessages.length > 0) {
-          msg = possibleMessages.join(' - ');
-        } else {
-          // Último recurso: mostrar todas las propiedades
-          const props = Object.entries(err)
-            .filter(([key, value]) => value != null)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join(', ');
-          msg = props || 'Error sin detalles disponibles';
-        }
-      } else {
-        msg = String(err);
-      }
-      
-      console.log('Final error message:', msg);
-      console.log('Order ID:', orderId);
-      console.log('User ID:', myId);
-      console.log('=== END ERROR DETAILS ===');
-      
-      showError('Error al aceptar la solicitud', msg);
-    } finally {
-      closeAcceptModal();
-      filterAndRender();
+    } else {
+      showError('Error al aceptar la solicitud', error);
     }
+
+    closeAcceptModal();
   });
 
   // Carga inicial y suscripción a tiempo real
