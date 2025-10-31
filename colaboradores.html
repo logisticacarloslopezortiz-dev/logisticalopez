@@ -169,7 +169,7 @@
     </div>
     
     <!-- Lista de colaboradores -->
-    <div class="bg-white rounded-xl shadow-lg">
+    <div class="bg-white rounded-xl shadow-lg overflow-x-auto">
       <div class="p-6 border-b border-gray-200">
         <div class="flex items-center gap-3">
           <div class="bg-blue-100 rounded-lg p-2">
@@ -178,13 +178,22 @@
           <h2 class="text-xl font-semibold text-gray-900">Lista de Colaboradores</h2>
         </div>
       </div>
-      <!-- Contenedor de tarjetas para todas las pantallas -->
-      <div id="ordersCardContainer" class="mt-6"></div>
       
-      <!-- Vista de tarjetas para móviles (mantener para compatibilidad) -->
-      <div class="md:hidden space-y-4" id="colaboradoresCardContainer">
-        <!-- Las tarjetas de colaboradores se cargarán aquí -->
-      </div>
+      <!-- Tabla para mostrar los colaboradores -->
+      <table class="w-full text-sm text-left text-gray-600">
+        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+          <tr>
+            <th scope="col" class="px-6 py-3">Nombre</th>
+            <th scope="col" class="px-6 py-3">Matrícula</th>
+            <th scope="col" class="px-6 py-3">Email</th>
+            <th scope="col" class="px-6 py-3">Estado</th>
+            <th scope="col" class="px-6 py-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="colaboradoresTableBody">
+          <!-- Las filas de los colaboradores se cargarán aquí dinámicamente -->
+        </tbody>
+      </table>
     </div>
   </main>
   <!-- Modal de Métricas -->
