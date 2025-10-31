@@ -70,10 +70,10 @@
       body.overflow-hidden { overflow: hidden; }
     }
 
-    /* DESKTOP: sidebar visible and sticky; content is shifted by 18rem (288px) */
+    /* DESKTOP: sidebar visible and fixed; content is shifted by 18rem (288px) */
     @media (min-width: 768px) {
       #collabSidebar {
-        position: sticky;
+        position: fixed; /* MEJORA: 'fixed' es más robusto que 'sticky' para este layout */
         top: 0;
         left: 0;
         height: 100vh;
@@ -82,8 +82,8 @@
         z-index: 30;
       }
 
-      /* main uses an explicit margin-left that matches sidebar width */
-      #mainContent { margin-left: 18rem; }
+      /* El margen se controla por JS para el colapso, se elimina la regla fija */
+      #mainContent { transition: margin-left 0.28s ease-in-out; }
 
       /* Overlay not used on desktop */
       #sidebarOverlay { display: none !important; }
@@ -211,19 +211,6 @@
           </div>
         </div>
 
-        <!-- Sección de solicitudes asignadas -->
-        <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
-          <div class="p-5 bg-gray-50/70 border-b border-gray-200/80">
-            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3">
-              <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
-              <span>Mis Solicitudes Asignadas</span>
-            </h2>
-          </div>
-          <div class="p-5">
-            <!-- Contenedor de 'Solicitudes Asignadas' eliminado: se unifica todo en 'ordersCardContainer' -->
-            <div class="text-sm text-gray-500">Tus solicitudes asignadas ahora aparecen en el mismo listado de solicitudes pendientes cuando corresponda.</div>
-          </div>
-        </div>
     </div>
     
     
