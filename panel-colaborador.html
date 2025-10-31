@@ -32,61 +32,86 @@
   <script src="js/colaboradores-cards.js"></script>
   
   <style>
-    /* Clean, single source of truth for sidebar + main layout
-       Desktop (>=768px): sidebar width = 18rem (288px, matches md:w-72)
-       Mobile (<768px): sidebar shown as floating panel width = 20rem (320px, matches w-80)
-    */
-
-    /* Basic helpers */
+    /* --- Base Layout --- */
+    body {
+      display: flex;
+    }
     #collabSidebar {
-      transition: transform 0.28s ease-in-out, visibility 0.28s;
+      transition: transform 0.3s ease-in-out;
       will-change: transform;
-      background: linear-gradient(180deg,#0f172a,#022c6b);
+    }
+    #mainContent {
+      flex-grow: 1;
+      transition: margin-left 0.3s ease-in-out;
+    }
+    #sidebarOverlay {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 40;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease-in-out, visibility 0.3s;
     }
 
-    /* Cards / map small tweaks */
-    #activeJobMap { min-height: 250px; width: 100%; }
-    #ordersCardContainer .order-card, #ordersCardContainer > div { width:100%; min-height:110px; }
-
-    /* MOBILE: default state -> sidebar hidden off-canvas, overlay hidden */
-    @media (max-width: 767px) {
+    /* --- Vista Móvil (< 768px) --- */
+    @media (max-width: 767.98px) {
+      body {
+        flex-direction: column;
+      }
       #collabSidebar {
         position: fixed;
         top: 0;
         left: 0;
         height: 100vh;
-        width: 20rem; /* 320px = w-80 */
         transform: translateX(-100%);
         z-index: 50;
       }
+      #mainContent {
+        width: 100%;
+        margin-left: 0 !important; /* Asegurar que no haya margen */
+      }
 
-      /* main content should not be pushed on mobile */
-      #mainContent { margin-left: 0; }
-
-      /* make overlay available but hidden by default via the `hidden` class in markup */
-      #sidebarOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
-      #sidebarOverlay.hidden { display: none; }
-
-      body.overflow-hidden { overflow: hidden; }
+      /* Estado: sidebar abierto en móvil */
+      body.sidebar-mobile-open #collabSidebar {
+        transform: translateX(0);
+      }
+      body.sidebar-mobile-open #sidebarOverlay {
+        opacity: 1;
+        visibility: visible;
+      }
+      body.sidebar-mobile-open {
+        overflow: hidden;
+      }
     }
 
-    /* DESKTOP: sidebar visible and fixed; content is shifted by 18rem (288px) */
+    /* --- Vista de Escritorio (>= 768px) --- */
     @media (min-width: 768px) {
       #collabSidebar {
-        position: fixed; /* MEJORA: 'fixed' es más robusto que 'sticky' para este layout */
+        position: fixed;
         top: 0;
         left: 0;
         height: 100vh;
-        width: 18rem; /* 288px = md:w-72 */
-        transform: translateX(0) !important;
-        z-index: 30;
+      }
+      #sidebarOverlay {
+        display: none !important; /* El overlay nunca se usa en escritorio */
       }
 
-      /* El margen se controla por JS para el colapso, se elimina la regla fija */
-      #mainContent { transition: margin-left 0.28s ease-in-out; }
+      /* Estado: sidebar abierto en escritorio (por defecto) */
+      body.sidebar-desktop-open #mainContent {
+        margin-left: 18rem; /* 288px, igual a md:w-72 */
+      }
+      body.sidebar-desktop-open #collabSidebar {
+        transform: translateX(0);
+      }
 
-      /* Overlay not used on desktop */
-      #sidebarOverlay { display: none !important; }
+      /* Estado: sidebar cerrado en escritorio */
+      body.sidebar-desktop-closed #mainContent {
+        margin-left: 0;
+      }
+      body.sidebar-desktop-closed #collabSidebar {
+        transform: translateX(-100%);
+      }
     }
   </style>
 </head>
@@ -113,7 +138,7 @@
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden hidden transition-opacity duration-300"></div>
 
   <!-- ✅ MEJORA: Sidebar rediseñado -->
-  <aside id="collabSidebar" class="fixed md:sticky top-0 left-0 w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-screen flex flex-col sidebar-transition -translate-x-full md:translate-x-0 z-50">
+  <aside id="collabSidebar" class="w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-screen flex flex-col z-50">
     <!-- Header del Sidebar -->
     <div class="p-6 border-b border-gray-700">
       <div class="flex items-center justify-between mb-4">
