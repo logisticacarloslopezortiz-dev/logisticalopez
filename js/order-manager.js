@@ -64,16 +64,32 @@ const OrderManager = {
       // 4. Enviar notificación push (si aplica)
       // Esta lógica se puede expandir para notificar a diferentes roles.
       try {
-        await supabaseConfig.client.functions.invoke('send-push-notification', {
-          body: {
+        // Crear el cuerpo de la solicitud para diagnóstico detallado
+        const notificationBody = {
+          orderId: orderId,
+          newStatus: newStatus
+        };
+        
+        console.log(`[OrderManager] Enviando notificación push para orden #${orderId}:`, JSON.stringify(notificationBody));
+        
+        const response = await supabaseConfig.client.functions.invoke('send-push-notification', {
+          body: notificationBody
+        });
+        
+        console.log(`[OrderManager] Respuesta de notificación para orden #${orderId}:`, response);
+        console.log(`[OrderManager] Solicitud de notificación enviada exitosamente para la orden #${orderId}.`);
+      } catch (invokeError) {
+        // Log detallado del error para diagnóstico
+        console.error(`[OrderManager] ERROR al enviar notificación para la orden #${orderId}:`, {
+          mensaje: invokeError.message,
+          código: invokeError.code || 'N/A',
+          detalles: invokeError.details || 'N/A',
+          respuesta: invokeError.response || 'N/A',
+          cuerpo: {
             orderId: orderId,
             newStatus: newStatus
           }
         });
-        console.log(`[OrderManager] Solicitud de notificación enviada para la orden #${orderId}.`);
-      } catch (invokeError) {
-        // No consideramos esto un error fatal, pero lo registramos.
-        console.warn(`[OrderManager] Fallo al enviar notificación para la orden #${orderId}:`, invokeError.message);
       }
 
       return { success: true, error: null };

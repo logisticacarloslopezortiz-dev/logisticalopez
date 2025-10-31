@@ -148,6 +148,73 @@ document.addEventListener('DOMContentLoaded', async () => {
     filterAndRender();
   });
 
+  // Configurar suscripción en tiempo real para órdenes completadas
+  const setupRealtimeSubscription = () => {
+    const channel = supabaseConfig.client.channel('historial-updates');
+    
+    channel
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'orders',
+          filter: 'status=eq.Completado'
+        }, 
+        (payload) => {
+          console.log('[Historial] Cambio en tiempo real detectado:', payload);
+          
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            // Si es una nueva orden completada o una actualización a completado
+            const existingIndex = allHistoryOrders.findIndex(o => o.id === payload.new.id);
+            
+            if (existingIndex === -1) {
+              // Es una nueva orden completada, añadirla al principio
+              console.log('[Historial] Nueva orden completada detectada:', payload.new.id);
+              // Cargar la orden completa con sus relaciones
+              loadOrderDetails(payload.new.id);
+            } else {
+              // Actualizar la orden existente
+              allHistoryOrders[existingIndex] = { 
+                ...allHistoryOrders[existingIndex], 
+                ...payload.new 
+              };
+              filterAndRender();
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Historial] Estado de suscripción en tiempo real:', status);
+      });
+  };
+
+  // Función para cargar los detalles completos de una orden
+  const loadOrderDetails = async (orderId) => {
+    const { data, error } = await supabaseConfig.client
+      .from('orders')
+      .select(`
+        *,
+        service:services(name),
+        profiles:completed_by(full_name)
+      `)
+      .eq('id', orderId)
+      .single();
+
+    if (error) {
+      console.error(`Error al cargar detalles de la orden #${orderId}:`, error);
+      return;
+    }
+
+    if (data) {
+      // Añadir al principio del array para que aparezca primero
+      allHistoryOrders.unshift(data);
+      filterAndRender();
+    }
+  };
+
   // Carga inicial
   await loadHistory();
+  
+  // Configurar suscripción en tiempo real
+  setupRealtimeSubscription();
 });

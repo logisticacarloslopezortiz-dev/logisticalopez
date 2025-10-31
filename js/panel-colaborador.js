@@ -80,6 +80,9 @@ async function changeStatus(orderId, newKey) {
     additionalData.status = 'Completado';
     additionalData.completed_at = new Date().toISOString();
     additionalData.completed_by = state.collabSession.user.id;
+  } else if (newKey === 'en_camino_recoger' || newKey === 'cargando' || newKey === 'en_camino_entregar') {
+    // Cuando el colaborador inicia el trabajo, actualizar el estado global a "En proceso"
+    additionalData.status = 'En proceso';
   }
 
   // Usar la función centralizada
@@ -112,6 +115,11 @@ async function changeStatus(orderId, newKey) {
       state.activeJobId = null;
       localStorage.removeItem('tlc_collab_active_job');
       document.getElementById('activeJobSection').classList.add('hidden');
+      
+      // Recargar la página para mostrar otras solicitudes pendientes
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500); // Recargar después de 1.5 segundos para que el usuario vea el mensaje de éxito
     }
 
     showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);

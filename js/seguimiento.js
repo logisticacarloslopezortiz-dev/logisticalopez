@@ -187,6 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'recogido': 'El servicio ha sido recogido',
             'en_ruta_entrega': 'En camino a la entrega',
             'completado': 'Tu servicio ha sido completado exitosamente',
+            'Completado': 'Tu servicio ha sido completado exitosamente',
+            'En proceso': 'Tu servicio está en proceso',
             'cancelado': 'Tu solicitud ha sido cancelada'
         };
         
@@ -353,13 +355,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getStatusClass(status) {
-        switch (status) {
-            case 'Pendiente': return 'status-pending';
-            case 'En proceso': return 'status-in-progress';
-            case 'Completado': return 'status-completed';
-            case 'Cancelado': return 'status-cancelled';
-            default: return 'status-pending';
-        }
+        const statusClasses = {
+            'pendiente': 'status-pending',
+            'confirmado': 'status-confirmed',
+            'asignado': 'status-assigned',
+            'En proceso': 'status-in-progress',
+            'Completado': 'status-completed',
+            'completado': 'status-completed',
+            'cancelado': 'status-canceled'
+        };
+        return statusClasses[status] || 'status-pending';
     }
 
     // --- Inicialización ---
