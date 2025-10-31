@@ -70,9 +70,10 @@ function filterOrders() {
       ((order.email || '').toLowerCase().includes(searchTerm)) ||
       String(order.id).includes(searchTerm);
 
-    const matchesStatus = statusFilter
-      ? order.status === statusFilter
-      : !['Completado', 'Cancelado'].includes(order.status);
+    // COMENTARIO: Lógica de filtrado actualizada.
+    // Por defecto, se ocultan las órdenes 'Completado' y 'Cancelado'.
+    // Si se selecciona un filtro de estado, se muestra solo ese estado.
+    const matchesStatus = statusFilter ? order.status === statusFilter : !['Completado', 'Cancelado'].includes(order.status);
 
     const matchesService = !serviceFilter || ((order.service?.name || order.service || '').toLowerCase() === serviceFilter.toLowerCase());
     const matchesDate = !dateFilter || order.date === dateFilter;
@@ -258,23 +259,25 @@ function renderOrders(){
 // --- INICIO: Funciones de Actualización y UI ---
 // Función para actualizar el estado de una orden en Supabase
 async function updateOrderStatus(orderId, newStatus) {
-  const { data, error } = await supabaseConfig.client
-    .from('orders')
-    .update({ status: newStatus })
-    .eq('id', orderId);
+  // COMENTARIO: Esta función ahora utiliza el OrderManager centralizado.
+  console.log(`[Dueño] Solicitando cambio de estado para orden #${orderId} a "${newStatus}"`);
 
-  if (error) {
-    console.error('Error al actualizar el estado:', error);
-    alert('No se pudo actualizar el estado de la orden.');
-    // Revertir el cambio en la UI si falla
-    loadOrders();
-  } else {
-    // Actualizar el estado en el array local para no tener que recargar toda la data
-    const orderIndex = allOrders.findIndex(o => o.id == orderId);
-    if (orderIndex !== -1) allOrders[orderIndex].status = newStatus;
-    filterOrders(); // Re-renderizar con el nuevo estado
+  // El tercer parámetro (additionalData) está vacío porque el dueño solo cambia el estado principal.
+  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newStatus, {});
+
+  if (success) {
     notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
-  }}
+
+    // Si el estado se cambia a 'Completado', el filtro se encargará de ocultarlo.
+    // Forzamos la recarga para asegurar que la vista esté 100% sincronizada.
+    await loadOrders();
+
+  } else {
+    notifications.error('No se pudo actualizar el estado de la orden.', error);
+    // Si falla, recargamos para revertir cualquier cambio visual optimista.
+    await loadOrders();
+  }
+}
 
 // Función para mostrar detalles del servicio
 function showServiceDetails(orderId) {

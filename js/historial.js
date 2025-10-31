@@ -1,151 +1,153 @@
-let allRequests = [];
-let filteredRequests = [];
-let currentPage = 1;
-const requestsPerPage = 15;
+// js/historial.js
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar iconos
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
-    loadFromSupabase();
+document.addEventListener('DOMContentLoaded', async () => {
+  // Inicializar elementos del DOM
+  const tableBody = document.getElementById('historyTableBody');
+  const searchInput = document.getElementById('searchInput');
+  const dateFilter = document.getElementById('dateFilter');
+  const clearFiltersBtn = document.getElementById('clearFilters');
+  const showingCountEl = document.getElementById('showingCount');
+  const totalCountEl = document.getElementById('totalCount');
 
-    // Listeners para filtros
-    document.getElementById('searchInput')?.addEventListener('input', applyFilters);
-    document.getElementById('dateFilter')?.addEventListener('change', applyFilters);
-    document.getElementById('clearFilters')?.addEventListener('click', clearFilters);
-});
+  let allHistoryOrders = [];
+  let filteredOrders = [];
 
-async function loadFromSupabase() {
-    const tableBody = document.getElementById('historyTableBody');
-    tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-500"><div class="flex flex-col items-center gap-2"><i data-lucide="loader" class="w-8 h-8 animate-spin"></i><span>Cargando historial...</span></div></td></tr>`;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+  // --- MODAL DE EVIDENCIA ---
+  const evidenceModal = document.getElementById('evidenceModal');
+  const closeEvidenceModalBtn = document.getElementById('closeEvidenceModal');
+  const evidenceGallery = document.getElementById('evidenceGallery');
 
-    try {
-        // ✅ MEJORA: Cargar solo las órdenes completadas/canceladas y los datos relacionados.
-        const { data, error } = await supabaseConfig.client
-            .from('orders')
-            .select('*, service:services(name), completed:profiles!orders_completed_by_fkey(full_name)')
-            .in('status', ['Completado', 'Cancelado'])
-            .order('completed_at', { ascending: false, nullsLast: true })
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        allRequests = data || [];
-        filteredRequests = [...allRequests];
-        displayRequests();
-    } catch (error) {
-        console.error('Error cargando desde Supabase:', error);
-        tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-red-500">No se pudo cargar el historial.</td></tr>`;
-}
-}
-
-function displayRequests() {
-    const tbody = document.getElementById('historyTableBody');
-    const showingCount = document.getElementById('showingCount');
-    const totalCount = document.getElementById('totalCount');
-
-    if (!tbody) return;
-
-    if (filteredRequests.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-500">No se encontraron solicitudes en el historial.</td></tr>`;
-        if (showingCount) showingCount.textContent = 0;
-        if (totalCount) totalCount.textContent = allRequests.length;
-        return;
+  // Función para abrir el modal de evidencia
+  window.showEvidence = (orderId) => {
+    const order = filteredOrders.find(o => o.id === orderId);
+    if (!order || !order.evidence_photos || order.evidence_photos.length === 0) {
+      alert('Esta solicitud no tiene fotos de evidencia.');
+      return;
     }
 
-    const startIndex = (currentPage - 1) * requestsPerPage;
-    const endIndex = startIndex + requestsPerPage;
-    const pageRequests = filteredRequests.slice(startIndex, endIndex);
+    evidenceGallery.innerHTML = order.evidence_photos.map(photoUrl => `
+      <a href="${photoUrl}" target="_blank" class="block group">
+        <img src="${photoUrl}" alt="Evidencia" class="w-full h-48 object-cover rounded-lg shadow-md group-hover:opacity-80 transition-opacity">
+      </a>
+    `).join('');
 
-    tbody.innerHTML = pageRequests.map(request => {
-        const evidence = Array.isArray(request.photos) ? request.photos : (Array.isArray(request.evidence_urls) ? request.evidence_urls : []);
-        const evidenceCell = evidence.length > 0
-            ? `<button class="view-evidence px-3 py-1 bg-blue-600 text-white rounded text-sm" data-id="${request.id}">Ver</button>`
-            : '<span class="text-gray-400">N/A</span>';
-        return `
-        <tr data-id="${request.id}" class="hover:bg-gray-50">
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${request.id}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${request.name}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.service?.name || 'N/A'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.completed_at ? new Date(request.completed_at).toLocaleDateString('es-DO') : 'N/A'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${request.completed?.full_name || 'No asignado'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${request.status === 'Completado' ? 'text-green-600' : 'text-red-600'}">${request.estimated_price || 'N/A'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">${evidenceCell}</td>
-        </tr>`;
-    }).join('');
+    evidenceModal.classList.remove('hidden');
+    evidenceModal.classList.add('flex');
+  };
 
-    if (showingCount) showingCount.textContent = pageRequests.length;
-    if (totalCount) totalCount.textContent = filteredRequests.length;
-    // Aquí iría la lógica de paginación si se implementa
+  // Función para cerrar el modal
+  const closeEvidenceModal = () => {
+    evidenceModal.classList.add('hidden');
+    evidenceModal.classList.remove('flex');
+  };
 
-    // Vincular botones de evidencia
-    document.querySelectorAll('.view-evidence').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const id = e.currentTarget.getAttribute('data-id');
-            const req = filteredRequests.find(r => String(r.id) === String(id));
-            openEvidenceModal(req);
-        });
-    });
-}
+  closeEvidenceModalBtn.addEventListener('click', closeEvidenceModal);
+  // Cerrar al hacer clic fuera
+  evidenceModal.addEventListener('click', (e) => {
+    if (e.target === evidenceModal) {
+      closeEvidenceModal();
+    }
+  });
 
-function openEvidenceModal(request) {
-    const modal = document.getElementById('evidenceModal');
-    const gallery = document.getElementById('evidenceGallery');
-    if (!modal || !gallery || !request) return;
-    const evidence = Array.isArray(request.photos) ? request.photos : (Array.isArray(request.evidence_urls) ? request.evidence_urls : []);
-    if (evidence.length === 0) {
-        gallery.innerHTML = '<div class="text-gray-500">No hay evidencia disponible para esta solicitud.</div>';
+
+  // --- CARGA Y RENDERIZADO DE DATOS ---
+
+  // Función para renderizar las filas de la tabla
+  const renderTable = () => {
+    if (!tableBody) return;
+
+    if (filteredOrders.length === 0) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center py-10 text-gray-500">
+            No se encontraron solicitudes que coincidan con los filtros.
+          </td>
+        </tr>
+      `;
     } else {
-        gallery.innerHTML = evidence.map(url => `
-            <div class="border rounded-lg overflow-hidden">
-              <img src="${url}" alt="Evidencia" class="w-full h-40 object-cover" />
-            </div>
-        `).join('');
+      tableBody.innerHTML = filteredOrders.map(order => {
+        const completadoPorNombre = order.profiles ? order.profiles.full_name : 'No disponible';
+
+        return `
+          <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.name}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service?.name || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${new Date(order.completed_at).toLocaleDateString()}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${completadoPorNombre}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-700">${order.monto_cobrado ? `$${order.monto_cobrado.toLocaleString('es-DO')}` : 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              ${(order.evidence_photos && order.evidence_photos.length > 0) ?
+                `<button onclick="showEvidence(${order.id})" class="text-blue-600 hover:underline">Ver (${order.evidence_photos.length})</button>` :
+                'No hay'}
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
 
-document.addEventListener('click', (e) => {
-    if (e.target && e.target.id === 'closeEvidenceModal') {
-        const modal = document.getElementById('evidenceModal');
-        if (modal) {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-    }
-});
+    // Actualizar contadores
+    showingCountEl.textContent = filteredOrders.length;
+    totalCountEl.textContent = allHistoryOrders.length;
+    if (window.lucide) lucide.createIcons();
+  };
 
-function applyFilters() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const dateFilter = document.getElementById('dateFilter').value;
+  // Función de filtrado
+  const filterAndRender = () => {
+    const searchTerm = searchInput.value.toLowerCase();
+    const dateValue = dateFilter.value;
 
-    filteredRequests = allRequests.filter(request => {
-        const matchSearch = !searchTerm ||
-            request.name.toLowerCase().includes(searchTerm) ||
-            (request.service?.name || '').toLowerCase().includes(searchTerm) ||
-            String(request.id).toLowerCase().includes(searchTerm) ||
-            String(request.short_id || '').toLowerCase().includes(searchTerm);
+    filteredOrders = allHistoryOrders.filter(order => {
+      const matchesSearch = !searchTerm ||
+        String(order.id).includes(searchTerm) ||
+        order.name.toLowerCase().includes(searchTerm) ||
+        (order.service?.name || '').toLowerCase().includes(searchTerm);
 
-        const matchDate = !dateFilter || request.completed_at?.startsWith(dateFilter);
+      const matchesDate = !dateValue || order.completed_at.startsWith(dateValue);
 
-        return matchSearch && matchDate;
+      return matchesSearch && matchesDate;
     });
 
-    currentPage = 1;
-    displayRequests();
-}
+    renderTable();
+  };
 
-function clearFilters() {
-    document.getElementById('searchInput').value = '';
-    document.getElementById('dateFilter').value = '';
-    filteredRequests = [...allRequests];
-    currentPage = 1;
-    displayRequests();
-}
+  // Carga inicial de datos
+  const loadHistory = async () => {
+    const { data, error } = await supabaseConfig.client
+      .from('orders')
+      .select(`
+        *,
+        service:services(name),
+        profiles:completed_by(full_name)
+      `)
+      .in('status', ['Completado', 'Cancelado'])
+      .order('completed_at', { ascending: false });
 
-// Hacer funciones globales para que los botones en el HTML puedan llamarlas
-window.applyFilters = applyFilters;
-window.clearFilters = clearFilters;
+    if (error) {
+      console.error('Error al cargar el historial:', error);
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center py-10 text-red-500">
+            Error al cargar el historial. Inténtalo de nuevo más tarde.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    allHistoryOrders = data;
+    filterAndRender();
+  };
+
+  // --- EVENT LISTENERS ---
+  searchInput.addEventListener('input', filterAndRender);
+  dateFilter.addEventListener('change', filterAndRender);
+  clearFiltersBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    dateFilter.value = '';
+    filterAndRender();
+  });
+
+  // Carga inicial
+  await loadHistory();
+});
