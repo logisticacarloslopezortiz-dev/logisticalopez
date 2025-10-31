@@ -68,26 +68,8 @@ Deno.serve(async (req: Request) => {
 
     if (!existing || existing.length === 0) {
       logDebug('Creando perfil de colaborador', { userId: user.id });
-      
-      // 1. Insertar en tabla collaborators
-      const { error: insErr } = await admin
-        .from('collaborators')
-        .insert({ 
-          id: user.id, 
-          email, 
-          name, 
-          phone, 
-          matricula,
-          status: 'activo', // Corregido: 'activo' en minúsculas para consistencia
-          created_at: new Date().toISOString()
-        });
 
-      if (insErr) {
-        logDebug('Error al insertar perfil de colaborador', insErr);
-        return jsonResponse({ error: insErr.message }, 400);
-      }
-      
-      // 2. Insertar en tabla profiles
+      // 1. Insertar primero en tabla profiles (evita violación de FK en collaborators)
       const { error: profileErr } = await admin
         .from('profiles')
         .insert({
@@ -98,24 +80,64 @@ Deno.serve(async (req: Request) => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
-        
+
       if (profileErr) {
         logDebug('Error al insertar en profiles', profileErr);
+        // Rollback: eliminar el usuario de Auth para no dejar cuentas colgando
+        try { await admin.auth.admin.deleteUser(user.id); } catch (cleanupError) {
+          logDebug('Fallo al limpiar usuario auth tras error de profiles', cleanupError);
+        }
         return jsonResponse({ error: profileErr.message }, 400);
       }
-      
-      // 3. Insertar en tabla matricula si se proporcionó
+
+      // 2. Insertar en tabla collaborators
+      const { error: collabErr } = await admin
+        .from('collaborators')
+        .insert({ 
+          id: user.id, 
+          email, 
+          name, 
+          phone, 
+          matricula,
+          status: 'activo',
+          created_at: new Date().toISOString()
+        });
+
+      if (collabErr) {
+        logDebug('Error al insertar colaborador', collabErr);
+        // Rollback: limpiar perfil y usuario auth
+        try { await admin.from('profiles').delete().eq('id', user.id); } catch (cleanupError) {
+          logDebug('Fallo al limpiar profiles tras error collaborators', cleanupError);
+        }
+        try { await admin.auth.admin.deleteUser(user.id); } catch (cleanupError) {
+          logDebug('Fallo al limpiar usuario auth tras error collaborators', cleanupError);
+        }
+        return jsonResponse({ error: collabErr.message }, 400);
+      }
+
+      // 3. Insertar en tabla matriculas si se proporcionó
       if (matricula) {
         const { error: matriculaErr } = await admin
           .from('matriculas')
           .insert({
             user_id: user.id,
             matricula,
+            status: 'activo',
             created_at: new Date().toISOString()
           });
-          
+
         if (matriculaErr) {
           logDebug('Error al insertar en matriculas', matriculaErr);
+          // Rollback: eliminar collaborator y profile y auth
+          try { await admin.from('collaborators').delete().eq('id', user.id); } catch (cleanupError) {
+            logDebug('Fallo al limpiar collaborators tras error matriculas', cleanupError);
+          }
+          try { await admin.from('profiles').delete().eq('id', user.id); } catch (cleanupError) {
+            logDebug('Fallo al limpiar profiles tras error matriculas', cleanupError);
+          }
+          try { await admin.auth.admin.deleteUser(user.id); } catch (cleanupError) {
+            logDebug('Fallo al limpiar usuario auth tras error matriculas', cleanupError);
+          }
           return jsonResponse({ error: matriculaErr.message }, 400);
         }
       }

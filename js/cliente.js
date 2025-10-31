@@ -542,12 +542,31 @@ async function subscribeUserToPush(orderId) {
     const registration = await navigator.serviceWorker.ready;
     console.log("Service Worker listo para suscripción");
     
-    // Clave VAPID fija para desarrollo (reemplazar en producción)
-    const vapidKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
-    console.log("Usando clave VAPID:", vapidKey);
-    
-    const applicationServerKey = urlBase64ToUint8Array(vapidKey);
-    console.log("applicationServerKey generada correctamente");
+    // Obtener la clave VAPID válida desde el servidor
+    let vapidKey = null;
+    try {
+      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key', { body: {} });
+      if (error) {
+        console.warn('No se pudo obtener VAPID por función:', error.message);
+      }
+      vapidKey = data?.vapidPublicKey || null;
+    } catch (e) {
+      console.warn('Fallo al invocar get-vapid-key:', e?.message || String(e));
+    }
+
+    if (!vapidKey || typeof vapidKey !== 'string') {
+      throw new Error('VAPID pública no disponible. Contacte al administrador.');
+    }
+
+    // Validar formato de clave VAPID antes de convertir
+    const raw = urlBase64ToUint8Array(vapidKey);
+    if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
+      console.error('Clave VAPID inválida: longitud', raw?.length, 'primer byte', raw?.[0]);
+      throw new Error('Invalid raw ECDSA P-256 public key');
+    }
+
+    const applicationServerKey = raw;
+    console.log("applicationServerKey generada y validada correctamente");
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey

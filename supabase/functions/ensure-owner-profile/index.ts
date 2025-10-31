@@ -40,28 +40,42 @@ Deno.serve(async (req) => {
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // 3. Verificar si ya existe un perfil en 'collaborators'
+    // 3. Asegurar que exista el perfil público en 'profiles'
+    const { error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin',
+        phone: user.user_metadata?.phone || null,
+        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (profileErr) {
+      return jsonResponse({ error: 'No se pudo crear/actualizar el perfil público', details: profileErr.message }, 500);
+    }
+
+    // 4. Verificar si ya existe un colaborador; si no, insertarlo con rol 'administrador'
     const { data: existingCollaborator, error: selectError } = await supabaseAdmin
       .from('collaborators')
       .select('id')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
-    // Si ya existe o hay un error que no sea "no encontrado", no hacer nada
-    if (existingCollaborator || (selectError && selectError.code !== 'PGRST116')) {
-      return jsonResponse({ success: true, message: 'El perfil del colaborador ya existe.' });
+    if (!existingCollaborator) {
+      const { error: insertError } = await supabaseAdmin.from('collaborators').insert({
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin',
+        role: 'administrador',
+        status: 'activo',
+        created_at: new Date().toISOString()
+      });
+      if (insertError) {
+        return jsonResponse({ error: 'No se pudo crear el colaborador', details: insertError.message }, 500);
+      }
     }
-
-    // 4. Si no existe, crearlo con rol de 'administrador'
-    const { error: insertError } = await supabaseAdmin.from('collaborators').insert({
-      id: user.id,
-      email: user.email,
-      name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin',
-      role: 'administrador',
-      status: 'activo',
-    });
-
-    if (insertError) throw insertError;
 
     return jsonResponse({ success: true, message: 'Perfil de administrador creado y sincronizado.' });
   } catch (error) {
