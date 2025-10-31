@@ -1,5 +1,4 @@
 /// <reference path="../globals.d.ts" />
-import webpush from 'https://esm.sh/web-push@3.6.1'
 import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts'
 
 // --- Configuración de Claves VAPID ---
@@ -14,10 +13,20 @@ Deno.serve(async (req: Request) => {
   if (corsResponse) return corsResponse;
 
   try {
+    // Validación de método
+    if (req.method !== 'POST') {
+      return jsonResponse({ success: false, error: 'Method not allowed' }, 200);
+    }
+
+    // Validar secretos VAPID en runtime
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
+      return jsonResponse({ success: false, error: 'Faltan claves VAPID en el servidor' }, 200);
+    }
+
     const { subscription, notification } = await req.json();
 
     if (!subscription || !notification) {
-      throw new Error('Falta la suscripción o el payload de la notificación');
+      return jsonResponse({ success: false, error: 'Falta la suscripción o el payload de la notificación' }, 200);
     }
 
     const options = {
@@ -28,6 +37,9 @@ Deno.serve(async (req: Request) => {
       },
     };
 
+    // Importar dinámicamente la librería web-push para evitar fallos en inicialización
+    const { default: webpush } = await import('https://esm.sh/web-push@3.6.1');
+
     // Enviar la notificación push usando la librería web-push
     await webpush.sendNotification(
       subscription,
@@ -35,10 +47,11 @@ Deno.serve(async (req: Request) => {
       options
     );
 
-    return jsonResponse({ message: 'Notificación push enviada con éxito' }, 200);
+    return jsonResponse({ success: true, message: 'Notificación push enviada con éxito' }, 200);
   } catch (error) {
     console.error('Error al enviar notificación push:', error);
     const msg = error instanceof Error ? error.message : 'Fallo inesperado';
-    return jsonResponse({ error: msg }, 500);
+    // Responder siempre 200 con success:false para manejo uniforme en cliente
+    return jsonResponse({ success: false, error: msg }, 200);
   }
 });

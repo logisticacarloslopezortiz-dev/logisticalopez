@@ -225,6 +225,10 @@ const supabaseConfig = {
     let safeUpdates = { ...updates };
     delete safeUpdates.last_collab_status;
     delete safeUpdates.lastCollabStatus;
+    // Eliminar el campo tracking si existe en las actualizaciones
+    if ('tracking' in safeUpdates) {
+      delete safeUpdates.tracking;
+    }
 
     // Intentaremos la actualización; si falla por columna desconocida, quitamos la(s) columna(s) problemática(s) y reintentos.
     let attempt = 0;

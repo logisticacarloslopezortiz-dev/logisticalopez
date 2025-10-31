@@ -38,6 +38,18 @@ Deno.serve(async (req: Request) => {
     });
     if (authErr) return jsonResponse({ error: authErr.message }, 400);
 
+    // 2) Sincronizar tabla profiles (upsert por id)
+    const { error: profErr } = await admin
+      .from('profiles')
+      .upsert({
+        id: user_id,
+        full_name: name ?? undefined,
+        email: email ?? undefined,
+        phone: phone ?? undefined,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
+    if (profErr) return jsonResponse({ error: profErr.message }, 400);
+
     // 2) Actualizar collaborators (sin campo 'role' para evitar 42703)
     const updateCollab: any = {};
     if (email !== undefined) updateCollab.email = email;

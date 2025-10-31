@@ -24,7 +24,7 @@
   <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
   
   <!-- Leaflet CSS para el mapa -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <!-- Google Maps will be used instead of Leaflet. Set your API key in the script src below. -->
   
   <!-- Tailwind y Lucide -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -32,71 +32,65 @@
   <script src="js/colaboradores-cards.js"></script>
   
   <style>
-    /* Sidebar animations */
-    .sidebar-transition {
-      transition: transform 0.3s ease-in-out;
-    }
-    
-    .sidebar-hidden {
-      transform: translateX(-100%);
-    }
-    
-    /* Card hover effects */
-    .order-card {
-      transition: all 0.2s ease-in-out;
-    }
-    
-    .order-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-    }
-    
-    /* Mobile optimizations */
-    @media (max-width: 768px) {
-      .mobile-card {
-        margin-bottom: 1rem;
-      }
-      
-      /* Auto-hide sidebar on mobile */
-      #sidebar, #collabSidebar {
-        transform: translateX(-100%);
-      }
-      
-      /* Ajustes para contenido principal en móvil */
-      #mainContent {
-        margin-left: 0 !important;
-        padding: 1rem;
-      }
+    /* Clean, single source of truth for sidebar + main layout
+       Desktop (>=768px): sidebar width = 18rem (288px, matches md:w-72)
+       Mobile (<768px): sidebar shown as floating panel width = 20rem (320px, matches w-80)
+    */
 
+    /* Basic helpers */
+    #collabSidebar {
+      transition: transform 0.28s ease-in-out, visibility 0.28s;
+      will-change: transform;
+      background: linear-gradient(180deg,#0f172a,#022c6b);
+    }
+
+    /* Cards / map small tweaks */
+    #activeJobMap { min-height: 250px; width: 100%; }
+    #ordersCardContainer .order-card, #ordersCardContainer > div { width:100%; min-height:110px; }
+
+    /* MOBILE: default state -> sidebar hidden off-canvas, overlay hidden */
+    @media (max-width: 767px) {
       #collabSidebar {
-        z-index: 50;
         position: fixed;
+        top: 0;
+        left: 0;
         height: 100vh;
+        width: 20rem; /* 320px = w-80 */
+        transform: translateX(-100%);
+        z-index: 50;
       }
 
-      #sidebarOverlay {
-        z-index: 40;
-      }
+      /* main content should not be pushed on mobile */
+      #mainContent { margin-left: 0; }
+
+      /* make overlay available but hidden by default via the `hidden` class in markup */
+      #sidebarOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
+      #sidebarOverlay.hidden { display: none; }
+
+      body.overflow-hidden { overflow: hidden; }
     }
 
-    @media (min-width: 769px) {
+    /* DESKTOP: sidebar visible and sticky; content is shifted by 18rem (288px) */
+    @media (min-width: 768px) {
       #collabSidebar {
         position: sticky;
         top: 0;
+        left: 0;
         height: 100vh;
+        width: 18rem; /* 288px = md:w-72 */
+        transform: translateX(0) !important;
         z-index: 30;
       }
-    }
-    
-    /* Mapa estilos */
-    #activeJobMap {
-      min-height: 250px;
-      width: 100%;
-      z-index: 1;
+
+      /* main uses an explicit margin-left that matches sidebar width */
+      #mainContent { margin-left: 18rem; }
+
+      /* Overlay not used on desktop */
+      #sidebarOverlay { display: none !important; }
     }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex">
+<body class="bg-gray-50 min-h-screen">
   <!-- Skip link for keyboard users -->
   <a href="#mainContent" class="sr-only" style="position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;" onfocus="this.style.position='static';this.style.left='1rem';this.style.top='1rem';this.style.width='auto';this.style.height='auto';this.style.padding='8px 12px';this.style.background='#fff';this.style.zIndex='9999';">Saltar al contenido</a>
   <!-- Mobile Header with Hamburger -->
@@ -125,7 +119,7 @@
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-            TLC
+            LLO
           </div>
           <div>
             <p class="text-xs text-gray-400">Panel de Control</p>
@@ -199,29 +193,37 @@
   </aside>
 
   <!-- Contenedor principal -->
-  <div class="flex-1 min-w-0 relative">
-    <!-- Contenido principal -->
-    <main id="mainContent" class="ml-0 p-4 md:p-8 transition-all duration-300">
+  <!-- Sidebar and main are siblings for predictable layout and easier CSS control -->
+  <main id="mainContent" class="p-4 md:p-8 transition-all duration-300">
       <!-- Contenedor principal con grid para colocar contenido junto al sidebar -->
       <div class="grid grid-cols-1 gap-6">
-        <!-- Sección de solicitudes asignadas: colocada al lado del sidebar en desktop -->
-        <div class="flex flex-col lg:flex-row lg:items-start gap-6">
-          <!-- Columna izquierda: filtros y tabla/órdenes asignadas -->
-          <div class="w-full lg:w-1/3">
-            <div class="flex items-center justify-between gap-4 mb-4">
-              <h1 class="text-2xl font-bold text-gray-900">Solicitudes asignadas</h1>
-            </div>
-
-          <!-- Contenedor para las tarjetas de órdenes asignadas (columna izquierda) -->
-          <div id="assignedOrdersContainer" class="grid grid-cols-1 gap-4 mb-4"></div>
+        <!-- Sección de solicitudes -->
+        <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
+          <div class="p-5 bg-gray-50/70 border-b border-gray-200/80">
+            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3">
+              <i data-lucide="clipboard-list" class="w-6 h-6 text-blue-600"></i>
+              <span>Solicitudes Pendientes</span>
+            </h2>
+          </div>
+          <div class="p-5">
+            <!-- Contenedor de tarjetas: grid responsive para mostrar varias tarjetas por fila -->
+            <div id="ordersCardContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
+          </div>
         </div>
 
-        <!-- Columna derecha: listado principal de tarjetas móviles/pendientes -->
-        <div class="w-full lg:w-2/3">
-          <!-- Contenedor de tarjetas principal para solicitudes (pendientes y asignadas) -->
-          <div id="ordersCardContainer" class="space-y-4 mb-6"></div>
+        <!-- Sección de solicitudes asignadas -->
+        <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
+          <div class="p-5 bg-gray-50/70 border-b border-gray-200/80">
+            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3">
+              <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
+              <span>Mis Solicitudes Asignadas</span>
+            </h2>
+          </div>
+          <div class="p-5">
+            <!-- Contenedor de 'Solicitudes Asignadas' eliminado: se unifica todo en 'ordersCardContainer' -->
+            <div class="text-sm text-gray-500">Tus solicitudes asignadas ahora aparecen en el mismo listado de solicitudes pendientes cuando corresponda.</div>
+          </div>
         </div>
-      </div>
     </div>
     
     
@@ -259,6 +261,10 @@
               <button type="button" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2">
               <i data-lucide="alert-triangle" class="w-4 h-4"></i>
               <span>Reportar retraso</span>
+            </button>
+              <button type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2">
+              <i data-lucide="check-square" class="w-4 h-4"></i>
+              <span>Finalizar</span>
             </button>
           </div>
         </div>
@@ -312,7 +318,6 @@
       </div>
     </div>
     </main>
-  </div>
 
   <!-- Dependencias externas (una sola vez) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -328,123 +333,86 @@
   <script src="js/panel-colaborador.js"></script>
   <script src="js/pwa.js"></script>
   
+  <!-- Google Maps: replace YOUR_API_KEY with a valid API key. The API will call initGoogleMaps when loaded. -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initGoogleMaps"></script>
+
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Inicializar iconos Lucide
-      lucide.createIcons();
-      
-      // Elementos del DOM
-      const sidebar = document.getElementById('collabSidebar');
-      const mainContent = document.getElementById('mainContent');
-      const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
-      const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-      const sidebarOverlay = document.getElementById('sidebarOverlay');
-      
-      // Función para colapsar/expandir el sidebar
-      function updateMainMargin() {
-        // En desktop (>=768px) el contenido debe tener margen cuando el sidebar está visible.
-        // En móvil el sidebar usa overlay y NO debe empujar el contenido.
-        const isDesktop = window.innerWidth >= 768;
-        const sidebarVisible = !sidebar.classList.contains('-translate-x-full');
-        // Eliminar ambas clases de margen primero
-        mainContent.classList.remove('ml-72', 'ml-80');
-        if (isDesktop && sidebarVisible) {
-          // Usar ml-72 en desktop (coincide con md:w-72 del sidebar)
-          mainContent.classList.add('ml-72');
-        }
+    // initGoogleMaps is the callback used by the Google Maps script.
+    function initGoogleMaps(){
+      // mark as ready so other scripts can safely call initActiveJobMap/updateActiveJobMap
+      window.googleMapsReady = true;
+      // create map if activeJobSection is visible
+      try { if (typeof initActiveJobMap === 'function') initActiveJobMap(); } catch(e) { console.warn('initActiveJobMap error', e); }
+    }
+
+    // Initializes the Google Map instance for the active job.
+    function initActiveJobMap(){
+      const mapContainer = document.getElementById('activeJobMap');
+      if (!mapContainer || window.activeJobGMap) return;
+      try {
+        // Default center (fallback)
+        const center = { lat: 19.432608, lng: -99.133209 };
+        window.activeJobGMap = new google.maps.Map(mapContainer, {
+          center,
+          zoom: 12,
+          disableDefaultUI: true,
+        });
+        window.activeJobGMarkers = [];
+        window.activeJobGPolyline = null;
+      } catch (err) {
+        console.error('Error initializing Google Map:', err);
+      }
+    }
+
+    // Update the map with origin/destination coordinates (objects with {lat, lng}).
+    // If only targetLatLng is provided, center on it.
+    function updateActiveJobMap(origin, destination, targetLatLng){
+      if (!window.googleMapsReady) return;
+      initActiveJobMap();
+      const map = window.activeJobGMap;
+      if (!map) return;
+
+      // Clear previous markers and polyline
+      if (window.activeJobGMarkers) {
+        window.activeJobGMarkers.forEach(m => m.setMap(null));
+        window.activeJobGMarkers = [];
+      }
+      if (window.activeJobGPolyline) {
+        window.activeJobGPolyline.setMap(null);
+        window.activeJobGPolyline = null;
       }
 
-      function toggleSidebar() {
-        sidebar.classList.toggle('-translate-x-full');
-        // Ajustar margen según el nuevo estado y ancho de pantalla
-        updateMainMargin();
-      }
-      
-      // Evento para el botón de colapso en el sidebar
-      if (sidebarCollapseBtn) {
-        sidebarCollapseBtn.addEventListener('click', toggleSidebar);
-      }
-      
-      // Evento para el botón de menú en móvil
-      if (mobileMenuBtn) {
-        mobileMenuBtn.addEventListener('click', function() {
-          if (sidebar) sidebar.classList.remove('-translate-x-full');
-          if (sidebarOverlay) sidebarOverlay.classList.remove('hidden');
-          // En móvil no empujamos el contenido, así que no añadimos margen
-          mainContent.classList.remove('ml-72', 'ml-80');
-        });
-      }
-      
-      // Cerrar sidebar al hacer clic en el overlay (móvil)
-      if (sidebarOverlay) {
-        sidebarOverlay.addEventListener('click', function() {
-          sidebar.classList.add('-translate-x-full');
-          sidebarOverlay.classList.add('hidden');
-          // Asegurar que el contenido no tenga margen después de cerrar overlay
-          updateMainMargin();
-        });
-      }
-      
-      // Función para manejar el comportamiento responsivo
-      function handleResize() {
-        if (window.innerWidth < 768 && sidebar) {
-          // En móvil: ocultar sidebar por defecto y usar overlay
-          sidebar.classList.add('-translate-x-full');
-          if (sidebarOverlay) sidebarOverlay.classList.add('hidden');
-          // Asegurar que el contenido no tenga margen en móvil
-          if (mainContent) mainContent.classList.remove('ml-72', 'ml-80');
-        } else {
-          // En desktop: mostrar sidebar por defecto y empujar el contenido
-          if (sidebar) sidebar.classList.remove('-translate-x-full');
-          // Forzar margen adecuado para desktop
-          updateMainMargin();
+      try {
+        const bounds = new google.maps.LatLngBounds();
+        if (origin && destination) {
+          const o = new google.maps.LatLng(origin.lat, origin.lng);
+          const d = new google.maps.LatLng(destination.lat, destination.lng);
+          const markerO = new google.maps.Marker({ position: o, map, title: 'Origen' });
+          const markerD = new google.maps.Marker({ position: d, map, title: 'Destino' });
+          window.activeJobGMarkers.push(markerO, markerD);
+          window.activeJobGPolyline = new google.maps.Polyline({ path: [o, d], geodesic: true, strokeColor: '#2563eb', strokeWeight: 4 });
+          window.activeJobGPolyline.setMap(map);
+          bounds.extend(o);
+          bounds.extend(d);
+          map.fitBounds(bounds, 40);
+        } else if (targetLatLng) {
+          const t = new google.maps.LatLng(targetLatLng.lat, targetLatLng.lng);
+          const markerT = new google.maps.Marker({ position: t, map });
+          window.activeJobGMarkers.push(markerT);
+          map.setCenter(t);
+          map.setZoom(15);
         }
+      } catch (err) {
+        console.error('Error updating Active Job Map:', err);
       }
-      
-      // Función para inicializar el mapa
-      function initializeMap() {
-        const mapContainer = document.getElementById('activeJobMap');
-        if (!mapContainer) return;
-        
-        try {
-          const map = L.map('activeJobMap').setView([19.432608, -99.133209], 13);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          }).addTo(map);
-          
-          // Marcador de ejemplo (se actualizará con datos reales)
-          L.marker([19.432608, -99.133209]).addTo(map)
-            .bindPopup('Ubicación actual')
-            .openPopup();
-            
-          // Corregir el tamaño del mapa después de cargarlo
-          setTimeout(() => {
-            map.invalidateSize();
-          }, 100);
-        } catch (error) {
-          console.error('Error al inicializar el mapa:', error);
-        }
-      }
-      
-      // Inicializar el mapa si está visible
-      const activeJobSection = document.getElementById('activeJobSection');
-      if (activeJobSection && !activeJobSection.classList.contains('hidden')) {
-        initializeMap();
-      }
-      
-      // Ejecutar al cargar y al cambiar el tamaño de la ventana
-      window.addEventListener('resize', handleResize);
-      handleResize();
-      
-      // Configurar botones de acción del trabajo activo
-      const actionButtons = document.querySelectorAll('#activeJobSection button');
-      actionButtons.forEach(button => {
-        button.addEventListener('click', function() {
-          console.log('Acción:', this.textContent.trim());
-          // Aquí se implementará la lógica para cada acción
-        });
-      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function(){
+      // If Google Maps loaded earlier, ensure map is initialized for visible section
+      try { if (window.googleMapsReady) initActiveJobMap(); } catch(e){}
     });
+
   </script>
+
 </body>
 </html>

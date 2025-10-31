@@ -295,45 +295,30 @@ function updateActiveJobView(){
   const mapContainer = document.getElementById('activeJobMap');
   const hintEl = document.getElementById('activeJobMapHint');
 
-  // Inicializar mapa si no existe
-  if (!activeJobMap) {
-    activeJobMap = L.map(mapContainer).setView([18.4861, -69.9312], 9);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap'
-    }).addTo(activeJobMap);
-  }
-
-  // Limpiar capas anteriores
-  activeJobMap.eachLayer(layer => {
-    if (layer instanceof L.Marker || layer instanceof L.Polyline) {
-      activeJobMap.removeLayer(layer);
-    }
-  });
-
+  // Use Google Maps helpers defined in the HTML (initActiveJobMap / updateActiveJobMap)
   const origin = order.origin_coords;
   const destination = order.destination_coords;
   let targetLatLng, hintText;
 
   if (statusKey === 'cargando' || statusKey === 'en_camino_entregar' || statusKey === 'entregado') {
-    targetLatLng = destination ? [destination.lat, destination.lng] : null;
+    targetLatLng = destination ? { lat: destination.lat, lng: destination.lng } : null;
     hintText = 'Dirígete a la dirección de entrega';
   } else {
-    targetLatLng = origin ? [origin.lat, origin.lng] : null;
+    targetLatLng = origin ? { lat: origin.lat, lng: origin.lng } : null;
     hintText = 'Dirígete a la dirección de recogida';
   }
 
   hintEl.textContent = hintText;
 
-  if (origin && destination) {
-    const originLatLng = [origin.lat, origin.lng];
-    const destLatLng = [destination.lat, destination.lng];
-    L.marker(originLatLng, { title: 'Origen' }).addTo(activeJobMap);
-    L.marker(destLatLng, { title: 'Destino' }).addTo(activeJobMap);
-    L.polyline([originLatLng, destLatLng], { color: '#2563eb', weight: 4 }).addTo(activeJobMap);
-    activeJobMap.fitBounds([originLatLng, destLatLng], { padding: [40, 40] });
-  } else if (targetLatLng) {
-    L.marker(targetLatLng).addTo(activeJobMap);
-    activeJobMap.setView(targetLatLng, 15);
+  try {
+    if (typeof updateActiveJobMap === 'function') {
+      updateActiveJobMap(origin, destination, targetLatLng);
+    } else {
+      // If Google Maps helpers aren't available, fall back gracefully.
+      console.warn('Google Maps helpers not available; map will not update.');
+    }
+  } catch (e) {
+    console.warn('Failed to update active job map:', e);
   }
 }
 
@@ -422,8 +407,7 @@ async function handlePhotoUpload(event) {
 let baseVisibleCount = 0;
 function render(){
   const cardsContainer = document.getElementById('ordersCardContainer');
-  const assignedContainer = document.getElementById('assignedOrdersContainer');
-  if (assignedContainer) assignedContainer.classList.add('hidden'); // unificamos en un solo contenedor
+  // Note: 'assignedOrdersContainer' was removed from the HTML. All cards render into ordersCardContainer.
 
   if (!cardsContainer) return;
 
@@ -570,69 +554,49 @@ function renderDesktopAssignedCards(orders){
 }
 
 // === Toggle de sidebar en móvil (hamburguesa) ===
-function setupMobileSidebarToggle(){
-  // ✅ MEJORA: Lógica de sidebar móvil con overlay
+function setupMobileSidebarToggle() {
   const sidebar = document.getElementById('collabSidebar');
-  const toggleBtn = document.getElementById('mobileMenuBtn');
   const overlay = document.getElementById('sidebarOverlay');
+  const btn = document.getElementById('mobileMenuBtn');
+  
+  if (!sidebar || !overlay || !btn) return;
 
-  if (!sidebar || !toggleBtn || !overlay) return;
-
-  const openSidebar = () => {
+  btn.onclick = () => {
     sidebar.classList.remove('-translate-x-full');
     overlay.classList.remove('hidden');
-    overlay.classList.add('opacity-100');
+    document.body.classList.add('overflow-hidden'); // bloquea scroll
   };
 
-  const closeSidebar = () => {
+  overlay.onclick = () => {
     sidebar.classList.add('-translate-x-full');
-    overlay.classList.remove('opacity-100');
     overlay.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
   };
-
-  toggleBtn.addEventListener('click', () => {
-    sidebar.classList.contains('-translate-x-full') ? openSidebar() : closeSidebar();
-  });
-
-  overlay.addEventListener('click', closeSidebar);
 }
 
 // ✅ MEJORA: Lógica para el sidebar plegable en escritorio
 function setupDesktopSidebarToggle() {
   const sidebar = document.getElementById('collabSidebar');
-  const mainContent = document.getElementById('mainContent');
-  // Intentar encontrar el toggle específico de escritorio; si no existe, usar
-  // el botón de colapso existente `sidebarCollapseBtn` como fallback.
-  const toggleBtn = document.getElementById('desktopSidebarToggle') || document.getElementById('sidebarCollapseBtn');
+  const main = document.getElementById('mainContent');
+  const btn = document.getElementById('sidebarCollapseBtn');
+  
+  if (!sidebar || !main || !btn) return;
 
-  // Si alguno de los elementos esenciales no existe, salir sin lanzar errores.
-  if (!sidebar || !mainContent || !toggleBtn) return;
+  // Estado inicial en desktop: sidebar visible → margen activo
+  if (window.innerWidth >= 768) {
+    main.classList.add('ml-72');
+  }
 
-  const icon = toggleBtn.querySelector && toggleBtn.querySelector('i');
-
-  toggleBtn.addEventListener('click', () => {
-    sidebar.classList.toggle('-translate-x-full');
-    // Actualizar el margen del contenido en función del estado del sidebar y el ancho de pantalla
-    // Nota: updateMainMargin se define en panel-colaborador.html inline script; si no existe, aplicar comportamiento por defecto.
-    try {
-      if (typeof updateMainMargin === 'function') {
-        updateMainMargin();
-      } else {
-        // Fallback: añadir/remover ml-72 en desktop
-        const isHidden = sidebar.classList.contains('-translate-x-full');
-        if (window.innerWidth >= 768) {
-          if (isHidden) mainContent.classList.remove('ml-72');
-          else mainContent.classList.add('ml-72');
-        }
-      }
-    } catch (e) {
-      console.warn('No se pudo actualizar el margen del contenido:', e);
-    }
+  btn.onclick = () => {
     const isHidden = sidebar.classList.contains('-translate-x-full');
-    if (icon && typeof icon.setAttribute === 'function') icon.setAttribute('data-lucide', isHidden ? 'panel-right-close' : 'panel-left-close');
-    lucide.createIcons();
-    setTimeout(() => activeJobMap?.invalidateSize(), 350); // Redibujar mapa si está activo
-  });
+    if (isHidden) {
+      sidebar.classList.remove('-translate-x-full');
+      main.classList.add('ml-72');
+    } else {
+      sidebar.classList.add('-translate-x-full');
+      main.classList.remove('ml-72');
+    }
+  };
 }
 
 // Funciones para actualizar el sidebar

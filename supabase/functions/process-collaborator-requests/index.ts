@@ -13,9 +13,9 @@ Deno.serve(async (req: Request) => {
   if (corsPreflight) return corsPreflight
 
   try {
-    // Validate request method
+    // Validate request method (siempre devolver 200 con success:false)
     if (req.method !== 'POST') {
-      return jsonResponse({ error: 'Method not allowed' }, 405)
+      return jsonResponse({ success: false, error: 'Method not allowed' }, 200)
     }
 
     // Create Supabase client with Service Role key for admin operations
@@ -35,7 +35,7 @@ Deno.serve(async (req: Request) => {
     try {
       requestBody = await req.json()
     } catch (_e) {
-      return jsonResponse({ error: 'Invalid JSON body' }, 400)
+      return jsonResponse({ success: false, error: 'Invalid JSON body' }, 200)
     }
 
     const { action, requestId, collaboratorData } = requestBody
@@ -44,9 +44,10 @@ Deno.serve(async (req: Request) => {
     if (action === 'create_collaborator') {
       if (!collaboratorData?.email || !collaboratorData?.password || !collaboratorData?.name) {
         return jsonResponse({ 
+          success: false,
           error: 'Missing required fields',
           details: 'Email, password and name are required'
-        }, 400)
+        }, 200)
       }
     }
 
@@ -81,11 +82,11 @@ Deno.serve(async (req: Request) => {
                 const { data: existingUserData, error: getErr } = await supabaseAdmin.auth.admin.getUserByEmail(collaboratorData.email)
                 if (getErr) {
                   console.error('Error fetching existing user by email:', getErr)
-                  return jsonResponse({ error: 'Failed to create auth user', details: authMsg }, 400)
+                  return jsonResponse({ success: false, error: 'Failed to create auth user', details: authMsg }, 200)
                 }
                 const existingUser = (existingUserData && (existingUserData.user || existingUserData)) || null
                 if (!existingUser || !existingUser.id) {
-                  return jsonResponse({ error: 'Failed to create auth user', details: authMsg }, 400)
+                  return jsonResponse({ success: false, error: 'Failed to create auth user', details: authMsg }, 200)
                 }
 
                 // Ensure a public profile row exists for this user
@@ -94,7 +95,8 @@ Deno.serve(async (req: Request) => {
                     id: existingUser.id,
                     full_name: collaboratorData.name,
                     email: collaboratorData.email,
-                    created_at: new Date().toISOString()
+                    phone: collaboratorData.phone ?? null,
+                    updated_at: new Date().toISOString()
                   }, { onConflict: 'id' })
                 } catch (upsertErr) {
                   console.warn('Could not upsert profile for existing auth user:', errMsg(upsertErr))
@@ -104,17 +106,37 @@ Deno.serve(async (req: Request) => {
                 authUser = { user: { id: existingUser.id } }
               } catch (e) {
                 console.error('Failed to handle existing auth user:', e)
-                return jsonResponse({ error: 'Failed to create auth user', details: authMsg }, 400)
+                return jsonResponse({ success: false, error: 'Failed to create auth user', details: authMsg }, 200)
               }
             } else {
-              return jsonResponse({ error: 'Failed to create auth user', details: authMsg }, 400)
+              return jsonResponse({ success: false, error: 'Failed to create auth user', details: authMsg }, 200)
             }
           }
 
           // Ensure we have an auth user id to associate
           if (!authUser || !authUser.user || !authUser.user.id) {
             console.error('No auth user available to create collaborator profile')
-            return jsonResponse({ error: 'Missing auth user', details: 'Auth user id is required' }, 500)
+            return jsonResponse({ success: false, error: 'Missing auth user', details: 'Auth user id is required' }, 200)
+          }
+
+          // Ensure a public profile row exists for this user (handle both new and existing cases)
+          const { error: profErr } = await supabaseAdmin
+            .from('profiles')
+            .upsert({
+              id: authUser.user.id,
+              full_name: collaboratorData.name,
+              email: collaboratorData.email,
+              phone: collaboratorData.phone ?? null,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'id' })
+
+          if (profErr) {
+            // Attempt to rollback auth user to avoid dangling accounts
+            try { await supabaseAdmin.auth.admin.deleteUser(authUser.user.id) } catch (cleanupError) {
+              console.error('Failed to cleanup auth user after profile upsert failed:', errMsg(cleanupError))
+            }
+            console.error('Profile error:', errMsg(profErr))
+            return jsonResponse({ success: false, error: 'Failed to create collaborator profile', details: errMsg(profErr) }, 200)
           }
 
           // Create collaborator profile
@@ -139,7 +161,7 @@ Deno.serve(async (req: Request) => {
             }
 
             console.error('Profile error:', errMsg(profileError))
-            return jsonResponse({ error: 'Failed to create collaborator profile', details: errMsg(profileError) }, 400)
+            return jsonResponse({ success: false, error: 'Failed to create collaborator profile', details: errMsg(profileError) }, 200)
           }
 
           // Optional: update request status if table exists
@@ -168,17 +190,19 @@ Deno.serve(async (req: Request) => {
           console.error('Unexpected error in create_collaborator:', error)
           const _msg = error instanceof Error ? error.message : String(error)
           return jsonResponse({ 
+            success: false,
             error: 'Internal server error',
             details: _msg
-          }, 500)
+          }, 200)
         }
 
       case 'reject_request':
         if (!requestId) {
           return jsonResponse({ 
+            success: false,
             error: 'Missing required fields',
             details: 'Request ID is required for rejection'
-          }, 400)
+          }, 200)
         }
 
         try {
@@ -193,7 +217,7 @@ Deno.serve(async (req: Request) => {
             .eq('id', requestId)
 
           if (rejectError) {
-            return jsonResponse({ error: 'Failed to reject request', details: errMsg(rejectError) }, 400)
+            return jsonResponse({ success: false, error: 'Failed to reject request', details: errMsg(rejectError) }, 200)
           }
 
           return jsonResponse({ 
@@ -204,24 +228,27 @@ Deno.serve(async (req: Request) => {
           console.error('Error in reject_request:', error)
           const _msg = error instanceof Error ? error.message : String(error)
           return jsonResponse({ 
+            success: false,
             error: 'Failed to process rejection',
             details: _msg 
-          }, 500)
+          }, 200)
         }
 
       default:
         return jsonResponse({ 
+          success: false,
           error: 'Invalid action',
           details: `Action '${action}' not supported`
-        }, 400)
+        }, 200)
     }
 
   } catch (error) {
     console.error('Fatal error in process-collaborator-requests:', error)
     const _msg = error instanceof Error ? error.message : String(error)
     return jsonResponse({ 
+      success: false,
       error: 'Internal server error',
       details: _msg || 'Unexpected error occurred'
-    }, 500)
+    }, 200)
   }
 })
