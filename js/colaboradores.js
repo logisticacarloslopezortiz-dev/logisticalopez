@@ -42,6 +42,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateSummary();
   }
 
+  // Función para generar avatar con iniciales
+  function generateAvatar(name) {
+    if (!name) return '';
+    
+    // Obtener las iniciales (máximo 2 caracteres)
+    const initials = name.trim()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .slice(0, 2)
+      .join('');
+    
+    // Generar color basado en el nombre para consistencia
+    const colors = [
+      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-red-500', 
+      'bg-yellow-500', 'bg-indigo-500', 'bg-pink-500', 'bg-teal-500'
+    ];
+    const colorIndex = name.length % colors.length;
+    const bgColor = colors[colorIndex];
+    
+    return `
+      <div class="w-10 h-10 ${bgColor} rounded-full flex items-center justify-center text-white font-semibold text-sm">
+        ${initials}
+      </div>
+    `;
+  }
+
   // Renderizar la tabla
   function renderTable(collaborators) {
     if (collaborators.length === 0) {
@@ -51,7 +77,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     tableBody.innerHTML = collaborators.map(colab => `
       <tr class="border-b hover:bg-gray-50">
-        <td class="px-6 py-4 font-medium text-gray-900">${colab.name}</td>
+        <td class="px-6 py-4 font-medium text-gray-900">
+          <div class="flex items-center gap-3">
+            ${generateAvatar(colab.name)}
+            <div>
+              <div class="font-medium">${colab.name}</div>
+              <div class="text-sm text-gray-500">${colab.role || 'Colaborador'}</div>
+            </div>
+          </div>
+        </td>
         <td class="px-6 py-4">${colab.matricula || 'N/A'}</td>
         <td class="px-6 py-4">${colab.email}</td>
         <td class="px-6 py-4">

@@ -56,6 +56,50 @@ async function loadCollaborators() {
   return data;
 }
 
+// Función para cargar y mostrar información del administrador
+async function loadAdminInfo() {
+  try {
+    const { data: { user }, error } = await supabaseConfig.client.auth.getUser();
+    
+    if (error) {
+      console.error('Error al obtener información del usuario:', error);
+      return;
+    }
+
+    if (user) {
+      const adminNameElement = document.getElementById('adminName');
+      const adminAvatarElement = document.getElementById('adminAvatar');
+      
+      // Obtener el nombre del administrador
+      let adminName = 'Administrador';
+      if (user.user_metadata?.full_name) {
+        adminName = user.user_metadata.full_name;
+      } else if (user.email) {
+        // Si no hay nombre completo, usar la parte antes del @ del email
+        adminName = user.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      }
+      
+      // Actualizar el nombre en el DOM
+      if (adminNameElement) {
+        adminNameElement.textContent = adminName;
+      }
+      
+      // Generar avatar con iniciales
+      if (adminAvatarElement) {
+        const initials = adminName.split(' ').map(word => word.charAt(0).toUpperCase()).join('').substring(0, 2);
+        adminAvatarElement.textContent = initials;
+        
+        // Generar color basado en el nombre
+        const colors = ['bg-blue-600', 'bg-green-600', 'bg-purple-600', 'bg-red-600', 'bg-yellow-600', 'bg-indigo-600'];
+        const colorIndex = adminName.length % colors.length;
+        adminAvatarElement.className = adminAvatarElement.className.replace(/bg-\w+-\d+/, colors[colorIndex]);
+      }
+    }
+  } catch (error) {
+    console.error('Error al cargar información del administrador:', error);
+  }
+}
+
 // Función para filtrar pedidos
 function filterOrders() {
   const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -870,8 +914,27 @@ document.addEventListener('DOMContentLoaded', function() {
   window.closeAssignModal = closeAssignModal; // Hacerla global para el botón de cierre
 
   function openWhatsApp(order) {
-    const phone = order.phone.replace(/[^0-9]/g, ''); // Limpiar número
-    const message = `Hola ${order.name}, te contacto sobre tu orden #${order.short_id || order.id} de ${order.service.name}.`;
+    // Verificar que existe el número de teléfono
+    if (!order.phone) {
+      notifications.error('Esta orden no tiene un número de teléfono registrado.');
+      return;
+    }
+    
+    // Limpiar y formatear el número de teléfono
+    let phone = order.phone.replace(/[^0-9]/g, '');
+    
+    // Si el número no tiene código de país, agregar el de República Dominicana (+1809)
+    if (phone.length === 10 && !phone.startsWith('1')) {
+      phone = '1809' + phone;
+    } else if (phone.length === 7) {
+      phone = '1809' + phone;
+    }
+    
+    // Crear mensaje personalizado con información de la orden
+    const serviceName = order.service?.name || order.service || 'servicio solicitado';
+    const orderRef = order.short_id || order.id;
+    const message = `¡Hola ${order.name}! 👋\n\nTe contacto sobre tu orden #${orderRef} de ${serviceName}.\n\n¿En qué puedo ayudarte?`;
+    
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   }
@@ -879,6 +942,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Inicialización
   function init() {
     loadOrders();
+    loadAdminInfo();
   }
 
   init();

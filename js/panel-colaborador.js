@@ -268,9 +268,38 @@ function calculateTotalTime(orderId) {
  */
 function saveCompletionMetrics(metrics, orderId) {
   try {
-    // Guardar en localStorage para análisis local
+    // Guardar métricas individuales de la orden
     const key = `tlc_metrics_order_${orderId}`;
     localStorage.setItem(key, JSON.stringify(metrics));
+    
+    // Actualizar métricas agregadas del colaborador
+    const collaboratorEmail = state.collabSession?.user?.email;
+    if (collaboratorEmail) {
+      const metricsKey = 'tlc_collab_metrics';
+      const existingMetrics = JSON.parse(localStorage.getItem(metricsKey) || '{}');
+      
+      if (!existingMetrics[collaboratorEmail]) {
+        existingMetrics[collaboratorEmail] = {
+          completedOrders: 0,
+          totalTime: 0,
+          serviceTypes: {}
+        };
+      }
+      
+      const collabMetrics = existingMetrics[collaboratorEmail];
+      collabMetrics.completedOrders += 1;
+      collabMetrics.totalTime += metrics.tiempo_total || 0;
+      
+      // Actualizar estadísticas por tipo de servicio
+      const order = state.allOrders.find(o => o.id === orderId);
+      if (order && order.servicio) {
+        const serviceType = order.servicio;
+        collabMetrics.serviceTypes[serviceType] = (collabMetrics.serviceTypes[serviceType] || 0) + 1;
+      }
+      
+      localStorage.setItem(metricsKey, JSON.stringify(existingMetrics));
+      console.log('[Métricas] Métricas del colaborador actualizadas:', collabMetrics);
+    }
     
     // Opcionalmente enviar a Supabase para análisis centralizado
     // TODO: Implementar endpoint para guardar métricas

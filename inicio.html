@@ -74,8 +74,25 @@
 
   <!-- Contenido principal -->
   <main id="main-content" class="p-8 transition-all duration-300 ease-in-out">
-    <h1 class="text-2xl font-bold mb-6">Inicio</h1>
-    <p>Pedidos recientes, resumen diario y alertas importantes.</p>
+    <!-- Header con información del administrador -->
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        <h1 class="text-2xl font-bold">Inicio</h1>
+        <p class="text-gray-600">Pedidos recientes, resumen diario y alertas importantes.</p>
+      </div>
+      <div class="flex items-center gap-3 bg-white rounded-lg shadow-sm px-4 py-2 border">
+        <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold" id="adminAvatar">
+          A
+        </div>
+        <div>
+          <p class="font-semibold text-gray-800" id="adminName">Administrador</p>
+          <div class="flex items-center gap-1">
+            <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+            <span class="text-xs text-green-600 font-medium">Activo</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Filtros y búsqueda -->
     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
