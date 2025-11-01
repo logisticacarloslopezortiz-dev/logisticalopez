@@ -21,6 +21,179 @@ const STATUS_MAP = {
   }
 };
 
+/**
+ * Inicializa y configura el mapa para mostrar origen y destino
+ * @param {Object} order - Datos de la orden
+ */
+function initializeMap(order) {
+  try {
+    console.log('[Mapa] Inicializando mapa para orden:', order.id);
+    
+    // Limpiar mapa anterior si existe
+    if (window.activeJobMap) {
+      window.activeJobMap.remove();
+    }
+    
+    // Verificar que existan coordenadas
+    if (!order.pickup_coords || !order.delivery_coords) {
+      console.error('[Mapa] Error: Faltan coordenadas de origen o destino');
+      document.getElementById('mapErrorMessage').classList.remove('hidden');
+      return;
+    }
+    
+    // Ocultar mensaje de error si estaba visible
+    document.getElementById('mapErrorMessage').classList.add('hidden');
+    
+    // Parsear coordenadas
+    const pickupCoords = parseCoordinates(order.pickup_coords);
+    const deliveryCoords = parseCoordinates(order.delivery_coords);
+    
+    if (!pickupCoords || !deliveryCoords) {
+      console.error('[Mapa] Error: Formato de coordenadas inválido');
+      document.getElementById('mapErrorMessage').classList.remove('hidden');
+      return;
+    }
+    
+    // Inicializar mapa centrado entre origen y destino
+    const centerLat = (pickupCoords.lat + deliveryCoords.lat) / 2;
+    const centerLng = (pickupCoords.lng + deliveryCoords.lng) / 2;
+    
+    const map = L.map('activeJobMap').setView([centerLat, centerLng], 13);
+    
+    // Añadir capa de mapa
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    
+    // Añadir marcadores
+    const pickupMarker = L.marker([pickupCoords.lat, pickupCoords.lng], {
+      icon: createCustomIcon('green', 'A')
+    }).addTo(map);
+    pickupMarker.bindPopup('<strong>Origen:</strong> ' + order.pickup_address).openPopup();
+    
+    const deliveryMarker = L.marker([deliveryCoords.lat, deliveryCoords.lng], {
+      icon: createCustomIcon('red', 'B')
+    }).addTo(map);
+    deliveryMarker.bindPopup('<strong>Destino:</strong> ' + order.delivery_address);
+    
+    // Dibujar ruta entre puntos
+    const points = [
+      [pickupCoords.lat, pickupCoords.lng],
+      [deliveryCoords.lat, deliveryCoords.lng]
+    ];
+    
+    const polyline = L.polyline(points, {color: 'blue', weight: 5, opacity: 0.7}).addTo(map);
+    
+    // Ajustar vista para mostrar toda la ruta
+    map.fitBounds(polyline.getBounds(), {padding: [50, 50]});
+    
+    // Guardar referencia al mapa
+    window.activeJobMap = map;
+    
+    console.log('[Mapa] Mapa inicializado correctamente');
+  } catch (err) {
+    console.error('[Mapa] Error al inicializar mapa:', err);
+    document.getElementById('mapErrorMessage').classList.remove('hidden');
+  }
+}
+
+/**
+ * Parsea string de coordenadas a objeto {lat, lng}
+ * @param {string} coordsString - String de coordenadas (formato: "lat,lng" o [lat,lng])
+ * @returns {Object|null} - Objeto con lat y lng o null si es inválido
+ */
+function parseCoordinates(coordsString) {
+  try {
+    if (!coordsString) return null;
+    
+    // Intentar parsear diferentes formatos
+    let coords;
+    
+    // Si es un string, intentar separar por coma
+    if (typeof coordsString === 'string') {
+      // Limpiar posibles corchetes
+      const cleaned = coordsString.replace(/[\[\]]/g, '');
+      coords = cleaned.split(',').map(c => parseFloat(c.trim()));
+    } 
+    // Si es un array, usarlo directamente
+    else if (Array.isArray(coordsString)) {
+      coords = coordsString.map(c => parseFloat(c));
+    }
+    // Si es un objeto con lat y lng
+    else if (coordsString.lat !== undefined && coordsString.lng !== undefined) {
+      return {
+        lat: parseFloat(coordsString.lat),
+        lng: parseFloat(coordsString.lng)
+      };
+    }
+    
+    // Validar que sean dos números
+    if (coords && coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+      return {
+        lat: coords[0],
+        lng: coords[1]
+      };
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('[Mapa] Error al parsear coordenadas:', err);
+    return null;
+  }
+}
+
+/**
+ * Crea un icono personalizado para el mapa
+ * @param {string} color - Color del icono
+ * @param {string} text - Texto a mostrar
+ * @returns {L.DivIcon} - Icono personalizado
+ */
+function createCustomIcon(color, text) {
+  return L.divIcon({
+    className: 'custom-map-marker',
+    html: `<div style="background-color: ${color}; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; justify-content: center; align-items: center; font-weight: bold;">${text}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+  });
+}
+
+/**
+ * Guarda métricas de finalización en localStorage
+ * @param {Object} metrics - Datos de métricas
+ * @param {number} orderId - ID de la orden
+ */
+function saveCompletionMetrics(metrics, orderId) {
+  try {
+    // Obtener métricas existentes o inicializar
+    const existingMetrics = JSON.parse(localStorage.getItem('tlc_completion_metrics') || '[]');
+    
+    // Agregar nueva métrica
+    existingMetrics.push({
+      ...metrics,
+      order_id: orderId,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Guardar en localStorage
+    localStorage.setItem('tlc_completion_metrics', JSON.stringify(existingMetrics));
+    
+    // Enviar a Supabase si está disponible
+    if (window.supabase) {
+      supabase.from('completion_metrics').insert([{
+        order_id: orderId,
+        colaborador_id: metrics.colaborador_id,
+        tiempo_total_minutos: metrics.tiempo_total,
+        fecha_completado: metrics.fecha_completado
+      }]).then(res => {
+        if (res.error) console.error('[Métricas] Error al guardar en Supabase:', res.error);
+        else console.log('[Métricas] Guardadas en Supabase correctamente');
+      });
+    }
+  } catch (err) {
+    console.error('[Métricas] Error al guardar métricas:', err);
+  }
+}
+
 // Notificación del navegador (con Service Worker para manejar clic y deep-link)
 async function showBrowserNotification(order, statusKey) {
   try {
@@ -66,6 +239,72 @@ async function showBrowserNotification(order, statusKey) {
 }
 
 /**
+ * Función para calcular el tiempo total que tomó completar una orden
+ * @param {number} orderId - ID de la orden
+ * @returns {number} - Tiempo en minutos
+ */
+function calculateTotalTime(orderId) {
+  try {
+    const order = state.allOrders.find(o => o.id === orderId);
+    if (!order || !order.tracking_data || order.tracking_data.length < 2) return 0;
+    
+    // Buscar el primer estado de tracking
+    const firstStatus = order.tracking_data[0];
+    const startTime = new Date(firstStatus.date).getTime();
+    const endTime = new Date().getTime();
+    
+    // Retornar tiempo en minutos
+    return Math.round((endTime - startTime) / 60000);
+  } catch (err) {
+    console.error('[Métricas] Error al calcular tiempo:', err);
+    return 0;
+  }
+}
+
+/**
+ * Función para guardar métricas de finalización
+ * @param {Object} metrics - Métricas a guardar
+ * @param {number} orderId - ID de la orden
+ */
+function saveCompletionMetrics(metrics, orderId) {
+  try {
+    // Guardar en localStorage para análisis local
+    const key = `tlc_metrics_order_${orderId}`;
+    localStorage.setItem(key, JSON.stringify(metrics));
+    
+    // Opcionalmente enviar a Supabase para análisis centralizado
+    // TODO: Implementar endpoint para guardar métricas
+  } catch (err) {
+    console.error('[Métricas] Error al guardar:', err);
+  }
+}
+
+/**
+ * Función para enviar notificación al cliente sobre cambio de estado
+ * @param {number} orderId - ID de la orden
+ * @param {string} status - Nuevo estado
+ */
+function notifyClient(orderId, status) {
+  try {
+    const order = state.allOrders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    // Enviar notificación push si hay un token registrado
+    if (order.client_notification_token) {
+      console.log(`[Notificaciones] Enviando notificación push al cliente para orden #${orderId}`);
+      
+      // Usar la función de notificación del navegador como fallback
+      showBrowserNotification(
+        `Actualización de tu servicio #${orderId}`,
+        `Tu servicio ha sido actualizado a: ${STATUS_MAP[status]?.label || status}`
+      );
+    }
+  } catch (err) {
+    console.error('[Notificaciones] Error al notificar al cliente:', err);
+  }
+}
+
+/**
  * Cambia el estado de una orden, actualiza la base de datos y notifica al cliente.
  * @param {number} orderId - El ID de la orden a actualizar.
  * @param {string} newKey - La nueva clave de estado (ej. 'en_camino_recoger').
@@ -74,21 +313,61 @@ async function changeStatus(orderId, newKey) {
   // COMENTARIO: Esta función ahora actúa como un intermediario (wrapper) hacia el OrderManager.
   console.log(`[Colaborador] Solicitando cambio de estado para orden #${orderId} a "${newKey}"`);
   const additionalData = {};
+  const startTime = performance.now(); // Medición de rendimiento
 
   // Si el colaborador marca como 'entregado', esto se traduce a 'Completado' en el estado general.
   if (newKey === 'entregado') {
     additionalData.status = 'Completado';
     additionalData.completed_at = new Date().toISOString();
     additionalData.completed_by = state.collabSession.user.id;
+    /**
+     * Calcula el tiempo total que tomó completar una orden
+     * @param {number} orderId - ID de la orden
+     * @returns {number} - Tiempo en minutos
+     */
+    function calculateTotalTime(orderId) {
+      try {
+        const order = state.allOrders.find(o => o.id === orderId);
+        if (!order || !order.tracking_data || order.tracking_data.length < 2) return 0;
+        
+        // Buscar el primer estado de tracking
+        const firstStatus = order.tracking_data[0];
+        const startTime = new Date(firstStatus.date).getTime();
+        const endTime = new Date().getTime();
+        
+        // Retornar tiempo en minutos
+        return Math.round((endTime - startTime) / 60000);
+      } catch (err) {
+        console.error('[Métricas] Error al calcular tiempo:', err);
+        return 0;
+      }
+    }
+
+    // Registrar métricas de finalización
+    try {
+      const metrics = {
+        colaborador_id: state.collabSession.user.id,
+        tiempo_total: calculateTotalTime(orderId),
+        fecha_completado: new Date().toISOString()
+      };
+      console.log('[Métricas] Registrando finalización:', metrics);
+      // Guardar métricas en localStorage para análisis
+      saveCompletionMetrics(metrics, orderId);
+    } catch (err) {
+      console.error('[Métricas] Error al registrar:', err);
+    }
   } else if (newKey === 'en_camino_recoger' || newKey === 'cargando' || newKey === 'en_camino_entregar') {
     // Cuando el colaborador inicia el trabajo, actualizar el estado global a "En proceso"
     additionalData.status = 'En proceso';
   }
 
-  // Usar la función centralizada
+  // Dentro de la función changeStatus, justo después de la llamada a OrderManager
   const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newKey, additionalData);
 
   if (success) {
+    // Notificar al cliente sobre el cambio de estado
+    notifyClient(orderId, newKey);
+    
     // Actualizar localmente el último estado del colaborador y el tracking
     const idx = state.allOrders.findIndex(o => o.id === orderId);
     if (idx !== -1) {
@@ -101,25 +380,42 @@ async function changeStatus(orderId, newKey) {
       };
     }
     updateActiveJobView();
+    
     // Si el trabajo se completó, invocar la función para incrementar el contador
     if (newKey === 'entregado') {
       try {
         await supabaseConfig.client.functions.invoke('increment-completed-jobs', {
           body: { userId: state.collabSession.user.id }
         });
+        
+        // Registrar métricas de finalización
+        try {
+          const metrics = {
+            colaborador_id: state.collabSession.user.id,
+            tiempo_total: calculateTotalTime(orderId),
+            fecha_completado: new Date().toISOString()
+          };
+          console.log('[Métricas] Registrando finalización:', metrics);
+          saveCompletionMetrics(metrics, orderId);
+        } catch (err) {
+          console.error('[Métricas] Error al registrar métricas:', err);
+        }
       } catch (invokeErr) {
         console.warn('No se pudo incrementar el contador de trabajos completados:', invokeErr);
       }
-
+    
       // Limpiar el trabajo activo de la vista
       state.activeJobId = null;
       localStorage.removeItem('tlc_collab_active_job');
       document.getElementById('activeJobSection').classList.add('hidden');
       
-      // Recargar la página para mostrar otras solicitudes pendientes
+      // Mostrar mensaje de éxito
+      showSuccess('¡Trabajo finalizado con éxito!', 'La solicitud ha sido marcada como completada y enviada al historial.');
+      
+      // Redirigir a historial-solicitudes.html después de 1.5 segundos
       setTimeout(() => {
-        window.location.reload();
-      }, 1500); // Recargar después de 1.5 segundos para que el usuario vea el mensaje de éxito
+        window.location.href = 'historial-solicitudes.html?completed=' + orderId;
+      }, 1500);
     }
 
     showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
