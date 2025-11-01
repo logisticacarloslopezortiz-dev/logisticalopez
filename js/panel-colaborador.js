@@ -198,8 +198,18 @@ function saveCompletionMetrics(metrics, orderId) {
       console.log('[Métricas] Métricas del colaborador actualizadas:', collabMetrics);
     }
 
-    // Opcionalmente enviar a Supabase para análisis centralizado
-    // TODO: Implementar endpoint para guardar métricas
+    // Enviar a Supabase si está disponible
+    if (window.supabase) {
+      supabase.from('completion_metrics').insert([{
+        order_id: orderId,
+        colaborador_id: metrics.colaborador_id,
+        tiempo_total_minutos: metrics.tiempo_total,
+        fecha_completado: metrics.fecha_completado
+      }]).then(res => {
+        if (res.error) console.error('[Métricas] Error al guardar en Supabase:', res.error);
+        else console.log('[Métricas] Guardadas en Supabase correctamente');
+      });
+    }
   } catch (err) {
     console.error('[Métricas] Error al guardar:', err);
   }
@@ -414,9 +424,26 @@ async function handleOrderCompletion(orderId) {
 
     showSuccess('¡Trabajo finalizado con éxito!', 'La solicitud ha sido marcada como completada.');
 
-    setTimeout(() => {
-      window.location.href = 'historial-solicitudes.html?completed=' + orderId;
-    }, 1500);
+    // En lugar de redirigir, cambia a la pestaña de historial
+    const tabHistorial = document.getElementById('tab-historial');
+    if (tabHistorial) {
+      // Retraso para que el usuario vea la notificación de éxito
+      setTimeout(() => {
+        tabHistorial.click(); // Simula un clic para cambiar a la pestaña de historial
+
+        // Opcional: Resaltar la tarjeta recién completada
+        setTimeout(() => {
+            const completedCard = document.querySelector(`#historial-solicitudes [data-order-id="${orderId}"]`);
+            if (completedCard) {
+                completedCard.classList.add('bg-green-50', 'border-green-300', 'transition-all', 'duration-500');
+                setTimeout(() => {
+                    completedCard.classList.remove('bg-green-50', 'border-green-300');
+                }, 3000); // Mantener resaltado por 3 segundos
+            }
+        }, 200);
+
+      }, 1500);
+    }
 
   } catch (invokeErr) {
     console.warn('No se pudo invocar la función para incrementar trabajos completados:', invokeErr);
@@ -1031,7 +1058,7 @@ async function loadInitialOrders() {
           service:services(name),
           vehicle:vehicles(name)
         `)
-        .or(`status.eq.Pendiente,and(assigned_to.eq.${state.collabSession.user.id},status.neq.Completado)`)
+        .or(`status.eq.Pendiente,assigned_to.eq.${state.collabSession.user.id}`)
         .order('created_at', { ascending: false });
     };
 
@@ -1229,6 +1256,52 @@ function setupEventListeners() {
   }
 }
 
+function setupTabs() {
+  const tabActivos = document.getElementById('tab-activos');
+  const tabHistorial = document.getElementById('tab-historial');
+  const panelActivos = document.getElementById('panel-activos');
+  const panelHistorial = document.getElementById('panel-historial');
+  const sidebarActivosBtn = document.getElementById('sidebar-activos-btn');
+  const sidebarHistorialBtn = document.getElementById('sidebar-historial-btn');
+
+  function switchTab(tab) {
+    if (tab === 'historial') {
+      tabActivos.classList.remove('text-blue-600', 'border-blue-600');
+      tabActivos.classList.add('text-gray-500', 'border-transparent', 'hover:text-gray-700', 'hover:border-gray-300');
+      tabHistorial.classList.add('text-blue-600', 'border-blue-600');
+      tabHistorial.classList.remove('text-gray-500', 'border-transparent', 'hover:text-gray-700', 'hover:border-gray-300');
+      panelActivos.classList.add('hidden');
+      panelHistorial.classList.remove('hidden');
+      sidebarActivosBtn.classList.remove('bg-blue-700/50', 'text-white');
+      sidebarActivosBtn.classList.add('text-gray-300', 'hover:text-white');
+      sidebarHistorialBtn.classList.add('bg-blue-700/50', 'text-white');
+      sidebarHistorialBtn.classList.remove('text-gray-300');
+    } else {
+      tabHistorial.classList.remove('text-blue-600', 'border-blue-600');
+      tabHistorial.classList.add('text-gray-500', 'border-transparent', 'hover:text-gray-700', 'hover:border-gray-300');
+      tabActivos.classList.add('text-blue-600', 'border-blue-600');
+      tabActivos.classList.remove('text-gray-500', 'border-transparent', 'hover:text-gray-700', 'hover:border-gray-300');
+      panelHistorial.classList.add('hidden');
+      panelActivos.classList.remove('hidden');
+      sidebarHistorialBtn.classList.remove('bg-blue-700/50', 'text-white');
+      sidebarHistorialBtn.classList.add('text-gray-300', 'hover:text-white');
+      sidebarActivosBtn.classList.add('bg-blue-700/50', 'text-white');
+      sidebarActivosBtn.classList.remove('text-gray-300');
+    }
+  }
+
+  tabActivos.addEventListener('click', () => switchTab('activos'));
+  tabHistorial.addEventListener('click', () => switchTab('historial'));
+  sidebarActivosBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    switchTab('activos');
+  });
+  sidebarHistorialBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    switchTab('historial');
+  });
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
   const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
@@ -1245,6 +1318,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupSidebarToggles();
   setupEventListeners();
+  setupTabs();
 
   supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
     state.collabSession = newSession;

@@ -207,10 +207,15 @@
     <!-- Navegación -->
     <nav class="flex-1 p-6" role="navigation" aria-label="Navegación principal">
       <div class="space-y-2">
-        <a href="panel-colaborador.html" class="flex items-center gap-3 p-3 rounded-xl text-white hover:bg-blue-700/50 transition-all duration-200 group">
-          <i data-lucide="list" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
-          <span class="font-medium">Solicitudes</span>
+        <a href="#" id="sidebar-activos-btn" class="flex items-center gap-3 p-3 rounded-xl text-white bg-blue-700/50 transition-all duration-200 group">
+          <i data-lucide="list" class="w-5 h-5 text-white"></i>
+          <span class="font-medium">Trabajos Activos</span>
           <span class="ml-auto bg-blue-600 text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount">0</span>
+        </a>
+
+        <a href="#" id="sidebar-historial-btn" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-blue-700/50 hover:text-white transition-all duration-200 group">
+          <i data-lucide="check-circle" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
+          <span class="font-medium">Historial</span>
         </a>
         
         <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-blue-700/50 hover:text-white transition-all duration-200 group">
@@ -241,43 +246,38 @@
         <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
       </button>
 
-      <!-- Contenedor principal con grid para colocar contenido junto al sidebar -->
-      <div class="grid grid-cols-1 gap-6">
-        <!-- Sección de solicitudes -->
-        <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
-          <div class="p-5 bg-gray-50/70 border-b border-gray-200/80">
-            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3">
-              <i data-lucide="clipboard-list" class="w-6 h-6 text-blue-600"></i>
-              <span>Solicitudes Pendientes</span>
-            </h2>
+      <!-- Pestañas de Navegación -->
+      <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+          <button id="tab-activos" type="button" role="tab" aria-controls="panel-activos" aria-selected="true" class="tab-btn group inline-flex items-center py-3 px-1 border-b-2 font-semibold text-sm text-blue-600 border-blue-600">
+            <i data-lucide="list" class="mr-2 h-5 w-5 text-blue-500"></i>
+            <span>Trabajos Activos</span>
+          </button>
+          <button id="tab-historial" type="button" role="tab" aria-controls="panel-historial" aria-selected="false" class="tab-btn group inline-flex items-center py-3 px-1 border-b-2 font-semibold text-sm text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300">
+            <i data-lucide="check-circle" class="mr-2 h-5 w-5 text-gray-400 group-hover:text-gray-500"></i>
+            <span>Historial</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Paneles de Contenido -->
+      <div>
+        <!-- Panel de Trabajos Activos (Visible por defecto) -->
+        <div id="panel-activos" role="tabpanel" aria-labelledby="tab-activos">
+          <!-- Indicador de Carga -->
+          <div id="loadingIndicator" class="text-center py-10">
+            <div class="spinner"></div>
+            <p class="text-gray-500 mt-2">Cargando solicitudes...</p>
           </div>
-          <div class="p-5">
-            <!-- Indicador de Carga -->
-            <div id="loadingIndicator" class="text-center py-10">
-              <div class="spinner"></div>
-              <p class="text-gray-500 mt-2">Cargando solicitudes...</p>
-            </div>
-            <!-- Contenedor de tarjetas: grid responsive para mostrar varias tarjetas por fila -->
-            <div id="ordersCardContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 hidden"></div>
-          </div>
+          <!-- Contenedor de tarjetas: grid responsive para mostrar varias tarjetas por fila -->
+          <div id="ordersCardContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden"></div>
         </div>
 
-        <!-- Sección de historial de solicitudes -->
-        <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
-          <div class="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200/80">
-            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3" style="font-family: 'Poppins', sans-serif;">
-              <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
-              <span>Historial de Solicitudes</span>
-            </h2>
-            <p class="text-sm text-gray-600 mt-1" style="font-family: 'Comic Neue', sans-serif;">Solicitudes completadas y finalizadas</p>
-          </div>
-          <div class="p-5">
-            <!-- Contenedor de tarjetas del historial -->
-            <div id="historial-solicitudes" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
-          </div>
+        <!-- Panel de Historial (Oculto por defecto) -->
+        <div id="panel-historial" role="tabpanel" aria-labelledby="tab-historial" class="hidden">
+           <div id="historial-solicitudes" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
         </div>
-
-    </div>
+      </div>
     
     
     <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada -->
