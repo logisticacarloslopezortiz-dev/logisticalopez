@@ -293,44 +293,38 @@ async function notifyClient(orderId, status) {
     const order = state.allOrders.find(o => o.id === orderId);
     if (!order) {
       console.warn(`[Notificaciones] No se encontró la orden #${orderId} para notificar`);
-      return;
+      return false;
     }
-    
+
     console.log(`[Notificaciones] Procesando notificación para orden #${orderId}, estado: ${status}`);
-    
-    // 1. Intentar enviar notificación push mediante Edge Function
-    try {
-      if (supabaseConfig.client) {
+
+    // 1) Intentar enviar notificación push mediante Edge Function
+    if (supabaseConfig.client) {
+      try {
         const title = `Actualización de tu servicio #${orderId}`;
         const body = `Tu servicio ha sido actualizado a: ${STATUS_MAP[status]?.label || status}`;
-        
+
         const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
-          body: { 
-            orderId, 
-            title, 
-            body,
-            target: 'client' // Especificar que la notificación es para el cliente
-          }
+          body: { orderId, title, body, target: 'client' }
         });
-        
+
         if (error) throw new Error(`Error en Edge Function: ${error.message}`);
-        console.log(`[Notificaciones] Push enviado correctamente:`, data);
-        return true; // Notificación enviada con éxito
-      }
+        console.log('[Notificaciones] Push enviado correctamente:', data);
+        return true;
       } catch (pushError) {
-        console.warn(`[Notificaciones] Error al enviar push mediante Edge Function:`, pushError);
-        // Continuar con fallbacks
+        console.warn('[Notificaciones] Error al enviar push mediante Edge Function:', pushError);
+        // seguir con fallbacks
       }
     }
-    
-    // 2. Intentar notificación del navegador como fallback
+
+    // 2) Fallback: notificación del navegador
     const notificationSent = await showBrowserNotification(order, status);
     if (notificationSent) {
       console.log(`[Notificaciones] Notificación del navegador mostrada para orden #${orderId}`);
       return true;
     }
-    
-    // 3. Último fallback: notificación en pantalla si está disponible
+
+    // 3) Último fallback: notificación en pantalla
     if (window.notifications) {
       window.notifications.info(
         `Cliente de orden #${orderId} notificado sobre cambio a estado: ${STATUS_MAP[status]?.label || status}`,
@@ -338,7 +332,7 @@ async function notifyClient(orderId, status) {
       );
       return true;
     }
-    
+
     return false;
   } catch (err) {
     console.error('[Notificaciones] Error al notificar al cliente:', err);
@@ -356,6 +350,23 @@ async function changeStatus(orderId, newKey) {
   console.log(`[Colaborador] Solicitando cambio de estado para orden #${orderId} a "${newKey}"`);
   const additionalData = {};
   const startTime = performance.now(); // Medición de rendimiento
+  // Validaciones previas al cambio de estado
+  const order = state.allOrders.find(o => o.id === orderId);
+  if (!order) {
+    showError('Orden no encontrada', 'No se pudo localizar la solicitud seleccionada.');
+    return;
+  }
+  if (newKey === 'entregado') {
+    const photos = order.evidence_photos || [];
+    if (photos.length === 0) {
+      showError('Evidencia requerida', 'Añade al menos una foto antes de finalizar el trabajo.');
+      return;
+    }
+    if (!order.last_collab_status) {
+      showError('Inicia el trabajo primero', 'Marca "Recoger" o "Confirmar llegada" antes de finalizar.');
+      return;
+    }
+  }
 
   // Si el colaborador marca como 'entregado', esto se traduce a 'Completado' en el estado general.
   if (newKey === 'entregado') {
@@ -407,10 +418,12 @@ async function changeStatus(orderId, newKey) {
 
 async function handleOrderCompletion(orderId) {
   try {
+    // Incrementar contador de trabajos completados
     await supabaseConfig.client.functions.invoke('increment-completed-jobs', {
       body: { userId: state.collabSession.user.id }
     });
 
+    // Registrar métricas de finalización
     const metrics = {
       colaborador_id: state.collabSession.user.id,
       tiempo_total: calculateTotalTime(orderId),
@@ -418,32 +431,48 @@ async function handleOrderCompletion(orderId) {
     };
     saveCompletionMetrics(metrics, orderId);
 
+    // Limpiar trabajo activo
     state.activeJobId = null;
     localStorage.removeItem('tlc_collab_active_job');
     document.getElementById('activeJobSection').classList.add('hidden');
 
-    showSuccess('¡Trabajo finalizado con éxito!', 'La solicitud ha sido marcada como completada.');
+    // Mostrar contenedor de órdenes nuevamente
+    document.getElementById('ordersCardContainer')?.classList.remove('hidden');
 
-    // En lugar de redirigir, cambia a la pestaña de historial
-    const tabHistorial = document.getElementById('tab-historial');
-    if (tabHistorial) {
-      // Retraso para que el usuario vea la notificación de éxito
-      setTimeout(() => {
-        tabHistorial.click(); // Simula un clic para cambiar a la pestaña de historial
+    // Actualizar estadísticas del colaborador inmediatamente
+    updateCollaboratorStats(state.collabSession.user.id);
 
-        // Opcional: Resaltar la tarjeta recién completada
-        setTimeout(() => {
-            const completedCard = document.querySelector(`#historial-solicitudes [data-order-id="${orderId}"]`);
-            if (completedCard) {
-                completedCard.classList.add('bg-green-50', 'border-green-300', 'transition-all', 'duration-500');
+    // Mostrar notificación de éxito con opción de ver historial
+    showSuccess(
+      'La solicitud ha sido completada. Puedes ver más trabajos pendientes o revisar tu historial.',
+      {
+        title: '¡Trabajo finalizado con éxito!',
+        duration: 8000,
+        actions: [
+          {
+            text: 'Ver Historial',
+            handler: `(() => {
+              const tabHistorial = document.getElementById('tab-historial');
+              if (tabHistorial) {
+                tabHistorial.click();
                 setTimeout(() => {
-                    completedCard.classList.remove('bg-green-50', 'border-green-300');
-                }, 3000); // Mantener resaltado por 3 segundos
-            }
-        }, 200);
+                  const completedCard = document.querySelector('#historial-solicitudes [data-order-id="${orderId}"]');
+                  if (completedCard) {
+                    completedCard.classList.add('bg-green-50', 'border-green-300', 'transition-all', 'duration-500');
+                    setTimeout(() => {
+                      completedCard.classList.remove('bg-green-50', 'border-green-300');
+                    }, 3000);
+                  }
+                }, 200);
+              }
+            })()`
+          }
+        ]
+      }
+    );
 
-      }, 1500);
-    }
+    // Actualizar datos para reflejar la orden completada
+    filterAndRender();
 
   } catch (invokeErr) {
     console.warn('No se pudo invocar la función para incrementar trabajos completados:', invokeErr);
@@ -470,6 +499,11 @@ function collabDisplayName(email){
 }
 
 function openAcceptModal(order){
+  // Bloquear aceptación si ya hay un trabajo activo
+  if (state.activeJobId) {
+    showError('Trabajo activo', 'Ya tienes un trabajo en progreso. Complétalo antes de aceptar otro.');
+    return;
+  }
   state.selectedOrderIdForAccept = order.id;
   const modal = document.getElementById('acceptModal');
   const body = document.getElementById('acceptModalBody');
@@ -504,7 +538,6 @@ function handleCardClick(orderId) {
     showActiveJob(order);
     // al mostrar trabajo activo, ocultar tarjetas
     document.getElementById('ordersCardContainer')?.classList.add('hidden');
-    document.getElementById('assignedOrdersContainer')?.classList.add('hidden');
   }
 }
 
@@ -521,7 +554,6 @@ function showActiveJob(order){
   section.classList.remove('hidden');
   // Ocultar contenedores de tarjetas mientras hay trabajo activo visible
   document.getElementById('ordersCardContainer')?.classList.add('hidden');
-  document.getElementById('assignedOrdersContainer')?.classList.add('hidden');
   const info = document.getElementById('activeJobInfo');
   // ✅ MEJORA: Diseño de información de trabajo activo más limpio y organizado
   info.innerHTML = /*html*/`
@@ -893,47 +925,10 @@ function renderHistorial(){
   if (window.lucide) lucide.createIcons();
 }
 
-// === Tarjetas de escritorio para órdenes asignadas ===
-function renderDesktopAssignedCards(orders){
-  // ✅ CORRECCIÓN: Apuntar al nuevo contenedor de tarjetas
-  const container = document.getElementById('assignedOrdersContainer');
-  if (!container) return;
-  const myId = state.collabSession?.user?.id;
-  const assigned = (orders || []).filter(o => o.assigned_to === myId && o.status !== 'Completado');
-  if (assigned.length === 0){
-    container.classList.add('hidden');
-    return;
-  }
-  container.classList.remove('hidden');
-  container.innerHTML = assigned.map(o => {
-    const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
-    const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
-    // ✅ MEJORA: Diseño de tarjeta mejorado con ID destacado
-    return `
-      <!-- ✅ MEJORA: Tarjeta flotante y estandarizada que abre el modal al hacer clic -->
-      <div class="order-card bg-white rounded-xl shadow-lg border border-gray-200/80 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 cursor-pointer" 
-           data-order-id="${o.id}">
-        <div class="p-5">
-          <div class="flex items-start justify-between mb-4">
-            <div class="flex items-center gap-3">
-              <span class="px-3 py-1.5 text-sm rounded-lg bg-blue-100 text-blue-800 font-bold font-mono shadow-sm">ID: ${o.id}</span>
-              <span class="px-2 py-1 text-xs rounded-full ${status.badge}">${status.label}</span>
-            </div>
-            <i data-lucide="arrow-right" class="w-5 h-5 text-gray-400"></i>
-          </div>
-          <div class="space-y-3 text-sm">
-            <div class="font-semibold text-gray-900 text-base">${o.name} <span class="font-normal text-gray-500">- ${o.phone || ''}</span></div>
-            <div class="text-gray-700"><strong class="font-medium">Servicio:</strong> ${o.service}</div>
-            <div class="text-gray-600"><strong class="font-medium">Ruta:</strong> <span class="truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</span></div>
-            <div class="text-gray-600"><strong class="font-medium">Fecha:</strong> ${o.date} <span class="text-gray-400">•</span> ${o.time}</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  if (window.lucide) lucide.createIcons();
-}
+// === FUNCIÓN ELIMINADA: renderDesktopAssignedCards ===
+// Esta función ha sido eliminada porque el contenedor 'assignedOrdersContainer' 
+// ya no existe en el HTML. Todas las tarjetas se renderizan ahora en 'ordersCardContainer'
+// usando la función renderMobileCards que es responsiva.
 
 // === Lógica Unificada del Sidebar (Móvil y Escritorio) ===
 function setupSidebarToggles() {
@@ -1114,17 +1109,71 @@ async function loadInitialOrders() {
   }
 }
 
-function updateCollaboratorStats(collaboratorId) {
-  const collaboratorOrders = state.allOrders.filter(order => order.assigned_to === collaboratorId);
-  
-  const activeJobs = collaboratorOrders.filter(order => order.status === 'En proceso').length;
-  const completedJobs = collaboratorOrders.filter(order => order.status === 'Completado').length;
-  
-  const pendingRequests = state.allOrders.filter(order => order.status === 'Pendiente' && !order.assigned_to).length;
-  
-  document.getElementById('collabActiveJobs').textContent = activeJobs;
-  document.getElementById('collabCompletedJobs').textContent = completedJobs;
-  document.getElementById('pendingRequestsCount').textContent = pendingRequests;
+async function updateCollaboratorStats(collaboratorId) {
+  try {
+    // Obtener estadísticas locales inmediatamente para UI responsiva
+    const collaboratorOrders = state.allOrders.filter(order => order.assigned_to === collaboratorId);
+    
+    const activeJobs = collaboratorOrders.filter(order => 
+      order.status === 'En proceso' || 
+      (order.assigned_to === collaboratorId && order.status !== 'Completado' && order.status !== 'Cancelado')
+    ).length;
+    
+    const completedJobs = collaboratorOrders.filter(order => order.status === 'Completado').length;
+    const pendingRequests = state.allOrders.filter(order => order.status === 'Pendiente' && !order.assigned_to).length;
+    
+    // Actualizar UI inmediatamente con datos locales
+    const activeJobsEl = document.getElementById('collabActiveJobs');
+    const completedJobsEl = document.getElementById('collabCompletedJobs');
+    const pendingRequestsEl = document.getElementById('pendingRequestsCount');
+    
+    if (activeJobsEl) activeJobsEl.textContent = activeJobs;
+    if (completedJobsEl) completedJobsEl.textContent = completedJobs;
+    if (pendingRequestsEl) pendingRequestsEl.textContent = pendingRequests;
+
+    // Sincronizar con base de datos para obtener estadísticas precisas
+    if (supabaseConfig.client) {
+      const { data: realTimeStats, error } = await supabaseConfig.client
+        .from('orders')
+        .select('status, assigned_to')
+        .or(`assigned_to.eq.${collaboratorId},status.eq.Pendiente`);
+
+      if (!error && realTimeStats) {
+        const realActiveJobs = realTimeStats.filter(order => 
+          order.assigned_to === collaboratorId && 
+          order.status === 'En proceso'
+        ).length;
+        
+        const realCompletedJobs = realTimeStats.filter(order => 
+          order.assigned_to === collaboratorId && 
+          order.status === 'Completado'
+        ).length;
+        
+        const realPendingRequests = realTimeStats.filter(order => 
+          order.status === 'Pendiente' && !order.assigned_to
+        ).length;
+
+        // Actualizar UI con datos sincronizados si hay diferencias
+        if (realActiveJobs !== activeJobs && activeJobsEl) {
+          activeJobsEl.textContent = realActiveJobs;
+        }
+        if (realCompletedJobs !== completedJobs && completedJobsEl) {
+          completedJobsEl.textContent = realCompletedJobs;
+        }
+        if (realPendingRequests !== pendingRequests && pendingRequestsEl) {
+          pendingRequestsEl.textContent = realPendingRequests;
+        }
+
+        console.log('[Stats] Estadísticas sincronizadas:', {
+          activeJobs: realActiveJobs,
+          completedJobs: realCompletedJobs,
+          pendingRequests: realPendingRequests
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[Stats] Error al actualizar estadísticas:', err);
+  }
 }
 
 // --- Lógica de Tiempo Real ---
@@ -1211,6 +1260,10 @@ function setupEventListeners() {
   }
 
   document.getElementById('confirmAcceptBtn')?.addEventListener('click', async () => {
+    if (state.activeJobId) {
+      showError('Trabajo activo', 'Ya tienes un trabajo en progreso. Complétalo antes de aceptar otro.');
+      return closeAcceptModal();
+    }
     if (!state.selectedOrderIdForAccept) return closeAcceptModal();
 
     const orderId = state.selectedOrderIdForAccept;
