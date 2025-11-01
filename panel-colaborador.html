@@ -26,6 +26,11 @@
   <!-- Leaflet CSS para el mapa -->
   <!-- Google Maps will be used instead of Leaflet. Set your API key in the script src below. -->
   
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Comic+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+  
   <!-- Tailwind y Lucide -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -238,6 +243,21 @@
           </div>
         </div>
 
+        <!-- Sección de historial de solicitudes -->
+        <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
+          <div class="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200/80">
+            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3" style="font-family: 'Poppins', sans-serif;">
+              <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
+              <span>Historial de Solicitudes</span>
+            </h2>
+            <p class="text-sm text-gray-600 mt-1" style="font-family: 'Comic Neue', sans-serif;">Solicitudes completadas y finalizadas</p>
+          </div>
+          <div class="p-5">
+            <!-- Contenedor de tarjetas del historial -->
+            <div id="historial-solicitudes" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
+          </div>
+        </div>
+
     </div>
     
     
@@ -290,15 +310,60 @@
 
           <!-- Columna de Mapa y Fotos (ocupa 2/5) -->
           <div class="lg:col-span-2 space-y-6">
-            <!-- Mapa -->
-            <div>
-              <h3 class="text-md font-semibold text-gray-800 mb-3">Ubicación</h3>
-              <div class="w-full h-64 rounded-xl overflow-hidden border-2 border-gray-200 shadow-inner">
-                <div id="activeJobMap" class="w-full h-full"></div>
+            <!-- Mapa Google Maps Embebido -->
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200 shadow-lg">
+              <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2" style="font-family: 'Poppins', 'Comic Neue', sans-serif;">
+                <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
+                Ver Origen y Ver Destino
+              </h3>
+              
+              <!-- Campos de entrada -->
+              <div class="space-y-4 mb-6">
+                <div>
+                  <label class="block text-sm font-semibold text-gray-700 mb-2" style="font-family: 'Poppins', sans-serif;">Nombre del lugar</label>
+                  <input type="text" id="placeName" placeholder="Ej: Karpus Kids Central" 
+                         class="w-full px-4 py-3 rounded-xl border-2 border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all shadow-sm"
+                         style="font-family: 'Comic Neue', sans-serif;">
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-semibold text-gray-700 mb-2" style="font-family: 'Poppins', sans-serif;">Coordenadas de origen</label>
+                  <input type="text" id="originCoords" placeholder="18.476389,-69.912222" 
+                         class="w-full px-4 py-3 rounded-xl border-2 border-green-200 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all shadow-sm"
+                         style="font-family: 'Comic Neue', sans-serif;">
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-semibold text-gray-700 mb-2" style="font-family: 'Poppins', sans-serif;">Coordenadas de destino</label>
+                  <input type="text" id="destinationCoords" placeholder="18.480000,-69.910000" 
+                         class="w-full px-4 py-3 rounded-xl border-2 border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all shadow-sm"
+                         style="font-family: 'Comic Neue', sans-serif;">
+                </div>
               </div>
-              <div class="mt-2 text-sm text-gray-600 flex items-center gap-2">
-                <i data-lucide="navigation" class="w-4 h-4 text-blue-500"></i>
-                <span id="activeJobMapHint">Dirígete a la dirección de recogida</span>
+
+              <!-- Mapa embebido -->
+              <div class="w-full h-48 rounded-xl overflow-hidden border-2 border-gray-200 shadow-lg mb-4">
+                <iframe id="googleMapFrame" 
+                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3783.2!2d-69.912222!3d18.476389!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTjCsDI4JzM1LjAiTiA2OcKwNTQnNDQuMCJX!5e0!3m2!1ses!2sdo!4v1234567890"
+                        width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade">
+                </iframe>
+              </div>
+
+              <!-- Botones de acción -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button id="viewLocationBtn" 
+                        class="flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold rounded-2xl hover:from-blue-600 hover:to-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+                        style="font-family: 'Poppins', sans-serif;">
+                  <i data-lucide="map-pin" class="w-5 h-5"></i>
+                  Ver Ubicación
+                </button>
+                
+                <button id="viewRouteBtn" 
+                        class="flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-2xl hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+                        style="font-family: 'Poppins', sans-serif;">
+                  <i data-lucide="route" class="w-5 h-5"></i>
+                  Ver Ruta
+                </button>
               </div>
             </div>
             <!-- Evidencia Fotográfica -->
@@ -507,6 +572,68 @@
     document.addEventListener('DOMContentLoaded', function(){
       // Inicializar mapa si alguna librería está lista
       try { if (window.googleMapsReady || window.leafletReady) initActiveJobMap(); } catch(e){}
+      
+      // Funcionalidad para los botones de Google Maps
+      const originCoordsInput = document.getElementById('originCoords');
+      const destinationCoordsInput = document.getElementById('destinationCoords');
+      const googleMapFrame = document.getElementById('googleMapFrame');
+      const viewLocationBtn = document.getElementById('viewLocationBtn');
+      const viewRouteBtn = document.getElementById('viewRouteBtn');
+
+      // Actualizar mapa cuando cambien las coordenadas de origen
+      if (originCoordsInput) {
+        originCoordsInput.addEventListener('input', function() {
+          updateEmbeddedMap();
+        });
+      }
+
+      // Función para actualizar el mapa embebido
+      function updateEmbeddedMap() {
+        const originCoords = originCoordsInput.value.trim();
+        if (originCoords && originCoords.includes(',')) {
+          const [lat, lng] = originCoords.split(',').map(coord => coord.trim());
+          if (lat && lng) {
+            const embedUrl = `https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3783.2!2d${lng}!3d${lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2z${encodeURIComponent(lat + ',' + lng)}!5e0!3m2!1ses!2sdo!4v1234567890`;
+            googleMapFrame.src = embedUrl;
+          }
+        }
+      }
+
+      // Botón Ver Ubicación
+      if (viewLocationBtn) {
+        viewLocationBtn.addEventListener('click', function() {
+          const originCoords = originCoordsInput.value.trim();
+          if (originCoords && originCoords.includes(',')) {
+            const [lat, lng] = originCoords.split(',').map(coord => coord.trim());
+            if (lat && lng) {
+              const url = `https://www.google.com/maps?q=${lat},${lng}`;
+              window.open(url, '_blank');
+            }
+          } else {
+            alert('Por favor ingresa coordenadas de origen válidas (formato: lat,lng)');
+          }
+        });
+      }
+
+      // Botón Ver Ruta
+      if (viewRouteBtn) {
+        viewRouteBtn.addEventListener('click', function() {
+          const originCoords = originCoordsInput.value.trim();
+          const destinationCoords = destinationCoordsInput.value.trim();
+          
+          if (originCoords && destinationCoords && originCoords.includes(',') && destinationCoords.includes(',')) {
+            const [originLat, originLng] = originCoords.split(',').map(coord => coord.trim());
+            const [destLat, destLng] = destinationCoords.split(',').map(coord => coord.trim());
+            
+            if (originLat && originLng && destLat && destLng) {
+              const url = `https://www.google.com/maps/dir/${originLat},${originLng}/${destLat},${destLng}`;
+              window.open(url, '_blank');
+            }
+          } else {
+            alert('Por favor ingresa coordenadas de origen y destino válidas (formato: lat,lng)');
+          }
+        });
+      }
     });
 
   </script>

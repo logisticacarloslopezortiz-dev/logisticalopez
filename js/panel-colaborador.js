@@ -469,6 +469,7 @@ async function changeStatus(orderId, newKey) {
 const state = {
   allOrders: [],
   filteredOrders: [],
+  historialOrders: [],
   selectedOrderIdForAccept: null,
   activeJobId: Number(localStorage.getItem('tlc_collab_active_job')) || null,
   collabSession: null,
@@ -771,18 +772,35 @@ function filterAndRender(){
   // Búsqueda y filtrado deshabilitados en este panel para evitar problemas de layout.
   const term = '';
   const statusFilter = '';
+  
+  // Función para órdenes pendientes (no completadas)
   const visibleForCollab = (o) => {
     if (!state.collabSession) return false;
-    // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador.
+    // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador que NO estén completadas.
     const isPendingAndUnassigned = o.status === 'Pendiente' && !o.assigned_to;
-    const isAssignedToMe = o.assigned_to === state.collabSession.user.id && o.status !== 'Completado' && o.status !== 'Cancelado';
+    const isAssignedToMe = o.assigned_to === state.collabSession.user.id && 
+                          o.status !== 'Completado' && 
+                          o.status !== 'Cancelado' && 
+                          o.last_collab_status !== 'entregado';
     return isPendingAndUnassigned || isAssignedToMe;
   };
+
+  // Función para órdenes del historial (completadas)
+  const historialForCollab = (o) => {
+    if (!state.collabSession) return false;
+    // Mostrar órdenes completadas que fueron asignadas a este colaborador
+    return o.assigned_to === state.collabSession.user.id && 
+           (o.status === 'Completado' || o.last_collab_status === 'entregado');
+  };
+
   let base = state.allOrders.filter(visibleForCollab);
-  // Si hay trabajo activo, mostrar solo ese trabajo
+  let historialBase = state.allOrders.filter(historialForCollab);
+  
+  // Si hay trabajo activo, mostrar solo ese trabajo en pendientes
   if (state.activeJobId) {
     base = base.filter(o => o.id === state.activeJobId);
   }
+  
   baseVisibleCount = base.length;
   state.filteredOrders = base.filter(o => {
     // ✅ CORRECCIÓN: Convertir el ID a String para evitar errores al buscar.
@@ -795,7 +813,19 @@ function filterAndRender(){
     const m2 = !statusFilter || statusFilter === currentStatus;
     return m1 && m2;
   });
+
+  // Filtrar historial
+  state.historialOrders = historialBase.filter(o => {
+    const m1 = !term 
+      || o.name.toLowerCase().includes(term) 
+      || String(o.id).toLowerCase().includes(term)
+      || String(o.short_id || '').toLowerCase().includes(term)
+      || o.service.toLowerCase().includes(term);
+    return m1;
+  });
+
   render();
+  renderHistorial();
   updateCollaboratorStats(state.collabSession.user.id);
 }
 
@@ -844,6 +874,41 @@ function renderMobileCards(orders){
   container.querySelectorAll('.mob-step-btn').forEach(btn => {
     btn.addEventListener('click', () => changeStatus(Number(btn.dataset.id), btn.dataset.next));
   });
+  if (window.lucide) lucide.createIcons();
+}
+
+// === Función para renderizar el historial de solicitudes completadas ===
+function renderHistorial(){
+  const historialContainer = document.getElementById('historial-solicitudes');
+  if (!historialContainer) return;
+  
+  if (!state.historialOrders || state.historialOrders.length === 0){
+    historialContainer.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes completadas</div>';
+    return;
+  }
+  
+  historialContainer.innerHTML = state.historialOrders.map(o => {
+    const statusKey = o.last_collab_status || o.status;
+    const status = STATUS_MAP[statusKey] || { label: 'Completado', badge: 'bg-green-100 text-green-800' };
+    
+    return `
+      <div class="bg-white rounded-lg shadow p-4 border border-gray-100 mb-3">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-semibold text-gray-900">#${o.id}</div>
+          <span class="px-2 py-1 rounded-full text-xs font-semibold ${status.badge}">${status.label}</span>
+        </div>
+        <div class="text-sm text-gray-800 font-medium">${o.name}</div>
+        <div class="text-xs text-gray-500 mb-2">${o.phone}</div>
+        <div class="text-sm text-gray-700">${o.service}</div>
+        <div class="text-xs text-gray-600 truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</div>
+        <div class="text-xs text-gray-600">${o.date} <span class="text-gray-400">•</span> ${o.time}</div>
+        ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
+          ? `<div class='mt-3'><button class='px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full' onclick="showServiceDetailsCollab('${o.id}')">Ver Detalles</button></div>`
+          : ''}
+      </div>
+    `;
+  }).join('');
+  
   if (window.lucide) lucide.createIcons();
 }
 

@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
     }
     
     // Buscar suscripciones push para el cliente
-    let pushSubscriptions = [];
+    let pushSubscriptions: Array<{ endpoint: string; keys: { p256dh: string; auth: string } }> = [];
     
     // Buscar en push_subscriptions si hay client_id
     if (order.client_id) {
@@ -110,11 +110,25 @@ Deno.serve(async (req: Request) => {
       }
     }
     
+    // Fallback: si no hay suscripciones por user_id, intentar usar la suscripción guardada en la orden
     if (pushSubscriptions.length === 0) {
-      return jsonResponse({ 
-        success: false, 
-        message: 'No hay suscripciones push registradas para este cliente' 
-      }, 200);
+      try {
+        const { data: orderWithSub } = await supabase
+          .from('orders')
+          .select('id, push_subscription')
+          .eq('id', orderId)
+          .maybeSingle();
+        const sub = (orderWithSub as any)?.push_subscription || null;
+        if (sub && sub.endpoint && sub.keys && sub.keys.p256dh && sub.keys.auth) {
+          pushSubscriptions = [{ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }];
+        }
+      } catch (e) {
+        logDebug('Fallback de suscripción en orden falló', e);
+      }
+    }
+
+    if (pushSubscriptions.length === 0) {
+      return jsonResponse({ success: false, message: 'No hay suscripciones push registradas' }, 200);
     }
     
     // Enviar notificación a todas las suscripciones del cliente

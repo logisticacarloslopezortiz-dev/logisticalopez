@@ -407,4 +407,4 @@ if (!window.supabaseConfig) {
 
 // Exportar referencia (por compatibilidad con scripts que ya lo usan)
 const supabaseConfig = window.supabaseConfig;
-export {};
+// Nota: evitar `export {}` para que funcione en navegadores sin módulos

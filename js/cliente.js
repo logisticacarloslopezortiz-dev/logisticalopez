@@ -572,9 +572,43 @@ async function subscribeUserToPush(orderId) {
       applicationServerKey
     });
     
-    // Actualizar la orden en Supabase con la suscripción
-    await supabaseConfig.client.from('orders').update({ push_subscription: subscription }).eq('id', orderId);
-    console.log('Suscripción guardada para la orden:', orderId);
+    // Guardar suscripción en Supabase
+    // Preferir tabla push_subscriptions por usuario; si no hay usuario, guardar en la orden como fallback
+    try {
+      const { data: userData } = await supabaseConfig.client.auth.getUser();
+      const userId = userData?.user?.id || null;
+
+      if (userId) {
+        // Inserta o actualiza en push_subscriptions usando formato de keys JSON { p256dh, auth }
+        const payload = {
+          user_id: userId,
+          endpoint: subscription?.endpoint,
+          keys: {
+            p256dh: subscription?.keys?.p256dh,
+            auth: subscription?.keys?.auth
+          }
+        };
+        // Upsert para evitar duplicados por (user_id, endpoint) cuando el esquema lo soporta
+        const { error: upsertErr } = await supabaseConfig.client
+          .from('push_subscriptions')
+          .upsert(payload, { onConflict: 'user_id,endpoint' });
+        if (upsertErr) {
+          console.warn('Fallo upsert en push_subscriptions, probando insert:', upsertErr?.message || upsertErr);
+          await supabaseConfig.client.from('push_subscriptions').insert(payload);
+        }
+        console.log('Suscripción guardada en push_subscriptions para usuario:', userId);
+      } else {
+        // Fallback: guardar en la orden para clientes anónimos
+        await supabaseConfig.client
+          .from('orders')
+          .update({ push_subscription: subscription })
+          .eq('id', orderId);
+        console.log('Suscripción guardada en la orden (anónimo):', orderId);
+      }
+    } catch (saveErr) {
+      console.error('Error guardando suscripción en Supabase:', saveErr);
+    }
+
     return subscription;
   } catch (error) {
     console.error("Error en subscribeUserToPush:", error);
