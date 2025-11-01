@@ -194,6 +194,53 @@ function saveCompletionMetrics(metrics, orderId) {
   }
 }
 
+/**
+ * Función para guardar métricas de finalización
+ * @param {Object} metrics - Métricas a guardar
+ * @param {number} orderId - ID de la orden
+ */
+function saveCompletionMetrics(metrics, orderId) {
+  try {
+    // Guardar métricas individuales de la orden
+    const key = `tlc_metrics_order_${orderId}`;
+    localStorage.setItem(key, JSON.stringify(metrics));
+
+    // Actualizar métricas agregadas del colaborador
+    const collaboratorEmail = state.collabSession?.user?.email;
+    if (collaboratorEmail) {
+      const metricsKey = 'tlc_collab_metrics';
+      const existingMetrics = JSON.parse(localStorage.getItem(metricsKey) || '{}');
+
+      if (!existingMetrics[collaboratorEmail]) {
+        existingMetrics[collaboratorEmail] = {
+          completedOrders: 0,
+          totalTime: 0,
+          serviceTypes: {}
+        };
+      }
+
+      const collabMetrics = existingMetrics[collaboratorEmail];
+      collabMetrics.completedOrders += 1;
+      collabMetrics.totalTime += metrics.tiempo_total || 0;
+
+      // Actualizar estadísticas por tipo de servicio
+      const order = state.allOrders.find(o => o.id === orderId);
+      if (order && order.servicio) {
+        const serviceType = order.servicio;
+        collabMetrics.serviceTypes[serviceType] = (collabMetrics.serviceTypes[serviceType] || 0) + 1;
+      }
+
+      localStorage.setItem(metricsKey, JSON.stringify(existingMetrics));
+      console.log('[Métricas] Métricas del colaborador actualizadas:', collabMetrics);
+    }
+
+    // Opcionalmente enviar a Supabase para análisis centralizado
+    // TODO: Implementar endpoint para guardar métricas
+  } catch (err) {
+    console.error('[Métricas] Error al guardar:', err);
+  }
+}
+
 // Notificación del navegador (con Service Worker para manejar clic y deep-link)
 async function showBrowserNotification(order, statusKey) {
   try {
@@ -261,52 +308,6 @@ function calculateTotalTime(orderId) {
   }
 }
 
-/**
- * Función para guardar métricas de finalización
- * @param {Object} metrics - Métricas a guardar
- * @param {number} orderId - ID de la orden
- */
-function saveCompletionMetrics(metrics, orderId) {
-  try {
-    // Guardar métricas individuales de la orden
-    const key = `tlc_metrics_order_${orderId}`;
-    localStorage.setItem(key, JSON.stringify(metrics));
-    
-    // Actualizar métricas agregadas del colaborador
-    const collaboratorEmail = state.collabSession?.user?.email;
-    if (collaboratorEmail) {
-      const metricsKey = 'tlc_collab_metrics';
-      const existingMetrics = JSON.parse(localStorage.getItem(metricsKey) || '{}');
-      
-      if (!existingMetrics[collaboratorEmail]) {
-        existingMetrics[collaboratorEmail] = {
-          completedOrders: 0,
-          totalTime: 0,
-          serviceTypes: {}
-        };
-      }
-      
-      const collabMetrics = existingMetrics[collaboratorEmail];
-      collabMetrics.completedOrders += 1;
-      collabMetrics.totalTime += metrics.tiempo_total || 0;
-      
-      // Actualizar estadísticas por tipo de servicio
-      const order = state.allOrders.find(o => o.id === orderId);
-      if (order && order.servicio) {
-        const serviceType = order.servicio;
-        collabMetrics.serviceTypes[serviceType] = (collabMetrics.serviceTypes[serviceType] || 0) + 1;
-      }
-      
-      localStorage.setItem(metricsKey, JSON.stringify(existingMetrics));
-      console.log('[Métricas] Métricas del colaborador actualizadas:', collabMetrics);
-    }
-    
-    // Opcionalmente enviar a Supabase para análisis centralizado
-    // TODO: Implementar endpoint para guardar métricas
-  } catch (err) {
-    console.error('[Métricas] Error al guardar:', err);
-  }
-}
 
 /**
  * Función para enviar notificación al cliente sobre cambio de estado
@@ -387,28 +388,6 @@ async function changeStatus(orderId, newKey) {
     additionalData.status = 'Completado';
     additionalData.completed_at = new Date().toISOString();
     additionalData.completed_by = state.collabSession.user.id;
-    /**
-     * Calcula el tiempo total que tomó completar una orden
-     * @param {number} orderId - ID de la orden
-     * @returns {number} - Tiempo en minutos
-     */
-    function calculateTotalTime(orderId) {
-      try {
-        const order = state.allOrders.find(o => o.id === orderId);
-        if (!order || !order.tracking_data || order.tracking_data.length < 2) return 0;
-        
-        // Buscar el primer estado de tracking
-        const firstStatus = order.tracking_data[0];
-        const startTime = new Date(firstStatus.date).getTime();
-        const endTime = new Date().getTime();
-        
-        // Retornar tiempo en minutos
-        return Math.round((endTime - startTime) / 60000);
-      } catch (err) {
-        console.error('[Métricas] Error al calcular tiempo:', err);
-        return 0;
-      }
-    }
 
     // Registrar métricas de finalización
     try {
@@ -436,53 +415,11 @@ async function changeStatus(orderId, newKey) {
     notifyClient(orderId, newKey);
     
     // Actualizar localmente el último estado del colaborador y el tracking
-    const idx = state.allOrders.findIndex(o => o.id === orderId);
-    if (idx !== -1) {
-      const prev = state.allOrders[idx];
-      const prevTracking = Array.isArray(prev.tracking_data) ? prev.tracking_data : [];
-      state.allOrders[idx] = {
-        ...prev,
-        last_collab_status: newKey,
-        tracking_data: [...prevTracking, { status: newKey, date: new Date().toISOString() }]
-      };
-    }
-    updateActiveJobView();
+    handleStatusUpdate(orderId, newKey);
     
     // Si el trabajo se completó, invocar la función para incrementar el contador
     if (newKey === 'entregado') {
-      try {
-        await supabaseConfig.client.functions.invoke('increment-completed-jobs', {
-          body: { userId: state.collabSession.user.id }
-        });
-        
-        // Registrar métricas de finalización
-        try {
-          const metrics = {
-            colaborador_id: state.collabSession.user.id,
-            tiempo_total: calculateTotalTime(orderId),
-            fecha_completado: new Date().toISOString()
-          };
-          console.log('[Métricas] Registrando finalización:', metrics);
-          saveCompletionMetrics(metrics, orderId);
-        } catch (err) {
-          console.error('[Métricas] Error al registrar métricas:', err);
-        }
-      } catch (invokeErr) {
-        console.warn('No se pudo incrementar el contador de trabajos completados:', invokeErr);
-      }
-    
-      // Limpiar el trabajo activo de la vista
-      state.activeJobId = null;
-      localStorage.removeItem('tlc_collab_active_job');
-      document.getElementById('activeJobSection').classList.add('hidden');
-      
-      // Mostrar mensaje de éxito
-      showSuccess('¡Trabajo finalizado con éxito!', 'La solicitud ha sido marcada como completada y enviada al historial.');
-      
-      // Redirigir a historial-solicitudes.html después de 1.5 segundos
-      setTimeout(() => {
-        window.location.href = 'historial-solicitudes.html?completed=' + orderId;
-      }, 1500);
+      handleOrderCompletion(orderId);
     }
 
     showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
@@ -491,6 +428,34 @@ async function changeStatus(orderId, newKey) {
 
   } else {
     showError('No se pudo actualizar el estado', error);
+  }
+}
+
+async function handleOrderCompletion(orderId) {
+  try {
+    await supabaseConfig.client.functions.invoke('increment-completed-jobs', {
+      body: { userId: state.collabSession.user.id }
+    });
+
+    const metrics = {
+      colaborador_id: state.collabSession.user.id,
+      tiempo_total: calculateTotalTime(orderId),
+      fecha_completado: new Date().toISOString()
+    };
+    saveCompletionMetrics(metrics, orderId);
+
+    state.activeJobId = null;
+    localStorage.removeItem('tlc_collab_active_job');
+    document.getElementById('activeJobSection').classList.add('hidden');
+
+    showSuccess('¡Trabajo finalizado con éxito!', 'La solicitud ha sido marcada como completada.');
+
+    setTimeout(() => {
+      window.location.href = 'historial-solicitudes.html?completed=' + orderId;
+    }, 1500);
+
+  } catch (invokeErr) {
+    console.warn('No se pudo invocar la función para incrementar trabajos completados:', invokeErr);
   }
 }
 
@@ -874,9 +839,8 @@ function renderMobileCards(orders){
   container.innerHTML = orders.map(o => {
     const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
     const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
-    const onClickAttr = `onclick="handleCardClick(${o.id})"`;
     return `
-      <div class="bg-white rounded-lg shadow p-4 border border-gray-100 cursor-pointer" ${onClickAttr}>
+      <div class="bg-white rounded-lg shadow p-4 border border-gray-100 cursor-pointer" data-order-id="${o.id}">
         <div class="flex items-center justify-between mb-2">
           <div class="text-sm font-semibold text-gray-900">#${o.id}</div>
           <span class="px-2 py-1 rounded-full text-xs font-semibold ${status.badge}">${status.label}</span>
@@ -887,7 +851,7 @@ function renderMobileCards(orders){
         <div class="text-xs text-gray-600 truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</div>
         <div class="text-xs text-gray-600">${o.date} <span class="text-gray-400">•</span> ${o.time}</div>
         ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
-          ? `<div class='mt-3'><button class='px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full' onclick="showServiceDetailsCollab('${o.id}')">Detalles</button></div>`
+          ? `<div class='mt-3'><button class='px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full' data-details-id="${o.id}">Detalles</button></div>`
           : ''}
         <div class="mt-3 grid grid-cols-2 gap-2">
           <button data-id="${o.id}" data-next="en_camino_recoger" class="mob-step-btn px-2 py-2 text-xs bg-blue-600 text-white rounded">Recoger</button>
@@ -900,9 +864,6 @@ function renderMobileCards(orders){
     `;
   }).join('');
 
-  container.querySelectorAll('.mob-step-btn').forEach(btn => {
-    btn.addEventListener('click', () => changeStatus(Number(btn.dataset.id), btn.dataset.next));
-  });
   if (window.lucide) lucide.createIcons();
 }
 
@@ -960,7 +921,7 @@ function renderDesktopAssignedCards(orders){
     return `
       <!-- ✅ MEJORA: Tarjeta flotante y estandarizada que abre el modal al hacer clic -->
       <div class="order-card bg-white rounded-xl shadow-lg border border-gray-200/80 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 cursor-pointer" 
-           onclick="handleCardClick(${o.id})">
+           data-order-id="${o.id}">
         <div class="p-5">
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center gap-3">
@@ -980,9 +941,6 @@ function renderDesktopAssignedCards(orders){
     `;
   }).join('');
 
-  container.querySelectorAll('.desk-step-btn').forEach(btn => {
-    btn.addEventListener('click', () => changeStatus(Number(btn.dataset.id), btn.dataset.next));
-  });
   if (window.lucide) lucide.createIcons();
 }
 
@@ -1212,75 +1170,48 @@ function handleRealtimeUpdate(payload) {
   }
 }
 
-// Inicialización
-document.addEventListener('DOMContentLoaded', async () => {
-  // ✅ CORRECCIÓN: Usar el método oficial de Supabase para verificar la sesión
-  const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
+function setupEventListeners() {
+  const mainContent = document.getElementById('mainContent');
+  if (mainContent) {
+    mainContent.addEventListener('click', (e) => {
+      const card = e.target.closest('[data-order-id]');
+      const detailsButton = e.target.closest('[data-details-id]');
+      const stepButton = e.target.closest('.mob-step-btn');
 
-  if (sessionError || !session) {
-    const msg = 'No hay sesión de colaborador activa. Redirigiendo al login.';
-    console.error(msg);
-    if (window.showError) {
-      try { window.showError('Sesión requerida', msg); } catch (_) {}
-    }
-    setTimeout(() => { window.location.href = 'login-colaborador.html'; }, 400);
-    return;
-  }
-  
-  state.collabSession = session;
+      if (detailsButton) {
+        e.stopPropagation();
+        showServiceDetailsCollab(detailsButton.dataset.detailsId);
+        return;
+      }
 
-  // Render icons as soon as the DOM is ready to prevent issues with icon-based buttons.
-  if (window.lucide) {
-    try {
-      lucide.createIcons();
-    } catch (e) {
-      console.error('Error creating lucide icons on initial load:', e);
-    }
-  }
+      if (stepButton) {
+        e.stopPropagation();
+        changeStatus(Number(stepButton.dataset.id), stepButton.dataset.next);
+        return;
+      }
 
-  // Configurar la lógica del sidebar unificado
-  try {
-    setupSidebarToggles();
-  } catch(e) {
-    console.error('Error al inicializar el sidebar:', e);
+      if (card) {
+        handleCardClick(card.dataset.orderId);
+      }
+    });
   }
 
-  // Suscribirse a cambios de auth para mantener sesión fresca
-  supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
-    if (newSession) {
-      state.collabSession = newSession;
-    }
-  });
-    
-  // Actualizar perfil del colaborador
-  updateCollaboratorProfile(session);
-
-  // Search and status filter removed for this panel. Listeners intentionally omitted.
-
-  document.getElementById('logoutBtn').addEventListener('click', (e) => {
-    e.preventDefault();
-    // ✅ CORRECCIÓN: Usar el método oficial de Supabase para cerrar sesión
+  document.getElementById('logoutBtn')?.addEventListener('click', () => {
     supabaseConfig.client.auth.signOut();
     window.location.href = 'login-colaborador.html';
   });
 
-  // Modal aceptar trabajo
-  document.getElementById('cancelAcceptBtn').addEventListener('click', (e) => {
-    e.preventDefault();
-    closeAcceptModal();
-  });
-  // ✅ CORRECCIÓN: Conectar el input de subida de fotos a su función.
-  document.getElementById('photoUpload').addEventListener('change', handlePhotoUpload);
+  document.getElementById('cancelAcceptBtn')?.addEventListener('click', closeAcceptModal);
 
-  // ✅ NUEVO: Conectar los botones de acción del trabajo activo.
+  document.getElementById('photoUpload')?.addEventListener('change', handlePhotoUpload);
+
   const actionButtonsContainer = document.getElementById('activeJobActionButtons');
   if (actionButtonsContainer) {
     actionButtonsContainer.addEventListener('click', (e) => {
-      const button = e.target.closest('button');
-      if (button && button.dataset.status) {
-        const newStatus = button.dataset.status;
+      const button = e.target.closest('button[data-status]');
+      if (button) {
         if (state.activeJobId) {
-          changeStatus(state.activeJobId, newStatus);
+          changeStatus(state.activeJobId, button.dataset.status);
         } else {
           showError('Error', 'No hay un trabajo activo seleccionado.');
         }
@@ -1288,99 +1219,96 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  document.getElementById('confirmAcceptBtn').addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (!state.selectedOrderIdForAccept) {
-      closeAcceptModal();
-      return;
-    }
+  document.getElementById('confirmAcceptBtn')?.addEventListener('click', async () => {
+    if (!state.selectedOrderIdForAccept) return closeAcceptModal();
 
     const orderId = state.selectedOrderIdForAccept;
-    const myId = state.collabSession.user.id;
-
-    // COMENTARIO: Se centraliza la lógica de aceptación usando OrderManager.
-    console.log(`[Colaborador] Aceptando orden #${orderId}`);
-
-    const additionalData = {
-      assigned_to: myId,
-      assigned_at: new Date().toISOString(),
-      status: 'En proceso' // Al aceptar, el estado general cambia a 'En proceso'.
-    };
-
-    // La función centralizada se encarga de actualizar el tracking y notificar.
-    const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, 'en_camino_recoger', additionalData);
+    const { success, error } = await OrderManager.acceptOrder(orderId, state.collabSession.user.id);
 
     if (success) {
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
-      
-      // Guardar como trabajo activo y forzar recarga.
       state.activeJobId = orderId;
       localStorage.setItem('tlc_collab_active_job', String(orderId));
       await loadInitialOrders();
       const order = state.allOrders.find(o => o.id === orderId);
-      if (order) {
-        showActiveJob(order);
-      }
-
+      if (order) showActiveJob(order);
     } else {
       showError('Error al aceptar la solicitud', error);
     }
-
     closeAcceptModal();
   });
 
-  // Carga inicial y suscripción a tiempo real
-  await loadInitialOrders();
-
-  // ✅ CORRECCIÓN: Mover la lógica para restaurar el trabajo activo a DESPUÉS de cargar los pedidos.
-  restoreActiveJob();
-
-  // Botón cancelar trabajo activo
   const cancelBtn = document.getElementById('cancelActiveJobBtn');
   if (cancelBtn) {
     cancelBtn.addEventListener('click', async () => {
       if (!state.activeJobId) return;
-      const order = state.allOrders.find(o => o.id === state.activeJobId);
-      if (!order) return;
       const ok = confirm('¿Cancelar este trabajo activo? Esto marcará la solicitud como Cancelado.');
       if (!ok) return;
-      try {
-        const trackingEvent = { status: 'Trabajo cancelado por colaborador', date: new Date().toISOString() };
-        const existingTracking = Array.isArray(order.tracking)
-          ? order.tracking
-          : (Array.isArray(order.tracking_data) ? order.tracking_data : []);
-        const newTracking = [...existingTracking, trackingEvent];
 
-        await supabaseConfig.updateOrder(state.activeJobId, {
-          status: 'Cancelado',
-          assigned_to: null,
-          assigned_at: null,
-          tracking: newTracking,
-          tracking_data: newTracking
-        });
-        // Actualizar local
-        const idx = state.allOrders.findIndex(o => o.id === state.activeJobId);
-        if (idx !== -1) {
-          state.allOrders[idx] = {
-            ...state.allOrders[idx],
-            status: 'Cancelado',
-            assigned_to: null,
-            assigned_at: null,
-            tracking: newTracking,
-            tracking_data: newTracking
-          };
-        }
-        // Limpiar trabajo activo y volver a mostrar solicitudes
+      const { success, error } = await OrderManager.cancelActiveJob(state.activeJobId);
+      if (success) {
         state.activeJobId = null;
         localStorage.removeItem('tlc_collab_active_job');
         document.getElementById('activeJobSection')?.classList.add('hidden');
         filterAndRender();
         showSuccess('Trabajo cancelado', 'La solicitud ha sido marcada como cancelada.');
-      } catch (err) {
-        console.error('Error al cancelar trabajo activo:', err);
-        showError('Error al cancelar', err?.message || 'No se pudo cancelar el trabajo.');
+      } else {
+        showError('Error al cancelar', error || 'No se pudo cancelar el trabajo.');
       }
     });
+  }
+}
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', async () => {
+  const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
+
+  if (sessionError || !session) {
+    console.error('No hay sesión activa. Redirigiendo al login.');
+    window.location.href = 'login-colaborador.html';
+    return;
+  }
+
+  state.collabSession = session;
+
+  if (window.lucide) lucide.createIcons();
+
+  setupSidebarToggles();
+  setupEventListeners();
+
+  supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
+    state.collabSession = newSession;
+  });
+
+  updateCollaboratorProfile(session);
+  const loadingIndicator = document.getElementById('loadingIndicator');
+  const cardsContainer = document.getElementById('ordersCardContainer');
+
+  loadingIndicator.classList.remove('hidden');
+  cardsContainer.classList.add('hidden');
+
+  await loadInitialOrders();
+
+  loadingIndicator.classList.add('hidden');
+  cardsContainer.classList.remove('hidden');
+
+  restoreActiveJob();
+
+  function handleStatusUpdate(orderId, newStatus) {
+    const order = state.allOrders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const idx = state.allOrders.findIndex(o => o.id === orderId);
+    if (idx !== -1) {
+      const prev = state.allOrders[idx];
+      const prevTracking = Array.isArray(prev.tracking_data) ? prev.tracking_data : [];
+      state.allOrders[idx] = {
+        ...prev,
+        last_collab_status: newStatus,
+        tracking_data: [...prevTracking, { status: newStatus, date: new Date().toISOString() }]
+      };
+    }
+    updateActiveJobView();
   }
 
   if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
@@ -1389,12 +1317,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
       .subscribe();
   } else {
-    // Fallback: refrescar periódicamente desde localStorage
-    setInterval(async () => {
-      // En modo Supabase, el refresco es manejado por el listener de tiempo real.
-      // Si se quiere un refresco forzado, se llamaría a loadInitialOrders() de nuevo.
-      filterAndRender();
-    }, 5000);
+    setInterval(filterAndRender, 5000);
   }
 });
 
@@ -1470,11 +1393,20 @@ function showServiceDetailsCollab(orderId){
   modal.innerHTML = `
     <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto shadow-xl">
       ${detailsHtml}
-      <button onclick="this.closest('.fixed').remove()" class="mt-6 w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">Cerrar</button>
+      <button id="closeDetailsModalBtn" class="mt-6 w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">Cerrar</button>
     </div>
   `;
   document.body.appendChild(modal);
-}
 
-// Hacer accesible globalmente
-window.showServiceDetailsCollab = showServiceDetailsCollab;
+  const closeButton = modal.querySelector('#closeDetailsModalBtn');
+  closeButton.addEventListener('click', () => {
+    modal.remove();
+  });
+
+  // Also close on overlay click
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      modal.remove();
+    }
+  });
+}
