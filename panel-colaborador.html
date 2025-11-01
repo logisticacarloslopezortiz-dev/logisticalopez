@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>Panel — Colaborador</title> 
   
   <!-- PWA Meta Tags -->
@@ -23,18 +23,15 @@
   <link rel="icon" type="image/x-icon" href="img/favicon-32x32.png" sizes="32x32" />
   <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
   
-  <!-- Leaflet CSS para el mapa -->
-  <!-- Google Maps will be used instead of Leaflet. Set your API key in the script src below. -->
-  
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Comic+Neue:wght@300;400;700&display=swap" rel="stylesheet">
   
   <!-- Tailwind y Lucide -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="js/colaboradores-cards.js"></script>
+  <script src="https://cdn.tailwindcss.com" defer></script>
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <script src="js/colaboradores-cards.js" defer></script>
   
   <style>
     /* --- Base Layout --- */
@@ -157,7 +154,7 @@
   </header>
 
   <!-- ✅ MEJORA: Sidebar Overlay for Mobile -->
-  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden hidden transition-opacity duration-300"></div>
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
 
   <!-- ✅ MEJORA: Sidebar rediseñado -->
   <aside id="collabSidebar" class="w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-screen flex flex-col z-50">
@@ -421,19 +418,18 @@
     </main>
 
   <!-- Dependencias externas (una sola vez) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
 
   <!-- Scripts de la aplicación (ordenados y sin duplicados) -->
-  <script src="js/supabase-config.js"></script>
-  <script src="js/notifications.js"></script>
-  <script src="js/backup.js"></script>
-  <script src="js/theme.js"></script>
-  <script src="js/rating-system.js"></script>
-  <script src="js/order-manager.js"></script>
-  <script src="js/panel-colaborador.js"></script>
-  <script src="js/pwa.js"></script>
+  <script src="js/supabase-config.js" defer></script>
+  <script src="js/notifications.js" defer></script>
+  <script src="js/backup.js" defer></script>
+  <script src="js/theme.js" defer></script>
+  <script src="js/rating-system.js" defer></script>
+  <script src="js/order-manager.js" defer></script>
+  <script src="js/panel-colaborador.js" defer></script>
+  <script src="js/pwa.js" defer></script>
   
   <!--
     ================================================================================
