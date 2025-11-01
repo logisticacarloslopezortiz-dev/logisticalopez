@@ -157,42 +157,6 @@ function createCustomIcon(color, text) {
   });
 }
 
-/**
- * Guarda métricas de finalización en localStorage
- * @param {Object} metrics - Datos de métricas
- * @param {number} orderId - ID de la orden
- */
-function saveCompletionMetrics(metrics, orderId) {
-  try {
-    // Obtener métricas existentes o inicializar
-    const existingMetrics = JSON.parse(localStorage.getItem('tlc_completion_metrics') || '[]');
-    
-    // Agregar nueva métrica
-    existingMetrics.push({
-      ...metrics,
-      order_id: orderId,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Guardar en localStorage
-    localStorage.setItem('tlc_completion_metrics', JSON.stringify(existingMetrics));
-    
-    // Enviar a Supabase si está disponible
-    if (window.supabase) {
-      supabase.from('completion_metrics').insert([{
-        order_id: orderId,
-        colaborador_id: metrics.colaborador_id,
-        tiempo_total_minutos: metrics.tiempo_total,
-        fecha_completado: metrics.fecha_completado
-      }]).then(res => {
-        if (res.error) console.error('[Métricas] Error al guardar en Supabase:', res.error);
-        else console.log('[Métricas] Guardadas en Supabase correctamente');
-      });
-    }
-  } catch (err) {
-    console.error('[Métricas] Error al guardar métricas:', err);
-  }
-}
 
 /**
  * Función para guardar métricas de finalización
@@ -1229,9 +1193,15 @@ function setupEventListeners() {
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
       state.activeJobId = orderId;
       localStorage.setItem('tlc_collab_active_job', String(orderId));
-      await loadInitialOrders();
+
+      // Optimistic update
       const order = state.allOrders.find(o => o.id === orderId);
-      if (order) showActiveJob(order);
+      if (order) {
+        order.assigned_to = state.collabSession.user.id;
+        order.status = 'En proceso';
+        order.last_collab_status = 'en_camino_recoger';
+        showActiveJob(order);
+      }
     } else {
       showError('Error al aceptar la solicitud', error);
     }
