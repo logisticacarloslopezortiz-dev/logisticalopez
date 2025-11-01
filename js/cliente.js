@@ -853,10 +853,16 @@ document.addEventListener('DOMContentLoaded', function() {
           tracking: orderData.tracking || orderData.tracking_data
         };
 
-        // RLS: Para el formulario público, fuerza client_id = null
-        // Evita violación de FK si el usuario autenticado no tiene fila en public.profiles
-        // y cumple la política de inserción pública (status = 'Pendiente').
-        baseOrder.client_id = null;
+        // Verificar si hay un usuario autenticado y asignar su ID como client_id
+        const { data: { user } } = await supabaseConfig.client.auth.getUser();
+        if (user && user.id) {
+          baseOrder.client_id = user.id;
+          console.log('Usuario autenticado, asignando client_id:', user.id);
+        } else {
+          // Si no hay usuario autenticado, mantener client_id como null
+          baseOrder.client_id = null;
+          console.log('No hay usuario autenticado, client_id será null');
+        }
 
         const origin_coords2 = orderData.origin_coords;
         const destination_coords2 = orderData.destination_coords;
@@ -888,21 +894,40 @@ document.addEventListener('DOMContentLoaded', function() {
 
           // Intentar insertar; si falla por columna inexistente (p.ej. 'tracking'), reintentar sin ese campo
           async function insertWithSanitize(candidatePayload) {
-            const resp = await clientToUse.from('orders').insert([candidatePayload]).select();
+            // Intento principal: insert + select (requiere política SELECT para órdenes pendientes)
+            let resp = await clientToUse.from('orders').insert([candidatePayload]).select();
             if (resp.error) {
-              // Detectar error de columna no encontrada o PGRST204
-              const msg = String(resp.error.message || '').toLowerCase();
-              const code = resp.error.code || '';
-              if (code === 'PGRST204' || /could not find the 'tracking' column/i.test(resp.error.message || '') || msg.includes("column \"tracking\"") || /tracking column/i.test(msg)) {
-                // Reintentar sin 'tracking'
+              const err = resp.error;
+              const msg = String(err.message || '').toLowerCase();
+              const code = err.code || '';
+              const status = err.status || 0;
+
+              // Si la columna 'tracking' no existe en el esquema, reintentar sin ese campo
+              if (
+                code === 'PGRST204' ||
+                /could not find the 'tracking' column/i.test(err.message || '') ||
+                msg.includes("column \"tracking\"") ||
+                /tracking column/i.test(msg)
+              ) {
                 const sanitized = { ...candidatePayload };
                 delete sanitized.tracking;
-                const retryResp = await clientToUse.from('orders').insert([sanitized]).select();
-                if (retryResp.error) throw retryResp.error;
-                if (!retryResp.data || retryResp.data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
-                return retryResp.data[0];
+                resp = await clientToUse.from('orders').insert([sanitized]).select();
+                if (resp.error) throw resp.error;
+                if (!resp.data || resp.data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
+                return resp.data[0];
               }
-              throw resp.error;
+
+              // Si falla por RLS/401, hacer insert con retorno mínimo como fallback
+              if (status === 401 || code === 'PGRST303' || /rls|not authorized|permission/i.test(msg)) {
+                const sanitized = { ...candidatePayload };
+                delete sanitized.tracking;
+                const minimal = await clientToUse.from('orders').insert([sanitized], { returning: 'minimal' });
+                if (minimal.error) throw minimal.error;
+                // No podemos leer la fila por RLS; devolvemos marcador para flujos de UI
+                return { id: null, short_id: null, __noSelect: true };
+              }
+
+              throw err;
             }
             if (!resp.data || resp.data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
             return resp.data[0];
@@ -931,42 +956,33 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
 
-        // Si llegamos aquí, savedOrder está presente
-        if (!savedOrder || !savedOrder.id) {
-          console.error('Error: No se pudo obtener el ID de la orden guardada');
-          notifications.error('No se pudo completar el proceso. Por favor, inténtalo de nuevo.', { title: 'Error de Procesamiento' });
-          return;
-        }
-
-        const tracking_url = `${window.location.origin}/seguimiento.html?order=${savedOrder.id}`;
-        // Actualizar tracking_url (sin RPC, acorde al esquema actual)
-        try {
-          const { error: updateError } = await supabaseConfig.client
-            .from('orders')
-            .update({ tracking_url })
-            .eq('id', savedOrder.id);
-          if (updateError) {
-            console.warn('No se pudo actualizar la URL de seguimiento:', updateError);
-          }
-        } catch (e) {
-          console.warn('No se pudo actualizar tracking_url:', e);
-        }
-
-        // Notificar al usuario y ofrecer copia del ID
-        notifications.persistent(
-          `Guarda este ID para dar seguimiento a tu servicio: <strong>${savedOrder.id}</strong>`,
-          'success',
-          {
-            title: '¡Solicitud Enviada con Éxito!',
-            copyText: savedOrder.id,
-            onCopy: () => {
-              window.location.href = `index.html?highlight=status&orderId=${savedOrder.id}`;
+        // Si llegamos aquí, savedOrder está presente (puede no traer ID si hubo fallback RLS)
+        const displayCode = (savedOrder && (savedOrder.short_id || savedOrder.id)) ? (savedOrder.short_id || savedOrder.id) : null;
+        if (!displayCode) {
+          console.warn('Orden creada sin datos de retorno por RLS. Mostrando confirmación genérica.');
+          notifications.persistent(
+            'Tu solicitud fue enviada. Te enviaremos el código de seguimiento por correo.',
+            'success',
+            { title: '¡Solicitud Enviada!' }
+          );
+        } else {
+          const trackingUrl = `${window.location.origin}/seguimiento.html?codigo=${displayCode}`;
+          // No actualizar tracking_url manualmente: el trigger del backend ya lo establece
+          notifications.persistent(
+            `Guarda este código para dar seguimiento: <strong>${displayCode}</strong>`,
+            'success',
+            {
+              title: '¡Solicitud Enviada con Éxito!',
+              copyText: displayCode,
+              onCopy: () => { window.location.href = trackingUrl; }
             }
-          }
-        );
+          );
+        }
 
-        // Mostrar tarjeta de opt-in para notificaciones push
-        askForNotificationPermission(savedOrder.id);
+        // Mostrar tarjeta de opt-in para notificaciones push (si tenemos id)
+        if (savedOrder && savedOrder.id) {
+          askForNotificationPermission(savedOrder.id);
+        }
 
       } catch (error) {
         // Log detallado del error para debugging

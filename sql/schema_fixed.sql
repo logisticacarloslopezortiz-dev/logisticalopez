@@ -218,16 +218,19 @@ $$;
 -- --------------------------------------------------------------
 -- 5. ÓRDENES Y NOTIFICACIONES
 -- --------------------------------------------------------------
+-- Ya no necesitamos la secuencia para los IDs aleatorios
 DROP SEQUENCE IF EXISTS public.orders_short_id_seq;
-CREATE SEQUENCE public.orders_short_id_seq START WITH 1;
 
 CREATE OR REPLACE FUNCTION public.generate_order_short_id()
 RETURNS TEXT AS $$
 DECLARE
-    next_id BIGINT;
+    fecha_actual TEXT;
+    codigo_aleatorio TEXT;
 BEGIN
-    next_id := nextval('public.orders_short_id_seq');
-    RETURN 'ORD-' || lpad(next_id::TEXT, 4, '0');
+    -- Formato: ORD-YYYYMMDD-RANDOM
+    fecha_actual := to_char(current_date, 'YYYYMMDD');
+    codigo_aleatorio := upper(substring(md5(random()::text) from 1 for 6));
+    RETURN 'ORD-' || fecha_actual || '-' || codigo_aleatorio;
 END;
 $$ LANGUAGE plpgsql;
 

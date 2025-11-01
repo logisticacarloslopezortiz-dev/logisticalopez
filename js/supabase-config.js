@@ -5,19 +5,38 @@
  */
 
 const SUPABASE_URL = 'https://fkprllkxyjtosjhtikxy.supabase.co'; // Reemplaza con la URL de tu proyecto
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ';        
-let supabaseClient = null;
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ';
 
-try {
-  supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-} catch (e) {
-  console.error("Error al inicializar el cliente de Supabase:", e);
-}
+// Evitar múltiples instancias de GoTrueClient: reutilizar cliente único y cachear public client
+if (!window.supabaseConfig) {
+  let mainClient = null;
+  let publicClient = null;
+  try {
+    mainClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        storageKey: 'sb-tlc-main'
+      }
+    });
+    publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+        storageKey: 'sb-tlc-public'
+      }
+    });
+  } catch (e) {
+    console.error('Error al inicializar clientes de Supabase:', e);
+  }
 
-const supabaseConfig = {
-  client: supabaseClient,
-  useLocalStorage: false, // ✅ CORREGIDO: Forzar la lectura desde Supabase siempre.
-  vapidPublicKey: null,
+  window.supabaseConfig = {
+    client: mainClient,
+    _publicClient: publicClient,
+    useLocalStorage: false,
+    vapidPublicKey: null,
 
   // Asegura que la sesión JWT esté fresca antes de consultas
   ensureFreshSession: async function() {
@@ -41,8 +60,13 @@ const supabaseConfig = {
 
   // Crea un cliente público (anon) para consultas que no requieran la sesión del usuario
   getPublicClient() {
+    // Reutilizar cliente público cacheado para evitar múltiples GoTrueClient con mismo storageKey
+    if (this._publicClient) return this._publicClient;
     try {
-      return supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+      });
+      return this._publicClient;
     } catch (e) {
       console.error('Error creando public client de Supabase:', e);
       return this.client; // fallback al cliente principal
@@ -378,4 +402,9 @@ const supabaseConfig = {
     console.log('Configuración guardada exitosamente:', data);
     return data;
   }
-};
+  };
+} // end if guard
+
+// Exportar referencia (por compatibilidad con scripts que ya lo usan)
+const supabaseConfig = window.supabaseConfig;
+export {};
