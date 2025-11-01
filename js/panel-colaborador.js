@@ -737,7 +737,7 @@ function filterAndRender(){
     if (!state.collabSession) return false;
     // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador.
     const isPendingAndUnassigned = o.status === 'Pendiente' && !o.assigned_to;
-    const isAssignedToMe = o.assigned_to === state.collabSession.user.id && o.status !== 'Completado';
+    const isAssignedToMe = o.assigned_to === state.collabSession.user.id && o.status !== 'Completado' && o.status !== 'Cancelado';
     return isPendingAndUnassigned || isAssignedToMe;
   };
   let base = state.allOrders.filter(visibleForCollab);

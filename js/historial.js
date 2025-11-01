@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           event: '*', 
           schema: 'public', 
           table: 'orders',
-          filter: 'status=eq.Completado'
+          filter: 'status=in.(Completado,Cancelado)'
         }, 
         (payload) => {
           console.log('[Historial] Cambio en tiempo real detectado:', payload);
@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (existingIndex === -1) {
               // Es una nueva orden completada, añadirla al principio
-              console.log('[Historial] Nueva orden completada detectada:', payload.new.id);
+              console.log('[Historial] Nueva orden completada/cancelada detectada:', payload.new.id);
               // Cargar la orden completa con sus relaciones
               loadOrderDetails(payload.new.id);
             } else {

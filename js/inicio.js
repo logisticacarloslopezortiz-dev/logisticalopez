@@ -748,7 +748,16 @@ function handleRealtimeUpdate(payload) {
       // Encontrar y actualizar la orden en el array
       const indexToUpdate = allOrders.findIndex(order => order.id === newRecord.id);
       if (indexToUpdate !== -1) {
+        // Guardar los filtros actuales antes de actualizar
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const serviceFilter = document.getElementById('serviceFilter').value;
+        const dateFilter = document.getElementById('dateFilter').value;
+        
+        // Actualizar la orden en el array
         allOrders[indexToUpdate] = { ...allOrders[indexToUpdate], ...newRecord };
+        
+        // Reaplicar los filtros con los valores guardados
         filterOrders();
       }
       break;
