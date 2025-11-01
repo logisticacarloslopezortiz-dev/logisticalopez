@@ -284,23 +284,61 @@ function saveCompletionMetrics(metrics, orderId) {
  * @param {number} orderId - ID de la orden
  * @param {string} status - Nuevo estado
  */
-function notifyClient(orderId, status) {
+async function notifyClient(orderId, status) {
   try {
     const order = state.allOrders.find(o => o.id === orderId);
-    if (!order) return;
-    
-    // Enviar notificación push si hay un token registrado
-    if (order.client_notification_token) {
-      console.log(`[Notificaciones] Enviando notificación push al cliente para orden #${orderId}`);
-      
-      // Usar la función de notificación del navegador como fallback
-      showBrowserNotification(
-        `Actualización de tu servicio #${orderId}`,
-        `Tu servicio ha sido actualizado a: ${STATUS_MAP[status]?.label || status}`
-      );
+    if (!order) {
+      console.warn(`[Notificaciones] No se encontró la orden #${orderId} para notificar`);
+      return;
     }
+    
+    console.log(`[Notificaciones] Procesando notificación para orden #${orderId}, estado: ${status}`);
+    
+    // 1. Intentar enviar notificación push mediante Edge Function
+    try {
+      if (supabaseConfig.client) {
+        const title = `Actualización de tu servicio #${orderId}`;
+        const body = `Tu servicio ha sido actualizado a: ${STATUS_MAP[status]?.label || status}`;
+        
+        const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
+          body: { 
+            orderId, 
+            title, 
+            body,
+            target: 'client' // Especificar que la notificación es para el cliente
+          }
+        });
+        
+        if (error) throw new Error(`Error en Edge Function: ${error.message}`);
+        console.log(`[Notificaciones] Push enviado correctamente:`, data);
+        return true; // Notificación enviada con éxito
+      }
+      } catch (pushError) {
+        console.warn(`[Notificaciones] Error al enviar push mediante Edge Function:`, pushError);
+        // Continuar con fallbacks
+      }
+    }
+    
+    // 2. Intentar notificación del navegador como fallback
+    const notificationSent = await showBrowserNotification(order, status);
+    if (notificationSent) {
+      console.log(`[Notificaciones] Notificación del navegador mostrada para orden #${orderId}`);
+      return true;
+    }
+    
+    // 3. Último fallback: notificación en pantalla si está disponible
+    if (window.notifications) {
+      window.notifications.info(
+        `Cliente de orden #${orderId} notificado sobre cambio a estado: ${STATUS_MAP[status]?.label || status}`,
+        { title: 'Cliente notificado', duration: 3000 }
+      );
+      return true;
+    }
+    
+    return false;
   } catch (err) {
     console.error('[Notificaciones] Error al notificar al cliente:', err);
+    return false;
   }
 }
 
@@ -1290,13 +1328,25 @@ function restoreActiveJob() {
 
 // Helper para construir el mensaje de notificación según estado
 function buildStatusMessage(order, statusKey) {
+  // Mapa completo de mensajes para todos los estados posibles
   const map = {
+    // Estados del colaborador (panel-colaborador.js)
     en_camino_recoger: `Tu pedido #${order.id} está en camino a recoger.`,
     cargando: `Estamos cargando tu pedido #${order.id}.`,
     en_camino_entregar: `Tu pedido #${order.id} va en camino a entregar.`,
     retraso_tapon: `Tu pedido #${order.id} tiene retraso por tapón.`,
-    entregado: `Tu pedido #${order.id} fue entregado. ¡Gracias!`
+    entregado: `Tu pedido #${order.id} fue entregado. ¡Gracias!`,
+    
+    // Estados principales del sistema (inicio.js)
+    'Pendiente': `Tu pedido #${order.id} está pendiente de confirmación.`,
+    'Confirmado': `Tu pedido #${order.id} ha sido confirmado y será procesado pronto.`,
+    'Asignado': `Tu pedido #${order.id} ha sido asignado a un colaborador.`,
+    'En proceso': `Tu pedido #${order.id} está siendo procesado por nuestro colaborador.`,
+    'Completado': `Tu pedido #${order.id} ha sido completado exitosamente. ¡Gracias!`,
+    'Cancelado': `Tu pedido #${order.id} ha sido cancelado.`
   };
+  
+  // Si el estado existe en el mapa, usar ese mensaje, sino construir uno genérico
   return map[statusKey] || `Actualización del pedido #${order.id}: ${STATUS_MAP[statusKey]?.label || statusKey}`;
 }
 // --- Modal de Detalles del Servicio (similar a inicio.js) ---

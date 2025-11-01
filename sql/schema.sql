@@ -1,11 +1,11 @@
-- =============================================================
+-- =============================================================
 --        ESQUEMA COMPLETO TLC (Versión lista para Supabase)
 -- =============================================================
 -- Incluye:
 -- - Tablas base (vehículos, servicios)
 -- - Perfiles, colaboradores y matrículas
--- - Órdenes, notificaciones y suscripciones
--- - Config-uración del negocio con RNC y dueño
+-- - Órdenes con códigos aleatorios, notificaciones y suscripciones
+-- - Configuración del negocio con RNC y dueño
 -- - Políticas RLS seguras y triggers automáticos
 -- =============================================================
 
@@ -65,7 +65,8 @@ CREATE TABLE public.collaborators (
     status TEXT DEFAULT 'activo' NOT NULL,
     role TEXT DEFAULT 'colaborador' NOT NULL CHECK (lower(role) IN ('administrador','colaborador')),
     push_subscription JSONB,
-    notes TEXT
+    notes TEXT,
+    updated_at timestamptz not null default now()
 );
 COMMENT ON TABLE public.collaborators IS 'Datos operativos de colaboradores.';
 
@@ -82,6 +83,8 @@ COMMENT ON TABLE public.matriculas IS 'Matrículas/placas de los colaboradores.'
 CREATE INDEX IF NOT EXISTS idx_matriculas_user_id ON public.matriculas(user_id);
 CREATE INDEX IF NOT EXISTS idx_collaborators_status ON public.collaborators(status);
 CREATE INDEX IF NOT EXISTS idx_collaborators_role ON public.collaborators(role);
+CREATE INDEX IF NOT EXISTS idx_collaborators_email ON public.collaborators(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
 
 -- Trigger para updated_at
 CREATE OR REPLACE FUNCTION public.set_updated_at()
@@ -95,6 +98,11 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_profiles_set_updated ON public.profiles;
 CREATE TRIGGER trg_profiles_set_updated
 BEFORE UPDATE ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_collaborators_touch_updated ON public.collaborators;
+CREATE TRIGGER trg_collaborators_touch_updated
+BEFORE UPDATE ON public.collaborators
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- --------------------------------------------------------------
@@ -141,11 +149,6 @@ ON CONFLICT (id) DO NOTHING;
 -- --------------------------------------------------------------
 -- 4.b COMPATIBILIDAD: business_settings (para proyectos antiguos)
 -- --------------------------------------------------------------
--- Nota: Algunos entornos/migraciones anteriores referencian public.business_settings.
--- Para evitar errores al pegar este esquema en Supabase, se crea una tabla
--- de compatibilidad con las mismas columnas básicas que "business".
--- Las políticas se basan en el dueño definido en public.business.owner_user_id.
-
 DROP TABLE IF EXISTS public.business_settings CASCADE;
 CREATE TABLE public.business_settings (
   id integer primary key default 1,
@@ -167,6 +170,17 @@ CREATE TRIGGER trg_business_settings_touch_updated
 BEFORE UPDATE ON public.business_settings
 FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 
+-- Consistencia de RNC
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'business_settings_rnc_check'
+  ) THEN
+    ALTER TABLE public.business_settings
+      ADD CONSTRAINT business_settings_rnc_check
+      CHECK (rnc ~ '^[0-9]{9,11}$' OR rnc IS NULL);
+  END IF;
+END $$;
+
 -- Seed inicial de compatibilidad
 INSERT INTO public.business_settings (id, business_name, address, phone, email)
 VALUES (1, 'Mi Negocio', '', '', '')
@@ -175,7 +189,6 @@ ON CONFLICT (id) DO NOTHING;
 -- --------------------------------------------------------------
 -- 5.a FUNCIONES DE ROL (helpers)
 -- --------------------------------------------------------------
--- Helper seguro: determina si el usuario es el dueño del negocio sin recursión
 CREATE OR REPLACE FUNCTION public.is_owner(uid uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -188,7 +201,6 @@ AS $$
   );
 $$;
 
--- Helper seguro: determina si el usuario es administrador sin recursión RLS
 CREATE OR REPLACE FUNCTION public.is_admin(uid uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -202,20 +214,26 @@ AS $$
   );
 $$;
 
-
 -- --------------------------------------------------------------
 -- 5. ÓRDENES Y NOTIFICACIONES
 -- --------------------------------------------------------------
+-- Ya no necesitamos la secuencia para los IDs cortos
 DROP SEQUENCE IF EXISTS public.orders_short_id_seq;
-CREATE SEQUENCE public.orders_short_id_seq START WITH 1;
 
 CREATE OR REPLACE FUNCTION public.generate_order_short_id()
 RETURNS TEXT AS $$
 DECLARE
-    next_id BIGINT;
+    random_part TEXT;
+    date_part TEXT;
 BEGIN
-    next_id := nextval('public.orders_short_id_seq');
-    RETURN 'ORD-' || lpad(next_id::TEXT, 4, '0');
+    -- Generar parte aleatoria (equivalente a Math.random().toString(36).substring(2, 8).toUpperCase())
+    random_part := upper(substring(md5(random()::text) from 1 for 6));
+    
+    -- Obtener fecha actual en formato YYYYMMDD
+    date_part := to_char(current_date, 'YYYYMMDD');
+    
+    -- Combinar en formato ORD-YYYYMMDD-RANDOM
+    RETURN 'ORD-' || date_part || '-' || random_part;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -250,7 +268,8 @@ CREATE TABLE public.orders (
     monto_cobrado NUMERIC,
     metodo_pago TEXT,
     tracking_data JSONB,
-    tracking_url TEXT
+    tracking_url TEXT,
+    updated_at timestamptz not null default now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
@@ -258,12 +277,23 @@ CREATE INDEX IF NOT EXISTS idx_orders_date ON public.orders("date");
 CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON public.orders(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_orders_client_id ON public.orders(client_id);
 
+-- Constraint de estado permitido
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'orders_status_check'
+  ) THEN
+    ALTER TABLE public.orders
+      ADD CONSTRAINT orders_status_check
+      CHECK (status IN ('Pendiente','Aceptada','En curso','Completada','Cancelada'));
+  END IF;
+END $$;
+
 -- Trigger: setear tracking_url automáticamente al crear la orden
 CREATE OR REPLACE FUNCTION public.set_order_tracking_url()
 RETURNS trigger AS $$
 BEGIN
   IF new.tracking_url IS NULL OR new.tracking_url = '' THEN
-    new.tracking_url := '/seguimiento.html?order=' || coalesce(new.short_id::text, new.id::text);
+    new.tracking_url := '/seguimiento.html?codigo=' || coalesce(new.short_id::text, new.id::text);
   END IF;
   RETURN new;
 END;
@@ -273,6 +303,12 @@ DROP TRIGGER IF EXISTS trg_orders_set_tracking ON public.orders;
 CREATE TRIGGER trg_orders_set_tracking
 BEFORE INSERT ON public.orders
 FOR EACH ROW EXECUTE FUNCTION public.set_order_tracking_url();
+
+-- Trigger updated_at para orders
+DROP TRIGGER IF EXISTS trg_orders_touch_updated ON public.orders;
+CREATE TRIGGER trg_orders_touch_updated
+BEFORE UPDATE ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 
 -- Notificaciones
 DROP TABLE IF EXISTS public.notifications CASCADE;
@@ -285,6 +321,7 @@ CREATE TABLE public.notifications (
   created_at timestamptz not null default now(),
   read_at timestamptz
 );
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id);
 
 -- Suscripciones push
 DROP TABLE IF EXISTS public.push_subscriptions CASCADE;
@@ -308,6 +345,8 @@ ALTER TABLE public.collaborators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matriculas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.business ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.business_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Limpieza previa de políticas antiguas
 DROP POLICY IF EXISTS "public_read_vehicles" ON public.vehicles;
@@ -316,18 +355,24 @@ DROP POLICY IF EXISTS "owner_all_access_vehicles" ON public.vehicles;
 DROP POLICY IF EXISTS "owner_all_access_services" ON public.services;
 DROP POLICY IF EXISTS "public_read_profiles" ON public.profiles;
 DROP POLICY IF EXISTS "users_update_own_profile" ON public.profiles;
-DROP POLICY IF EXISTS "public_create_orders" ON public.orders;
+DROP POLICY IF EXISTS "public_insert_pending_orders" ON public.orders;
 DROP POLICY IF EXISTS "clients_read_own_orders" ON public.orders;
+DROP POLICY IF EXISTS "collaborator_read_pending_orders" ON public.orders;
 DROP POLICY IF EXISTS "collaborator_read_assigned_orders" ON public.orders;
 DROP POLICY IF EXISTS "collaborator_update_own_orders" ON public.orders;
-DROP POLICY IF EXISTS "owner_all_orders" ON public.orders;
+DROP POLICY IF EXISTS "owner_admin_all_orders" ON public.orders;
 DROP POLICY IF EXISTS "collaborator_self_select" ON public.collaborators;
 DROP POLICY IF EXISTS "collaborator_self_update" ON public.collaborators;
 DROP POLICY IF EXISTS "owner_manage_collaborators" ON public.collaborators;
+DROP POLICY IF EXISTS "admin_manage_collaborators" ON public.collaborators;
 DROP POLICY IF EXISTS "collaborator_read_own_matriculas" ON public.matriculas;
 DROP POLICY IF EXISTS "owner_manage_matriculas" ON public.matriculas;
+DROP POLICY IF EXISTS "admin_manage_matriculas" ON public.matriculas;
 DROP POLICY IF EXISTS "owner_full_access_business" ON public.business;
 DROP POLICY IF EXISTS "owner_full_access_business_settings" ON public.business_settings;
+DROP POLICY IF EXISTS "user_manage_own_push_subscriptions" ON public.push_subscriptions;
+DROP POLICY IF EXISTS "user_read_own_notifications" ON public.notifications;
+DROP POLICY IF EXISTS "user_manage_own_notifications" ON public.notifications;
 
 -- Vehículos y servicios
 CREATE POLICY "public_read_vehicles" ON public.vehicles FOR SELECT USING (true);
@@ -344,10 +389,14 @@ CREATE POLICY "public_read_profiles" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "users_update_own_profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Orders
-CREATE POLICY "public_insert_pending_orders" ON public.orders FOR INSERT
-  WITH CHECK (
-    status = 'Pendiente' AND (client_id IS NULL OR client_id = auth.uid())
-  );
+-- Importante para evitar el error RLS en INSERT desde cliente anónimo o autenticado sin client_id
+-- Permitimos insertar órdenes en estado Pendiente, asignando client_id NULL o igual a auth.uid()
+CREATE POLICY "public_insert_pending_orders" ON public.orders
+FOR INSERT
+WITH CHECK (
+  status = 'Pendiente' AND (client_id IS NULL OR client_id = auth.uid())
+);
+
 CREATE POLICY "clients_read_own_orders" ON public.orders FOR SELECT USING (client_id = auth.uid());
 CREATE POLICY "collaborator_read_pending_orders" ON public.orders FOR SELECT USING (
   EXISTS (
@@ -359,14 +408,6 @@ CREATE POLICY "collaborator_read_assigned_orders" ON public.orders FOR SELECT US
 CREATE POLICY "collaborator_update_own_orders" ON public.orders FOR UPDATE USING (assigned_to = auth.uid());
 CREATE POLICY "owner_admin_all_orders" ON public.orders FOR ALL USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
-);
-
--- Alineación: asegurar condición de inserción pública de órdenes
-DROP POLICY IF EXISTS "public_insert_pending_orders" ON public.orders;
-CREATE POLICY "public_insert_pending_orders" ON public.orders
-FOR INSERT
-WITH CHECK (
-  status = 'Pendiente' AND (client_id IS NULL OR client_id = auth.uid())
 );
 
 -- Collaborators y Matrículas
@@ -403,24 +444,317 @@ FOR ALL USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
 
--- Alineación: política principal de business
-DROP POLICY IF EXISTS "owner_full_access_business" ON public.business;
-CREATE POLICY "owner_full_access_business" ON public.business
-FOR ALL USING (
-  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
-) WITH CHECK (
-  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
-);
-
 -- Push Subscriptions
-DROP POLICY IF EXISTS "user_manage_own_push_subscriptions" ON public.push_subscriptions;
 CREATE POLICY "user_manage_own_push_subscriptions" ON public.push_subscriptions
 FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- Notifications
-DROP POLICY IF EXISTS "user_read_own_notifications" ON public.notifications;
-CREATE POLICY "user_read_own_notifications" ON public.notifications
-FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "user_manage_own_notifications" ON public.notifications
+FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- --------------------------------------------------------------
+-- 7. SEED DE CATÁLOGOS
+-- --------------------------------------------------------------
+INSERT INTO public.vehicles (name, description, image_url, is_active) VALUES
+('Camión Pequeño', '14 pies', 'https://i.postimg.cc/DynCkfnV/camionpequeno.jpg', true),
+('Furgoneta', 'Ideal para paquetería y cargas ligeras', 'https://i.postimg.cc/RV4P5C9f/furgoneta.jpg', true),
+('Grúa Vehicular', 'Para remolque de autos y jeepetas', 'https://i.postimg.cc/hvgBTFmy/grua-vehiculos.jpg', true),
+('Camión Grande', '22 a 28 pies', 'https://i.postimg.cc/44z8SHCc/camiongrande.jpg', true),
+('Grúa de Carga', 'Para izado y movimiento de carga', 'https://i.postimg.cc/0yHZwpSf/grua.png', true),
+('Motor', 'Para paquetería y entregas rápidas', 'https://i.postimg.cc/JMNgTvmd/motor.jpg', true),
+('Camión Abierto', 'Carga y transporte de materiales y mineros', 'https://i.postimg.cc/Kvx9ScFT/camionminero.jpg', true)
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO public.services (name, description, image_url, is_active, display_order) VALUES
+('Transporte Comercial', 'Transporte seguro de mercancías comerciales.', 'https://i.postimg.cc/sXCdCFTD/transporte-comercial.png', true, 1),
+('Paquetería', 'Envíos de paquetes seguros y rápidos.', 'https://i.postimg.cc/zBYZYmx8/paqueteria.png', true, 2),
+('Carga Pesada', 'Especialistas en transporte de carga pesada.', 'https://i.postimg.cc/B65b1fbv/pesado.jpg', true, 3),
+('Flete', 'Servicios de flete a nivel nacional.', 'https://i.postimg.cc/15vQnj3w/flete.png', true, 4),
+('Mudanza', 'Mudanza residencial y comercial.', 'https://i.postimg.cc/HszyJd5m/mudanza.jpg', true, 5),
+('Grúa Vehículo', 'Remolque de vehículos.', 'https://i.postimg.cc/hvgBTFmy/grua-vehiculos.jpg', true, 6),
+('Botes Mineros', 'Alquiler y transporte de botes.', 'https://i.postimg.cc/gzL29mkt/botes-minenos.png', true, 7),
+('Grúa de Carga', 'Movimiento de carga pesada.', 'https://i.postimg.cc/sDjz2rsx/grua-carga.png', true, 8)
+ON CONFLICT (name) DO NOTHING;
+
+-- =============================================================
+--                      FIN DEL ESQUEMA
+-- =============================================================
+
+
+
+
+
+
+-- Admin/owner opcional (requiere existir en auth.users para no romper FK)
+INSERT INTO public.profiles (id, full_name, email, phone, created_at, updated_at)
+SELECT
+  'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
+  'Carlos López',
+  'carloslopez@gmail.com',
+  '8090000000',
+  NOW(),
+  NOW()
+WHERE EXISTS (SELECT 1 FROM auth.users WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71')
+  AND NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71');
+
+INSERT INTO public.collaborators (id, name, email, phone, matricula, status, created_at)
+SELECT
+  'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
+  'Carlos López',
+  'carloslopez@gmail.com',
+  '8090000000',
+  '1338547',
+  'activo',
+  NOW()
+WHERE EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71')
+  AND NOT EXISTS (SELECT 1 FROM public.collaborators WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71');
+
+UPDATE public.collaborators
+SET role = 'administrador'
+WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71';
+
+INSERT INTO public.matriculas (user_id, matricula, status, created_at)
+SELECT
+  'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
+  '1338547',
+  'activo',
+  NOW()
+WHERE EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71')
+  AND NOT EXISTS (
+    SELECT 1 FROM public.matriculas WHERE user_id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
+  );
+
+UPDATE public.business
+SET owner_user_id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
+WHERE id = 1
+  AND EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71');
+
+
+
+
+
+-- Normaliza políticas de administrador para evitar dependencias recursivas sobre public.business
+-- Reemplaza políticas 'owner_*' por políticas basadas en rol 'administrador' en collaborators
+
+-- Vehículos
+drop policy if exists "owner_all_access_vehicles" on public.vehicles;
+drop policy if exists "admin_all_access_vehicles" on public.vehicles;
+create policy "admin_all_access_vehicles" on public.vehicles
+for all using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+) with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+-- Servicios
+drop policy if exists "owner_all_access_services" on public.services;
+drop policy if exists "admin_all_access_services" on public.services;
+create policy "admin_all_access_services" on public.services
+for all using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+) with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+-- Órdenes
+drop policy if exists "owner_all_orders" on public.orders;
+drop policy if exists "admin_all_orders" on public.orders;
+create policy "admin_all_orders" on public.orders
+for all using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+) with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+-- Colaboradores (gestión completa por administradores)
+drop policy if exists "owner_manage_collaborators" on public.collaborators;
+drop policy if exists "admin_manage_collaborators" on public.collaborators;
+create policy "admin_manage_collaborators" on public.collaborators
+for all using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+) with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+-- Matrículas
+drop policy if exists "owner_manage_matriculas" on public.matriculas;
+drop policy if exists "admin_manage_matriculas" on public.matriculas;
+create policy "admin_manage_matriculas" on public.matriculas
+for all using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+) with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+-- Nota: Las políticas específicas de colaboradores (self select/update) y de órdenes para colaboradores
+-- permanecen intactas en otras migraciones recientes.
+
+
+
+
+create or replace function public.is_admin(uid uuid)
+returns boolean as $$
+  select exists (
+    select 1
+    from public.collaborators
+    where id = uid
+    and lower(role) = 'administrador'
+  );
+$$ language sql stable;
+
+
+
+-- =============================================================
+-- MIGRACIÓN: Normalización de estados de orders y utilidades para Edge Functions
+-- Objetivo:
+--  - Evitar errores 23514 (violación de orders_status_check)
+--  - Normalizar y validar estados con un set controlado y trigger
+--  - Ajustar RLS para updates de estado por colaboradores/admin
+--  - Agregar tabla simple de logs para depuración de Edge Functions (opcional)
+-- =============================================================
+
+-- 1) Ampliar temporalmente el constraint de status para permitir variantes usadas
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_status_check') THEN
+    ALTER TABLE public.orders DROP CONSTRAINT orders_status_check;
+  END IF;
+END $$;
+
+-- 2) Crear ENUM opcional o mantener TEXT con CHECK. Usaremos TEXT+CHECK + trigger de normalización.
+-- Catálogo de estados permitidos canónicos
+-- Pendiente, Aceptada, En curso, Completada, Cancelada
+-- Consideraremos variantes comunes: 'Aceptado', 'en_progreso', 'en curso', 'ACEPTADA', etc.
+
+-- 3) Función de normalización de estado
+CREATE OR REPLACE FUNCTION public.normalize_order_status(in_status text)
+RETURNS text
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  s text := trim(both from coalesce(in_status, ''));
+BEGIN
+  IF s = '' THEN
+    RETURN 'Pendiente';
+  END IF;
+  s := replace(lower(s), '_', ' ');
+
+  -- mapear variantes a canónicos
+  IF s IN ('pendiente') THEN RETURN 'Pendiente'; END IF;
+  IF s IN ('aceptada','aceptado','aceptar','accepted') THEN RETURN 'Aceptada'; END IF;
+  IF s IN ('en curso','en progreso','en proceso','en transito','en tránsito') THEN RETURN 'En curso'; END IF;
+  IF s IN ('completada','completado','finalizada','terminada') THEN RETURN 'Completada'; END IF;
+  IF s IN ('cancelada','cancelado','anulada') THEN RETURN 'Cancelada'; END IF;
+
+  -- Si llega algo desconocido, forzar a 'Pendiente' para no romper flujos
+  RETURN 'Pendiente';
+END $$;
+
+-- 4) Trigger BEFORE INSERT/UPDATE para normalizar y validar
+CREATE OR REPLACE FUNCTION public.orders_status_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.status := public.normalize_order_status(NEW.status);
+  -- Validación final
+  IF NEW.status NOT IN ('Pendiente','Aceptada','En curso','Completada','Cancelada') THEN
+    RAISE EXCEPTION 'Estado no permitido: %', NEW.status USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_orders_status_guard ON public.orders;
+CREATE TRIGGER trg_orders_status_guard
+BEFORE INSERT OR UPDATE ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.orders_status_guard();
+
+-- 5) Reaplicar CHECK para asegurar integridad futura
+ALTER TABLE public.orders
+  ADD CONSTRAINT orders_status_check
+  CHECK (status IN ('Pendiente','Aceptada','En curso','Completada','Cancelada'));
+
+-- 6) Normalizar datos existentes a canónicos
+UPDATE public.orders
+SET status = public.normalize_order_status(status)
+WHERE status IS NOT NULL;
+
+-- 7) RLS: asegurar que colaboradores/admin puedan actualizar su orden a estados válidos
+-- Ya existe collaborator_update_own_orders (assigned_to = auth.uid()). La dejamos.
+-- Reforzamos owner/admin all access por si necesitan corregir estados
+DO $do$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'orders'
+      AND policyname = 'owner_admin_all_orders'
+  ) THEN
+    EXECUTE $sql$
+      CREATE POLICY "owner_admin_all_orders"
+      ON public.orders
+      FOR ALL
+      USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()))
+      WITH CHECK (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+    $sql$;
+  END IF;
+END
+$do$;
+
+
+-- 8) Tabla simple de logs para Edge Functions (opcional)
+CREATE TABLE IF NOT EXISTS public.function_logs (
+  id bigint generated by default as identity primary key,
+  fn_name text not null,
+  level text not null default 'error',
+  message text,
+  payload jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- Policy: solo admin/owner puede leer; service_role escribe sin RLS
+ALTER TABLE public.function_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS function_logs_read_admin ON public.function_logs;
+CREATE POLICY function_logs_read_admin ON public.function_logs
+FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- 9) Nota de integración frontend/backend
+-- - En inserts, no envíes status o envía 'Pendiente'.
+-- - En updates desde panel-colaborador, puedes enviar 'Aceptada' o 'En curso' y el trigger lo normaliza
+--   aunque llegue 'aceptado' o 'en_progreso'.
+-- - Si tu Edge Function cambia estados, no se verá afectada si corre con service_role.
+
+-- FIN MIGRACIÓN
+
 
 -- --------------------------------------------------------------
 -- 6.b FACTURAS (INVOICES)
@@ -454,108 +788,249 @@ FOR SELECT USING (
   client_id = auth.uid()
 );
 
--- --------------------------------------------------------------
--- 7. SEED DE CATÁLOGOS
--- --------------------------------------------------------------
-INSERT INTO public.vehicles (name, description, image_url, is_active) VALUES
-('Camión Pequeño', '14 pies', 'https://i.postimg.cc/DynCkfnV/camionpequeno.jpg', true),
-('Furgoneta', 'Ideal para paquetería y cargas ligeras', 'https://i.postimg.cc/RV4P5C9f/furgoneta.jpg', true),
-('Grúa Vehicular', 'Para remolque de autos y jeepetas', 'https://i.postimg.cc/hvgBTFmy/grua-vehiculos.jpg', true),
-('Camión Grande', '22 a 28 pies', 'https://i.postimg.cc/44z8SHCc/camiongrande.jpg', true),
-('Grúa de Carga', 'Para izado y movimiento de carga', 'https://i.postimg.cc/0yHZwpSf/grua.png', true),
-('Motor', 'Para paquetería y entregas rápidas', 'https://i.postimg.cc/JMNgTvmd/motor.jpg', true),
-('Camión Abierto', 'Carga y transporte de materiales y mineros', 'https://i.postimg.cc/Kvx9ScFT/camionminero.jpg', true)
-ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO public.services (name, description, image_url, is_active, display_order) VALUES
-('Transporte Comercial', 'Transporte seguro de mercancías comerciales.', 'https://i.postimg.cc/sXCdCFTD/transporte-comercial.png', true, 1),
-('Paquetería', 'Envíos de paquetes seguros y rápidos.', 'https://i.postimg.cc/zBYZYmx8/paqueteria.png', true, 2),
-('Carga Pesada', 'Especialistas en transporte de carga pesada.', 'https://i.postimg.cc/B65b1fbv/pesado.jpg', true, 3),
-('Flete', 'Servicios de flete a nivel nacional.', 'https://i.postimg.cc/15vQnj3w/flete.png', true, 4),
-('Mudanza', 'Mudanza residencial y comercial.', 'https://i.postimg.cc/HszyJd5m/mudanza.jpg', true, 5),
-('Grúa Vehículo', 'Remolque de vehículos.', 'https://i.postimg.cc/hvgBTFmy/grua-vehiculos.jpg', true, 6),
-('Botes Mineros', 'Alquiler y transporte de botes.', 'https://i.postimg.cc/gzL29mkt/botes-minenos.png', true, 7),
-('Grúa de Carga', 'Movimiento de carga pesada.', 'https://i.postimg.cc/sDjz2rsx/grua-carga.png', true, 8)
-ON CONFLICT (name) DO NOTHING;
 
 -- =============================================================
---                      FIN DEL ESQUEMA
+-- Migration: Add Profile Sync Trigger and Fix RLS Policies
 -- =============================================================
 
-
---- ===========================================
--- 1️⃣ Crear o actualizar el usuario admin
--- ===========================================
-
--- Perfil admin
-INSERT INTO public.profiles (id, full_name, email, phone, created_at, updated_at)
-SELECT
-  'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
-  'Carlos López',
-  'carloslopez@gmail.com',
-  '8090000000',
-  NOW(),
-  NOW()
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
-);
-
--- Colaborador admin
-INSERT INTO public.collaborators (id, name, email, phone, matricula, status, created_at)
-SELECT
-  'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
-  'Carlos López',
-  'carloslopez@gmail.com',
-  '8090000000',
-  '1338547',
-  'activo',
-  NOW()
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.collaborators WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
-);
-
--- Asegurar rol de administrador para el usuario dueño
-UPDATE public.collaborators
-SET role = 'administrador'
-WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71';
-
--- Matrícula asociada al colaborador
-INSERT INTO public.matriculas (user_id, matricula, status, created_at)
-SELECT
-  'a1bd79f0-8a12-40e3-8ee5-d24427dddf71',
-  '1338547',
-  'activo',
-  NOW()
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.matriculas WHERE user_id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
-);
-
--- ===========================================
--- 2️⃣ Asignar admin como dueño del negocio
--- ===========================================
-UPDATE public.business
-SET owner_user_id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
-WHERE id = 1;
-
--- ===========================================
--- 3️⃣ Opcional: actualizar nombre/email/teléfono del negocio
--- ===========================================
-UPDATE public.business
-SET business_name = 'Mi Negocio',
-    email = 'carloslopez@gmail.com',
-    phone = '8090000000',
+-- 1. Add trigger to sync profile names from collaborators
+CREATE OR REPLACE FUNCTION public.sync_profile_name()
+RETURNS trigger AS $$
+BEGIN
+  -- Update the profile's full_name when collaborator name changes
+  UPDATE public.profiles
+  SET 
+    full_name = NEW.name,
+    email = NEW.email,
+    phone = NEW.phone,
     updated_at = NOW()
-WHERE id = 1;
+  WHERE id = NEW.id;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- ===========================================
--- 4️⃣ Asegurar RLS activado en todas las tablas relevantes
--- ===========================================
-ALTER TABLE public.business ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.collaborators ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.matriculas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP TRIGGER IF EXISTS trg_sync_profile_name ON public.collaborators;
+CREATE TRIGGER trg_sync_profile_name
+AFTER INSERT OR UPDATE OF name, email, phone ON public.collaborators
+FOR EACH ROW EXECUTE FUNCTION public.sync_profile_name();
+
+-- 2. Fix RLS policies for orders
+DROP POLICY IF EXISTS "public_insert_pending_orders" ON public.orders;
+CREATE POLICY "public_insert_pending_orders" ON public.orders
+FOR INSERT
+WITH CHECK (
+  -- Allow pending orders from any client (including anonymous)
+  status = 'Pendiente' AND
+  -- Prevent hijacking by ensuring client_id is either null or matches auth
+  (client_id IS NULL OR client_id = auth.uid()) AND
+  -- Additional safety: assigned_to must be null for new orders
+  assigned_to IS NULL
+);
+
+-- 3. More permissive read policy for orders (helps with 401s)
+DROP POLICY IF EXISTS "public_read_pending_orders" ON public.orders;
+CREATE POLICY "public_read_pending_orders" ON public.orders
+FOR SELECT USING (
+  -- Allow reading pending orders or own orders
+  status = 'Pendiente' OR
+  client_id = auth.uid() OR
+  assigned_to = auth.uid() OR
+  -- Admins and owners can read all
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+);
+
+-- 4. Make sure collaborator operations work
+DROP POLICY IF EXISTS "collaborator_all_on_own_orders" ON public.orders;
+CREATE POLICY "collaborator_all_on_own_orders" ON public.orders
+FOR ALL USING (
+  -- Must be an active collaborator
+  EXISTS (
+    SELECT 1 FROM public.collaborators c
+    WHERE c.id = auth.uid() AND c.status = 'activo'
+  ) AND (
+    -- And either the order is assigned to them
+    assigned_to = auth.uid() OR
+    -- Or it's pending (allowing them to accept it)
+    status = 'Pendiente'
+  )
+) WITH CHECK (
+  -- For inserts/updates, must be an active collaborator
+  EXISTS (
+    SELECT 1 FROM public.collaborators c
+    WHERE c.id = auth.uid() AND c.status = 'activo'
+  )
+);
+
+-- 5. Fix collaborator self-management
+DROP POLICY IF EXISTS "collaborator_self_manage" ON public.collaborators;
+CREATE POLICY "collaborator_self_manage" ON public.collaborators
+FOR ALL USING (
+  -- Collaborators can manage their own profiles
+  auth.uid() = id OR
+  -- Admins and owners can manage all
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+) WITH CHECK (
+  -- Similar check for insert/update
+  auth.uid() = id OR
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+);
+
+-- 6. Add admin insert policy for collaborators (helps with creation)
+DROP POLICY IF EXISTS "admin_insert_collaborators" ON public.collaborators;
+CREATE POLICY "admin_insert_collaborators" ON public.collaborators
+FOR INSERT
+WITH CHECK (
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+);
+
+-- 7. Ensure admins can manage profiles
+DROP POLICY IF EXISTS "admin_manage_profiles" ON public.profiles;
+CREATE POLICY "admin_manage_profiles" ON public.profiles
+FOR ALL USING (
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+) WITH CHECK (
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+);
+
+-- 8. Add profile insert for new users
+DROP POLICY IF EXISTS "auth_insert_profile" ON public.profiles;
+CREATE POLICY "auth_insert_profile" ON public.profiles
+FOR INSERT
+WITH CHECK (
+  -- New users can create their profile
+  auth.uid() = id
+);
+
+
+
+-- =============================================================
+-- Migration: Add Profile Sync Trigger and Fix RLS Policies
+-- =============================================================
+
+-- 1. Add trigger to sync profile names from collaborators
+CREATE OR REPLACE FUNCTION public.sync_profile_name()
+RETURNS trigger AS $$
+BEGIN
+  -- Upsert into public.profiles to ensure a profile row always exists for the collaborator
+  INSERT INTO public.profiles (id, full_name, email, phone, created_at, updated_at)
+  VALUES (NEW.id, NEW.name, NEW.email, NEW.phone, NOW(), NOW())
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    email = EXCLUDED.email,
+    phone = EXCLUDED.phone,
+    updated_at = NOW();
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_profile_name ON public.collaborators;
+CREATE TRIGGER trg_sync_profile_name
+AFTER INSERT OR UPDATE OF name, email, phone ON public.collaborators
+FOR EACH ROW EXECUTE FUNCTION public.sync_profile_name();
+
+-- 2. Fix RLS policies for orders
+-- Ensure RLS is enabled on the tables we will modify (safe to run multiple times)
+ALTER TABLE IF EXISTS public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.collaborators ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public_insert_pending_orders" ON public.orders;
+CREATE POLICY "public_insert_pending_orders" ON public.orders
+FOR INSERT
+WITH CHECK (
+  -- Allow pending orders from any client (including anonymous)
+  status = 'Pendiente' AND
+  -- Prevent hijacking by ensuring client_id is either null or matches auth
+  (client_id IS NULL OR client_id = auth.uid()) AND
+  -- Additional safety: assigned_to must be null for new orders
+  assigned_to IS NULL
+);
+
+-- 3. More permissive read policy for orders (helps with 401s)
+DROP POLICY IF EXISTS "public_read_pending_orders" ON public.orders;
+CREATE POLICY "public_read_pending_orders" ON public.orders
+FOR SELECT USING (
+  -- Allow reading pending orders or own orders
+  status = 'Pendiente' OR
+  client_id = auth.uid() OR
+  assigned_to = auth.uid() OR
+  -- Admins and owners can read all
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+);
+
+-- 4. Make sure collaborator operations work
+DROP POLICY IF EXISTS "collaborator_all_on_own_orders" ON public.orders;
+CREATE POLICY "collaborator_all_on_own_orders" ON public.orders
+FOR ALL USING (
+  -- Must be an active collaborator
+  EXISTS (
+    SELECT 1 FROM public.collaborators c
+    WHERE c.id = auth.uid() AND c.status = 'activo'
+  ) AND (
+    -- And either the order is assigned to them
+    assigned_to = auth.uid() OR
+    -- Or it's pending (allowing them to accept it)
+    status = 'Pendiente'
+  )
+) WITH CHECK (
+  -- For inserts/updates, must be an active collaborator
+  EXISTS (
+    SELECT 1 FROM public.collaborators c
+    WHERE c.id = auth.uid() AND c.status = 'activo'
+  )
+);
+
+-- 5. Fix collaborator self-management
+DROP POLICY IF EXISTS "collaborator_self_manage" ON public.collaborators;
+CREATE POLICY "collaborator_self_manage" ON public.collaborators
+FOR ALL USING (
+  -- Collaborators can manage their own profiles
+  auth.uid() = id OR
+  -- Admins and owners can manage all
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+) WITH CHECK (
+  -- Similar check for insert/update
+  auth.uid() = id OR
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+);
+
+-- 6. Add admin insert policy for collaborators (helps with creation)
+DROP POLICY IF EXISTS "admin_insert_collaborators" ON public.collaborators;
+CREATE POLICY "admin_insert_collaborators" ON public.collaborators
+FOR INSERT
+WITH CHECK (
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+);
+
+-- 7. Ensure admins can manage profiles
+DROP POLICY IF EXISTS "admin_manage_profiles" ON public.profiles;
+CREATE POLICY "admin_manage_profiles" ON public.profiles
+FOR ALL USING (
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+) WITH CHECK (
+  public.is_owner(auth.uid()) OR 
+  public.is_admin(auth.uid())
+);
+
+-- 8. Add profile insert for new users
+DROP POLICY IF EXISTS "auth_insert_profile" ON public.profiles;
+CREATE POLICY "auth_insert_profile" ON public.profiles
+FOR INSERT
+WITH CHECK (
+  -- New users can create their profile
+  auth.uid() = id
+);

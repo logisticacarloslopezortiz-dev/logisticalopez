@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
     // Buscar la orden
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('id, client_id, name, phone')
+      .select('id, client_id, name, phone, email')
       .eq('id', orderId)
       .single();
     
@@ -97,6 +97,7 @@ Deno.serve(async (req: Request) => {
     // Buscar suscripciones push para el cliente
     let pushSubscriptions = [];
     
+    // Buscar en push_subscriptions si hay client_id
     if (order.client_id) {
       // Cliente registrado - buscar en push_subscriptions
       const { data: subscriptions, error: subError } = await supabase
