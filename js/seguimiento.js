@@ -180,23 +180,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Textos según el estado
         const statusMessages = {
-            // Estados iniciales y administrativos
             'pendiente': 'Tu solicitud está pendiente de confirmación',
             'confirmado': 'Tu solicitud ha sido confirmada',
             'asignado': 'Un colaborador ha sido asignado a tu solicitud',
-            // Flujo del colaborador (alias compatibles)
-            'en_camino_recoger': 'El colaborador está en camino a recoger',
             'en_ruta_recoger': 'El colaborador está en camino a recoger',
-            'cargando': 'Cargando pedido',
-            'en_camino_entregar': 'En camino a entregar pedido',
-            'retraso_tapon': 'Retraso por tapón',
-            // Estados globales
-            'En proceso': 'Tu servicio está en proceso',
-            'en_proceso': 'Tu servicio está en proceso',
-            'Completado': 'Tu servicio ha sido completado exitosamente',
+            'recogido': 'El servicio ha sido recogido',
+            'en_ruta_entrega': 'En camino a la entrega',
             'completado': 'Tu servicio ha sido completado exitosamente',
-            'entregado': 'Tu servicio ha sido completado exitosamente',
-            'Cancelado': 'Tu solicitud ha sido cancelada',
+            'Completado': 'Tu servicio ha sido completado exitosamente',
+            'En proceso': 'Tu servicio está en proceso',
             'cancelado': 'Tu solicitud ha sido cancelada'
         };
         
@@ -230,8 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('orderDate').textContent = `Creada el ${new Date(order.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}`;
         
         const statusBadge = document.getElementById('orderStatus');
-        const displayStatus = getStatusLabel(order.status);
-        statusBadge.textContent = displayStatus;
+        statusBadge.textContent = order.status;
         statusBadge.className = 'status-badge ' + getStatusClass(order.status);
 
         // Poblar Detalles
@@ -291,9 +282,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .forEach(([name, date]) => {
                 const item = document.createElement('div');
                 item.className = 'timeline-item active';
-                const label = formatStatusName(name);
                 item.innerHTML = `
-                    <h4 class="font-semibold text-gray-800">${label}</h4>
+                    <h4 class="font-semibold text-gray-800">${name}</h4>
                     <p class="text-sm text-gray-500">${date.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</p>
                 `;
                 timelineContainer.appendChild(item);
@@ -369,51 +359,12 @@ document.addEventListener('DOMContentLoaded', () => {
             'pendiente': 'status-pending',
             'confirmado': 'status-confirmed',
             'asignado': 'status-assigned',
-            // Estados de flujo colaborador se muestran como progreso
-            'en_camino_recoger': 'status-in-progress',
-            'en_ruta_recoger': 'status-in-progress',
-            'cargando': 'status-in-progress',
-            'en_camino_entregar': 'status-in-progress',
-            'retraso_tapon': 'status-in-progress',
-            // Estados globales
             'En proceso': 'status-in-progress',
-            'en_proceso': 'status-in-progress',
             'Completado': 'status-completed',
             'completado': 'status-completed',
-            'entregado': 'status-completed',
-            'Cancelado': 'status-canceled',
             'cancelado': 'status-canceled'
         };
         return statusClasses[status] || 'status-pending';
-    }
-
-    // Etiquetas amigables para mostrar en badges/timeline
-    function getStatusLabel(status) {
-        const labels = {
-            'pendiente': 'Pendiente',
-            'confirmado': 'Confirmado',
-            'asignado': 'Asignado',
-            'en_camino_recoger': 'En camino a recoger',
-            'en_ruta_recoger': 'En camino a recoger',
-            'cargando': 'Cargando pedido',
-            'en_camino_entregar': 'En camino a entregar',
-            'retraso_tapon': 'Retraso por tapón',
-            'En proceso': 'En proceso',
-            'en_proceso': 'En proceso',
-            'entregado': 'Completado',
-            'Completado': 'Completado',
-            'completado': 'Completado',
-            'Cancelado': 'Cancelado',
-            'cancelado': 'Cancelado'
-        };
-        return labels[status] || status;
-    }
-
-    function formatStatusName(name) {
-        // Evitar reetiquetar eventos ya descriptivos
-        const explicit = ['Solicitud Creada', 'Servicio Asignado', 'Servicio Completado'];
-        if (explicit.includes(name)) return name;
-        return getStatusLabel(name);
     }
 
     // --- Inicialización ---
