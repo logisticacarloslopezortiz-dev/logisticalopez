@@ -3,9 +3,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
   // Inicializar elementos del DOM
   const tableBody = document.getElementById('historyTableBody');
-  const searchInput = document.getElementById('searchInput');
-  const dateFilter = document.getElementById('dateFilter');
-  const clearFiltersBtn = document.getElementById('clearFilters');
   const showingCountEl = document.getElementById('showingCount');
   const totalCountEl = document.getElementById('totalCount');
 
@@ -108,20 +105,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Función de filtrado
   const filterAndRender = () => {
-    const searchTerm = searchInput.value.toLowerCase();
-    const dateValue = dateFilter.value;
-
-    filteredOrders = allHistoryOrders.filter(order => {
-      const matchesSearch = !searchTerm ||
-        String(order.id).includes(searchTerm) ||
-        order.name.toLowerCase().includes(searchTerm) ||
-        (order.service?.name || '').toLowerCase().includes(searchTerm);
-
-      const matchesDate = !dateValue || order.completed_at.startsWith(dateValue);
-
-      return matchesSearch && matchesDate;
-    });
-
+    // Los filtros fueron eliminados de la UI. Ahora simplemente renderiza todo el historial.
+    filteredOrders = allHistoryOrders;
     renderTable();
   };
 
@@ -197,15 +182,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
     }
   };
-
-  // --- EVENT LISTENERS ---
-  searchInput.addEventListener('input', filterAndRender);
-  dateFilter.addEventListener('change', filterAndRender);
-  clearFiltersBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    dateFilter.value = '';
-    filterAndRender();
-  });
 
   // Configurar suscripción en tiempo real para órdenes completadas
   const setupRealtimeSubscription = () => {

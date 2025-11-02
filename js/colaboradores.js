@@ -10,10 +10,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const passwordInput = document.getElementById('colaboradorPassword');
   const msgDiv = document.getElementById('colabMsg');
   
-  const searchInput = document.getElementById('searchInput');
-  const statusFilter = document.getElementById('statusFilter');
-  const clearFiltersBtn = document.getElementById('clearFilters');
-
   const totalColaboradoresEl = document.getElementById('totalColaboradores');
   const colaboradoresActivosEl = document.getElementById('colaboradoresActivos');
 
@@ -105,20 +101,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Filtrar y renderizar
   function filterAndRender() {
-    const searchTerm = searchInput.value.toLowerCase();
-    const status = statusFilter.value;
-
-    const filtered = allCollaborators.filter(colab => {
-      const matchesSearch = !searchTerm ||
-        colab.name.toLowerCase().includes(searchTerm) ||
-        colab.email.toLowerCase().includes(searchTerm);
-
-      const matchesStatus = !status || colab.status === status;
-
-      return matchesSearch && matchesStatus;
-    });
-
-    renderTable(filtered);
+    // Los filtros fueron eliminados de la UI. Ahora simplemente renderiza todos los colaboradores.
+    renderTable(allCollaborators);
   }
 
   // Actualizar tarjetas de resumen
@@ -210,16 +194,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert(`Error: ${error.message}`);
     }
   };
-
-  // --- EVENT LISTENERS PARA FILTROS ---
-  searchInput.addEventListener('input', filterAndRender);
-  statusFilter.addEventListener('change', filterAndRender);
-  clearFiltersBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    statusFilter.value = '';
-    filterAndRender();
-  });
-
 
   // --- INICIALIZACIÓN ---
   await loadCollaborators();
