@@ -157,47 +157,47 @@
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
 
   <!-- ✅ MEJORA: Sidebar rediseñado -->
-  <aside id="collabSidebar" class="w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-screen flex flex-col z-50">
+  <aside id="collabSidebar" class="w-80 md:w-72 shadow-2xl h-screen flex flex-col z-50" style="background-color: #1E405A;">
     <!-- Header del Sidebar -->
-    <div class="p-6 border-b border-gray-700">
+    <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: #1E8A95;">
             LLO
           </div>
           <div>
-            <p class="text-xs text-gray-400">Panel de Control</p>
+            <p class="text-xs text-white">Panel de Control</p>
           </div>
         </div>
         <!-- Botón para colapsar el sidebar -->
-        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 bg-blue-800 rounded-lg hover:bg-blue-700 transition-colors">
+        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors" style="background-color: rgba(30, 138, 149, 0.2); hover:background-color: rgba(30, 138, 149, 0.4);">
           <i data-lucide="panel-left-close" class="w-4 h-4 text-white"></i>
         </button>
       </div>
       
       <!-- Perfil del Colaborador -->
-      <div class="bg-blue-800/50 rounded-xl p-4 border border-blue-700">
+      <div class="rounded-xl p-4" style="background-color: rgba(30, 138, 149, 0.1); border: 1px solid rgba(30, 138, 149, 0.3);">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar" style="background-color: #1E8A95;">
             C
           </div>
           <div class="flex-1 min-w-0">
             <h3 class="text-white font-semibold text-sm truncate" id="collabName">Colaborador</h3>
-            <p class="text-gray-400 text-xs truncate" id="collabEmail"></p>
+            <p class="text-xs truncate" id="collabEmail" style="color: #1E8A95;"></p>
           </div>
           <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="En línea"></div>
         </div>
         
         <!-- Estadísticas rápidas -->
-        <div class="mt-3 pt-3 border-t border-blue-700">
+        <div class="mt-3 pt-3" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
           <div class="grid grid-cols-2 gap-3 text-center">
             <div>
               <div class="text-lg font-bold text-white" id="collabActiveJobs">0</div>
-              <div class="text-xs text-gray-400">Activos</div>
+              <div class="text-xs" style="color: #1E8A95;">Activos</div>
             </div>
             <div>
-              <div class="text-lg font-bold text-blue-400" id="collabCompletedJobs">0</div>
-              <div class="text-xs text-gray-400">Completados</div>
+              <div class="text-lg font-bold" id="collabCompletedJobs" style="color: #1E8A95;">0</div>
+              <div class="text-xs" style="color: #1E8A95;">Completados</div>
             </div>
           </div>
         </div>
@@ -207,33 +207,29 @@
     <!-- Navegación -->
     <nav class="flex-1 p-6" role="navigation" aria-label="Navegación principal">
       <div class="space-y-2">
-        <a href="#" id="sidebar-activos-btn" class="flex items-center gap-3 p-3 rounded-xl text-white bg-blue-700/50 transition-all duration-200 group">
+        <a href="#" id="sidebar-activos-btn" class="flex items-center gap-3 p-3 rounded-xl text-white transition-all duration-200 group" style="background-color: #1E8A95;">
           <i data-lucide="list" class="w-5 h-5 text-white"></i>
           <span class="font-medium">Trabajos Activos</span>
-          <span class="ml-auto bg-blue-600 text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount">0</span>
-        </a>
-
-        <a href="#" id="sidebar-historial-btn" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-blue-700/50 hover:text-white transition-all duration-200 group">
-          <i data-lucide="check-circle" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
-          <span class="font-medium">Historial</span>
+          <span class="ml-auto text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount" style="background-color: #1E405A;">0</span>
         </a>
         
-        <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-blue-700/50 hover:text-white transition-all duration-200 group">
-          <i data-lucide="bar-chart-3" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
+        <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
+          <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
           <span class="font-medium">Rendimiento</span>
         </a>
 
-        <!-- Botón de cambio de tema -->
-        <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mt-2 rounded-xl bg-blue-800/50 text-blue-400 hover:bg-blue-700/50 hover:text-blue-300 transition-all duration-200 group">
-            <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
-            <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
-            <span class="font-medium text-sm">Modo oscuro</span>
-        </button>
-        <!-- Cerrar sesión -->
-        <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-800/50 text-blue-400 hover:bg-blue-700/50 hover:text-blue-300 transition-all duration-200 group">
-            <i data-lucide="log-out" class="w-4 h-4"></i>
-            <span class="font-medium text-sm">Cerrar Sesión</span>
-        </button>
+        <!-- Botón de cambio de tema y cerrar sesión -->
+        <div class="pt-4 mt-4" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
+          <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mt-2 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
+              <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
+              <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
+              <span class="font-medium text-sm">Modo oscuro</span>
+          </button>
+          <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
+              <i data-lucide="log-out" class="w-4 h-4"></i>
+              <span class="font-medium text-sm">Cerrar Sesión</span>
+          </button>
+        </div>
       </div>
     </nav>
   </aside>
@@ -249,13 +245,9 @@
       <!-- Pestañas de Navegación -->
       <div class="border-b border-gray-200 mb-6">
         <nav class="-mb-px flex space-x-6" aria-label="Tabs">
-          <button id="tab-activos" type="button" role="tab" aria-controls="panel-activos" aria-selected="true" class="tab-btn group inline-flex items-center py-3 px-1 border-b-2 font-semibold text-sm text-blue-600 border-blue-600">
-            <i data-lucide="list" class="mr-2 h-5 w-5 text-blue-500"></i>
+          <button id="tab-activos" type="button" role="tab" aria-controls="panel-activos" aria-selected="true" class="tab-btn group inline-flex items-center py-3 px-1 border-b-2 font-semibold text-sm" style="color: #1E405A; border-color: #1E405A;">
+            <i data-lucide="list" class="mr-2 h-5 w-5" style="color: #1E8A95;"></i>
             <span>Trabajos Activos</span>
-          </button>
-          <button id="tab-historial" type="button" role="tab" aria-controls="panel-historial" aria-selected="false" class="tab-btn group inline-flex items-center py-3 px-1 border-b-2 font-semibold text-sm text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300">
-            <i data-lucide="check-circle" class="mr-2 h-5 w-5 text-gray-400 group-hover:text-gray-500"></i>
-            <span>Historial</span>
           </button>
         </nav>
       </div>
@@ -271,11 +263,6 @@
           </div>
           <!-- Contenedor de tarjetas: grid responsive para mostrar varias tarjetas por fila -->
           <div id="ordersCardContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden"></div>
-        </div>
-
-        <!-- Panel de Historial (Oculto por defecto) -->
-        <div id="panel-historial" role="tabpanel" aria-labelledby="tab-historial" class="hidden">
-           <div id="historial-solicitudes" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
         </div>
       </div>
     

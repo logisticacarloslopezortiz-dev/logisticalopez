@@ -10,36 +10,37 @@
 <link rel="icon" type="image/x-icon" href="/img/favicon-32x32.png" sizes="32x32" />
 <link rel="shortcut icon" href="/img/favicon.ico" type="image/x-icon"/> 
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/custom-styles.css">
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Scripts de Supabase (cargados primero) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
 </head>
-<body class="bg-gray-100 flex justify-center items-center h-screen">
+<body class="bg-white flex justify-center items-center h-screen">
 
   <main class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
     <div class="flex flex-col items-center mb-6">
       <img src="/img/1vertical.png" alt="Logo de la empresa" class="w-24 h-24 object-contain mb-3">
-      <h1 class="text-2xl font-bold text-center text-blue-700">Panel LLO - Login</h1>
+      <h1 class="text-2xl font-bold text-center" style="color: #1E405A;">Panel LLO - Login</h1>
     </div>
 
     <form id="loginForm" class="flex flex-col gap-4">
       <div>
-        <label class="block font-semibold mb-1 text-blue-700">Usuario</label>
+        <label class="block font-semibold mb-1" style="color: #1E405A;">Usuario</label>
         <input type="text" id="username" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="admin">
       </div>
       <div>
-        <label class="block font-semibold mb-1 text-blue-700">Contraseña</label>
+        <label class="block font-semibold mb-1" style="color: #1E405A;">Contraseña</label>
         <input type="password" id="password" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="********">
       </div>
-      <button type="submit" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition">Ingresar</button>
+      <button type="submit" class="btn-login">Ingresar</button>
     </form>
 
-    <p id="loginError" class="text-blue-700 mt-4 text-center hidden">Usuario o contraseña incorrectos.</p>
+    <p id="loginError" class="text-red-500 mt-4 text-center hidden">Usuario o contraseña incorrectos.</p>
     
     <div class="mt-6 text-center">
-      <a href="admin-register.html" class="text-blue-700 hover:underline">Registrar nuevo administrador</a>
+      <a href="admin-register.html" class="hover:underline" style="color: #1E8A95;">Registrar nuevo administrador</a>
     </div>
   </main>
 

@@ -860,7 +860,7 @@ function filterAndRender(){
   });
 
   render();
-  renderHistorial();
+  // renderHistorial(); // Eliminado
   updateCollaboratorStats(state.collabSession.user.id);
 }
 
@@ -908,40 +908,8 @@ function renderMobileCards(orders){
   if (window.lucide) lucide.createIcons();
 }
 
-// === Función para renderizar el historial de solicitudes completadas ===
-function renderHistorial(){
-  const historialContainer = document.getElementById('historial-solicitudes');
-  if (!historialContainer) return;
-  
-  if (!state.historialOrders || state.historialOrders.length === 0){
-    historialContainer.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes completadas</div>';
-    return;
-  }
-  
-  historialContainer.innerHTML = state.historialOrders.map(o => {
-    const statusKey = o.last_collab_status || o.status;
-    const status = STATUS_MAP[statusKey] || { label: 'Completado', badge: 'bg-green-100 text-green-800' };
-    
-    return `
-      <div class="bg-white rounded-lg shadow p-4 border border-gray-100 mb-3">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-sm font-semibold text-gray-900">#${o.id}</div>
-          <span class="px-2 py-1 rounded-full text-xs font-semibold ${status.badge}">${status.label}</span>
-        </div>
-        <div class="text-sm text-gray-800 font-medium">${o.name}</div>
-        <div class="text-xs text-gray-500 mb-2">${o.phone}</div>
-        <div class="text-sm text-gray-700">${o.service}</div>
-        <div class="text-xs text-gray-600 truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</div>
-        <div class="text-xs text-gray-600">${o.date} <span class="text-gray-400">•</span> ${o.time}</div>
-        ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
-          ? `<div class='mt-3'><button class='px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full' onclick="showServiceDetailsCollab('${o.id}')">Ver Detalles</button></div>`
-          : ''}
-      </div>
-    `;
-  }).join('');
-  
-  if (window.lucide) lucide.createIcons();
-}
+// === FUNCIÓN ELIMINADA: renderHistorial ===
+// La funcionalidad de historial se ha eliminado de la interfaz principal.
 
 // === FUNCIÓN ELIMINADA: renderDesktopAssignedCards ===
 // Esta función ha sido eliminada porque el contenedor 'assignedOrdersContainer' 
@@ -1340,52 +1308,6 @@ function setupEventListeners() {
   }
 }
 
-function setupTabs() {
-  const tabActivos = document.getElementById('tab-activos');
-  const tabHistorial = document.getElementById('tab-historial');
-  const panelActivos = document.getElementById('panel-activos');
-  const panelHistorial = document.getElementById('panel-historial');
-  const sidebarActivosBtn = document.getElementById('sidebar-activos-btn');
-  const sidebarHistorialBtn = document.getElementById('sidebar-historial-btn');
-
-  function switchTab(tab) {
-    if (tab === 'historial') {
-      tabActivos.classList.remove('text-blue-600', 'border-blue-600');
-      tabActivos.classList.add('text-gray-500', 'border-transparent', 'hover:text-gray-700', 'hover:border-gray-300');
-      tabHistorial.classList.add('text-blue-600', 'border-blue-600');
-      tabHistorial.classList.remove('text-gray-500', 'border-transparent', 'hover:text-gray-700', 'hover:border-gray-300');
-      panelActivos.classList.add('hidden');
-      panelHistorial.classList.remove('hidden');
-      sidebarActivosBtn.classList.remove('bg-blue-700/50', 'text-white');
-      sidebarActivosBtn.classList.add('text-gray-300', 'hover:text-white');
-      sidebarHistorialBtn.classList.add('bg-blue-700/50', 'text-white');
-      sidebarHistorialBtn.classList.remove('text-gray-300');
-    } else {
-      tabHistorial.classList.remove('text-blue-600', 'border-blue-600');
-      tabHistorial.classList.add('text-gray-500', 'border-transparent', 'hover:text-gray-700', 'hover:border-gray-300');
-      tabActivos.classList.add('text-blue-600', 'border-blue-600');
-      tabActivos.classList.remove('text-gray-500', 'border-transparent', 'hover:text-gray-700', 'hover:border-gray-300');
-      panelHistorial.classList.add('hidden');
-      panelActivos.classList.remove('hidden');
-      sidebarHistorialBtn.classList.remove('bg-blue-700/50', 'text-white');
-      sidebarHistorialBtn.classList.add('text-gray-300', 'hover:text-white');
-      sidebarActivosBtn.classList.add('bg-blue-700/50', 'text-white');
-      sidebarActivosBtn.classList.remove('text-gray-300');
-    }
-  }
-
-  tabActivos.addEventListener('click', () => switchTab('activos'));
-  tabHistorial.addEventListener('click', () => switchTab('historial'));
-  sidebarActivosBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    switchTab('activos');
-  });
-  sidebarHistorialBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    switchTab('historial');
-  });
-}
-
 // --- INICIALIZACIÓN ---
 
 // La sesión ya fue verificada al inicio del IIFE.
@@ -1395,7 +1317,7 @@ if (window.lucide) lucide.createIcons();
 
 setupSidebarToggles();
 setupEventListeners();
-setupTabs();
+// setupTabs(); // Eliminado
 
 supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
   state.collabSession = newSession;
