@@ -14,35 +14,36 @@
 
 
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/custom-styles.css">
   <script src="https://unpkg.com/lucide@latest"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+<body class="min-h-screen bg-white flex items-center justify-center p-6">
   <div class="w-full max-w-md bg-white rounded-xl shadow-lg p-8">
     <div class="flex flex-col items-center mb-6">
       <img src="/img/1vertical.png" alt="Logo de la empresa" class="w-24 h-24 object-contain mb-3">
       <div class="flex items-center gap-2">
-        <i data-lucide="truck" class="w-6 h-6 text-blue-700"></i>
-        <h1 class="text-xl font-bold text-blue-700">Acceso Colaborador</h1>
+        <i data-lucide="truck" class="w-6 h-6" style="color: #1E405A;"></i>
+        <h1 class="text-xl font-bold" style="color: #1E405A;">Acceso Colaborador</h1>
       </div>
     </div>
 
     <form id="collabLoginForm" class="space-y-4">
       <div>
-        <label for="email" class="block text-sm font-medium text-blue-700">Correo</label>
+        <label for="email" class="block text-sm font-medium" style="color: #1E405A;">Correo</label>
         <input id="email" type="email" required class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="colaborador@tlc.com">
       </div>
       <div>
-        <label for="password" class="block text-sm font-medium text-blue-700">Contraseña</label>
+        <label for="password" class="block text-sm font-medium" style="color: #1E405A;">Contraseña</label>
         <input id="password" type="password" required class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="••••••••">
       </div>
-      <button type="submit" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-semibold py-2.5 rounded-lg transition-colors">Ingresar</button>
+      <button type="submit" class="w-full btn-login">Ingresar</button>
     </form>
 
-    <div id="loginError" class="hidden mt-4 text-sm text-blue-700"></div>
+    <div id="loginError" class="hidden mt-4 text-sm text-red-500"></div>
 
-    <div class="mt-6 text-center text-sm text-gray-500">
-      <a href="login.html" class="text-blue-700 hover:underline">¿Eres el dueño? Inicia sesión aquí</a>
+    <div class="mt-6 text-center text-sm">
+      <a href="login.html" class="hover:underline" style="color: #1E8A95;">¿Eres el dueño? Inicia sesión aquí</a>
     </div>
   </div>
 

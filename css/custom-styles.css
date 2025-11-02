@@ -1,0 +1,14 @@
+/* Colores personalizados para los botones de login */
+.btn-login {
+  background-color: #1E405A; /* Azul Oscuro */
+  color: #1E8A95; /* Turquesa */
+  font-weight: bold;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.btn-login:hover {
+  background-color: #1E8A95; /* Turquesa */
+  color: #FFFFFF; /* Blanco */
+}
