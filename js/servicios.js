@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     labels: sortedVehicles.map(v => v.name),
                     datasets: [{
                         label: 'No. de Usos',
-                        data: sortedVeh.map(v => v.count),
+                        data: sortedVehicles.map(v => v.count),
                         backgroundColor: colorPalette, // Usar la paleta completa
                         borderColor: '#fff',
                         borderWidth: 3

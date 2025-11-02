@@ -102,27 +102,10 @@ async function loadAdminInfo() {
 
 // Función para filtrar pedidos
 function filterOrders() {
-  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-  const statusFilter = document.getElementById('statusFilter').value;
-  const serviceFilter = document.getElementById('serviceFilter').value;
-  const dateFilter = document.getElementById('dateFilter').value;
-
+  // YA NO HAY FILTROS EN LA UI. Se aplica el filtro por defecto de no mostrar completados/cancelados.
   filteredOrders = (allOrders || []).filter(order => {
-    const matchesSearch = !searchTerm || 
-      (order.name || '').toLowerCase().includes(searchTerm) ||
-      (order.phone || '').includes(searchTerm) ||
-      ((order.email || '').toLowerCase().includes(searchTerm)) ||
-      String(order.id).includes(searchTerm);
-
-    // COMENTARIO: Lógica de filtrado actualizada.
-    // Por defecto, se ocultan las órdenes 'Completado' y 'Cancelado'.
-    // Si se selecciona un filtro de estado, se muestra solo ese estado.
-    const matchesStatus = statusFilter ? order.status === statusFilter : !['Completado', 'Cancelado'].includes(order.status);
-
-    const matchesService = !serviceFilter || ((order.service?.name || order.service || '').toLowerCase() === serviceFilter.toLowerCase());
-    const matchesDate = !dateFilter || order.date === dateFilter;
-
-    return matchesSearch && matchesStatus && matchesService && matchesDate;
+    const matchesStatus = !['Completado', 'Cancelado'].includes(order.status);
+    return matchesStatus;
   });
 
   sortTable(sortColumn, null, true); // Re-aplicar ordenamiento sin cambiar dirección
@@ -706,40 +689,6 @@ function notifyCollaborator(order, collaborator) {
   // En una implementación real, aquí se enviaría una notificación push, SMS o correo
 }
 
-// Función para exportar datos
-function exportToCSV() {
-  const headers = ['ID', 'Cliente', 'Teléfono', 'Email', 'Servicio', 'Vehículo', 'Recogida', 'Entrega', 'Fecha', 'Hora', 'Estado', 'Precio'];
-  const csvContent = [headers.join(',')];
-  
-  filteredOrders.forEach(order => {
-    const row = [
-      order.id,
-      `"${order.name}"`, // Escaped quotes for CSV
-      order.phone,
-      order.email,
-      `"${order.service}"`, // Escaped quotes for CSV
-      `"${order.vehicle}"`, // Escaped quotes for CSV
-      `"${order.pickup}"`, // Escaped quotes for CSV
-      `"${order.delivery}"`, // Escaped quotes for CSV
-      order.date,
-      order.time,
-      order.status,
-      order.estimated_price || 'Por confirmar'
-    ];
-    csvContent.push(row.join(','));
-  });
-  
-  const blob = new Blob([csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', `pedidos_${new Date().toISOString().split('T')[0]}.csv`);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
 // Función para alternar menú de acciones
 function toggleActionsMenu(orderId, event) {
   event.stopPropagation();
@@ -815,11 +764,6 @@ function handleRealtimeUpdate(payload) {
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('searchInput').addEventListener('input', filterOrders);
-  document.getElementById('statusFilter').addEventListener('change', filterOrders);
-  document.getElementById('serviceFilter').addEventListener('change', filterOrders);
-  document.getElementById('dateFilter').addEventListener('change', filterOrders);
-  document.getElementById('exportBtn').addEventListener('click', exportToCSV);
   // Modal listeners
   document.getElementById('assignCancelBtn').addEventListener('click', closeAssignModal);
   document.getElementById('assignConfirmBtn').addEventListener('click', assignSelectedCollaborator);
@@ -827,14 +771,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Listeners para el modal de precio
   document.getElementById('priceCancelBtn').addEventListener('click', closePriceModal);
   document.getElementById('priceSaveBtn').addEventListener('click', savePriceData);
-  
-  document.getElementById('clearFilters').addEventListener('click', () => {
-    document.getElementById('searchInput').value = '';
-    document.getElementById('statusFilter').value = '';
-    document.getElementById('serviceFilter').value = '';
-    document.getElementById('dateFilter').value = '';
-    filterOrders();
-  });
 
   // Función para hacer funciones globales
   window.sortTable = sortTable;
