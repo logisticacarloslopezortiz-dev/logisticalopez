@@ -94,3 +94,34 @@ body {
 .btn-primary:hover {
   background-color: #1a7b85; /* Un tono más oscuro de turquesa */
 }
+
+/* Estilos para Tablas Modernas */
+.table-header {
+  padding: 0.75rem 1.5rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-texto-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: #F9FAFB;
+  border-bottom: 1px solid var(--color-bordes, #E5E7EB);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.table-header:hover {
+  background-color: #F3F4F6;
+}
+
+.table-cell {
+  padding: 1rem 1.5rem;
+  font-size: 0.875rem;
+  color: var(--color-texto-principal);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-bordes, #E5E7EB);
+}
+
+.text-turquoise {
+  color: var(--color-primario-turquesa);
+}

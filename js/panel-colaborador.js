@@ -396,63 +396,52 @@ async function notifyClient(orderId, status) {
  * @param {string} newKey - La nueva clave de estado (ej. 'en_camino_recoger').
  */
 async function changeStatus(orderId, newKey) {
-  // COMENTARIO: Esta función ahora actúa como un intermediario (wrapper) hacia el OrderManager.
   console.log(`[Colaborador] Solicitando cambio de estado para orden #${orderId} a "${newKey}"`);
-  const additionalData = {};
-  const startTime = performance.now(); // Medición de rendimiento
-  // Validaciones previas al cambio de estado
+
+  // Validaciones previas
   const order = state.allOrders.find(o => o.id === orderId);
   if (!order) {
     showError('Orden no encontrada', 'No se pudo localizar la solicitud seleccionada.');
     return;
   }
   if (newKey === 'entregado') {
-    const photos = order.evidence_photos || [];
-    if (photos.length === 0) {
-      showError('Evidencia requerida', 'Añade al menos una foto antes de finalizar el trabajo.');
+    if ((order.evidence_photos || []).length === 0) {
+      showError('Evidencia requerida', 'Añade al menos una foto antes de finalizar.');
       return;
     }
     if (!order.last_collab_status) {
-      showError('Inicia el trabajo primero', 'Marca "Recoger" o "Confirmar llegada" antes de finalizar.');
+      showError('Inicia el trabajo primero', 'Debes marcar un estado inicial antes de finalizar.');
       return;
     }
   }
 
-  // Si el colaborador marca como 'entregado', esto se traduce a 'Completado' en el estado general.
-  if (newKey === 'entregado') {
-    additionalData.status = 'Completado';
-    additionalData.completed_at = new Date().toISOString();
-    additionalData.completed_by = state.collabSession.user.id;
-
-    // Registrar métricas de finalización
-    try {
-      const metrics = {
-        colaborador_id: state.collabSession.user.id,
-        tiempo_total: calculateTotalTime(orderId),
-        fecha_completado: new Date().toISOString()
-      };
-      console.log('[Métricas] Registrando finalización:', metrics);
-      // Guardar métricas en localStorage para análisis
-      saveCompletionMetrics(metrics, orderId);
-    } catch (err) {
-      console.error('[Métricas] Error al registrar:', err);
-    }
-  } else if (newKey === 'en_camino_recoger' || newKey === 'cargando' || newKey === 'en_camino_entregar') {
-    // Cuando el colaborador inicia el trabajo, actualizar el estado global a "En proceso"
-    additionalData.status = 'En proceso';
-  }
-
-  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newKey, additionalData);
+  // Centralizar la lógica de negocio en el OrderManager.
+  // El OrderManager ahora decidirá si el estado global debe cambiar.
+  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newKey, {
+    collaborator_id: state.collabSession.user.id
+  });
 
   if (success) {
     notifyClient(orderId, newKey);
-    handleStatusUpdate(orderId, newKey); // Actualización optimista de la UI
-    filterAndRender(); // Re-renderizar para mostrar el cambio al instante.
+    handleStatusUpdate(orderId, newKey); // UI optimista
+    filterAndRender();
+
     if (newKey === 'entregado') {
+      // Registrar métricas de finalización
+      try {
+        const metrics = {
+          colaborador_id: state.collabSession.user.id,
+          tiempo_total: calculateTotalTime(orderId),
+          fecha_completado: new Date().toISOString()
+        };
+        saveCompletionMetrics(metrics, orderId);
+      } catch (err) {
+        console.error('[Métricas] Error al registrar:', err);
+      }
       handleOrderCompletion(orderId);
     }
+
     showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
-    // await loadInitialOrders(); // Eliminado para implementar actualización optimista.
   } else {
     showError('No se pudo actualizar el estado', error);
   }

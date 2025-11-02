@@ -94,12 +94,12 @@
   
   <!-- Formulario para agregar colaborador -->
   <div class="card p-6 mb-8">
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background-color: rgba(30, 138, 149, 0.1);">
-          <i data-lucide="user-plus" class="w-6 h-6" style="color: var(--color-primario-turquesa);"></i>
-        </div>
-        <h2 class="text-xl font-semibold text-gray-900">Agregar Nuevo Colaborador</h2>
-      </div>
+      <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-6">
+        <span class="bg-yellow-400 p-2 rounded-lg">
+          <i data-lucide="user-plus" class="w-5 h-5 text-white"></i>
+        </span>
+        Agregar Nuevo Colaborador
+      </h2>
       <form id="colaboradorForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div class="space-y-2 lg:col-span-2 xl:col-span-1">
           <label class="text-sm font-medium text-gray-700">Nombre Completo</label>
@@ -132,69 +132,34 @@
       <p class="text-xs text-gray-500 mt-3">Los colaboradores podrán iniciar sesión en login-colaborador.html con su correo y contraseña.</p>
     </div>
     
-    <!-- Filtros y búsqueda -->
-    <div class="card p-6 mb-8">
-      <div class="flex items-center gap-3 mb-4">
-        <div class="bg-gray-100 rounded-lg p-2">
-          <i data-lucide="filter" class="w-6 h-6 text-gray-600"></i>
-        </div>
-        <h3 class="text-lg font-semibold text-gray-900">Filtros y Búsqueda</h3>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700">Buscar</label>
-          <div class="relative">
-            <input type="text" id="searchInput" placeholder="Buscar por nombre o email..." class="w-full border border-gray-300 rounded-lg px-4 py-3 pl-10 focus:ring-2 focus:ring-blue-500 transition-all">
-            <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"></i>
-          </div>
-        </div>
-
-        
-
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700">Filtrar por Estado</label>
-          <select id="statusFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 transition-all">
-            <option value="">Todos los estados</option>
-            <option value="activo">Activo</option>
-            <option value="inactivo">Inactivo</option>
-          </select>
-        </div>
-
-        <div class="flex items-end">
-          <button id="clearFilters" class="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 font-medium flex items-center justify-center gap-2">
-            <i data-lucide="x" class="w-5 h-5"></i>
-            Limpiar Filtros
-          </button>
-        </div>
-      </div>
-    </div>
-    
     <!-- Lista de colaboradores -->
-    <div class="card overflow-x-auto">
-      <div class="p-6 border-b">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background-color: rgba(30, 64, 90, 0.1);">
-            <i data-lucide="users" class="w-6 h-6" style="color: var(--color-primario-oscuro);"></i>
-          </div>
-          <h2 class="text-xl font-semibold text-gray-900">Lista de Colaboradores</h2>
-        </div>
+    <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+      <div class="p-6 border-b border-gray-200">
+        <h2 class="text-xl font-bold text-turquoise flex items-center gap-3">
+          <span class="bg-yellow-400 p-2 rounded-lg">
+            <i data-lucide="users" class="w-5 h-5 text-white"></i>
+          </span>
+          Lista de Colaboradores
+        </h2>
       </div>
       
       <!-- Tabla para mostrar los colaboradores -->
-      <table class="w-full text-sm text-left text-gray-600">
-        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-          <tr>
-            <th scope="col" class="px-6 py-3">Nombre</th>
-            <th scope="col" class="px-6 py-3">Matrícula</th>
-            <th scope="col" class="px-6 py-3">Email</th>
-            <th scope="col" class="px-6 py-3">Estado</th>
-            <th scope="col" class="px-6 py-3">Acciones</th>
-          </tr>
-        </thead>
-        <tbody id="colaboradoresTableBody">
-          <!-- Las filas de los colaboradores se cargarán aquí dinámicamente -->
-        </tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="min-w-full">
+          <thead>
+            <tr>
+              <th class="table-header">Nombre</th>
+              <th class="table-header">Matrícula</th>
+              <th class="table-header">Email</th>
+              <th class="table-header">Estado</th>
+              <th class="table-header">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="colaboradoresTableBody" class="divide-y divide-gray-200">
+            <!-- Filas generadas dinámicamente -->
+          </tbody>
+        </table>
+      </div>
     </div>
   </main>
   <!-- Modal de Métricas -->

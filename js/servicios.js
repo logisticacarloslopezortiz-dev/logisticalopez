@@ -64,6 +64,18 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('mostRequestedService').textContent = sortedServices[0]?.name || 'N/A';
         document.getElementById('mostUsedVehicle').textContent = sortedVehicles[0]?.name || 'N/A';
 
+        // Paleta de colores extendida
+        const colorPalette = [
+            '#1E405A', // Azul Oscuro
+            '#1E8A95', // Turquesa
+            '#FBBF24', // Amarillo
+            '#4A5568', // Gris Oscuro
+            '#38A169', // Verde
+            '#805AD5', // Púrpura
+            '#DD6B20', // Naranja
+            '#3182CE'  // Azul Claro
+        ];
+
         // Gráfico de Servicios
         const serviceChartCtx = document.getElementById('serviceChart')?.getContext('2d');
         if (serviceChartCtx) {
@@ -74,15 +86,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     datasets: [{
                         label: 'No. de Solicitudes',
                         data: sortedServices.map(s => s.count),
-                        backgroundColor: '#1E8A95', // Turquesa
-                        borderColor: '#1E405A', // Azul Oscuro
-                        borderWidth: 2
+                        backgroundColor: colorPalette, // Usar la paleta completa
+                        borderColor: 'rgba(255, 255, 255, 0.5)',
+                        borderWidth: 1
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true } }
+                    scales: { y: { beginAtZero: true } },
+                    plugins: { legend: { display: false } } // Ocultar leyenda para más claridad
                 }
             });
         }
@@ -96,20 +109,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     labels: sortedVehicles.map(v => v.name),
                     datasets: [{
                         label: 'No. de Usos',
-                        data: sortedVehicles.map(v => v.count),
-                        backgroundColor: [
-                            '#1E405A', // Azul Oscuro
-                            '#1E8A95', // Turquesa
-                            '#FBBF24', // Amarillo
-                            '#a9a9a9'  // Gris
-                        ],
+                        data: sortedVeh.map(v => v.count),
+                        backgroundColor: colorPalette, // Usar la paleta completa
                         borderColor: '#fff',
-                        borderWidth: 2
+                        borderWidth: 3
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
+                    }
                 }
             });
         }

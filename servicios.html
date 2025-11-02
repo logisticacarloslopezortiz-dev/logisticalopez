@@ -109,29 +109,25 @@
     <!-- Gráficos de estadísticas -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       <div class="card p-6">
-        <div class="flex items-center gap-3 mb-6">
-          <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background-color: rgba(30, 138, 149, 0.1);">
-            <i data-lucide="bar-chart-3" class="w-5 h-5" style="color: var(--color-primario-turquesa);"></i>
-          </div>
-          <div>
-            <h3 class="text-xl font-bold text-gray-900">Servicios Más Solicitados</h3>
-            <p class="text-gray-500 text-sm">Distribución de pedidos por servicio</p>
-          </div>
-        </div>
+        <h3 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+          <span class="bg-yellow-400 p-2 rounded-lg">
+            <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
+          </span>
+          Servicios Más Solicitados
+        </h3>
+        <p class="text-gray-500 text-sm mb-6">Distribución de pedidos por servicio</p>
         <div class="h-80">
           <canvas id="serviceChart"></canvas>
         </div>
       </div>
       <div class="card p-6">
-        <div class="flex items-center gap-3 mb-6">
-          <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background-color: rgba(30, 64, 90, 0.1);">
-            <i data-lucide="pie-chart" class="w-5 h-5" style="color: var(--color-primario-oscuro);"></i>
-          </div>
-          <div>
-            <h3 class="text-xl font-bold text-gray-900">Vehículos Más Utilizados</h3>
-            <p class="text-gray-500 text-sm">Distribución por tipo de vehículo</p>
-          </div>
-        </div>
+        <h3 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+          <span class="bg-yellow-400 p-2 rounded-lg">
+            <i data-lucide="pie-chart" class="w-5 h-5 text-white"></i>
+          </span>
+          Vehículos Más Utilizados
+        </h3>
+        <p class="text-gray-500 text-sm mb-6">Distribución por tipo de vehículo</p>
         <div class="h-80">
           <canvas id="vehicleChart"></canvas>
         </div>
@@ -140,15 +136,13 @@
 
     <!-- Sección Servicios Activos -->
     <section class="card p-6">
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background-color: rgba(30, 138, 149, 0.1);">
-          <i data-lucide="settings" class="w-5 h-5" style="color: var(--color-primario-turquesa);"></i>
-        </div>
-        <div>
-          <h2 class="text-xl font-bold text-gray-900">Servicios Activos</h2>
-          <p class="text-gray-500 text-sm">Gestiona los servicios disponibles</p>
-        </div>
-      </div>
+      <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+        <span class="bg-yellow-400 p-2 rounded-lg">
+          <i data-lucide="settings" class="w-5 h-5 text-white"></i>
+        </span>
+        Servicios Activos
+      </h2>
+      <p class="text-gray-500 text-sm mb-6">Gestiona los servicios disponibles</p>
       <div class="flex flex-col sm:flex-row gap-3 mb-6">
         <input type="text" id="newService" placeholder="Nombre del nuevo servicio" 
                class="flex-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors">
@@ -162,15 +156,23 @@
 
     <!-- Sección Vehículos -->
     <section class="card p-6">
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background-color: rgba(30, 64, 90, 0.1);">
-          <i data-lucide="car" class="w-5 h-5" style="color: var(--color-primario-oscuro);"></i>
-        </div>
-        <div>
-          <h2 class="text-xl font-bold text-gray-900">Tipos de Vehículos</h2>
-          <p class="text-gray-500 text-sm">Gestiona los tipos de vehículos disponibles</p>
-        </div>
+      <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+        <span class="bg-yellow-400 p-2 rounded-lg">
+          <i data-lucide="car" class="w-5 h-5 text-white"></i>
+        </span>
+        Tipos de Vehículos
+      </h2>
+      <p class="text-gray-500 text-sm mb-6">Gestiona los tipos de vehículos disponibles</p>
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <input type="text" id="newVehicle" placeholder="Tipo de vehículo nuevo"
+               class="flex-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors">
+        <button id="addVehicleBtn" class="btn-primary px-6 py-3 rounded-lg flex items-center gap-2 font-medium">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          Agregar Vehículo
+        </button>
       </div>
+      <ul id="vehicleList" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></ul>
+    </section>
       <div class="flex flex-col sm:flex-row gap-3 mb-6">
         <input type="text" id="newVehicle" placeholder="Tipo de vehículo nuevo" 
                class="flex-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors">

@@ -59,20 +59,16 @@
     <h1 class="text-3xl font-bold text-gray-900 mb-2">Mi Negocio</h1>
     <p class="text-gray-600 mb-6">Aquí puedes ver y editar los datos de tu empresa, información de contacto y configuración general.</p>
 
-    <!-- Búsqueda rápida por ID/short_id de solicitud -->
-    <div class="card p-6 mb-6">
-      <h2 class="text-lg font-semibold mb-3">Buscar solicitud por ID</h2>
-      <div class="flex flex-col sm:flex-row gap-3">
-        <input id="businessOrderSearchInput" type="text" placeholder="Ej: 123 o ORD-ABC123" class="flex-1 border p-2 rounded-lg" />
-        <button id="businessOrderSearchBtn" class="btn-primary px-4 py-2 rounded-lg">Buscar</button>
-      </div>
-      <div id="businessOrderSearchResult" class="mt-4 text-sm text-gray-700"></div>
-    </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       <!-- Formulario de información del negocio -->
       <div class="card p-6">
-        <h2 class="text-xl font-bold mb-4">Información del Negocio</h2>
+        <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+          <span class="bg-yellow-400 p-2 rounded-lg">
+            <i data-lucide="briefcase" class="w-5 h-5 text-white"></i>
+          </span>
+          Información del Negocio
+        </h2>
         <form id="businessForm" class="flex flex-col gap-4">
         <div>
           <label class="block font-semibold mb-1">Nombre de la empresa:</label>
@@ -100,8 +96,13 @@
 
       <!-- Configuración de cotización -->
       <div class="card p-6">
-      <h2 class="text-xl font-bold mb-4">Configuración de Cotización</h2>
-      <form id="quotationForm" class="flex flex-col gap-4">
+        <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+          <span class="bg-yellow-400 p-2 rounded-lg">
+            <i data-lucide="sliders-horizontal" class="w-5 h-5 text-white"></i>
+          </span>
+          Configuración de Cotización
+        </h2>
+        <form id="quotationForm" class="flex flex-col gap-4">
         <div>
           <label class="block font-semibold mb-1">Tarifa base por kilómetro:</label>
           <div class="flex items-center gap-2">
