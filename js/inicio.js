@@ -197,13 +197,35 @@ function renderOrders(){
     return;
   }
 
+  // Helper para normalizar estados provenientes del flujo del colaborador
+  function normalizeStatus(status) {
+    const map = {
+      'pendiente': 'Pendiente',
+      'confirmado': 'Confirmado',
+      'asignado': 'Asignado',
+      'en_camino_recoger': 'En proceso',
+      'en_ruta_recoger': 'En proceso',
+      'cargando': 'En proceso',
+      'en_camino_entregar': 'En proceso',
+      'retraso_tapon': 'En proceso',
+      'en_proceso': 'En proceso',
+      'En proceso': 'En proceso',
+      'entregado': 'Completado',
+      'completado': 'Completado',
+      'Completado': 'Completado',
+      'Cancelado': 'Cancelado',
+      'cancelado': 'Cancelado'
+    };
+    return map[status] || status;
+  }
+
   filteredOrders.forEach(o=>{
     const statusColor = {
       'Pendiente': 'bg-yellow-100 text-yellow-800',
       'En proceso': 'bg-blue-100 text-blue-800',
       'Completado': 'bg-green-100 text-green-800',
       'Cancelado': 'bg-red-100 text-red-800'
-    }[o.status] || 'bg-gray-100 text-gray-800';
+    }[normalizeStatus(o.status)] || 'bg-gray-100 text-gray-800';
 
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50 transition-colors';
@@ -234,10 +256,12 @@ function renderOrders(){
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
         <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">
-          <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-          <option value="En proceso" ${o.status === 'En proceso' ? 'selected' : ''}>En Proceso</option>
-          <option value="Completado" ${o.status === 'Completado' ? 'selected' : ''}>Completado</option>
-          <option value="Cancelado" ${o.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
+          ${(() => { const n = normalizeStatus(o.status); return `
+          <option value="Pendiente" ${n === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+          <option value="En proceso" ${n === 'En proceso' ? 'selected' : ''}>En Proceso</option>
+          <option value="Completado" ${n === 'Completado' ? 'selected' : ''}>Completado</option>
+          <option value="Cancelado" ${n === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
+          `; })()}
         </select>
         ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
       </td>
@@ -262,7 +286,7 @@ function renderOrders(){
         'En proceso': 'bg-blue-100 text-blue-800',
         'Completado': 'bg-green-100 text-green-800',
         'Cancelado': 'bg-red-100 text-red-800'
-      }[o.status] || 'bg-gray-100 text-gray-800';
+      }[normalizeStatus(o.status)] || 'bg-gray-100 text-gray-800';
       const card = document.createElement('div');
       card.className = 'bg-white rounded-lg shadow p-4';
       card.innerHTML = `
@@ -272,7 +296,7 @@ function renderOrders(){
             <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
             <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
           </div>
-          <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
+          <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${normalizeStatus(o.status)}</span>
         </div>
         <div class="grid grid-cols-2 gap-3 text-sm mb-3">
           <div>

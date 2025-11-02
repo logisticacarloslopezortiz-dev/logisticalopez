@@ -1,154 +1,220 @@
 
-                        <!DOCTYPE html>
-                        <html lang="en">
-                        <head>
-                            <meta charset="UTF-8">
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                body {
-                  background-color: white; /* Ensure the iframe has a white background */
-                }
-    
-                
-              </style>
-                        </head>
-                        <body>
-                            <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 mb-8 w-full">
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Seguimiento de solicitud — Logística López Ortiz" />
+  <title>Seguimiento de Solicitud — LLO</title>
 
-<div id="requestsTableContainer" class="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
 
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
 
-    
-              <script>
-                              // ✅ MEJORA: Toggle de sidebar en móvil y escritorio
-function setupSidebarToggle() {
-  const sidebar = document.getElementById('collabSidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  const mobileBtn = document.getElementById('mobileMenuBtn');
-  const desktopBtn = document.getElementById('desktopSidebarToggle');
-  const mainContent = document.getElementById('mainContent');
-
-  if (!sidebar || !overlay || !mobileBtn || !mainContent) return;
-
-  const closeSidebar = () => {
-    sidebar.classList.add('-translate-x-full');
-    overlay.classList.add('hidden');
-    localStorage.setItem('sidebarCollapsed', 'true');
-    mainContent.classList.remove('md:ml-72');
-    if (desktopBtn) {
-      desktopBtn.querySelector('i').setAttribute('data-lucide', 'panel-left-close');
-    }
-  };
-
-  const openSidebar = () => {
-    sidebar.classList.remove('-translate-x-full');
-    overlay.classList.remove('hidden');
-    localStorage.setItem('sidebarCollapsed', 'false');
-    mainContent.classList.add('md:ml-72');
-    if (desktopBtn) {
-      desktopBtn.querySelector('i').setAttribute('data-lucide', 'panel-right-close');
-    }
-  };
-
-  // Mobile
-  mobileBtn.addEventListener('click', () => {
-    sidebar.classList.contains('-translate-x-full') ? openSidebar() : closeSidebar();
-  });
-  overlay.addEventListener('click', closeSidebar);
-
-  // Desktop
-  if (desktopBtn) {
-    desktopBtn.addEventListener('click', () => {
-      if (sidebar.classList.contains('-translate-x-full')) {
-        openSidebar();
-      } else {
-        closeSidebar();
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            azul: {
+              oscuro: '#0f172a',
+              turquesa: '#06b6d4'
+            }
+          }
+        }
       }
-      lucide.createIcons(); // Actualizar ícono
-      setTimeout(() => activeJobMap?.invalidateSize(), 350);
-    });
-  }
+    }
+  </script>
 
-  // Estado persistente
-  if (localStorage.getItem('sidebarCollapsed') === 'true') {
-    closeSidebar();
-  } else {
-    openSidebar();
-  }
-}
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
-function renderDesktopAssignedCards(orders) {
-  const container = document.getElementById('assignedOrdersContainer');
-  if (!container) return;
+  <!-- Leaflet Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  const myId = state.collabSession?.user?.id;
-  const assigned = (orders || []).filter(o => 
-    o.assigned_to === myId && o.status !== 'Completado'
-  );
+  <!-- Fuente -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  if (assigned.length === 0) {
-    container.classList.add('hidden');
-    return;
-  }
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(180deg, #ffffff 0%, #e0f7fa 100%);
+      color: #0f172a;
+    }
 
-  container.classList.remove('hidden');
+    .card {
+      background: #ffffff;
+      border-radius: 1.5rem;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+      transition: all 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+    }
 
-  container.innerHTML = assigned.map(o => {
-    const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
-    const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
+    .btn-primary {
+      background: linear-gradient(135deg, #0f172a, #06b6d4);
+      transition: all 0.3s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(6,182,212,0.3);
+    }
 
-    return `
-      <div class="order-card bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
-           onclick="openAcceptModal({
-             id: ${o.id},
-             name: '${o.name.replace(/'/g, "\\'")}',
-             phone: '${o.phone}',
-             service: '${(o.service || '').replace(/'/g, "\\'")}',
-             vehicle: '${(o.vehicle || '').replace(/'/g, "\\'")}',
-             pickup: '${(o.pickup || '').replace(/'/g, "\\'")}',
-             delivery: '${(o.delivery || '').replace(/'/g, "\\'")}',
-             date: '${o.date}',
-             time: '${o.time}'
-           })">
-        <div class="p-4">
-          <!-- Encabezado con ID y estado -->
-          <div class="flex justify-between items-start mb-3">
-            <span class="px-2.5 py-1 text-xs font-bold rounded bg-blue-100 text-blue-800">ID: ${o.id}</span>
-            <span class="px-2 py-1 text-xs font-semibold rounded-full ${status.badge}">${status.label}</span>
+    .timeline-step {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      position: relative;
+      padding-left: 1rem;
+    }
+
+    .timeline-step::before {
+      content: '';
+      position: absolute;
+      left: 0.3rem;
+      top: 1.2rem;
+      width: 2px;
+      height: 100%;
+      background-color: #e5e7eb;
+    }
+
+    .timeline-step:last-child::before {
+      display: none;
+    }
+
+    .fade-in {
+      animation: fadeIn 0.6s ease-in-out forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen">
+
+  <!-- 🟦 LOGIN SCREEN -->
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-azul-oscuro to-azul-turquesa">
+    <div class="card p-8 w-full max-w-md text-center fade-in">
+      <img src="img/1vertical.png" alt="LLO Logo" class="w-24 h-auto mx-auto mb-4">
+      <h1 class="text-2xl font-bold text-azul-oscuro mb-2">Logística López Ortiz</h1>
+      <p class="text-gray-600 mb-6">Consulta el estado de tu envío con tu ID de orden</p>
+
+      <input type="text" id="orderIdInput" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-azul-turquesa focus:border-transparent" placeholder="Ingresa tu ID de orden" maxlength="20">
+
+      <button id="trackButton" class="btn-primary text-white px-6 py-3 rounded-lg w-full font-semibold mt-5">
+        <i data-lucide="search" class="w-4 h-4 inline mr-2"></i> Buscar Solicitud
+      </button>
+
+      <div class="text-center mt-4">
+        <a href="index.html" class="text-azul-turquesa hover:underline text-sm">← Volver al inicio</a>
+      </div>
+
+      <div id="errorMessage" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+        <p class="text-red-800 text-sm"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📦 TRACKING SCREEN -->
+  <div id="trackingScreen" class="hidden fade-in">
+    <!-- Header -->
+    <header class="sticky top-0 bg-white/90 backdrop-blur-lg shadow-sm z-50">
+      <div class="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
+        <button onclick="location.href='index.html'" class="flex items-center gap-1 text-azul-turquesa hover:text-azul-oscuro">
+          <i data-lucide="arrow-left" class="w-5 h-5"></i>
+          <span class="font-medium">Volver</span>
+        </button>
+        <h1 class="font-semibold text-azul-oscuro text-lg">Seguimiento de Envío</h1>
+        <img src="img/1vertical.png" class="h-8" />
+      </div>
+    </header>
+
+    <!-- Contenido -->
+    <main class="max-w-5xl mx-auto px-4 py-8 space-y-8">
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 🧾 Detalles -->
+        <div class="lg:col-span-2 space-y-6">
+          <div class="card p-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+              <div>
+                <h2 class="text-2xl font-bold text-azul-oscuro" id="orderTitle">Orden #LLO-001</h2>
+                <p class="text-sm text-gray-500" id="orderDate">Creada el 1 de Noviembre, 2025</p>
+              </div>
+              <div id="orderStatus" class="status-badge bg-azul-turquesa/10 text-azul-turquesa font-semibold px-3 py-1 rounded-full mt-2 sm:mt-0">
+                Pendiente
+              </div>
+            </div>
+            <div id="orderDetails" class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 border-t border-gray-200 pt-4">
+              <!-- Se llena dinámicamente -->
+            </div>
           </div>
 
-          <!-- Cliente -->
-          <h3 class="font-semibold text-gray-900 text-base mb-1 truncate">${o.name}</h3>
-          <p class="text-sm text-gray-600 mb-3">${o.phone}</p>
-
-          <!-- Servicio -->
-          <div class="mb-2">
-            <p class="text-sm font-medium text-gray-800">${o.service || '—'}</p>
-            ${o.vehicle ? `<p class="text-xs text-gray-500">${o.vehicle}</p>` : ''}
-          </div>
-
-          <!-- Ruta -->
-          <div class="text-xs text-gray-600 mb-2">
-            <span class="font-medium">Ruta:</span>
-            <span class="block truncate" title="${o.pickup} → ${o.delivery}">
-              ${o.pickup} → ${o.delivery}
-            </span>
-          </div>
-
-          <!-- Fecha/Hora -->
-          <div class="text-xs text-gray-600">
-            <span class="font-medium">Fecha:</span> ${o.date} • ${o.time}
+          <!-- 🕓 Timeline -->
+          <div class="card p-6">
+            <h3 class="text-xl font-semibold text-azul-oscuro mb-4">Historial del Envío</h3>
+            <div id="timeline" class="space-y-4">
+              <!-- Ejemplo temporal -->
+              <div class="timeline-step">
+                <div class="bg-azul-turquesa text-white rounded-full p-2">
+                  <i data-lucide="package" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-gray-800">Orden registrada</p>
+                  <span class="text-xs text-gray-500">01/11/2025 - 10:00 AM</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+
+        <!-- 🗺️ Mapa -->
+        <div class="card p-6 space-y-4">
+          <h3 class="text-xl font-semibold text-azul-oscuro">Ruta del Envío</h3>
+          <div class="relative w-full h-80 rounded-xl overflow-hidden">
+            <div id="trackingMap" class="absolute inset-0"></div>
+            <div class="absolute bottom-4 right-4 flex gap-3">
+              <button class="bg-white p-2 rounded-full shadow hover:bg-gray-50">
+                <i data-lucide="navigation" class="w-5 h-5 text-azul-turquesa"></i>
+              </button>
+              <button class="bg-white p-2 rounded-full shadow hover:bg-gray-50">
+                <i data-lucide="map-pin" class="w-5 h-5 text-azul-oscuro"></i>
+              </button>
+            </div>
+          </div>
+          <div id="mapDetails" class="text-sm text-gray-600 space-y-1"></div>
+        </div>
       </div>
-    `;
-  }).join('');
 
-  if (window.lucide) lucide.createIcons();
-}
+      <!-- 🖼️ Fotos -->
+      <div id="photoSection" class="hidden card p-6">
+        <h3 class="text-xl font-semibold text-azul-oscuro mb-4">Evidencia del Servicio</h3>
+        <div id="photoGallery" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          <!-- Fotos dinámicas -->
+        </div>
+      </div>
+    </main>
+  </div>
 
-
-              </script>
-                        </body>
-                        </html>
-                    
+  <!-- ⚙️ Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/seguimiento.js"></script>
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
