@@ -529,6 +529,47 @@ SET owner_user_id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71'
 WHERE id = 1
   AND EXISTS (SELECT 1 FROM public.profiles WHERE id = 'a1bd79f0-8a12-40e3-8ee5-d24427dddf71');
 
+-- Agregar columnas para aceptación de órdenes y notificaciones push
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_by uuid;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_at timestamptz;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS client_id text;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS notification_subscription jsonb;
+-- Columnas necesarias para asignación y estado del colaborador
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS assigned_to uuid;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS last_collab_status text;
+
+-- Crear índices para mejor rendimiento
+CREATE INDEX IF NOT EXISTS orders_accepted_by_idx ON public.orders (accepted_by);
+CREATE INDEX IF NOT EXISTS orders_client_id_idx ON public.orders (client_id);
+
+-- Función RPC para aceptar órdenes desde el panel del colaborador
+CREATE OR REPLACE FUNCTION public.accept_order(order_id_param bigint)
+RETURNS public.orders
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE public.orders
+  SET status = 'En proceso',
+      accepted_by = auth.uid(),
+      accepted_at = now(),
+      assigned_to = auth.uid(),
+      last_collab_status = 'en_camino_recoger',
+      tracking_data = COALESCE(tracking_data, '[]'::jsonb) || jsonb_build_array(
+        jsonb_build_object(
+          'status', 'en_camino_recoger',
+          'timestamp', now(),
+          'message', 'Orden aceptada, en camino a recoger',
+          'by', auth.uid()
+        )
+      )
+  WHERE id = order_id_param
+  RETURNING *;
+$$;
+
+-- Conceder permisos de ejecución
+GRANT EXECUTE ON FUNCTION public.accept_order(bigint) TO authenticated;
+
 
 
 

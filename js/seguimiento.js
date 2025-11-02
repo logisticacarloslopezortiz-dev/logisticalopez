@@ -64,21 +64,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // Detectar si el input parece un short_id (ej. "ORD-1234") o un id numérico
+            // Nuevo sistema de IDs seguros:
+            // - client_tracking_id: 32 caracteres hex aleatorio para clientes
+            // - supabase_seq_id: ID secuencial interno (números)
+            // - id: UUID primario
             const looksLikeShortId = /^ORD-\w+/i.test(orderIdValue);
-            const numericId = Number(orderIdValue);
+            const isHex32 = /^[0-9a-f]{32}$/i.test(orderIdValue);
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderIdValue);
+            const isNumeric = /^[0-9]+$/.test(orderIdValue);
 
             let query = supabaseConfig.client
                 .from('orders')
                 .select('*, service:services(name), vehicle:vehicles(name)');
 
-            if (looksLikeShortId) {
+            if (isHex32) {
+                query = query.eq('client_tracking_id', orderIdValue.toLowerCase());
+            } else if (isUUID) {
+                query = query.eq('id', orderIdValue);
+            } else if (isNumeric) {
+                query = query.eq('supabase_seq_id', Number(orderIdValue));
+            } else if (looksLikeShortId) {
+                // Compatibilidad con formato anterior
                 query = query.eq('short_id', orderIdValue);
-            } else if (!Number.isNaN(numericId)) {
-                query = query.eq('id', numericId);
             } else {
-                // Último recurso: intentar por short_id si el formato no es numérico
-                query = query.eq('short_id', orderIdValue);
+                throw new Error('Formato de ID no válido. Use: ID de seguimiento (32 hex), ID secuencial (números) o UUID');
             }
 
             // Intentar asegurar sesión fresca antes de la consulta
@@ -92,9 +101,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const publicClient = supabaseConfig.getPublicClient();
                     const publicQuery = publicClient.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
-                    if (looksLikeShortId) publicQuery.eq('short_id', orderIdValue);
-                    else if (!Number.isNaN(numericId)) publicQuery.eq('id', numericId);
-                    else publicQuery.eq('short_id', orderIdValue);
+                    if (isHex32) publicQuery.eq('client_tracking_id', orderIdValue.toLowerCase());
+                    else if (isUUID) publicQuery.eq('id', orderIdValue);
+                    else if (isNumeric) publicQuery.eq('supabase_seq_id', Number(orderIdValue));
+                    else if (looksLikeShortId) publicQuery.eq('short_id', orderIdValue);
+                    else throw new Error('Formato de ID no válido.');
                     const resp = await publicQuery.single();
                     order = resp.data;
                     error = resp.error;
@@ -111,8 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
             displayOrderDetails(currentOrder);
 
             // Suscribirse a cambios en tiempo real para esta orden
-            const orderNumericId = Number(currentOrder.id);
-            subscribeToOrderUpdates(orderNumericId);
+            // Suscribirse usando el ID primario tal cual (puede ser UUID)
+            subscribeToOrderUpdates(currentOrder.id);
 
         } catch (err) {
             showError(err.message);
@@ -218,7 +229,8 @@ document.addEventListener('DOMContentLoaded', () => {
         trackingScreen.classList.remove('hidden');
 
         // Poblar Header
-        document.getElementById('orderTitle').textContent = `Orden #${order.id}`;
+        const orderLabel = (order.supabase_seq_id != null) ? `#${order.supabase_seq_id}` : `#${order.id}`;
+        document.getElementById('orderTitle').textContent = `Orden ${orderLabel}`;
         document.getElementById('orderDate').textContent = `Creada el ${new Date(order.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}`;
         
         const statusBadge = document.getElementById('orderStatus');

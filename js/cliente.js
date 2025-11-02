@@ -4,6 +4,39 @@ let selectedService = null; // Ahora será un objeto {id, name}
 let serviceQuestions = {};
 let modalFilled = false; // Nueva variable para controlar si el modal fue llenado
 
+// Función para obtener o generar client_id
+function getClientId() {
+  let clientId = localStorage.getItem('client_id');
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    localStorage.setItem('client_id', clientId);
+    console.log('[Cliente] Nuevo client_id generado:', clientId);
+  }
+  return clientId;
+}
+
+// Función para obtener suscripción push
+async function getPushSubscription() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.warn('[Push] Service Worker o Push Manager no disponible');
+      return null;
+    }
+
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: 'BEl62iUYgUivxIkv69yViEuiBIa40HdHSWgDdXU5cp0TJpQrSr90PiZKP-Q_ZdLiRkiWHGfzjFoyBLOAGLbDzfM' // Reemplaza con tu VAPID key
+    });
+    
+    console.log('[Push] Suscripción obtenida:', subscription);
+    return subscription.toJSON();
+  } catch (error) {
+    console.warn('[Push] Error al obtener suscripción:', error);
+    return null;
+  }
+}
+
 // Variables para el mapa
 let map;
 let originMarker;
@@ -887,15 +920,22 @@ document.addEventListener('DOMContentLoaded', function() {
           tracking: orderData.tracking || orderData.tracking_data
         };
 
-        // Verificar si hay un usuario autenticado y asignar su ID como client_id
+        // Asignar client_id (usuario autenticado o UUID generado)
         const { data: { user } } = await supabaseConfig.client.auth.getUser();
         if (user && user.id) {
           baseOrder.client_id = user.id;
           console.log('Usuario autenticado, asignando client_id:', user.id);
         } else {
-          // Si no hay usuario autenticado, mantener client_id como null
-          baseOrder.client_id = null;
-          console.log('No hay usuario autenticado, client_id será null');
+          // Si no hay usuario autenticado, usar client_id generado
+          baseOrder.client_id = getClientId();
+          console.log('No hay usuario autenticado, usando client_id generado:', baseOrder.client_id);
+        }
+
+        // Obtener suscripción push para notificaciones
+        const pushSubscription = await getPushSubscription();
+        if (pushSubscription) {
+          baseOrder.notification_subscription = pushSubscription;
+          console.log('Suscripción push agregada a la orden');
         }
 
         const origin_coords2 = orderData.origin_coords;

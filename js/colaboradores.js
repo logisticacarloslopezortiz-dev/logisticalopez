@@ -17,25 +17,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- LÓGICA PRINCIPAL ---
 
-  // Cargar y mostrar colaboradores
-  async function loadCollaborators() {
+  // Cargar y mostrar colaboradores con reintentos automáticos
+  async function loadCollaborators(retryCount = 0) {
     if (!tableBody) return;
-    tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Cargando...</td></tr>';
+    
+    const maxRetries = 3;
+    const retryDelay = 1000 * (retryCount + 1); // 1s, 2s, 3s
+    
+    tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4">Cargando colaboradores${retryCount > 0 ? ` (intento ${retryCount + 1}/${maxRetries + 1})` : ''}...</td></tr>`;
 
-    const { data, error } = await supabaseConfig.client
-      .from('collaborators')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabaseConfig.client
+        .from('collaborators')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error al cargar colaboradores:', error);
-      tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">No se pudieron cargar los colaboradores.</td></tr>';
-      return;
+      if (error) {
+        throw error;
+      }
+
+      allCollaborators = data || [];
+      filterAndRender();
+      updateSummary();
+      console.log(`[Colaboradores] Cargados ${allCollaborators.length} colaboradores exitosamente`);
+      
+    } catch (error) {
+      console.error(`Error al cargar colaboradores (intento ${retryCount + 1}):`, error);
+      
+      if (retryCount < maxRetries) {
+        console.log(`[Colaboradores] Reintentando en ${retryDelay}ms...`);
+        setTimeout(() => loadCollaborators(retryCount + 1), retryDelay);
+      } else {
+        tableBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="text-center py-4">
+              <div class="text-red-500 mb-2">No se pudieron cargar los colaboradores</div>
+              <button onclick="loadCollaborators()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                Reintentar
+              </button>
+            </td>
+          </tr>
+        `;
+      }
     }
-
-    allCollaborators = data;
-    filterAndRender();
-    updateSummary();
   }
 
   // Función para generar avatar con iniciales
@@ -197,4 +221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- INICIALIZACIÓN ---
   await loadCollaborators();
+  
+  // Exponer función para reintentos manuales
+  window.loadCollaborators = loadCollaborators;
 });

@@ -9,47 +9,7 @@
     return; // Detener la ejecución si no hay sesión.
   }
 
-  const OrderManager = {
-    async acceptOrder(orderId, collaboratorId) {
-      try {
-        const { error } = await supabaseConfig.client.rpc('accept_order', {
-          order_id_param: orderId
-        });
-        if (error) throw error;
-        return { success: true, error: null };
-      } catch (err) {
-        console.error('Error en OrderManager.acceptOrder:', JSON.stringify(err, null, 2));
-        return { success: false, error: err.message };
-      }
-    },
-    async cancelActiveJob(orderId) {
-      try {
-        const { error } = await supabaseConfig.client
-          .from('orders')
-          .update({ status: 'Cancelado' })
-          .eq('id', orderId);
-        if (error) throw error;
-        return { success: true, error: null };
-      } catch (err) {
-        console.error('Error en OrderManager.cancelActiveJob:', JSON.stringify(err, null, 2));
-        return { success: false, error: err.message };
-      }
-    },
-    async actualizarEstadoPedido(orderId, newKey, additionalData = {}) {
-      try {
-        const updatePayload = { ...additionalData, last_collab_status: newKey };
-        const { error } = await supabaseConfig.client
-          .from('orders')
-          .update(updatePayload)
-          .eq('id', orderId);
-        if (error) throw error;
-        return { success: true, error: null };
-      } catch (err) {
-        console.error('Error en OrderManager.actualizarEstadoPedido:', JSON.stringify(err, null, 2));
-        return { success: false, error: err.message };
-      }
-    }
-  };
+  // Usar OrderManager global importado desde order-manager.js
 
   const STATUS_MAP = {
     en_camino_recoger: {
@@ -639,6 +599,12 @@ function showActiveJob(order){
   if (typeof updateActiveJobMap === 'function') {
     updateActiveJobMap(order.origin_coords, order.destination_coords);
   }
+
+  // Enganchar botones de rutas para usar datos desde Supabase
+  const originBtn = document.getElementById('viewLocationBtn');
+  const routeBtn = document.getElementById('viewRouteBtn');
+  if (originBtn) originBtn.onclick = handleViewOrigin;
+  if (routeBtn) routeBtn.onclick = handleViewRoute;
 }
 
 function updateActiveJobView(){
@@ -666,6 +632,68 @@ function renderPhotoGallery(photos) {
     imgContainer.innerHTML = `<img src="${photoSrc}" class="w-full h-full object-cover">`;
     gallery.appendChild(imgContainer);
   });
+}
+
+// Obtiene coordenadas y direcciones actuales desde Supabase para el trabajo activo
+async function fetchActiveOrderCoordsAndAddresses() {
+  if (!state.activeJobId) throw new Error('No hay trabajo activo');
+  const { data, error } = await supabaseConfig.client
+    .from('orders')
+    .select('origin_coords, destination_coords, pickup, delivery')
+    .eq('id', state.activeJobId)
+    .single();
+  if (error) throw error;
+  return data || {};
+}
+
+// Abre Google Maps en el origen usando coordenadas si existen, o texto si no
+async function handleViewOrigin() {
+  try {
+    const data = await fetchActiveOrderCoordsAndAddresses();
+    const order = state.allOrders.find(o => o.id === state.activeJobId) || {};
+    const origin = data.origin_coords || order.origin_coords;
+    const pickupText = data.pickup || order.pickup;
+
+    if (origin && typeof origin.lat === 'number' && typeof origin.lng === 'number') {
+      const url = `https://www.google.com/maps?q=${origin.lat},${origin.lng}`;
+      window.open(url, '_blank');
+      if (typeof updateActiveJobMap === 'function') updateActiveJobMap(origin, null);
+    } else if (pickupText) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickupText)}`;
+      window.open(url, '_blank');
+    } else {
+      showError('Sin datos', 'No hay datos de origen disponibles.');
+    }
+  } catch (err) {
+    console.error('Error al abrir origen en Maps:', err);
+    showError('Error', 'No se pudo obtener el origen desde Supabase.');
+  }
+}
+
+// Abre Google Maps con la ruta entre origen y destino
+async function handleViewRoute() {
+  try {
+    const data = await fetchActiveOrderCoordsAndAddresses();
+    const order = state.allOrders.find(o => o.id === state.activeJobId) || {};
+    const origin = data.origin_coords || order.origin_coords;
+    const destination = data.destination_coords || order.destination_coords;
+    const pickupText = data.pickup || order.pickup;
+    const deliveryText = data.delivery || order.delivery;
+
+    if (origin && destination && typeof origin.lat === 'number' && typeof origin.lng === 'number' && typeof destination.lat === 'number' && typeof destination.lng === 'number') {
+      const url = `https://www.google.com/maps/dir/${origin.lat},${origin.lng}/${destination.lat},${destination.lng}`;
+      window.open(url, '_blank');
+      if (typeof updateActiveJobMap === 'function') updateActiveJobMap(origin, destination);
+    } else if (pickupText && deliveryText) {
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pickupText)}&destination=${encodeURIComponent(deliveryText)}`;
+      window.open(url, '_blank');
+    } else {
+      showError('Sin datos', 'No hay datos suficientes para la ruta.');
+    }
+  } catch (err) {
+    console.error('Error al abrir ruta en Maps:', err);
+    showError('Error', 'No se pudo obtener la ruta desde Supabase.');
+  }
 }
 
 // Cache de nombres de colaboradores para evitar mostrar UUIDs
@@ -1224,7 +1252,7 @@ function setupEventListeners() {
     if (!state.selectedOrderIdForAccept) return closeAcceptModal();
 
     const orderId = state.selectedOrderIdForAccept;
-    const { success, error } = await OrderManager.acceptOrder(orderId, state.collabSession.user.id);
+    const { success, error } = await OrderManager.acceptOrder(orderId);
 
     if (success) {
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
