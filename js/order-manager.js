@@ -9,55 +9,47 @@
 const OrderManager = {
   /**
    * Centraliza la lógica para actualizar el estado de un pedido en Supabase.
-   * También gestiona la actualización del historial de seguimiento y el envío de notificaciones.
-   *
-   * @param {string | number} orderId - El ID del pedido a actualizar.
-   * @param {string} newStatus - El nuevo estado del pedido (ej. 'En proceso', 'Completado').
-   * @param {Object} [additionalData={}] - Un objeto con datos adicionales para la actualización (ej. { monto_cobrado: 500 }).
-   * @returns {Promise<{success: boolean, error: any}>} - Un objeto indicando si la operación fue exitosa.
    */
   async actualizarEstadoPedido(orderId, newStatus, additionalData = {}) {
     console.log(`[OrderManager] Iniciando actualización para orden #${orderId} a estado "${newStatus}"`);
 
-    // 1. Construir el objeto de actualización para Supabase
-    // No sobrescribir el estado global con estados intermedios del colaborador.
-    // Solo aplicar 'status' si viene explícitamente en additionalData (p.ej. 'Completado' o 'Cancelado').
-    const updatePayload = {
-      ...additionalData
-    };
+    const updatePayload = { ...additionalData, last_collab_status: newStatus };
 
-    // 2. Añadir la nueva entrada al historial de seguimiento (tracking_data)
-    // Primero, obtenemos el tracking_data actual para no sobreescribirlo.
+    // Lógica de negocio centralizada:
+    // Si el colaborador marca "entregado", el estado general de la orden pasa a "Completado".
+    if (newStatus === 'entregado') {
+      updatePayload.status = 'Completado';
+      updatePayload.completed_at = new Date().toISOString();
+      if (additionalData.collaborator_id) {
+        updatePayload.completed_by = additionalData.collaborator_id;
+      }
+    }
+    // Si el colaborador inicia el trabajo, el estado general pasa a "En proceso".
+    else if (['en_camino_recoger', 'cargando', 'en_camino_entregar'].includes(newStatus)) {
+      updatePayload.status = 'En proceso';
+    }
+
     try {
+      // Obtener tracking_data actual
       const { data: currentOrder, error: fetchError } = await supabaseConfig.client
         .from('orders')
         .select('tracking_data')
         .eq('id', orderId)
         .single();
 
-      if (fetchError) {
-        throw new Error(`Error al obtener el pedido: ${fetchError.message}`);
-      }
+      if (fetchError) throw new Error(`Error al obtener el pedido: ${fetchError.message}`);
 
-      const newTrackingEntry = {
-        status: newStatus,
-        date: new Date().toISOString()
-      };
-
-      // Asegurarse de que tracking_data sea un array
+      const newTrackingEntry = { status: newStatus, date: new Date().toISOString() };
       const currentTracking = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
       updatePayload.tracking_data = [...currentTracking, newTrackingEntry];
 
-
-      // 3. Realizar la actualización en la base de datos
+      // Realizar la actualización
       const { error: updateError } = await supabaseConfig.client
         .from('orders')
         .update(updatePayload)
         .eq('id', orderId);
 
-      if (updateError) {
-        throw new Error(`Error al actualizar en Supabase: ${updateError.message}`);
-      }
+      if (updateError) throw new Error(`Error al actualizar en Supabase: ${updateError.message}`);
 
       console.log(`[OrderManager] Orden #${orderId} actualizada exitosamente en la BD.`);
 

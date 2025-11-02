@@ -10,7 +10,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Evitar múltiples instancias de GoTrueClient: reutilizar cliente único y cachear public client
 if (!window.supabaseConfig) {
   let mainClient = null;
-  let publicClient = null;
   try {
     mainClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
@@ -20,21 +19,13 @@ if (!window.supabaseConfig) {
         storageKey: 'sb-tlc-main'
       }
     });
-    publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-        storageKey: 'sb-tlc-public'
-      }
-    });
   } catch (e) {
-    console.error('Error al inicializar clientes de Supabase:', e);
+    console.error('Error al inicializar el cliente principal de Supabase:', e);
   }
 
   window.supabaseConfig = {
     client: mainClient,
-    _publicClient: publicClient,
+    _publicClient: null, // Se inicializa como null y se crea solo cuando se necesita
     useLocalStorage: false,
     vapidPublicKey: null,
 
