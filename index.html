@@ -303,9 +303,12 @@
       <!-- INICIO: Animación 2D con Tailwind CSS (Activada por Scroll) -->
       <div id="animation-section" class="mt-12 w-full flex flex-col justify-center items-center overflow-x-hidden p-4 min-h-[18rem] sm:min-h-[12rem]">
         <div class="relative w-full max-w-lg h-48 flex items-center justify-center">
-          <!-- El camión -->
+          <!-- El camión con logo -->
           <div id="truck-animation" class="absolute left-0 z-10 opacity-0">
-            <i class="fas fa-truck text-8xl md:text-9xl text-azulOscuro -scale-x-100"></i>
+            <div class="relative">
+              <i class="fas fa-truck text-8xl md:text-9xl text-azulOscuro -scale-x-100"></i>
+              <img src="img/1vertical.png" alt="Logo" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 object-contain">
+            </div>
           </div>
           <!-- Los "paquetes" que se convierten en botones -->
           <div class="absolute left-[40%] md:left-[45%] flex flex-col gap-4">

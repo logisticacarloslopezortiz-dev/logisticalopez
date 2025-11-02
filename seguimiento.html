@@ -101,24 +101,46 @@
     }
   </style>
 </head>
+<body class="bg-gray-50 min-h-screen overflow-hidden">
 
-<body class="min-h-screen">
+  <!-- Animation Container -->
+  <div id="animation-container" class="fixed inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 z-50 flex items-center justify-center">
+    <!-- El camión que animará la entrada -->
+    <div id="animation-truck" class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full">
+      <div class="relative">
+        <i class="fas fa-truck text-9xl text-gray-700 -scale-x-100"></i>
+        <img src="img/1vertical.png" alt="Logo" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 object-contain">
+      </div>
+    </div>
+    <!-- La caja que se convierte en el modal -->
+    <div id="animation-box" class="w-24 h-24 bg-yellow-400 rounded-lg shadow-lg opacity-0"></div>
+  </div>
 
-  <!-- 🟦 LOGIN SCREEN -->
-  <div id="loginScreen" class="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-azul-oscuro to-azul-turquesa">
-    <div class="card p-8 w-full max-w-md text-center fade-in">
-      <img src="img/1vertical.png" alt="LLO Logo" class="w-24 h-auto mx-auto mb-4">
-      <h1 class="text-2xl font-bold text-azul-oscuro mb-2">Logística López Ortiz</h1>
-      <p class="text-gray-600 mb-6">Consulta el estado de tu envío con tu ID de orden</p>
-
-      <input type="text" id="orderIdInput" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-azul-turquesa focus:border-transparent" placeholder="Ingresa tu ID de orden" maxlength="20">
-
-      <button id="trackButton" class="btn-primary text-white px-6 py-3 rounded-lg w-full font-semibold mt-5">
-        <i data-lucide="search" class="w-4 h-4 inline mr-2"></i> Buscar Solicitud
-      </button>
-
-      <div class="text-center mt-4">
-        <a href="index.html" class="text-azul-turquesa hover:underline text-sm">← Volver al inicio</a>
+  <!-- Pantalla de Login -->
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-blue-50 to-indigo-100 opacity-0 relative z-10">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+      <div class="text-center mb-8">
+        <img src="img/1vertical.png" alt="TLC Logo" class="w-24 h-auto mx-auto mb-4">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">Seguimiento de Solicitud</h1>
+        <p class="text-gray-600">Ingresa tu ID de orden para ver el estado</p>
+      </div>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">ID de Orden</label>
+          <input type="text" id="orderIdInput" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Pega aquí el ID de tu orden" maxlength="20">
+        </div>
+        
+        <button id="trackButton" class="btn-primary text-white px-6 py-3 rounded-lg w-full font-semibold shadow-lg">
+          <i data-lucide="search" class="w-4 h-4 inline mr-2"></i>
+          Buscar Solicitud
+        </button>
+        
+        <div class="text-center">
+          <a href="index.html" class="text-blue-600 hover:text-blue-800 text-sm">
+            ← Volver al inicio
+          </a>
+        </div>
       </div>
 
       <div id="errorMessage" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -206,14 +228,76 @@
         </div>
       </div>
     </main>
+
+    <!-- Interactive Scene -->
+    <footer id="interactive-scene" class="fixed bottom-0 left-0 w-full h-48 bg-gray-200 border-t-4 border-gray-300 z-30 flex items-end p-4">
+      <!-- Camión -->
+      <div id="interactive-truck" class="absolute bottom-4 right-4">
+        <div class="relative">
+          <i class="fas fa-truck text-8xl text-gray-700"></i>
+          <img src="img/1vertical.png" alt="Logo" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 object-contain">
+        </div>
+      </div>
+
+      <!-- Cajas -->
+      <div id="box-stack" class="absolute bottom-4 left-4 flex flex-col-reverse gap-1">
+        <div class="box w-12 h-12 bg-yellow-500 rounded"></div>
+        <div class="box w-12 h-12 bg-yellow-500 rounded"></div>
+        <div class="box w-12 h-12 bg-yellow-500 rounded"></div>
+      </div>
+
+      <!-- Personaje (clicable) -->
+      <div id="interactive-worker" class="absolute bottom-4 left-48 cursor-pointer">
+         <div class="relative w-24 h-36">
+           <i class="fas fa-hard-hat text-5xl text-yellow-500"></i>
+           <div class="absolute bottom-0 left-0 w-full h-3/4 bg-blue-600 rounded-t-lg flex items-center justify-center">
+             <img src="img/1vertical.png" alt="Logo" class="w-8 h-8 object-contain">
+           </div>
+         </div>
+      </div>
+    </footer>
+
   </div>
 
-  <!-- ⚙️ Scripts -->
+  <!-- Modal de Instalación PWA -->
+  <div id="pwaModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-md flex items-center justify-center">
+      <div class="w-full bg-white rounded-xl shadow-2xl p-6 text-center">
+        <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="smartphone" class="w-8 h-8 text-blue-600"></i>
+        </div>
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">¡Instala nuestra App!</h3>
+        <p class="text-gray-600 mb-6">Mantente al día con el seguimiento de tu solicitud instalando nuestra aplicación.</p>
+        <div class="flex gap-3">
+          <button id="cancelPWA" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+            Ahora no
+          </button>
+          <button id="installPWA" class="flex-1 btn-primary text-white px-4 py-2 rounded-lg">
+            Instalar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GSAP for advanced animations -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/seguimiento.js"></script>
-  <script>
-    lucide.createIcons();
-  </script>
+  <script src="js/seguimiento-animations.js"></script>
+
+  <!-- Worker Character Placeholder -->
+  <div id="worker-character" class="absolute bottom-0 right-10 opacity-0 z-20">
+    <div class="relative w-32 h-48">
+      <i class="fas fa-hard-hat text-6xl text-yellow-500"></i>
+      <div class="absolute bottom-0 left-0 w-full h-3/4 bg-blue-600 rounded-t-lg">
+        <img src="img/1vertical.png" alt="Logo" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 object-contain">
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
