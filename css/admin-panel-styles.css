@@ -1,0 +1,96 @@
+/*
+  Hoja de estilos para el panel de administración
+  Autor: Jules
+  Fecha: 2025-11-02
+*/
+
+/* --- Estilos base y paleta de colores --- */
+:root {
+  --color-primario-oscuro: #1E405A;
+  --color-primario-turquesa: #1E8A95;
+  --color-fondo-principal: #FFFFFF;
+  --color-fondo-secundario: #F9FAFB; /* Gris claro */
+  --color-texto-principal: #1F2937;
+  --color-texto-secundario: #6B7280;
+  --color-acento-amarillo: #FBBF24;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--color-fondo-secundario);
+}
+
+/* --- Estilos del Sidebar Modernizado --- */
+#sidebar {
+  background-color: var(--color-primario-oscuro);
+  color: var(--color-fondo-principal);
+  transition: width 0.3s ease-in-out;
+}
+
+#sidebar .sidebar-header {
+  border-bottom: 1px solid rgba(30, 138, 149, 0.3);
+}
+
+#sidebar .sidebar-logo {
+  background-color: var(--color-primario-turquesa);
+}
+
+#sidebar nav a {
+  color: #E5E7EB; /* Un blanco un poco más suave */
+  transition: all 0.2s ease-in-out;
+  border-left: 3px solid transparent;
+}
+
+#sidebar nav a:hover {
+  background-color: rgba(30, 138, 149, 0.2);
+  color: var(--color-fondo-principal);
+  border-left-color: var(--color-primario-turquesa);
+}
+
+#sidebar nav a.active {
+  background-color: var(--color-primario-turquesa);
+  color: var(--color-fondo-principal);
+  font-weight: 600;
+  border-left-color: var(--color-acento-amarillo);
+}
+
+#sidebar .sidebar-footer {
+  border-top: 1px solid rgba(30, 138, 149, 0.3);
+}
+
+#sidebar .sidebar-footer button {
+  color: #E5E7EB;
+}
+
+#sidebar .sidebar-footer button:hover {
+  background-color: rgba(30, 138, 149, 0.2);
+  color: var(--color-fondo-principal);
+}
+
+/* --- Estilos para el Contenido del Panel --- */
+.main-content {
+  margin-left: 16rem; /* Ancho del sidebar */
+  transition: margin-left 0.3s ease-in-out;
+}
+
+.card {
+  background-color: var(--color-fondo-principal);
+  border: 1px solid #E5E7EB;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+.stat-card {
+  color: white;
+}
+
+.btn-primary {
+  background-color: var(--color-primario-turquesa);
+  color: white;
+  font-weight: 600;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.btn-primary:hover {
+  background-color: #1a7b85; /* Un tono más oscuro de turquesa */
+}

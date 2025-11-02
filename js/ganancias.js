@@ -134,16 +134,18 @@ function updateChart() {
       datasets: [{
         label: 'Ingresos',
         data: chartData.data,
-        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-        borderColor: 'rgba(34, 197, 94, 1)',
+        backgroundColor: 'rgba(30, 138, 149, 0.1)', // Turquesa con opacidad
+        borderColor: '#1E8A95', // Turquesa sólido
         borderWidth: 3,
         fill: true,
         tension: 0.4,
-        pointBackgroundColor: 'rgba(34, 197, 94, 1)',
+        pointBackgroundColor: '#FBBF24', // Amarillo para los puntos
         pointBorderColor: '#fff',
         pointBorderWidth: 2,
         pointRadius: 6,
-        pointHoverRadius: 8
+        pointHoverRadius: 8,
+        pointHoverBackgroundColor: '#FBBF24',
+        pointHoverBorderColor: '#fff'
       }]
     },
     options: {
