@@ -40,7 +40,7 @@
   
   <!-- Botón de menú móvil -->
   <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden">
-    <i data-lucide="menu" class="w-6 h-6 text-[#1E405A]"></i>
+    <i data-lucide="menu" class="w-6 h-6 text-blue-700"></i>
   </button>
   
   <!-- Overlay para móvil -->
@@ -50,10 +50,10 @@
   <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white shadow-md z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
     <div class="flex items-center justify-center py-6 px-4 border-b">
       <img src="img/1vertical.png" alt="Logo" class="w-10 sidebar-text">
-      <h2 class="text-xl font-bold text-[#1E405A] ml-2 sidebar-text">LLO Admin</h2>
+      <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">LLO Admin</h2>
     </div>
     <nav class="flex-1 flex flex-col gap-3 py-4">
-      <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 rounded-r-full hover:bg-[#E6F6F7] text-[#1E405A] font-semibold"><i data-lucide="home" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Inicio</span></a>
+      <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 rounded-r-full hover:bg-blue-50 text-blue-700 font-semibold"><i data-lucide="home" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Inicio</span></a>
       <a href="servicios.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="box" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Servicios</span></a>
       <a href="ganancias.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="dollar-sign" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Ganancia</span></a>
       <a href="historial-solicitudes.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="history" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Historial</span></a>
@@ -99,21 +99,21 @@
       <div class="flex flex-wrap gap-4 items-center">
         <div class="flex-1 min-w-64">
           <input type="text" id="searchInput" placeholder="Buscar por nombre o servicio..." 
-                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E8A95] focus:border-transparent">
+                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
         </div>
-        <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E8A95]">
+        <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
           <option value="">Todos los estados</option>
           <option value="Pendiente">Pendiente</option>
           <option value="En proceso">En proceso</option>
           <option value="Completado">Completado</option>
         </select>
-        <select id="serviceFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E8A95]">
+        <select id="serviceFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
           <option value="">Todos los servicios</option>
           <option value="Mudanza">Mudanza</option>
           <option value="Transporte Comercial">Transporte Comercial</option>
           <option value="Carga Pesada">Carga Pesada</option>
         </select>
-        <input type="date" id="dateFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1E8A95]">
+        <input type="date" id="dateFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
         <button id="clearFilters" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
@@ -189,7 +189,7 @@
         <h3 class="text-lg font-semibold text-gray-800">Pedidos recientes</h3>
         <div class="flex items-center gap-2">
           <span class="text-sm text-gray-500">Mostrando <span id="showingCount">0</span> de <span id="totalCount">0</span> pedidos</span>
-          <button id="exportBtn" class="px-3 py-1 bg-[#1E8A95] text-white rounded text-sm hover:bg-[#16727d] transition-colors">
+          <button id="exportBtn" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors">
             <i data-lucide="download" class="w-4 h-4 inline mr-1"></i>Exportar
           </button>
         </div>

@@ -1,7 +1,65 @@
-const STATUS_MAP = {
-  en_camino_recoger: {
-    label: 'En camino a recoger pedido',
-    badge: 'bg-blue-100 text-blue-800'
+(async () => {
+  "use strict";
+
+  // Envoltura de seguridad: verificar la sesión al inicio.
+  const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
+  if (sessionError || !session) {
+    console.warn('Sesión no encontrada, redirigiendo al login.');
+    window.location.href = 'login-colaborador.html';
+    return; // Detener la ejecución si no hay sesión.
+  }
+
+  const OrderManager = {
+    async acceptOrder(orderId, collaboratorId) {
+      try {
+        const { error } = await supabaseConfig.client
+          .from('orders')
+          .update({
+            assigned_to: collaboratorId,
+            status: 'En proceso',
+            last_collab_status: 'en_camino_recoger'
+          })
+          .eq('id', orderId);
+        if (error) throw error;
+        return { success: true, error: null };
+      } catch (err) {
+        console.error('Error en OrderManager.acceptOrder:', err);
+        return { success: false, error: err.message };
+      }
+    },
+    async cancelActiveJob(orderId) {
+      try {
+        const { error } = await supabaseConfig.client
+          .from('orders')
+          .update({ status: 'Cancelado' })
+          .eq('id', orderId);
+        if (error) throw error;
+        return { success: true, error: null };
+      } catch (err) {
+        console.error('Error en OrderManager.cancelActiveJob:', err);
+        return { success: false, error: err.message };
+      }
+    },
+    async actualizarEstadoPedido(orderId, newKey, additionalData = {}) {
+      try {
+        const updatePayload = { ...additionalData, last_collab_status: newKey };
+        const { error } = await supabaseConfig.client
+          .from('orders')
+          .update(updatePayload)
+          .eq('id', orderId);
+        if (error) throw error;
+        return { success: true, error: null };
+      } catch (err) {
+        console.error('Error en OrderManager.actualizarEstadoPedido:', err);
+        return { success: false, error: err.message };
+      }
+    }
+  };
+
+  const STATUS_MAP = {
+    en_camino_recoger: {
+      label: 'En camino a recoger pedido',
+      badge: 'bg-blue-100 text-blue-800'
   },
   cargando: {
     label: 'Cargando pedido',
@@ -30,8 +88,8 @@ function initializeMap(order) {
     console.log('[Mapa] Inicializando mapa para orden:', order.id);
     
     // Limpiar mapa anterior si existe
-    if (window.activeJobMap) {
-      window.activeJobMap.remove();
+    if (state.activeJobMap) {
+      state.activeJobMap.remove();
     }
     
     // Verificar que existan coordenadas
@@ -88,7 +146,7 @@ function initializeMap(order) {
     map.fitBounds(polyline.getBounds(), {padding: [50, 50]});
     
     // Guardar referencia al mapa
-    window.activeJobMap = map;
+    state.activeJobMap = map;
     
     console.log('[Mapa] Mapa inicializado correctamente');
   } catch (err) {
@@ -392,28 +450,27 @@ async function changeStatus(orderId, newKey) {
     additionalData.status = 'En proceso';
   }
 
-  // Dentro de la función changeStatus, justo después de la llamada a OrderManager
   const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newKey, additionalData);
 
   if (success) {
-    // Notificar al cliente sobre el cambio de estado
     notifyClient(orderId, newKey);
-    
-    // Actualizar localmente el último estado del colaborador y el tracking
-    handleStatusUpdate(orderId, newKey);
-    
-    // Si el trabajo se completó, invocar la función para incrementar el contador
+    handleStatusUpdate(orderId, newKey); // Actualización optimista de la UI
+    filterAndRender(); // Re-renderizar para mostrar el cambio al instante.
     if (newKey === 'entregado') {
       handleOrderCompletion(orderId);
     }
-
     showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
-    // Forzar una recarga de datos para asegurar sincronización completa.
-    await loadInitialOrders();
-
+    // await loadInitialOrders(); // Eliminado para implementar actualización optimista.
   } else {
     showError('No se pudo actualizar el estado', error);
   }
+}
+
+function returnToOrdersView() {
+  state.activeJobId = null;
+  localStorage.removeItem('tlc_collab_active_job');
+  document.getElementById('activeJobSection').classList.add('hidden');
+  document.getElementById('ordersCardContainer')?.classList.remove('hidden');
 }
 
 async function handleOrderCompletion(orderId) {
@@ -431,13 +488,7 @@ async function handleOrderCompletion(orderId) {
     };
     saveCompletionMetrics(metrics, orderId);
 
-    // Limpiar trabajo activo
-    state.activeJobId = null;
-    localStorage.removeItem('tlc_collab_active_job');
-    document.getElementById('activeJobSection').classList.add('hidden');
-
-    // Mostrar contenedor de órdenes nuevamente
-    document.getElementById('ordersCardContainer')?.classList.remove('hidden');
+    returnToOrdersView();
 
     // Actualizar estadísticas del colaborador inmediatamente
     updateCollaboratorStats(state.collabSession.user.id);
@@ -487,9 +538,9 @@ const state = {
   selectedOrderIdForAccept: null,
   activeJobId: Number(localStorage.getItem('tlc_collab_active_job')) || null,
   collabSession: null,
+  activeJobMap: null,
+  collabNameCache: new Map(),
 };
-
-let activeJobMap = null; // Variable para la instancia del mapa de trabajo activo
 
 function collabDisplayName(email){
   try {
@@ -622,6 +673,11 @@ function showActiveJob(order){
   updateActiveJobView();
   if (window.lucide) lucide.createIcons(); // Renderizar iconos
   renderPhotoGallery(order.evidence_photos || []); // Renderizar fotos
+
+  // Llamar a la función del mapa del HTML
+  if (typeof updateActiveJobMap === 'function') {
+    updateActiveJobMap(order.origin_coords, order.destination_coords);
+  }
 }
 
 function updateActiveJobView(){
@@ -634,7 +690,7 @@ function updateActiveJobView(){
   const statusLabel = STATUS_MAP[statusKey]?.label || statusKey;
   const badge = document.getElementById('activeJobStatus');
   if (badge) badge.textContent = statusLabel;
-  // Proteger acceso a `jobProgressBar` (puede no existir en el DOM).
+
   const progressBar = document.getElementById('jobProgressBar');
   const currentWidth = progressBar && progressBar.style && progressBar.style.width ? progressBar.style.width : '25%';
   const progressValues = {
@@ -646,36 +702,6 @@ function updateActiveJobView(){
   };
   if (progressBar && progressBar.style) {
     progressBar.style.width = progressValues[statusKey] || '25%';
-  }
-
-  // ✅ MEJORA: Usar Leaflet directamente en lugar de un iframe
-  const mapContainer = document.getElementById('activeJobMap');
-  const hintEl = document.getElementById('activeJobMapHint');
-
-  // Use Google Maps helpers defined in the HTML (initActiveJobMap / updateActiveJobMap)
-  const origin = order.origin_coords;
-  const destination = order.destination_coords;
-  let targetLatLng, hintText;
-
-  if (statusKey === 'cargando' || statusKey === 'en_camino_entregar' || statusKey === 'entregado') {
-    targetLatLng = destination ? { lat: destination.lat, lng: destination.lng } : null;
-    hintText = 'Dirígete a la dirección de entrega';
-  } else {
-    targetLatLng = origin ? { lat: origin.lat, lng: origin.lng } : null;
-    hintText = 'Dirígete a la dirección de recogida';
-  }
-
-  hintEl.textContent = hintText;
-
-  try {
-    if (typeof updateActiveJobMap === 'function') {
-      updateActiveJobMap(origin, destination, targetLatLng);
-    } else {
-      // If Google Maps helpers aren't available, fall back gracefully.
-      console.warn('Google Maps helpers not available; map will not update.');
-    }
-  } catch (e) {
-    console.warn('Failed to update active job map:', e);
   }
 }
 
@@ -692,10 +718,9 @@ function renderPhotoGallery(photos) {
 }
 
 // Cache de nombres de colaboradores para evitar mostrar UUIDs
-const collabNameCache = new Map();
 function getCollaboratorName(userId){
   if (!userId) return '';
-  const cached = collabNameCache.get(userId);
+  const cached = state.collabNameCache.get(userId);
   return cached || userId; // Fallback al ID mientras se resuelve el nombre real
 }
 
@@ -813,10 +838,8 @@ function filterAndRender(){
   let base = state.allOrders.filter(visibleForCollab);
   let historialBase = state.allOrders.filter(historialForCollab);
   
-  // Si hay trabajo activo, mostrar solo ese trabajo en pendientes
-  if (state.activeJobId) {
-    base = base.filter(o => o.id === state.activeJobId);
-  }
+  // Lógica de filtrado para trabajo activo eliminada para mayor claridad.
+  // La visibilidad de la sección de trabajo activo se maneja por separado.
   
   baseVisibleCount = base.length;
   state.filteredOrders = base.filter(o => {
@@ -1015,7 +1038,7 @@ function updateCollaboratorProfile(session) {
   document.getElementById('collabAvatar').textContent = initials;
 
   // ✅ CORRECCIÓN: Guardar el nombre del colaborador actual en la caché para mostrarlo en el trabajo activo.
-  collabNameCache.set(user.id, name);
+  state.collabNameCache.set(user.id, name);
   
   updateCollaboratorStats(user.id);
 }
@@ -1034,7 +1057,7 @@ async function preloadCollaboratorNames(orders){
       return;
     }
     (data || []).forEach(p => {
-      collabNameCache.set(p.id, p.full_name || p.email || p.id);
+      state.collabNameCache.set(p.id, p.full_name || p.email || p.id);
     });
   } catch (err) {
     console.warn('Fallo al precargar nombres de colaboradores:', err);
@@ -1096,6 +1119,8 @@ async function loadInitialOrders() {
       ...order,
       service: order.service?.name || order.service || 'Sin servicio',
       vehicle: order.vehicle?.name || order.vehicle || 'Sin vehículo',
+      origin_coords: parseCoordinates(order.pickup_coords),
+      destination_coords: parseCoordinates(order.delivery_coords),
       last_collab_status: order.last_collab_status || deriveLastStatus(order)
     }));
     await preloadCollaboratorNames(state.allOrders);
@@ -1251,15 +1276,7 @@ function setupEventListeners() {
       const button = e.target.closest('button[data-status]');
       if (button) {
         if (state.activeJobId) {
-          const original = button.innerHTML;
-          button.disabled = true;
-          button.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 inline animate-spin"></i>' + (button.textContent || 'Actualizando');
-          if (window.lucide) lucide.createIcons();
-          Promise.resolve(changeStatus(state.activeJobId, button.dataset.status)).finally(() => {
-            button.disabled = false;
-            button.innerHTML = original;
-            if (window.lucide) lucide.createIcons();
-          });
+          changeStatus(state.activeJobId, button.dataset.status);
         } else {
           showError('Error', 'No hay un trabajo activo seleccionado.');
         }
@@ -1275,9 +1292,6 @@ function setupEventListeners() {
     if (!state.selectedOrderIdForAccept) return closeAcceptModal();
 
     const orderId = state.selectedOrderIdForAccept;
-    const btn = document.getElementById('confirmAcceptBtn');
-    const originalHtml = btn ? btn.innerHTML : '';
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 inline animate-spin"></i> Aceptando...'; if (window.lucide) lucide.createIcons(); }
     const { success, error } = await OrderManager.acceptOrder(orderId, state.collabSession.user.id);
 
     if (success) {
@@ -1285,19 +1299,17 @@ function setupEventListeners() {
       state.activeJobId = orderId;
       localStorage.setItem('tlc_collab_active_job', String(orderId));
 
-      // Optimistic update
+      // Actualización optimista
       const order = state.allOrders.find(o => o.id === orderId);
       if (order) {
         order.assigned_to = state.collabSession.user.id;
-        // Estado de aceptación requerido: 'en_camino_recoger'
-        order.status = 'en_camino_recoger';
+        order.status = 'En proceso';
         order.last_collab_status = 'en_camino_recoger';
         showActiveJob(order);
       }
     } else {
       showError('Error al aceptar la solicitud', error);
     }
-    if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; if (window.lucide) lucide.createIcons(); }
     closeAcceptModal();
   });
 
@@ -1310,10 +1322,8 @@ function setupEventListeners() {
 
       const { success, error } = await OrderManager.cancelActiveJob(state.activeJobId);
       if (success) {
-        state.activeJobId = null;
-        localStorage.removeItem('tlc_collab_active_job');
-        document.getElementById('activeJobSection')?.classList.add('hidden');
-        filterAndRender();
+        returnToOrdersView();
+        filterAndRender(); // Actualizar la vista
         showSuccess('Trabajo cancelado', 'La solicitud ha sido marcada como cancelada.');
       } else {
         showError('Error al cancelar', error || 'No se pudo cancelar el trabajo.');
@@ -1368,68 +1378,62 @@ function setupTabs() {
   });
 }
 
-// Inicialización
-document.addEventListener('DOMContentLoaded', async () => {
-  const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
+// --- INICIALIZACIÓN ---
 
-  if (sessionError || !session) {
-    console.error('No hay sesión activa. Redirigiendo al login.');
-    window.location.href = 'login-colaborador.html';
-    return;
-  }
+// La sesión ya fue verificada al inicio del IIFE.
+state.collabSession = session;
 
-  state.collabSession = session;
+if (window.lucide) lucide.createIcons();
 
-  if (window.lucide) lucide.createIcons();
+setupSidebarToggles();
+setupEventListeners();
+setupTabs();
 
-  setupSidebarToggles();
-  setupEventListeners();
-  setupTabs();
-
-  supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
-    state.collabSession = newSession;
-  });
-
-  updateCollaboratorProfile(session);
-  const loadingIndicator = document.getElementById('loadingIndicator');
-  const cardsContainer = document.getElementById('ordersCardContainer');
-
-  loadingIndicator.classList.remove('hidden');
-  cardsContainer.classList.add('hidden');
-
-  await loadInitialOrders();
-
-  loadingIndicator.classList.add('hidden');
-  cardsContainer.classList.remove('hidden');
-
-  restoreActiveJob();
-
-  function handleStatusUpdate(orderId, newStatus) {
-    const order = state.allOrders.find(o => o.id === orderId);
-    if (!order) return;
-
-    const idx = state.allOrders.findIndex(o => o.id === orderId);
-    if (idx !== -1) {
-      const prev = state.allOrders[idx];
-      const prevTracking = Array.isArray(prev.tracking_data) ? prev.tracking_data : [];
-      state.allOrders[idx] = {
-        ...prev,
-        last_collab_status: newStatus,
-        tracking_data: [...prevTracking, { status: newStatus, date: new Date().toISOString() }]
-      };
-    }
-    updateActiveJobView();
-  }
-
-  if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
-    supabaseConfig.client
-      .channel('public:orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
-      .subscribe();
-  } else {
-    setInterval(filterAndRender, 5000);
-  }
+supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
+  state.collabSession = newSession;
 });
+
+updateCollaboratorProfile(session);
+
+const loadingIndicator = document.getElementById('loadingIndicator');
+const cardsContainer = document.getElementById('ordersCardContainer');
+
+loadingIndicator.classList.remove('hidden');
+cardsContainer.classList.add('hidden');
+
+await loadInitialOrders();
+
+loadingIndicator.classList.add('hidden');
+cardsContainer.classList.remove('hidden');
+
+restoreActiveJob();
+
+// Mover handleStatusUpdate fuera de la inicialización para un scope correcto.
+function handleStatusUpdate(orderId, newStatus) {
+  const order = state.allOrders.find(o => o.id === orderId);
+  if (!order) return;
+
+  const idx = state.allOrders.findIndex(o => o.id === orderId);
+  if (idx !== -1) {
+    const prev = state.allOrders[idx];
+    const prevTracking = Array.isArray(prev.tracking_data) ? prev.tracking_data : [];
+    state.allOrders[idx] = {
+      ...prev,
+      last_collab_status: newStatus,
+      tracking_data: [...prevTracking, { status: newStatus, date: new Date().toISOString() }]
+    };
+  }
+  updateActiveJobView();
+}
+
+if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
+  supabaseConfig.client
+    .channel('public:orders')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
+    .subscribe();
+} else {
+  setInterval(filterAndRender, 5000);
+}
 
 /**
  * ✅ NUEVA FUNCIÓN: Busca y muestra el trabajo activo guardado en localStorage
@@ -1520,3 +1524,4 @@ function showServiceDetailsCollab(orderId){
     }
   });
 }
+})();
