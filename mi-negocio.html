@@ -11,87 +11,101 @@
 <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>     
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="css/admin-panel-styles.css">
 </head>
 <body class="bg-gray-100">
 
-  <!-- Sidebar -->
-  <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white shadow-md z-30 flex flex-col transition-all duration-300 ease-in-out">
-    <div class="flex items-center justify-center py-6 px-4 border-b">
-      <img src="img/1vertical.png" alt="Logo" class="w-10 sidebar-text" />
-      <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">TLC Admin</h2>
+  <!-- Botón de menú móvil -->
+  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden">
+    <i data-lucide="menu" class="w-6 h-6 text-gray-800"></i>
+  </button>
+
+  <!-- Overlay para móvil -->
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden md:hidden"></div>
+
+  <!-- Sidebar Modernizado -->
+  <aside id="sidebar" class="fixed top-0 left-0 h-screen w-64 z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
+    <!-- Header del Sidebar -->
+    <div class="sidebar-header flex items-center justify-center py-6 px-4">
+      <div class="sidebar-logo w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+        LLO
+      </div>
+      <h2 class="text-xl font-bold text-white ml-3 sidebar-text">Admin</h2>
     </div>
-    <nav class="flex-1 flex flex-col gap-3 py-4">
-      <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="home" class="w-6 h-6"></i> <span class="sidebar-text">Inicio</span></a>
-      <a href="servicios.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="box" class="w-6 h-6"></i> <span class="sidebar-text">Servicios</span></a>
-      <a href="ganancias.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="dollar-sign" class="w-6 h-6"></i> <span class="sidebar-text">Ganancia</span></a>
-      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="history" class="w-6 h-6"></i> <span class="sidebar-text">Historial</span></a>
-      <a href="mi-negocio.html" class="flex items-center gap-3 px-6 py-3 rounded-r-full hover:bg-red-50 text-red-700 font-semibold"><i data-lucide="briefcase" class="w-6 h-6"></i> <span class="sidebar-text">Mi negocio</span></a>
-      <a href="colaboradores.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="users" class="w-6 h-6"></i> <span class="sidebar-text">Colaboradores</span></a>
+    <!-- Navegación -->
+    <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
+      <a href="inicio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="home" class="w-5 h-5"></i> <span class="sidebar-text">Inicio</span></a>
+      <a href="servicios.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="box" class="w-5 h-5"></i> <span class="sidebar-text">Servicios</span></a>
+      <a href="ganancias.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="dollar-sign" class="w-5 h-5"></i> <span class="sidebar-text">Ganancia</span></a>
+      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="history" class="w-5 h-5"></i> <span class="sidebar-text">Historial</span></a>
+      <a href="mi-negocio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="briefcase" class="w-5 h-5"></i> <span class="sidebar-text">Mi negocio</span></a>
+      <a href="colaboradores.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="users" class="w-5 h-5"></i> <span class="sidebar-text">Colaboradores</span></a>
     </nav>
-    <div class="p-4 border-t">
-      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded hover:bg-gray-100 text-gray-600">
-        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-6 h-6"></i>
+    <!-- Footer del Sidebar -->
+    <div class="sidebar-footer p-4">
+      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm">
+        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
       </button>
-      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded hover:bg-red-100 text-red-600 mt-2">
-        <i data-lucide="log-out" class="w-6 h-6"></i>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm">
+        <i data-lucide="log-out" class="w-5 h-5"></i>
         <span class="sidebar-text font-medium">Cerrar Sesión</span>
       </button>
     </div>
   </aside>
 
   <!-- Contenido principal -->
-  <main id="main-content" class="p-8 transition-all duration-300 ease-in-out">
-    <h1 class="text-2xl font-bold mb-6">Mi Negocio</h1>
-    <p class="mb-6">Aquí puedes ver y editar los datos de tu empresa, información de contacto y configuración general.</p>
+  <main id="main-content" class="main-content p-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Mi Negocio</h1>
+    <p class="text-gray-600 mb-6">Aquí puedes ver y editar los datos de tu empresa, información de contacto y configuración general.</p>
 
     <!-- Búsqueda rápida por ID/short_id de solicitud -->
-    <div class="bg-white p-6 rounded shadow mb-6">
+    <div class="card p-6 mb-6">
       <h2 class="text-lg font-semibold mb-3">Buscar solicitud por ID</h2>
       <div class="flex flex-col sm:flex-row gap-3">
-        <input id="businessOrderSearchInput" type="text" placeholder="Ej: 123 o ORD-ABC123" class="flex-1 border p-2 rounded" />
-        <button id="businessOrderSearchBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Buscar</button>
+        <input id="businessOrderSearchInput" type="text" placeholder="Ej: 123 o ORD-ABC123" class="flex-1 border p-2 rounded-lg" />
+        <button id="businessOrderSearchBtn" class="btn-primary px-4 py-2 rounded-lg">Buscar</button>
       </div>
       <div id="businessOrderSearchResult" class="mt-4 text-sm text-gray-700"></div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8"></div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       <!-- Formulario de información del negocio -->
-      <div class="bg-white p-6 rounded shadow">
+      <div class="card p-6">
         <h2 class="text-xl font-bold mb-4">Información del Negocio</h2>
         <form id="businessForm" class="flex flex-col gap-4">
         <div>
           <label class="block font-semibold mb-1">Nombre de la empresa:</label>
-          <input type="text" id="businessName" class="border p-2 rounded w-full" placeholder="Transporte Logístico Carlos López">
+          <input type="text" id="businessName" class="border p-2 rounded-lg w-full" placeholder="Transporte Logístico Carlos López">
         </div>
         <div>
           <label class="block font-semibold mb-1">Dirección:</label>
-          <input type="text" id="businessAddress" class="border p-2 rounded w-full" placeholder="Calle, Ciudad, País">
+          <input type="text" id="businessAddress" class="border p-2 rounded-lg w-full" placeholder="Calle, Ciudad, País">
         </div>
         <div>
           <label class="block font-semibold mb-1">Teléfono:</label>
-          <input type="text" id="businessPhone" class="border p-2 rounded w-full" placeholder="+1 809 XXX XXXX">
+          <input type="text" id="businessPhone" class="border p-2 rounded-lg w-full" placeholder="+1 809 XXX XXXX">
         </div>
         <div>
           <label class="block font-semibold mb-1">Correo electrónico:</label>
-          <input type="email" id="businessEmail" class="border p-2 rounded w-full" placeholder="correo@empresa.com">
+          <input type="email" id="businessEmail" class="border p-2 rounded-lg w-full" placeholder="correo@empresa.com">
         </div>
         <div>
           <label class="block font-semibold mb-1">RNC:</label>
-          <input type="text" id="businessRnc" class="border p-2 rounded w-full" placeholder="123-45678-9">
+          <input type="text" id="businessRnc" class="border p-2 rounded-lg w-full" placeholder="123-45678-9">
         </div>
-        <button type="submit" class="bg-red-700 text-white px-4 py-2 rounded">Guardar cambios</button>
+        <button type="submit" class="btn-primary px-4 py-2 rounded-lg">Guardar cambios</button>
       </form>
       </div>
 
       <!-- Configuración de cotización -->
-      <div class="bg-white p-6 rounded shadow">
+      <div class="card p-6">
       <h2 class="text-xl font-bold mb-4">Configuración de Cotización</h2>
       <form id="quotationForm" class="flex flex-col gap-4">
         <div>
           <label class="block font-semibold mb-1">Tarifa base por kilómetro:</label>
           <div class="flex items-center gap-2">
-            <input type="number" id="baseRate" class="border p-2 rounded w-full" placeholder="0.00" step="0.01" min="0">
+            <input type="number" id="baseRate" class="border p-2 rounded-lg w-full" placeholder="0.00" step="0.01" min="0">
             <span class="text-gray-600">$/km</span>
           </div>
         </div>
@@ -101,19 +115,19 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm text-gray-600 mb-1">Camión Pequeño:</label>
-              <input type="number" id="smallTruckRate" class="border p-2 rounded w-full" placeholder="1.0" step="0.1" min="1">
+              <input type="number" id="smallTruckRate" class="border p-2 rounded-lg w-full" placeholder="1.0" step="0.1" min="1">
             </div>
             <div>
               <label class="block text-sm text-gray-600 mb-1">Camioneta:</label>
-              <input type="number" id="pickupRate" class="border p-2 rounded w-full" placeholder="1.2" step="0.1" min="1">
+              <input type="number" id="pickupRate" class="border p-2 rounded-lg w-full" placeholder="1.2" step="0.1" min="1">
             </div>
             <div>
               <label class="block text-sm text-gray-600 mb-1">Furgón:</label>
-              <input type="number" id="vanRate" class="border p-2 rounded w-full" placeholder="1.3" step="0.1" min="1">
+              <input type="number" id="vanRate" class="border p-2 rounded-lg w-full" placeholder="1.3" step="0.1" min="1">
             </div>
             <div>
               <label class="block text-sm text-gray-600 mb-1">Camión Grande:</label>
-              <input type="number" id="largeTruckRate" class="border p-2 rounded w-full" placeholder="1.5" step="0.1" min="1">
+              <input type="number" id="largeTruckRate" class="border p-2 rounded-lg w-full" placeholder="1.5" step="0.1" min="1">
             </div>
           </div>
         </div>
@@ -123,19 +137,19 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm text-gray-600 mb-1">Ligero (0-100kg):</label>
-              <input type="number" id="lightWeightRate" class="border p-2 rounded w-full" placeholder="1.0" step="0.1" min="1">
+              <input type="number" id="lightWeightRate" class="border p-2 rounded-lg w-full" placeholder="1.0" step="0.1" min="1">
             </div>
             <div>
               <label class="block text-sm text-gray-600 mb-1">Medio (101-500kg):</label>
-              <input type="number" id="mediumWeightRate" class="border p-2 rounded w-full" placeholder="1.3" step="0.1" min="1">
+              <input type="number" id="mediumWeightRate" class="border p-2 rounded-lg w-full" placeholder="1.3" step="0.1" min="1">
             </div>
             <div>
               <label class="block text-sm text-gray-600 mb-1">Pesado (501-1000kg):</label>
-              <input type="number" id="heavyWeightRate" class="border p-2 rounded w-full" placeholder="1.6" step="0.1" min="1">
+              <input type="number" id="heavyWeightRate" class="border p-2 rounded-lg w-full" placeholder="1.6" step="0.1" min="1">
             </div>
             <div>
               <label class="block text-sm text-gray-600 mb-1">Muy pesado (1000kg):</label>
-              <input type="number" id="veryHeavyWeightRate" class="border p-2 rounded w-full" placeholder="2.0" step="0.1" min="1">
+              <input type="number" id="veryHeavyWeightRate" class="border p-2 rounded-lg w-full" placeholder="2.0" step="0.1" min="1">
             </div>
           </div>
         </div>
@@ -146,21 +160,21 @@
             <div>
               <label class="block text-sm text-gray-600 mb-1">Tarifa por hora de espera:</label>
               <div class="flex items-center gap-2">
-                <input type="number" id="waitingRate" class="border p-2 rounded w-full" placeholder="0.00" step="0.01" min="0">
+                <input type="number" id="waitingRate" class="border p-2 rounded-lg w-full" placeholder="0.00" step="0.01" min="0">
                 <span class="text-gray-600">$/hr</span>
               </div>
             </div>
             <div>
               <label class="block text-sm text-gray-600 mb-1">Cargo por servicio urgente:</label>
               <div class="flex items-center gap-2">
-                <input type="number" id="urgentRate" class="border p-2 rounded w-full" placeholder="1.5" step="0.1" min="1">
+                <input type="number" id="urgentRate" class="border p-2 rounded-lg w-full" placeholder="1.5" step="0.1" min="1">
                 <span class="text-gray-600">x</span>
               </div>
             </div>
           </div>
         </div>
 
-        <button type="submit" class="bg-red-700 text-white px-4 py-2 rounded">Guardar configuración</button>
+        <button type="submit" class="btn-primary px-4 py-2 rounded-lg">Guardar configuración</button>
       </form>
     </div>
   </main>

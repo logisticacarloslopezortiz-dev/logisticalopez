@@ -74,9 +74,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     datasets: [{
                         label: 'No. de Solicitudes',
                         data: sortedServices.map(s => s.count),
-                        backgroundColor: 'rgba(239, 68, 68, 0.6)',
-                        borderColor: 'rgba(239, 68, 68, 1)',
-                        borderWidth: 1
+                        backgroundColor: '#1E8A95', // Turquesa
+                        borderColor: '#1E405A', // Azul Oscuro
+                        borderWidth: 2
                     }]
                 },
                 options: {
@@ -98,10 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         label: 'No. de Usos',
                         data: sortedVehicles.map(v => v.count),
                         backgroundColor: [
-                            'rgba(59, 130, 246, 0.7)',
-                            'rgba(16, 185, 129, 0.7)',
-                            'rgba(249, 115, 22, 0.7)',
-                            'rgba(139, 92, 246, 0.7)',
+                            '#1E405A', // Azul Oscuro
+                            '#1E8A95', // Turquesa
+                            '#FBBF24', // Amarillo
+                            '#a9a9a9'  // Gris
                         ],
                         borderColor: '#fff',
                         borderWidth: 2

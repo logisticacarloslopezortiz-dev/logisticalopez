@@ -14,6 +14,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="css/admin-panel-styles.css">
 </head>
 <body class="bg-gray-100">
 
@@ -21,38 +22,43 @@
   <div id="sidebarOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-20 hidden md:hidden"></div>
   
   <!-- Botón de menú móvil -->
-  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-20 p-2 rounded-lg bg-white shadow-md text-gray-700 md:hidden">
-    <i data-lucide="menu" class="w-6 h-6"></i>
+  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden">
+    <i data-lucide="menu" class="w-6 h-6 text-gray-800"></i>
   </button>
   
-  <!-- Sidebar -->
-  <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white shadow-md z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
-    <div class="flex items-center justify-center py-6 px-4 border-b">
-      <img src="img/1vertical.png" alt="Logo" class="w-10 sidebar-text">
-      <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">LLO Admin</h2>
+  <!-- Sidebar Modernizado -->
+  <aside id="sidebar" class="fixed top-0 left-0 h-screen w-64 z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
+    <!-- Header del Sidebar -->
+    <div class="sidebar-header flex items-center justify-center py-6 px-4">
+      <div class="sidebar-logo w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+        LLO
+      </div>
+      <h2 class="text-xl font-bold text-white ml-3 sidebar-text">Admin</h2>
     </div>
-    <nav class="flex-1 flex flex-col gap-3 py-4">
-      <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="home" class="w-6 h-6"></i> <span class="sidebar-text">Inicio</span></a>
-      <a href="servicios.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="box" class="w-6 h-6"></i> <span class="sidebar-text">Servicios</span></a>
-      <a href="ganancias.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="dollar-sign" class="w-6 h-6"></i> <span class="sidebar-text">Ganancia</span></a>
-      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="history" class="w-6 h-6"></i> <span class="sidebar-text">Historial</span></a>
-      <a href="mi-negocio.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="briefcase" class="w-6 h-6"></i> <span class="sidebar-text">Mi negocio</span></a>
-      <a href="colaboradores.html" class="flex items-center gap-3 px-6 py-3 rounded-r-full hover:bg-blue-50 text-blue-700 font-semibold"><i data-lucide="users" class="w-6 h-6"></i> <span class="sidebar-text">Colaboradores</span></a>
+    <!-- Navegación -->
+    <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
+      <a href="inicio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="home" class="w-5 h-5"></i> <span class="sidebar-text">Inicio</span></a>
+      <a href="servicios.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="box" class="w-5 h-5"></i> <span class="sidebar-text">Servicios</span></a>
+      <a href="ganancias.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="dollar-sign" class="w-5 h-5"></i> <span class="sidebar-text">Ganancia</span></a>
+      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="history" class="w-5 h-5"></i> <span class="sidebar-text">Historial</span></a>
+      <a href="mi-negocio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5"></i> <span class="sidebar-text">Mi negocio</span></a>
+      <a href="colaboradores.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="users" class="w-5 h-5"></i> <span class="sidebar-text">Colaboradores</span></a>
     </nav>
-    <div class="p-4 border-t">
-      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded hover:bg-gray-100 text-gray-600">
-        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-6 h-6"></i>
+    <!-- Footer del Sidebar -->
+    <div class="sidebar-footer p-4">
+      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm">
+        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
       </button>
-      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded hover:bg-red-100 text-red-600 mt-2">
-        <i data-lucide="log-out" class="w-6 h-6"></i>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm">
+        <i data-lucide="log-out" class="w-5 h-5"></i>
         <span class="sidebar-text font-medium">Cerrar Sesión</span>
       </button>
     </div>
   </aside>
 
   <!-- Contenido principal -->
-  <main id="main-content" class="p-6 transition-all duration-300 ease-in-out">
+  <main id="main-content" class="main-content p-6">
     <div class="mb-8">
       <h1 class="text-3xl font-bold text-gray-900 mb-2">Gestión de Colaboradores</h1>
       <p class="text-gray-600">Administra el equipo de trabajo y sus permisos</p>
@@ -60,10 +66,10 @@
     
     <!-- Tarjetas de resumen -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
-      <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-turquesa);">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-blue-100 text-sm font-medium">Total Colaboradores</p>
+            <p class="text-sm font-medium opacity-80">Total Colaboradores</p>
             <p class="text-3xl font-bold" id="totalColaboradores">0</p>
           </div>
           <div class="bg-white bg-opacity-20 rounded-lg p-3">
@@ -72,10 +78,10 @@
         </div>
       </div>
       
-      <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-green-100 text-sm font-medium">Colaboradores Activos</p>
+            <p class="text-sm font-medium opacity-80">Colaboradores Activos</p>
             <p class="text-3xl font-bold" id="colaboradoresActivos">0</p>
           </div>
           <div class="bg-white bg-opacity-20 rounded-lg p-3">
@@ -87,37 +93,37 @@
   </div>
   
   <!-- Formulario para agregar colaborador -->
-  <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+  <div class="card p-6 mb-8">
       <div class="flex items-center gap-3 mb-6">
-        <div class="bg-blue-100 rounded-lg p-2">
-          <i data-lucide="user-plus" class="w-6 h-6 text-blue-600"></i>
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background-color: rgba(30, 138, 149, 0.1);">
+          <i data-lucide="user-plus" class="w-6 h-6" style="color: var(--color-primario-turquesa);"></i>
         </div>
         <h2 class="text-xl font-semibold text-gray-900">Agregar Nuevo Colaborador</h2>
       </div>
       <form id="colaboradorForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div class="space-y-2 lg:col-span-2 xl:col-span-1">
           <label class="text-sm font-medium text-gray-700">Nombre Completo</label>
-          <input type="text" id="colaboradorName" placeholder="Ej: Juan Pérez" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+          <input type="text" id="colaboradorName" placeholder="Ej: Juan Pérez" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 transition-all" required>
         </div>
         <div class="space-y-2 lg:col-span-1">
           <label class="text-sm font-medium text-gray-700">Matrícula</label>
-          <input type="text" id="colaboradorMatricula" placeholder="Ej: 12345678" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <input type="text" id="colaboradorMatricula" placeholder="Ej: 12345678" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500">
         </div>
         <div class="space-y-2 lg:col-span-2 xl:col-span-1">
           <label class="text-sm font-medium text-gray-700">Correo Electrónico</label>
-          <input type="email" id="colaboradorEmail" placeholder="correo@ejemplo.com" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+          <input type="email" id="colaboradorEmail" placeholder="correo@ejemplo.com" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 transition-all" required>
         </div>
         <div class="space-y-2 lg:col-span-1">
           <label class="text-sm font-medium text-gray-700">Contraseña</label>
-          <input type="password" id="colaboradorPassword" placeholder="Mínimo 6 caracteres" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" required>
+          <input type="password" id="colaboradorPassword" placeholder="Mínimo 6 caracteres" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 transition-all" required>
         </div>
         
         <div class="flex items-end gap-2 lg:col-span-1">
-          <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium flex items-center justify-center gap-2">
+          <button type="submit" class="btn-primary w-full px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2">
             <i data-lucide="user-plus" class="w-5 h-5"></i>
             Agregar
           </button>
-          <button type="button" id="generatePasswordBtn" title="Generar contraseña" class="bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center justify-center">
+          <button type="button" id="generatePasswordBtn" title="Generar contraseña" class="bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 font-medium flex items-center justify-center">
             <i data-lucide="key-round" class="w-5 h-5"></i>
           </button>
         </div>
@@ -127,7 +133,7 @@
     </div>
     
     <!-- Filtros y búsqueda -->
-    <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+    <div class="card p-6 mb-8">
       <div class="flex items-center gap-3 mb-4">
         <div class="bg-gray-100 rounded-lg p-2">
           <i data-lucide="filter" class="w-6 h-6 text-gray-600"></i>
@@ -138,7 +144,7 @@
         <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Buscar</label>
           <div class="relative">
-            <input type="text" id="searchInput" placeholder="Buscar por nombre o email..." class="w-full border border-gray-300 rounded-lg px-4 py-3 pl-10 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+            <input type="text" id="searchInput" placeholder="Buscar por nombre o email..." class="w-full border border-gray-300 rounded-lg px-4 py-3 pl-10 focus:ring-2 focus:ring-blue-500 transition-all">
             <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"></i>
           </div>
         </div>
@@ -147,7 +153,7 @@
 
         <div class="space-y-2">
           <label class="text-sm font-medium text-gray-700">Filtrar por Estado</label>
-          <select id="statusFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+          <select id="statusFilter" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 transition-all">
             <option value="">Todos los estados</option>
             <option value="activo">Activo</option>
             <option value="inactivo">Inactivo</option>
@@ -155,7 +161,7 @@
         </div>
 
         <div class="flex items-end">
-          <button id="clearFilters" class="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center justify-center gap-2">
+          <button id="clearFilters" class="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 font-medium flex items-center justify-center gap-2">
             <i data-lucide="x" class="w-5 h-5"></i>
             Limpiar Filtros
           </button>
@@ -164,11 +170,11 @@
     </div>
     
     <!-- Lista de colaboradores -->
-    <div class="bg-white rounded-xl shadow-lg overflow-x-auto">
-      <div class="p-6 border-b border-gray-200">
+    <div class="card overflow-x-auto">
+      <div class="p-6 border-b">
         <div class="flex items-center gap-3">
-          <div class="bg-blue-100 rounded-lg p-2">
-            <i data-lucide="users" class="w-6 h-6 text-blue-600"></i>
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background-color: rgba(30, 64, 90, 0.1);">
+            <i data-lucide="users" class="w-6 h-6" style="color: var(--color-primario-oscuro);"></i>
           </div>
           <h2 class="text-xl font-semibold text-gray-900">Lista de Colaboradores</h2>
         </div>

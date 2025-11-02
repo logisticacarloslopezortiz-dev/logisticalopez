@@ -14,6 +14,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="css/admin-panel-styles.css">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
   <style>
@@ -40,48 +41,53 @@
   
   <!-- Botón de menú móvil -->
   <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden">
-    <i data-lucide="menu" class="w-6 h-6 text-blue-700"></i>
+    <i data-lucide="menu" class="w-6 h-6 text-gray-800"></i>
   </button>
   
   <!-- Overlay para móvil -->
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden md:hidden"></div>
 
-  <!-- Sidebar -->
-  <aside id="sidebar" class="fixed top-0 left-0 h-screen bg-white shadow-md z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
-    <div class="flex items-center justify-center py-6 px-4 border-b">
-      <img src="img/1vertical.png" alt="Logo" class="w-10 sidebar-text">
-      <h2 class="text-xl font-bold text-blue-700 ml-2 sidebar-text">LLO Admin</h2>
+  <!-- Sidebar Modernizado -->
+  <aside id="sidebar" class="fixed top-0 left-0 h-screen w-64 z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
+    <!-- Header del Sidebar -->
+    <div class="sidebar-header flex items-center justify-center py-6 px-4">
+      <div class="sidebar-logo w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+        LLO
+      </div>
+      <h2 class="text-xl font-bold text-white ml-3 sidebar-text">Admin</h2>
     </div>
-    <nav class="flex-1 flex flex-col gap-3 py-4">
-      <a href="inicio.html" class="flex items-center gap-3 px-6 py-3 rounded-r-full hover:bg-blue-50 text-blue-700 font-semibold"><i data-lucide="home" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Inicio</span></a>
-      <a href="servicios.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="box" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Servicios</span></a>
-      <a href="ganancias.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="dollar-sign" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Ganancia</span></a>
-      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="history" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Historial</span></a>
-      <a href="mi-negocio.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="briefcase" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Mi negocio</span></a>
-      <a href="colaboradores.html" class="flex items-center gap-3 px-6 py-3 hover:bg-gray-100"><i data-lucide="users" class="w-6 h-6 flex-shrink-0"></i> <span class="sidebar-text">Colaboradores</span></a>
+    <!-- Navegación -->
+    <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
+      <a href="inicio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="home" class="w-5 h-5"></i> <span class="sidebar-text">Inicio</span></a>
+      <a href="servicios.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="box" class="w-5 h-5"></i> <span class="sidebar-text">Servicios</span></a>
+      <a href="ganancias.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="dollar-sign" class="w-5 h-5"></i> <span class="sidebar-text">Ganancia</span></a>
+      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="history" class="w-5 h-5"></i> <span class="sidebar-text">Historial</span></a>
+      <a href="mi-negocio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5"></i> <span class="sidebar-text">Mi negocio</span></a>
+      <a href="colaboradores.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="users" class="w-5 h-5"></i> <span class="sidebar-text">Colaboradores</span></a>
     </nav>
-    <div class="p-4 border-t">
-      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded hover:bg-gray-100 text-gray-600">
-        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-6 h-6"></i>
+    <!-- Footer del Sidebar -->
+    <div class="sidebar-footer p-4">
+      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm">
+        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
       </button>
-      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-6 py-3 rounded mt-2 text-red-600 hover:bg-red-50">
-        <i data-lucide="log-out" class="w-6 h-6"></i>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm">
+        <i data-lucide="log-out" class="w-5 h-5"></i>
         <span class="sidebar-text font-medium">Cerrar Sesión</span>
       </button>
     </div>
   </aside>
 
   <!-- Contenido principal -->
-  <main id="main-content" class="p-8 transition-all duration-300 ease-in-out">
+  <main id="main-content" class="main-content p-8">
     <!-- Header con información del administrador -->
     <div class="flex justify-between items-center mb-6">
       <div>
-        <h1 class="text-2xl font-bold">Inicio</h1>
+        <h1 class="text-3xl font-bold text-gray-900">Inicio</h1>
         <p class="text-gray-600">Pedidos recientes, resumen diario y alertas importantes.</p>
       </div>
       <div class="flex items-center gap-3 bg-white rounded-lg shadow-sm px-4 py-2 border">
-        <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold" id="adminAvatar">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold" id="adminAvatar" style="background-color: var(--color-primario-oscuro);">
           A
         </div>
         <div>
@@ -95,11 +101,11 @@
     </div>
 
     <!-- Filtros y búsqueda -->
-    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+    <div class="card p-6 mb-6">
       <div class="flex flex-wrap gap-4 items-center">
         <div class="flex-1 min-w-64">
           <input type="text" id="searchInput" placeholder="Buscar por nombre o servicio..." 
-                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
         </div>
         <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
           <option value="">Todos los estados</option>
@@ -109,47 +115,44 @@
         </select>
         <select id="serviceFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
           <option value="">Todos los servicios</option>
-          <option value="Mudanza">Mudanza</option>
-          <option value="Transporte Comercial">Transporte Comercial</option>
-          <option value="Carga Pesada">Carga Pesada</option>
         </select>
         <input type="date" id="dateFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-        <button id="clearFilters" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
-          <i data-lucide="x" class="w-4 h-4"></i>
+        <button id="clearFilters" class="p-2 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300">
+          <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
     </div>
 
     <!-- Resumen diario -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div class="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-lg shadow-md text-white">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-turquesa);">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-blue-100">Total pedidos</p>
+            <p class="opacity-80">Total pedidos</p>
             <p class="text-3xl font-bold" id="totalPedidos">0</p>
-            <p class="text-sm text-blue-100 mt-1">+<span id="pedidosHoy">0</span> hoy</p>
+            <p class="text-sm opacity-80 mt-1">+<span id="pedidosHoy">0</span> hoy</p>
           </div>
-          <i data-lucide="package" class="w-12 h-12 text-blue-200"></i>
+          <i data-lucide="package" class="w-12 h-12 opacity-50"></i>
         </div>
       </div>
-      <div class="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-lg shadow-md text-white">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-green-100">Completados</p>
+            <p class="opacity-80">Completados</p>
             <p class="text-3xl font-bold" id="pedidosCompletados">0</p>
-            <p class="text-sm text-green-100 mt-1"><span id="porcentajeCompletados">0</span>% del total</p>
+            <p class="text-sm opacity-80 mt-1"><span id="porcentajeCompletados">0</span>% del total</p>
           </div>
-          <i data-lucide="check-circle" class="w-12 h-12 text-green-200"></i>
+          <i data-lucide="check-circle" class="w-12 h-12 opacity-50"></i>
         </div>
       </div>
-      <div class="bg-gradient-to-br from-yellow-500 to-yellow-600 p-6 rounded-lg shadow-md text-white">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-acento-amarillo); color: var(--color-texto-principal);">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-yellow-100">Pendientes</p>
+            <p class="opacity-80">Pendientes</p>
             <p class="text-3xl font-bold" id="pedidosPendientes">0</p>
-            <p class="text-sm text-yellow-100 mt-1"><span id="urgentes">0</span> urgentes</p>
+            <p class="text-sm opacity-80 mt-1"><span id="urgentes">0</span> urgentes</p>
           </div>
-          <i data-lucide="clock" class="w-12 h-12 text-yellow-200"></i>
+          <i data-lucide="clock" class="w-12 h-12 opacity-50"></i>
         </div>
       </div>
     </div>
