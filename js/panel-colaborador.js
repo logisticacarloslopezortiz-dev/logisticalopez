@@ -12,18 +12,13 @@
   const OrderManager = {
     async acceptOrder(orderId, collaboratorId) {
       try {
-        const { error } = await supabaseConfig.client
-          .from('orders')
-          .update({
-            assigned_to: collaboratorId,
-            status: 'En proceso',
-            last_collab_status: 'en_camino_recoger'
-          })
-          .eq('id', orderId);
+        const { error } = await supabaseConfig.client.rpc('accept_order', {
+          order_id_param: orderId
+        });
         if (error) throw error;
         return { success: true, error: null };
       } catch (err) {
-        console.error('Error en OrderManager.acceptOrder:', err);
+        console.error('Error en OrderManager.acceptOrder:', JSON.stringify(err, null, 2));
         return { success: false, error: err.message };
       }
     },
@@ -36,7 +31,7 @@
         if (error) throw error;
         return { success: true, error: null };
       } catch (err) {
-        console.error('Error en OrderManager.cancelActiveJob:', err);
+        console.error('Error en OrderManager.cancelActiveJob:', JSON.stringify(err, null, 2));
         return { success: false, error: err.message };
       }
     },
@@ -50,7 +45,7 @@
         if (error) throw error;
         return { success: true, error: null };
       } catch (err) {
-        console.error('Error en OrderManager.actualizarEstadoPedido:', err);
+        console.error('Error en OrderManager.actualizarEstadoPedido:', JSON.stringify(err, null, 2));
         return { success: false, error: err.message };
       }
     }
@@ -1066,7 +1061,18 @@ async function preloadCollaboratorNames(orders){
 
 // Función para cargar órdenes
 async function loadInitialOrders() {
+  let timeout = null;
+  const loadingIndicator = document.getElementById('loadingIndicator');
+
   try {
+    // Iniciar temporizador de carga
+    timeout = setTimeout(() => {
+      if (loadingIndicator && !loadingIndicator.classList.contains('hidden')) {
+        showError('Tiempo de carga excedido', 'No se pudieron cargar los datos. Por favor, recarga la página.');
+        loadingIndicator.classList.add('hidden');
+      }
+    }, 10000); // 10 segundos
+
     // Helper para ejecutar la consulta
     const doQuery = async () => {
       return await supabaseConfig.client
@@ -1131,6 +1137,8 @@ async function loadInitialOrders() {
     const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
     showError('Error de Carga', `No se pudieron cargar las solicitudes: ${errorMsg}`);
     state.allOrders = [];
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
