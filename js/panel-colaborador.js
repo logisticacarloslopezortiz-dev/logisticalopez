@@ -90,12 +90,9 @@ function initializeMap(order) {
     // Verificar que existan coordenadas
     if (!order.pickup_coords || !order.delivery_coords) {
       console.error('[Mapa] Error: Faltan coordenadas de origen o destino');
-      document.getElementById('mapErrorMessage').classList.remove('hidden');
+      // El elemento mapErrorMessage no existe, se elimina la referencia para evitar errores.
       return;
     }
-    
-    // Ocultar mensaje de error si estaba visible
-    document.getElementById('mapErrorMessage').classList.add('hidden');
     
     // Parsear coordenadas
     const pickupCoords = parseCoordinates(order.pickup_coords);
@@ -103,7 +100,7 @@ function initializeMap(order) {
     
     if (!pickupCoords || !deliveryCoords) {
       console.error('[Mapa] Error: Formato de coordenadas inválido');
-      document.getElementById('mapErrorMessage').classList.remove('hidden');
+      // El elemento mapErrorMessage no existe, se elimina la referencia para evitar errores.
       return;
     }
     
@@ -146,7 +143,7 @@ function initializeMap(order) {
     console.log('[Mapa] Mapa inicializado correctamente');
   } catch (err) {
     console.error('[Mapa] Error al inicializar mapa:', err);
-    document.getElementById('mapErrorMessage').classList.remove('hidden');
+    // El elemento mapErrorMessage no existe, se elimina la referencia para evitar errores.
   }
 }
 
@@ -251,9 +248,9 @@ function saveCompletionMetrics(metrics, orderId) {
       console.log('[Métricas] Métricas del colaborador actualizadas:', collabMetrics);
     }
 
-    // Enviar a Supabase si está disponible
-    if (window.supabase) {
-      supabase.from('completion_metrics').insert([{
+    // Enviar a Supabase usando la instancia consistente del config
+    if (supabaseConfig.client) {
+      supabaseConfig.client.from('completion_metrics').insert([{
         order_id: orderId,
         colaborador_id: metrics.colaborador_id,
         tiempo_total_minutos: metrics.tiempo_total,
@@ -488,32 +485,12 @@ async function handleOrderCompletion(orderId) {
     // Actualizar estadísticas del colaborador inmediatamente
     updateCollaboratorStats(state.collabSession.user.id);
 
-    // Mostrar notificación de éxito con opción de ver historial
+    // Mostrar notificación de éxito sin acciones, ya que el historial fue eliminado.
     showSuccess(
-      'La solicitud ha sido completada. Puedes ver más trabajos pendientes o revisar tu historial.',
+      'La solicitud ha sido completada. Ahora puedes ver otros trabajos pendientes.',
       {
         title: '¡Trabajo finalizado con éxito!',
-        duration: 8000,
-        actions: [
-          {
-            text: 'Ver Historial',
-            handler: `(() => {
-              const tabHistorial = document.getElementById('tab-historial');
-              if (tabHistorial) {
-                tabHistorial.click();
-                setTimeout(() => {
-                  const completedCard = document.querySelector('#historial-solicitudes [data-order-id="${orderId}"]');
-                  if (completedCard) {
-                    completedCard.classList.add('bg-green-50', 'border-green-300', 'transition-all', 'duration-500');
-                    setTimeout(() => {
-                      completedCard.classList.remove('bg-green-50', 'border-green-300');
-                    }, 3000);
-                  }
-                }, 200);
-              }
-            })()`
-          }
-        ]
+        duration: 8000
       }
     );
 
@@ -684,20 +661,10 @@ function updateActiveJobView(){
   const statusKey = order.last_collab_status || 'en_camino_recoger';
   const statusLabel = STATUS_MAP[statusKey]?.label || statusKey;
   const badge = document.getElementById('activeJobStatus');
-  if (badge) badge.textContent = statusLabel;
-
-  const progressBar = document.getElementById('jobProgressBar');
-  const currentWidth = progressBar && progressBar.style && progressBar.style.width ? progressBar.style.width : '25%';
-  const progressValues = {
-    'en_camino_recoger': '25%',
-    'cargando': '50%',
-    'en_camino_entregar': '75%',
-    'entregado': '100%',
-    'retraso_tapon': currentWidth // Mantener el progreso actual en caso de retraso
-  };
-  if (progressBar && progressBar.style) {
-    progressBar.style.width = progressValues[statusKey] || '25%';
+  if (badge) {
+    badge.textContent = statusLabel;
   }
+  // Se eliminó la lógica de la barra de progreso (jobProgressBar) porque el elemento no existe en el HTML.
 }
 
 function renderPhotoGallery(photos) {
@@ -1366,8 +1333,9 @@ if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
 }
 
 /**
- * ✅ NUEVA FUNCIÓN: Busca y muestra el trabajo activo guardado en localStorage
- * o encuentra el primer trabajo activo asignado al colaborador.
+ * ✅ REFACTORIZADO: Busca y muestra el trabajo activo guardado en localStorage.
+ * Si no es válido, limpia el estado y vuelve a la vista de órdenes para evitar
+ * una pantalla en blanco.
  */
 function restoreActiveJob() {
   if (state.activeJobId) {
@@ -1375,16 +1343,20 @@ function restoreActiveJob() {
     const assignedId = order?.assigned_to;
     const lastStatus = order?.last_collab_status;
     
+    // Condición para un trabajo activo válido
     if (order && assignedId === state.collabSession.user.id && lastStatus !== 'entregado') {
+      console.log(`[Cache] Restaurando trabajo activo #${order.id}`);
       showActiveJob(order);
-      return; // Salir si se encontró un trabajo activo válido
+      return; // Éxito: Salir de la función
     }
+
+    // Si la condición falla, el trabajo en caché es inválido.
+    console.warn(`[Cache] El trabajo activo #${state.activeJobId} ya no es válido. Limpiando.`);
   }
 
-  // Si no hay un trabajo activo guardado o es inválido, buscar uno nuevo.
-  state.activeJobId = null;
-  localStorage.removeItem('tlc_collab_active_job');
-  document.getElementById('activeJobSection').classList.add('hidden');
+  // Si no hay ID de trabajo activo o el que había era inválido,
+  // limpiar el estado y asegurarse de que la vista de órdenes esté visible.
+  returnToOrdersView();
 }
 
 // Helper para construir el mensaje de notificación según estado
