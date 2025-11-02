@@ -157,7 +157,7 @@
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
 
   <!-- ✅ MEJORA: Sidebar rediseñado -->
-  <aside id="collabSidebar" class="w-80 md:w-72 bg-gradient-to-b from-blue-900 to-blue-800 shadow-2xl h-screen flex flex-col z-50">
+  <aside id="collabSidebar" class="w-80 md:w-72 bg-[#1E405A] shadow-2xl h-screen flex flex-col z-50">
     <!-- Header del Sidebar -->
     <div class="p-6 border-b border-gray-700">
       <div class="flex items-center justify-between mb-4">
@@ -170,13 +170,13 @@
           </div>
         </div>
         <!-- Botón para colapsar el sidebar -->
-        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 bg-blue-800 rounded-lg hover:bg-blue-700 transition-colors">
+        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 bg-[#1E405A] rounded-lg hover:bg-[#18364A] transition-colors">
           <i data-lucide="panel-left-close" class="w-4 h-4 text-white"></i>
         </button>
       </div>
       
       <!-- Perfil del Colaborador -->
-      <div class="bg-blue-800/50 rounded-xl p-4 border border-blue-700">
+      <div class="bg-[#1E405A]/50 rounded-xl p-4 border border-[#1E405A]">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar">
             C
@@ -196,7 +196,7 @@
               <div class="text-xs text-gray-400">Activos</div>
             </div>
             <div>
-              <div class="text-lg font-bold text-blue-400" id="collabCompletedJobs">0</div>
+              <div class="text-lg font-bold text-[#1E8A95]" id="collabCompletedJobs">0</div>
               <div class="text-xs text-gray-400">Completados</div>
             </div>
           </div>
@@ -207,30 +207,30 @@
     <!-- Navegación -->
     <nav class="flex-1 p-6" role="navigation" aria-label="Navegación principal">
       <div class="space-y-2">
-        <a href="#" id="sidebar-activos-btn" class="flex items-center gap-3 p-3 rounded-xl text-white bg-blue-700/50 transition-all duration-200 group">
+        <a href="#" id="sidebar-activos-btn" class="flex items-center gap-3 p-3 rounded-xl text-white bg-[#1E405A]/60 transition-all duration-200 group">
           <i data-lucide="list" class="w-5 h-5 text-white"></i>
           <span class="font-medium">Trabajos Activos</span>
-          <span class="ml-auto bg-blue-600 text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount">0</span>
+          <span class="ml-auto bg-[#1E8A95] text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount">0</span>
         </a>
 
-        <a href="#" id="sidebar-historial-btn" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-blue-700/50 hover:text-white transition-all duration-200 group">
+        <a href="#" id="sidebar-historial-btn" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-[#18364A] hover:text-white transition-all duration-200 group">
           <i data-lucide="check-circle" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
           <span class="font-medium">Historial</span>
         </a>
         
-        <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-blue-700/50 hover:text-white transition-all duration-200 group">
+        <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-gray-300 hover:bg-[#18364A] hover:text-white transition-all duration-200 group">
           <i data-lucide="bar-chart-3" class="w-5 h-5 text-gray-400 group-hover:text-white"></i>
           <span class="font-medium">Rendimiento</span>
         </a>
 
         <!-- Botón de cambio de tema -->
-        <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mt-2 rounded-xl bg-blue-800/50 text-blue-400 hover:bg-blue-700/50 hover:text-blue-300 transition-all duration-200 group">
+        <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mt-2 rounded-xl bg-[#1E405A]/50 text-[#1E8A95] hover:bg-[#18364A]/60 hover:text-[#7fd1d9] transition-all duration-200 group">
             <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
             <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
             <span class="font-medium text-sm">Modo oscuro</span>
         </button>
         <!-- Cerrar sesión -->
-        <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-800/50 text-blue-400 hover:bg-blue-700/50 hover:text-blue-300 transition-all duration-200 group">
+        <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#1E405A]/50 text-[#1E8A95] hover:bg-[#18364A]/60 hover:text-[#7fd1d9] transition-all duration-200 group">
             <i data-lucide="log-out" class="w-4 h-4"></i>
             <span class="font-medium text-sm">Cerrar Sesión</span>
         </button>

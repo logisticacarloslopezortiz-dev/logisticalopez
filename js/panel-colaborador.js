@@ -1251,7 +1251,15 @@ function setupEventListeners() {
       const button = e.target.closest('button[data-status]');
       if (button) {
         if (state.activeJobId) {
-          changeStatus(state.activeJobId, button.dataset.status);
+          const original = button.innerHTML;
+          button.disabled = true;
+          button.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 inline animate-spin"></i>' + (button.textContent || 'Actualizando');
+          if (window.lucide) lucide.createIcons();
+          Promise.resolve(changeStatus(state.activeJobId, button.dataset.status)).finally(() => {
+            button.disabled = false;
+            button.innerHTML = original;
+            if (window.lucide) lucide.createIcons();
+          });
         } else {
           showError('Error', 'No hay un trabajo activo seleccionado.');
         }
@@ -1267,6 +1275,9 @@ function setupEventListeners() {
     if (!state.selectedOrderIdForAccept) return closeAcceptModal();
 
     const orderId = state.selectedOrderIdForAccept;
+    const btn = document.getElementById('confirmAcceptBtn');
+    const originalHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 inline animate-spin"></i> Aceptando...'; if (window.lucide) lucide.createIcons(); }
     const { success, error } = await OrderManager.acceptOrder(orderId, state.collabSession.user.id);
 
     if (success) {
@@ -1278,13 +1289,15 @@ function setupEventListeners() {
       const order = state.allOrders.find(o => o.id === orderId);
       if (order) {
         order.assigned_to = state.collabSession.user.id;
-        order.status = 'En proceso';
+        // Estado de aceptación requerido: 'en_camino_recoger'
+        order.status = 'en_camino_recoger';
         order.last_collab_status = 'en_camino_recoger';
         showActiveJob(order);
       }
     } else {
       showError('Error al aceptar la solicitud', error);
     }
+    if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; if (window.lucide) lucide.createIcons(); }
     closeAcceptModal();
   });
 
