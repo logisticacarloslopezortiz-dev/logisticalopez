@@ -242,7 +242,7 @@ const OrderManager = {
         console.log('[OrderManager] Fetch intento con:', cand);
         const { data, error } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data')
+          .select('tracking_data, id, short_id, supabase_seq_id')
           .eq(cand.col, cand.val)
           .maybeSingle();
 
@@ -260,12 +260,30 @@ const OrderManager = {
         if (data) {
           usedFilter = cand;
           currentOrder = data;
+          console.log('[OrderManager] Orden encontrada con filtro:', cand, 'Datos:', data);
           break;
         }
       }
 
+      // Si no se encontró con los candidatos principales, intentar búsqueda más amplia
+      if (!currentOrder && candidates.length > 0) {
+        console.log('[OrderManager] Intentando búsqueda amplia para orderId:', orderId);
+        const { data, error } = await supabaseConfig.client
+          .from('orders')
+          .select('tracking_data, id, short_id, supabase_seq_id')
+          .or(`id.eq.${normalizedId},short_id.eq.${orderId},supabase_seq_id.eq.${normalizedId}`)
+          .maybeSingle();
+
+        if (data && !error) {
+          currentOrder = data;
+          usedFilter = { col: 'id', val: data.id }; // Usar el ID real encontrado
+          console.log('[OrderManager] Orden encontrada con búsqueda amplia:', data);
+        }
+      }
+
       if (!currentOrder || !usedFilter) {
-        throw new Error('No se encontró la orden con ninguno de los filtros proporcionados.');
+        console.error('[OrderManager] No se pudo encontrar la orden. Candidatos probados:', candidates);
+        throw new Error(`No se encontró la orden con ID "${orderId}". Verifica que la orden existe y tienes permisos para accederla.`);
       }
 
       const newTrackingEntry = { 

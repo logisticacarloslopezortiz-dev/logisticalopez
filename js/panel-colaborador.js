@@ -169,6 +169,77 @@ function createCustomIcon(color, text) {
 
 
 /**
+ * Guarda el trabajo activo en localStorage para persistencia
+ * @param {Object} activeJob - Datos del trabajo activo
+ */
+function saveActiveJob(activeJob) {
+  try {
+    const collaboratorId = state.collabSession?.user?.id;
+    if (collaboratorId && activeJob) {
+      const key = `tlc_active_job_${collaboratorId}`;
+      const jobData = {
+        ...activeJob,
+        savedAt: new Date().toISOString()
+      };
+      localStorage.setItem(key, JSON.stringify(jobData));
+      console.log('[Persistencia] Trabajo activo guardado:', activeJob.id);
+    }
+  } catch (err) {
+    console.error('[Persistencia] Error al guardar trabajo activo:', err);
+  }
+}
+
+/**
+ * Recupera el trabajo activo desde localStorage
+ * @returns {Object|null} - Datos del trabajo activo o null
+ */
+function loadActiveJob() {
+  try {
+    const collaboratorId = state.collabSession?.user?.id;
+    if (collaboratorId) {
+      const key = `tlc_active_job_${collaboratorId}`;
+      const savedJob = localStorage.getItem(key);
+      if (savedJob) {
+        const jobData = JSON.parse(savedJob);
+        // Verificar que no sea muy antiguo (más de 24 horas)
+        const savedAt = new Date(jobData.savedAt);
+        const now = new Date();
+        const hoursDiff = (now - savedAt) / (1000 * 60 * 60);
+        
+        if (hoursDiff < 24) {
+          console.log('[Persistencia] Trabajo activo recuperado:', jobData.id);
+          return jobData;
+        } else {
+          // Limpiar trabajo antiguo
+          localStorage.removeItem(key);
+          console.log('[Persistencia] Trabajo activo expirado, eliminado');
+        }
+      }
+    }
+    return null;
+  } catch (err) {
+    console.error('[Persistencia] Error al cargar trabajo activo:', err);
+    return null;
+  }
+}
+
+/**
+ * Elimina el trabajo activo guardado
+ */
+function clearActiveJob() {
+  try {
+    const collaboratorId = state.collabSession?.user?.id;
+    if (collaboratorId) {
+      const key = `tlc_active_job_${collaboratorId}`;
+      localStorage.removeItem(key);
+      console.log('[Persistencia] Trabajo activo eliminado del almacenamiento');
+    }
+  } catch (err) {
+    console.error('[Persistencia] Error al limpiar trabajo activo:', err);
+  }
+}
+
+/**
  * Función para guardar métricas de finalización
  * @param {Object} metrics - Métricas a guardar
  * @param {number} orderId - ID de la orden
@@ -1355,6 +1426,13 @@ if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
  * una pantalla en blanco.
  */
 function restoreActiveJob() {
+  // Primero intentar cargar desde localStorage
+  const savedJob = loadActiveJob();
+  if (savedJob) {
+    state.activeJobId = savedJob.id;
+    console.log(`[Persistencia] Trabajo activo cargado desde localStorage: #${savedJob.id}`);
+  }
+
   if (state.activeJobId) {
     const order = state.allOrders.find(o => o.id === state.activeJobId);
     const assignedId = order?.assigned_to;
@@ -1364,11 +1442,14 @@ function restoreActiveJob() {
     if (order && assignedId === state.collabSession.user.id && lastStatus !== 'entregado') {
       console.log(`[Cache] Restaurando trabajo activo #${order.id}`);
       showActiveJob(order);
+      // Guardar el trabajo activo actualizado
+      saveActiveJob(order);
       return; // Éxito: Salir de la función
     }
 
     // Si la condición falla, el trabajo en caché es inválido.
     console.warn(`[Cache] El trabajo activo #${state.activeJobId} ya no es válido. Limpiando.`);
+    clearActiveJob(); // Limpiar localStorage también
   }
 
   // Si no hay ID de trabajo activo o el que había era inválido,
