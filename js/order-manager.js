@@ -233,6 +233,48 @@ const OrderManager = {
       updatePayload.status = 'Pendiente';
     }
 
+    // Intentar primero vía RPC para evitar problemas de RLS en SELECT/UPDATE
+    try {
+      const normalizedId = this._normalizeOrderId(orderId);
+      const rpcTrackingEntry = {
+        status: newStatus,
+        date: new Date().toISOString(),
+        description: newStatus === 'en_camino_recoger'
+          ? 'Orden aceptada, en camino a recoger'
+          : newStatus === 'cargando'
+            ? 'Carga en proceso'
+            : newStatus === 'en_camino_entregar'
+              ? 'En ruta hacia entrega'
+              : newStatus === 'entregado'
+                ? 'Entrega completada'
+                : 'Actualización de estado'
+      };
+
+      const rpcPayload = {
+        order_id: normalizedId,
+        new_status: newStatus,
+        collaborator_id: additionalData?.collaborator_id || null,
+        tracking_entry: rpcTrackingEntry,
+        extra: updatePayload
+      };
+
+      console.log('[OrderManager] Intentando RPC update_order_status ->', rpcPayload);
+      const { data: rpcData, error: rpcError } = await supabaseConfig.client.rpc('update_order_status', rpcPayload);
+
+      if (!rpcError) {
+        console.log('[OrderManager] RPC update_order_status OK', rpcData);
+        return { success: true, data: rpcData, error: null };
+      }
+
+      console.warn('[OrderManager] RPC update_order_status falló, aplicando flujo directo:', {
+        message: rpcError?.message, details: rpcError?.details, hint: rpcError?.hint, code: rpcError?.code
+      });
+      // Si falla RPC, continuar con el flujo directo (SELECT + UPDATE)
+    } catch (rpcEx) {
+      console.warn('[OrderManager] Excepción en RPC update_order_status, aplicando flujo directo:', rpcEx?.message);
+      // Continuar con el flujo directo
+    }
+
     try {
       // Obtener tracking_data actual probando secuencialmente los candidatos
       let usedFilter = null;

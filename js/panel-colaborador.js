@@ -1407,6 +1407,16 @@ function handleStatusUpdate(orderId, newStatus) {
       last_collab_status: newStatus,
       tracking_data: [...prevTracking, { status: newStatus, date: new Date().toISOString() }]
     };
+    // Persistir trabajo activo mientras no esté entregado ni cancelado
+    try {
+      if (newStatus !== 'entregado' && newStatus !== 'cancelado') {
+        saveActiveJob(state.allOrders[idx]);
+      } else {
+        clearActiveJob();
+      }
+    } catch (e) {
+      console.warn('[Persistencia] No se pudo guardar/limpiar trabajo activo:', e?.message);
+    }
   }
   updateActiveJobView();
 }
