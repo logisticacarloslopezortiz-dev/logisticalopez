@@ -956,7 +956,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         // Crear contacto de cliente si no hay usuario autenticado y asociarlo a la orden
-        async function createClientContact({ name, phone, email }) {
+        async function createClientContact({ name, phone, email, pushSubscription }) {
           try {
             // Usar cliente público si no hay sesión
             let session = null;
@@ -969,9 +969,13 @@ document.addEventListener('DOMContentLoaded', function() {
               ? supabaseConfig.getPublicClient()
               : supabaseConfig.client;
 
+            const insertPayload = { name, phone, email };
+            // Guardar suscripción push si la columna existe (migración aplicada)
+            if (pushSubscription) insertPayload.push_subscription = pushSubscription;
+
             const { data, error } = await clientToUse
               .from('clients')
-              .insert([{ name, phone, email }])
+              .insert([insertPayload])
               .select()
               .single();
             if (error) throw error;
@@ -982,16 +986,37 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
 
+        // Obtener suscripción push para notificaciones (una vez, reutilizar)
+        const pushSubscription = await getPushSubscription();
+        if (pushSubscription) {
+          console.log('Suscripción push obtenida');
+        }
+
         const { data: { user } } = await supabaseConfig.client.auth.getUser();
         if (user && user.id) {
           baseOrder.client_id = user.id;
           console.log('Usuario autenticado, asignando client_id:', user.id);
+
+          // Guardar suscripción push a nivel de perfil (si disponible)
+          try {
+            if (pushSubscription) {
+              const { error: upErr } = await supabaseConfig.client
+                .from('profiles')
+                .update({ push_subscription: pushSubscription })
+                .eq('id', user.id);
+              if (upErr) console.warn('No se pudo guardar push_subscription en profiles:', upErr.message || upErr);
+              else console.log('push_subscription guardada en profiles');
+            }
+          } catch (e) {
+            console.warn('Error al actualizar push_subscription en profiles:', e);
+          }
         } else {
           try {
             const contact = await createClientContact({
               name: orderData.name,
               phone: orderData.phone,
-              email: orderData.email
+              email: orderData.email,
+              pushSubscription
             });
             baseOrder.client_contact_id = contact.id;
             baseOrder.client_id = null; // Evitar FK hacia profiles cuando no hay usuario
@@ -1003,8 +1028,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
 
-        // Obtener suscripción push para notificaciones
-        const pushSubscription = await getPushSubscription();
+        // Agregar suscripción push a la orden (si disponible)
         if (pushSubscription) {
           baseOrder.notification_subscription = pushSubscription;
           console.log('Suscripción push agregada a la orden');

@@ -313,6 +313,13 @@ async function updateOrderStatus(orderId, newStatus) {
     // Forzamos la recarga para asegurar que la vista esté 100% sincronizada.
     await loadOrders();
 
+    // Redirigir al historial cuando se marca como completada
+    if (newStatus === 'Completada' || newStatus === 'Completado') {
+      try {
+        window.location.href = 'historial.html';
+      } catch (_) {}
+    }
+
   } else {
     notifications.error('No se pudo actualizar el estado de la orden.', error);
     // Si falla, recargamos para revertir cualquier cambio visual optimista.
