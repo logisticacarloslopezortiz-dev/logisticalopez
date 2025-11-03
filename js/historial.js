@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
     } else {
       tableBody.innerHTML = filteredOrders.map(order => {
-        const completadoPorNombre = order.profiles ? order.profiles.full_name : 'No disponible';
+        const completadoPorNombre = order.completed_by_full_name || 'No disponible';
         const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleDateString('es-ES', {
           year: 'numeric',
           month: 'short',
@@ -78,8 +78,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `
           <tr class="${rowClass}">
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.name}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service?.name || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.client_name || order.name}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service_name || order.service?.name || 'N/A'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${fechaCompletado}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${completadoPorNombre}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${order.status === 'Cancelado' ? 'text-red-600' : 'text-green-700'}">
@@ -117,12 +117,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Primera consulta: Obtener órdenes con status = 'Completada'
       const { data: completedData, error: completedError } = await supabaseConfig.client
-        .from('orders')
-        .select(`
-          *,
-          service:services(name),
-          profiles:completed_by(full_name)
-        `)
+        .from('orders_with_client')
+        .select('*')
         .eq('status', 'Completada')
         .order('completed_at', { ascending: false });
       
@@ -134,12 +130,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Segunda consulta: Obtener órdenes con status = 'Cancelado'
       const { data: canceledData, error: canceledError } = await supabaseConfig.client
-        .from('orders')
-        .select(`
-          *,
-          service:services(name),
-          profiles:completed_by(full_name)
-        `)
+        .from('orders_with_client')
+        .select('*')
         .eq('status', 'Cancelado')
         .order('completed_at', { ascending: false });
       

@@ -955,15 +955,52 @@ document.addEventListener('DOMContentLoaded', function() {
           tracking: orderData.tracking || orderData.tracking_data
         };
 
-        // Asignar client_id (usuario autenticado o UUID generado)
+        // Crear contacto de cliente si no hay usuario autenticado y asociarlo a la orden
+        async function createClientContact({ name, phone, email }) {
+          try {
+            // Usar cliente público si no hay sesión
+            let session = null;
+            try {
+              const s = await supabaseConfig.client.auth.getSession();
+              session = s?.data?.session ?? null;
+            } catch (_) {}
+
+            const clientToUse = !session && typeof supabaseConfig.getPublicClient === 'function'
+              ? supabaseConfig.getPublicClient()
+              : supabaseConfig.client;
+
+            const { data, error } = await clientToUse
+              .from('clients')
+              .insert([{ name, phone, email }])
+              .select()
+              .single();
+            if (error) throw error;
+            return data;
+          } catch (e) {
+            console.error('Error al crear contacto de cliente:', e);
+            throw e;
+          }
+        }
+
         const { data: { user } } = await supabaseConfig.client.auth.getUser();
         if (user && user.id) {
           baseOrder.client_id = user.id;
           console.log('Usuario autenticado, asignando client_id:', user.id);
         } else {
-          // Si no hay usuario autenticado, usar client_id generado
-          baseOrder.client_id = getClientId();
-          console.log('No hay usuario autenticado, usando client_id generado:', baseOrder.client_id);
+          try {
+            const contact = await createClientContact({
+              name: orderData.name,
+              phone: orderData.phone,
+              email: orderData.email
+            });
+            baseOrder.client_contact_id = contact.id;
+            baseOrder.client_id = null; // Evitar FK hacia profiles cuando no hay usuario
+            console.log('Cliente sin login, contact_id asociado:', contact.id);
+          } catch (e) {
+            // Si falla la creación del contacto, continuar sin client_id ni contact_id
+            baseOrder.client_id = null;
+            console.warn('Continuando sin client_contact_id por error al crear contacto.');
+          }
         }
 
         // Obtener suscripción push para notificaciones
@@ -1048,7 +1085,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let savedOrder;
         try {
-          savedOrder = await tryInsert(variantA);
+          // Intentar primero vía RPC para evitar problemas de RLS y FKs
+          try {
+            const { data: rpcData, error: rpcError } = await supabaseConfig.client
+              .rpc('create_order_with_contact', { order_payload: variantA });
+            if (rpcError) {
+              console.warn('Fallo RPC create_order_with_contact, se intenta inserción directa:', rpcError);
+            } else if (rpcData) {
+              savedOrder = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+            }
+          } catch (e) {
+            console.warn('Excepción al invocar RPC, se intenta inserción directa:', e);
+          }
+
+          if (!savedOrder) {
+            savedOrder = await tryInsert(variantA);
+          }
         } catch (err) {
           console.error('Error al guardar la solicitud:', err);
           let errorMsg = 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';

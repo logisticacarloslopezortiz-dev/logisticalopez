@@ -74,8 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const isNumeric = /^[0-9]+$/.test(orderIdValue);
 
             let query = supabaseConfig.client
-                .from('orders')
-                .select('*, service:services(name), vehicle:vehicles(name)');
+                .from('orders_with_client')
+                .select('*');
 
             if (isHex32) {
                 query = query.eq('client_tracking_id', orderIdValue.toLowerCase());
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('JWT expirado o no autorizado para buscar orden. Reintentando con cliente anon...');
                 try {
                     const publicClient = supabaseConfig.getPublicClient();
-                    const publicQuery = publicClient.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
+                    const publicQuery = publicClient.from('orders_with_client').select('*');
                     if (isHex32) publicQuery.eq('client_tracking_id', orderIdValue.toLowerCase());
                     else if (isUUID) publicQuery.eq('id', orderIdValue);
                     else if (isNumeric) publicQuery.eq('supabase_seq_id', Number(orderIdValue));
@@ -243,15 +243,17 @@ document.addEventListener('DOMContentLoaded', () => {
         detailsContainer.innerHTML = `
             <div>
                 <p class="text-sm text-gray-500">Cliente</p>
-                <p class="font-semibold text-gray-800">${order.name}</p>
+                <p class="font-semibold text-gray-800">${order.client_name || order.name}</p>
+                ${order.client_phone || order.phone ? `<p class="text-sm text-gray-600">${order.client_phone || order.phone}</p>` : ''}
+                ${order.client_email || order.email ? `<p class="text-sm text-gray-600 truncate">${order.client_email || order.email}</p>` : ''}
             </div>
             <div>
                 <p class="text-sm text-gray-500">Servicio</p>
-                <p class="font-semibold text-gray-800">${order.service?.name || 'No especificado'}</p>
+                <p class="font-semibold text-gray-800">${order.service_name || order.service?.name || 'No especificado'}</p>
             </div>
             <div>
                 <p class="text-sm text-gray-500">Vehículo</p>
-                <p class="font-semibold text-gray-800">${order.vehicle?.name || 'No especificado'}</p>
+                <p class="font-semibold text-gray-800">${order.vehicle_name || order.vehicle?.name || 'No especificado'}</p>
             </div>
             <div>
                 <p class="text-sm text-gray-500">Fecha Programada</p>
