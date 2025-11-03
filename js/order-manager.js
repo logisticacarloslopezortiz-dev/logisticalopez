@@ -7,6 +7,33 @@
  */
 
 const OrderManager = {
+  // Función helper para normalizar IDs de orden
+  _normalizeOrderId(orderId) {
+    try {
+      // Si ya es un número finito, devolverlo
+      if (typeof orderId === 'number' && Number.isFinite(orderId)) return orderId;
+      
+      // Si es string numérico, convertir
+      if (typeof orderId === 'string') {
+        const n = Number(orderId);
+        return Number.isFinite(n) ? n : null;
+      }
+      
+      // Si es objeto, buscar supabase_seq_id o id numérico
+      if (orderId && typeof orderId === 'object') {
+        // Priorizar supabase_seq_id si existe
+        if (Number.isFinite(orderId.supabase_seq_id)) return orderId.supabase_seq_id;
+        // Fallback a id si es numérico (no UUID)
+        if (Number.isFinite(orderId.id)) return orderId.id;
+        return null;
+      }
+      
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
   // Toast simple para notificaciones visuales
   _toast(message, type = 'info') {
     try {
@@ -56,98 +83,42 @@ const OrderManager = {
   /**
    * Acepta una orden desde el panel del colaborador usando RPC
    */
-  async acceptOrder(orderId) {
-    console.log(`[OrderManager] Aceptando orden #${orderId}`);
+  async acceptOrder(orderId, additionalData = {}) {
+    console.log('[OrderManager] Aceptando orden', orderId);
 
-    // Detectar formato del ID entrante
-    const orderIdRaw = orderId;
-    const orderIdNum = typeof orderId === 'string' ? parseInt(orderId, 10) : orderId;
-    const isNumeric = Number.isFinite(orderIdNum);
-    const isUUID = typeof orderIdRaw === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderIdRaw);
-    console.log('[OrderManager] ID detectado', { orderIdRaw, orderIdNum, isNumeric, isUUID });
+    const normalizedId = this._normalizeOrderId(orderId);
+    console.log('[OrderManager] ID normalizado para RPC:', normalizedId);
 
-    if (!isNumeric && !isUUID) {
-      const msg = 'ID de orden inválido (no es número ni UUID)';
-      console.error(`[OrderManager] ${msg}:`, orderIdRaw);
-      return { success: false, error: msg };
+    if (!Number.isFinite(normalizedId)) {
+      console.warn('[OrderManager] ID inválido para RPC accept_order; aplicando fallback...');
+      this._toast('ID inválido para RPC. Aplicando fallback…', 'warning');
+      return await this.actualizarEstadoPedido(orderId, 'en_camino_recoger', additionalData);
     }
 
+    const rpcPayload = { order_id: normalizedId };
+    console.log('[OrderManager] RPC accept_order -> payload', rpcPayload);
+
     try {
-      // Llamar al RPC con el nombre de parámetro esperado por PostgREST
-      // Nota: la mayoría de implementaciones usan 'order_id' como nombre de argumento
-      // Llamada al RPC (asumiendo que espera el secuencial interno)
-      console.log('[OrderManager] RPC accept_order -> payload', { order_id: orderIdNum });
-      const { data, error } = await supabaseConfig.client
-        .rpc('accept_order', { order_id: orderIdNum });
+      const { data, error } = await supabaseConfig.client.rpc('accept_order', rpcPayload);
 
-      if (error) throw error;
-
-      console.log('[OrderManager] RPC accept_order -> respuesta', { data });
-      console.log(`[OrderManager] Orden #${isNumeric ? orderIdNum : orderIdRaw} aceptada exitosamente`);
-      this._toast('Orden aceptada (RPC)', 'success');
-      return { success: true, data, error: null };
-    } catch (error) {
-      // Registro detallado del error de Supabase/PostgREST
-      const details = {
-        message: error?.message,
-        code: error?.code,
-        hint: error?.hint,
-        details: error?.details
-      };
-      console.error(`[OrderManager] Error al aceptar orden #${isNumeric ? orderIdNum : orderIdRaw}:`, details, error);
-
-      // Fallback: intentar actualización directa si el RPC no existe o falla por firma
-      const messageText = String(error?.message || '').toLowerCase();
-      const rpcMissing = messageText.includes('could not find') || messageText.includes('undefined function') || error?.code === 'PGRST204';
-      if (rpcMissing) {
-        this._toast('RPC no disponible, aplicando respaldo automático…', 'warning');
-        try {
-          // Intentar obtener el usuario actual para asignar
-          const { data: userData } = await supabaseConfig.client.auth.getUser();
-          const userId = userData?.user?.id || null;
-          // Obtener tracking actual y agregar entrada inicial
-          let fetchQuery = supabaseConfig.client
-            .from('orders')
-            .select('id, tracking_data');
-          if (isNumeric) fetchQuery = fetchQuery.eq('supabase_seq_id', orderIdNum);
-          else fetchQuery = fetchQuery.eq('id', orderIdRaw);
-          console.log('[OrderManager] Fallback -> fetch filtro', { by: isNumeric ? 'supabase_seq_id' : 'id', value: isNumeric ? orderIdNum : orderIdRaw });
-          const { data: currentOrder } = await fetchQuery.single();
-          const currentTracking = Array.isArray(currentOrder?.tracking_data) ? currentOrder.tracking_data : [];
-          const initialTrack = { status: 'en_camino_recoger', date: new Date().toISOString(), message: 'Orden aceptada, en camino a recoger' };
-
-          const payload = {
-            status: 'En proceso',
-            last_collab_status: 'en_camino_recoger',
-            accepted_at: new Date().toISOString(),
-            tracking_data: [...currentTracking, initialTrack]
-          };
-          if (userId) {
-            payload.accepted_by = userId;
-            payload.assigned_to = userId;
-          }
-          console.log('[OrderManager] Fallback -> update payload', payload);
-          let updateQuery = supabaseConfig.client.from('orders').update(payload);
-          if (isNumeric) updateQuery = updateQuery.eq('supabase_seq_id', orderIdNum);
-          else updateQuery = updateQuery.eq('id', orderIdRaw);
-          console.log('[OrderManager] Fallback -> update filtro', { by: isNumeric ? 'supabase_seq_id' : 'id', value: isNumeric ? orderIdNum : orderIdRaw });
-          const { error: updErr } = await updateQuery;
-          if (updErr) throw updErr;
-
-          console.log(`[OrderManager] Fallback aplicado: orden #${isNumeric ? orderIdNum : orderIdRaw} aceptada/actualizada`);
-          this._toast('Orden aceptada mediante respaldo automático', 'success');
-          return { success: true, data: null, error: null };
-        } catch (fallbackError) {
-          console.error(`[OrderManager] Fallback de aceptación falló para orden #${orderIdNum}:`, {
-            message: fallbackError?.message,
-            code: fallbackError?.code,
-            details: fallbackError?.details
-          });
-          this._toast('No se pudo aplicar respaldo automático', 'error');
-        }
+      if (error) {
+        console.error('[OrderManager] RPC error accept_order', {
+          message: error.message, 
+          details: error.details, 
+          hint: error.hint, 
+          code: error.code
+        });
+        this._toast(`RPC error: ${error.message || 'falló'}. Aplicando fallback…`, 'warning');
+        return await this.actualizarEstadoPedido(orderId, 'en_camino_recoger', additionalData);
       }
 
-      return { success: false, error: error?.message || 'No se pudo aceptar la orden' };
+      console.log('[OrderManager] RPC accept_order OK', data);
+      this._toast('Orden aceptada por RPC correctamente', 'success');
+      return { success: true, data, error: null };
+    } catch (error) {
+      console.error('[OrderManager] Exception en RPC accept_order:', error);
+      this._toast(`Error inesperado: ${error.message || 'falló'}. Aplicando fallback…`, 'warning');
+      return await this.actualizarEstadoPedido(orderId, 'en_camino_recoger', additionalData);
     }
   },
 
@@ -179,43 +150,157 @@ const OrderManager = {
   async actualizarEstadoPedido(orderId, newStatus, additionalData = {}) {
     console.log(`[OrderManager] Iniciando actualización para orden #${orderId} a estado "${newStatus}"`);
 
-    const updatePayload = { ...additionalData, last_collab_status: newStatus };
+    const normalizedId = this._normalizeOrderId(orderId);
+    const isNumeric = Number.isFinite(normalizedId);
+    const candidates = [];
 
-    // Lógica de negocio centralizada:
-    // Si el colaborador marca "entregado", el estado general de la orden pasa a "Completado".
-    if (newStatus === 'entregado') {
-      updatePayload.status = 'Completado';
-      updatePayload.completed_at = new Date().toISOString();
-      if (additionalData.collaborator_id) {
-        updatePayload.completed_by = additionalData.collaborator_id;
+    // Construir candidatos de filtro por orden de preferencia
+    if (isNumeric) {
+      // Primero el ID primario
+      candidates.push({ col: 'id', val: normalizedId });
+      // Luego secuencia de supabase si existe
+      candidates.push({ col: 'supabase_seq_id', val: normalizedId });
+      // Por último short_id como texto
+      candidates.push({ col: 'short_id', val: String(normalizedId) });
+    } else if (typeof orderId === 'string') {
+      const maybeNum = Number(orderId);
+      if (Number.isFinite(maybeNum)) {
+        candidates.push({ col: 'id', val: maybeNum });
+        candidates.push({ col: 'supabase_seq_id', val: maybeNum });
+      }
+      // Considerar short_id tal cual (texto)
+      candidates.push({ col: 'short_id', val: orderId });
+    } else if (orderId && typeof orderId === 'object') {
+      if (Number.isFinite(orderId.id)) candidates.push({ col: 'id', val: orderId.id });
+      if (Number.isFinite(orderId.supabase_seq_id)) candidates.push({ col: 'supabase_seq_id', val: orderId.supabase_seq_id });
+      if (typeof orderId.short_id === 'string') candidates.push({ col: 'short_id', val: orderId.short_id });
+    }
+
+    console.log('[OrderManager] Candidatos de filtro:', candidates);
+
+    // Sanitizar additionalData - solo incluir campos válidos de la tabla orders
+    const allowedFields = [
+      'status', 'assigned_to', 'assigned_at', 'completed_at',
+      'completed_by', 'tracking_data'
+    ];
+    const sanitizedData = {};
+    Object.keys(additionalData).forEach(key => {
+      if (allowedFields.includes(key)) {
+        sanitizedData[key] = additionalData[key];
+      }
+    });
+
+    // Mapear collaborator_id a campos correctos según el estado
+    if (additionalData.collaborator_id) {
+      if (newStatus === 'entregado') {
+        sanitizedData.completed_by = additionalData.collaborator_id;
+      } else {
+        sanitizedData.assigned_to = additionalData.collaborator_id;
       }
     }
-    // Si el colaborador inicia el trabajo, el estado general pasa a "En proceso".
-    else if (['en_camino_recoger', 'cargando', 'en_camino_entregar'].includes(newStatus)) {
-      updatePayload.status = 'En proceso';
+
+    const updatePayload = { ...sanitizedData };
+
+    // Lógica de negocio centralizada:
+    // Mapear estados de acciones del colaborador
+    if (newStatus === 'entregado') {
+      updatePayload.status = 'Completada';
+      updatePayload.completed_at = new Date().toISOString();
+    }
+    else if (newStatus === 'en_camino_recoger') {
+      updatePayload.status = 'Aceptada';
+      updatePayload.assigned_at = new Date().toISOString();
+    }
+    else if (['cargando', 'en_camino_entregar'].includes(newStatus)) {
+      updatePayload.status = 'En curso';
+    }
+    // Mapear estados cuando la UI del dueño usa valores finales
+    else if (['Completada', 'completada'].includes(newStatus)) {
+      updatePayload.status = 'Completada';
+      updatePayload.completed_at = new Date().toISOString();
+    }
+    else if (['Aceptada', 'aceptada'].includes(newStatus)) {
+      updatePayload.status = 'Aceptada';
+      updatePayload.assigned_at = new Date().toISOString();
+    }
+    else if (['En curso', 'en curso'].includes(newStatus)) {
+      updatePayload.status = 'En curso';
+    }
+    else if (['Cancelado', 'cancelado'].includes(newStatus)) {
+      updatePayload.status = 'Cancelado';
+    }
+    else if (['Pendiente', 'pendiente'].includes(newStatus)) {
+      updatePayload.status = 'Pendiente';
     }
 
     try {
-      // Obtener tracking_data actual
-      const { data: currentOrder, error: fetchError } = await supabaseConfig.client
-        .from('orders')
-        .select('tracking_data')
-        .eq('id', orderId)
-        .single();
+      // Obtener tracking_data actual probando secuencialmente los candidatos
+      let usedFilter = null;
+      let currentOrder = null;
 
-      if (fetchError) throw new Error(`Error al obtener el pedido: ${fetchError.message}`);
+      for (const cand of candidates) {
+        console.log('[OrderManager] Fetch intento con:', cand);
+        const { data, error } = await supabaseConfig.client
+          .from('orders')
+          .select('tracking_data')
+          .eq(cand.col, cand.val)
+          .maybeSingle();
 
-      const newTrackingEntry = { status: newStatus, date: new Date().toISOString() };
+        if (error) {
+          console.warn('[OrderManager] No encontrado con filtro:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+            filter: cand
+          });
+          continue;
+        }
+
+        if (data) {
+          usedFilter = cand;
+          currentOrder = data;
+          break;
+        }
+      }
+
+      if (!currentOrder || !usedFilter) {
+        throw new Error('No se encontró la orden con ninguno de los filtros proporcionados.');
+      }
+
+      const newTrackingEntry = { 
+        status: newStatus, 
+        date: new Date().toISOString(),
+        description: newStatus === 'en_camino_recoger'
+          ? 'Orden aceptada, en camino a recoger'
+          : newStatus === 'cargando'
+            ? 'Carga en proceso'
+            : newStatus === 'en_camino_entregar'
+              ? 'En ruta hacia entrega'
+              : newStatus === 'entregado'
+                ? 'Pedido entregado'
+                : undefined
+      };
       const currentTracking = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
       updatePayload.tracking_data = [...currentTracking, newTrackingEntry];
 
-      // Realizar la actualización
+      console.log('[OrderManager] Update payload:', updatePayload);
+
+      // Realizar la actualización usando el filtro que devolvió datos
       const { error: updateError } = await supabaseConfig.client
         .from('orders')
         .update(updatePayload)
-        .eq('id', orderId);
+        .eq(usedFilter.col, usedFilter.val);
 
-      if (updateError) throw new Error(`Error al actualizar en Supabase: ${updateError.message}`);
+      if (updateError) {
+        console.error('[OrderManager] Error al actualizar orden:', {
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint,
+          code: updateError.code
+        });
+        throw new Error(`Error al actualizar en Supabase: ${updateError.message}`);
+      }
 
       console.log(`[OrderManager] Orden #${orderId} actualizada exitosamente en la BD.`);
 

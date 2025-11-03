@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       console.log('[Historial] Iniciando carga de solicitudes finalizadas y canceladas...');
       
-      // Primera consulta: Obtener órdenes con status = 'Completado'
+      // Primera consulta: Obtener órdenes con status = 'Completada'
       const { data: completedData, error: completedError } = await supabaseConfig.client
         .from('orders')
         .select(`
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           service:services(name),
           profiles:completed_by(full_name)
         `)
-        .eq('status', 'Completado')
+        .eq('status', 'Completada')
         .order('completed_at', { ascending: false });
       
       if (completedError) {
@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Verificar si hay órdenes con estado completado pero sin fecha de completado
       const ordersWithoutCompletedAt = allHistoryOrders.filter(
-        order => order.status === 'Completado' && !order.completed_at
+        order => order.status === 'Completada' && !order.completed_at
       );
       
       if (ordersWithoutCompletedAt.length > 0) {
@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           event: '*', 
           schema: 'public', 
           table: 'orders',
-          filter: 'status=in.(Completado,Cancelado)'
+          filter: 'status=in.(Completada,Cancelado)'
         }, 
         (payload) => {
           console.log('[Historial] Cambio en tiempo real detectado:', payload);

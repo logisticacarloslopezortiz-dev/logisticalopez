@@ -104,7 +104,7 @@ async function loadAdminInfo() {
 function filterOrders() {
   // YA NO HAY FILTROS EN LA UI. Se aplica el filtro por defecto de no mostrar completados/cancelados.
   filteredOrders = (allOrders || []).filter(order => {
-    const matchesStatus = !['Completado', 'Cancelado'].includes(order.status);
+    const matchesStatus = !['Completada', 'Cancelado'].includes(order.status);
     return matchesStatus;
   });
 
@@ -183,10 +183,17 @@ function renderOrders(){
   filteredOrders.forEach(o=>{
     const statusColor = {
       'Pendiente': 'bg-yellow-100 text-yellow-800',
-      'En proceso': 'bg-blue-100 text-blue-800',
-      'Completado': 'bg-green-100 text-green-800',
+      'Aceptada': 'bg-blue-100 text-blue-800',
+      'En curso': 'bg-purple-100 text-purple-800',
+      'Completada': 'bg-green-100 text-green-800',
       'Cancelado': 'bg-red-100 text-red-800'
     }[o.status] || 'bg-gray-100 text-gray-800';
+
+    const displayStatus = (
+      o.status === 'Aceptada' ? 'En proceso' :
+      o.status === 'Completada' ? 'Completado' :
+      o.status
+    );
 
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50 transition-colors';
@@ -218,8 +225,9 @@ function renderOrders(){
       <td class="px-6 py-4 whitespace-nowrap">
         <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">
           <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-          <option value="En proceso" ${o.status === 'En proceso' ? 'selected' : ''}>En Proceso</option>
-          <option value="Completado" ${o.status === 'Completado' ? 'selected' : ''}>Completado</option>
+          <option value="Aceptada" ${o.status === 'Aceptada' ? 'selected' : ''}>En Proceso</option>
+          <option value="En curso" ${o.status === 'En curso' ? 'selected' : ''}>En curso</option>
+          <option value="Completada" ${o.status === 'Completada' ? 'selected' : ''}>Completado</option>
           <option value="Cancelado" ${o.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
         </select>
         ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
@@ -242,10 +250,16 @@ function renderOrders(){
     filteredOrders.forEach(o => {
       const badge = {
         'Pendiente': 'bg-yellow-100 text-yellow-800',
-        'En proceso': 'bg-blue-100 text-blue-800',
-        'Completado': 'bg-green-100 text-green-800',
+        'Aceptada': 'bg-blue-100 text-blue-800',
+        'En curso': 'bg-purple-100 text-purple-800',
+        'Completada': 'bg-green-100 text-green-800',
         'Cancelado': 'bg-red-100 text-red-800'
       }[o.status] || 'bg-gray-100 text-gray-800';
+      const displayStatusMobile = (
+        o.status === 'Aceptada' ? 'En proceso' :
+        o.status === 'Completada' ? 'Completado' :
+        o.status
+      );
       const card = document.createElement('div');
       card.className = 'bg-white rounded-lg shadow p-4';
       card.innerHTML = `
@@ -255,7 +269,7 @@ function renderOrders(){
             <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
             <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
           </div>
-          <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
+          <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${displayStatusMobile}</span>
         </div>
         <div class="grid grid-cols-2 gap-3 text-sm mb-3">
           <div>
@@ -347,8 +361,8 @@ function showServiceDetails(orderId) {
 function updateResumen(){
   const today = new Date().toISOString().split('T')[0];
   const todayOrders = allOrders.filter(o => o.date === today);
-  const completedOrders = allOrders.filter(o => o.status === 'Completado').length;
-  const pendingOrders = allOrders.filter(o => !['Completado', 'Cancelado'].includes(o.status));
+  const completedOrders = allOrders.filter(o => o.status === 'Completada').length;
+  const pendingOrders = allOrders.filter(o => !['Completada', 'Cancelado'].includes(o.status));
   const urgentOrders = pendingOrders.filter(o => {
     const serviceTime = new Date(`${o.date}T${o.time || '00:00'}`);
     const now = new Date();
@@ -532,25 +546,21 @@ async function assignSelectedCollaborator(){
     notifications.error('Colaborador no encontrado.'); 
     return; 
   }
-
   const updateData = {
-    assigned_to: collaboratorId, // ✅ CORREGIDO: Asignar por ID (UUID)
-    assigned_at: new Date().toISOString(),
-    status: 'En proceso' // Cambio automático a "En proceso"
+    assigned_to: collaboratorId,
+    assigned_at: new Date().toISOString()
   };
 
-  const { data, error } = await supabaseConfig.client
-    .from('orders')
-    .update(updateData)
-    .eq('id', selectedOrderIdForAssign);
+  // Usar OrderManager para centralizar lógica y tracking
+  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, 'en_camino_recoger', updateData);
 
-  if (error) {
-    notifications.error('Error de asignación', error.message);
+  if (!success) {
+    notifications.error('Error de asignación', error?.message || 'No se pudo asignar el pedido.');
   } else {
     // Actualizar el array local para reflejar el cambio inmediatamente
     const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
     if (orderIndex !== -1) {
-      allOrders[orderIndex] = { ...allOrders[orderIndex], ...updateData };
+      allOrders[orderIndex] = { ...allOrders[orderIndex], ...updateData, status: 'Aceptada' };
     }
     filterOrders();
     notifications.success(`Pedido asignado a ${col.name} y marcado como "En proceso".`);

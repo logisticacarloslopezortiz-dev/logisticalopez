@@ -191,21 +191,21 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Textos según el estado
         const statusMessages = {
-            'pendiente': 'Tu solicitud está pendiente de confirmación',
-            'confirmado': 'Tu solicitud ha sido confirmada',
-            'asignado': 'Un colaborador ha sido asignado a tu solicitud',
-            'en_ruta_recoger': 'El colaborador está en camino a recoger',
-            'recogido': 'El servicio ha sido recogido',
-            'en_ruta_entrega': 'En camino a la entrega',
-            'completado': 'Tu servicio ha sido completado exitosamente',
-            'Completado': 'Tu servicio ha sido completado exitosamente',
-            'En proceso': 'Tu servicio está en proceso',
-            'cancelado': 'Tu solicitud ha sido cancelada'
+            'Pendiente': 'Tu solicitud está pendiente de confirmación',
+            'Aceptada': 'Un colaborador ha sido asignado a tu solicitud',
+            'En curso': 'Tu servicio está en proceso',
+            'Completada': 'Tu servicio ha sido completado exitosamente',
+            'Cancelado': 'Tu solicitud ha sido cancelada',
+            // Estados de acción del colaborador
+            'en_camino_recoger': 'El colaborador está en camino a recoger',
+            'cargando': 'El colaborador está cargando el servicio',
+            'en_camino_entregar': 'En camino a la entrega',
+            'entregado': 'Tu servicio ha sido entregado'
         };
         
         const title = '¡Actualización de tu solicitud!';
         const options = {
-            body: statusMessages[status] || `Estado actualizado a: ${status}`,
+            body: statusMessages[status] || `Estado actualizado a: ${displayStatusText(status)}`,
             icon: 'img/logo-192.png',
             badge: 'img/badge-96.png',
             vibrate: [200, 100, 200]
@@ -234,7 +234,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('orderDate').textContent = `Creada el ${new Date(order.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}`;
         
         const statusBadge = document.getElementById('orderStatus');
-        statusBadge.textContent = order.status;
+        const statusText = displayStatusText(order.status);
+        statusBadge.textContent = statusText;
         statusBadge.className = 'status-badge ' + getStatusClass(order.status);
 
         // Poblar Detalles
@@ -274,7 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Función para añadir eventos evitando duplicados por nombre
         const addEvent = (name, date) => {
             if (name && date && !timelineEvents.has(name)) {
-                timelineEvents.set(name, new Date(date));
+                const pretty = prettyTimelineLabel(name);
+                timelineEvents.set(pretty, new Date(date));
             }
         };
 
@@ -367,22 +369,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getStatusClass(status) {
+        const mapped = displayStatusText(status);
         const statusClasses = {
-            'pendiente': 'status-pending',
-            'confirmado': 'status-confirmed',
-            'asignado': 'status-assigned',
+            'Pendiente': 'status-pending',
+            'Asignado': 'status-assigned',
             'En proceso': 'status-in-progress',
             'Completado': 'status-completed',
-            'completado': 'status-completed',
-            'cancelado': 'status-canceled'
+            'Cancelado': 'status-canceled'
         };
-        return statusClasses[status] || 'status-pending';
+        return statusClasses[mapped] || 'status-pending';
+    }
+
+    function displayStatusText(status) {
+        if (!status) return 'Pendiente';
+        if (status === 'Aceptada') return 'Asignado';
+        if (status === 'En curso') return 'En proceso';
+        if (status === 'Completada') return 'Completado';
+        if (status === 'Pendiente') return 'Pendiente';
+        if (status === 'Cancelado') return 'Cancelado';
+        const actionMap = {
+            'en_camino_recoger': 'En camino a recoger',
+            'cargando': 'Cargando',
+            'en_camino_entregar': 'En camino a entregar',
+            'entregado': 'Entregado'
+        };
+        return actionMap[status] || status;
+    }
+
+    function prettyTimelineLabel(raw) {
+        const map = {
+            'en_camino_recoger': 'En camino a recoger',
+            'cargando': 'Cargando',
+            'en_camino_entregar': 'En camino a entregar',
+            'entregado': 'Entregado',
+            'Aceptada': 'Servicio Asignado',
+            'Completada': 'Servicio Completado'
+        };
+        return map[raw] || raw;
     }
 
     // --- Inicialización ---
     async function init() {
         const params = new URLSearchParams(window.location.search);
-        const orderIdFromUrl = params.get('order');
+        const orderIdFromUrl = params.get('order') || params.get('codigo');
 
         if (orderIdFromUrl) {
             orderIdInput.value = orderIdFromUrl;
