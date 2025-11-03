@@ -600,10 +600,45 @@ async function subscribeUserToPush(orderId) {
 
     const applicationServerKey = raw;
     console.log("applicationServerKey generada y validada correctamente");
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey
-    });
+
+    // Si existe una suscripción previa, intentar desuscribir para evitar InvalidStateError
+    let existing = null;
+    try {
+      existing = await registration.pushManager.getSubscription();
+      if (existing) {
+        console.log('[Push] Existe suscripción previa, intentando desuscribir...');
+        await existing.unsubscribe();
+        console.log('[Push] Suscripción previa desuscrita.');
+      }
+    } catch (preErr) {
+      console.warn('[Push] No se pudo desuscribir la suscripción previa:', preErr);
+    }
+
+    let subscription = null;
+    try {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey
+      });
+    } catch (subErr) {
+      // Manejar caso de clave VAPID diferente: desuscribir y reintentar
+      if (String(subErr?.message || '').includes('applicationServerKey') || String(subErr?.name || '') === 'InvalidStateError') {
+        try {
+          existing = await registration.pushManager.getSubscription();
+          if (existing) {
+            console.log('[Push] Reintento: desuscribiendo suscripción conflictiva...');
+            await existing.unsubscribe();
+          }
+        } catch (_) {}
+        // Reintentar suscripción con la nueva clave
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey
+        });
+      } else {
+        throw subErr;
+      }
+    }
     
     // Guardar suscripción en Supabase
     // Preferir tabla push_subscriptions por usuario; si no hay usuario, guardar en la orden como fallback
@@ -617,8 +652,8 @@ async function subscribeUserToPush(orderId) {
           user_id: userId,
           endpoint: subscription?.endpoint,
           keys: {
-            p256dh: subscription?.keys?.p256dh,
-            auth: subscription?.keys?.auth
+            p256dh: subscription?.keys?.p256dh || (subscription?.toJSON?.().keys?.p256dh),
+            auth: subscription?.keys?.auth || (subscription?.toJSON?.().keys?.auth)
           }
         };
         // Upsert para evitar duplicados por (user_id, endpoint) cuando el esquema lo soporta
@@ -634,7 +669,7 @@ async function subscribeUserToPush(orderId) {
         // Fallback: guardar en la orden para clientes anónimos
         await supabaseConfig.client
           .from('orders')
-          .update({ push_subscription: subscription })
+          .update({ notification_subscription: subscription })
           .eq('id', orderId);
         console.log('Suscripción guardada en la orden (anónimo):', orderId);
       }

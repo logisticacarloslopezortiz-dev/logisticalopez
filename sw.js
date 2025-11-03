@@ -22,6 +22,7 @@ const urlsToCache = [
   '/js/notifications.js',
   '/js/pwa.js',
   '/img/1vertical.png',
+  '/img/favicon.ico',
   '/manifest.json'
 ];
 
@@ -61,13 +62,26 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Si se encuentra en caché, se devuelve. Si no, se busca en la red.
-        return response || fetch(event.request);
-      })
-  );
+  event.respondWith((async () => {
+    const cached = await caches.match(event.request);
+    try {
+      const network = await fetch(event.request);
+      // Devuelve respuesta de red si existe; si no, fallback a caché
+      return network || cached || new Response('Service Unavailable', { status: 503 });
+    } catch (e) {
+      // En modo offline o si la red falla, devolver caché si existe
+      if (cached) return cached;
+      // Último recurso: respuesta 503 para evitar errores no capturados
+      return new Response('Service Unavailable', { status: 503 });
+    }
+  })());
+});
+
+// Permite que la página pida saltar waiting (desde pwa.js)
+self.addEventListener('message', (event) => {
+  if (event?.data?.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
 });
 
 
