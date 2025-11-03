@@ -122,6 +122,33 @@ const OrderManager = {
     }
   },
 
+  /**
+   * Guarda el monto cobrado y método de pago usando RPC segura.
+   * Devuelve el registro de la orden actualizado o lanza error.
+   */
+  async setOrderAmount(orderId, amount, method, collaboratorId) {
+    try {
+      if (!supabaseConfig?.client) throw new Error('Supabase client no configurado');
+      const rpcPayload = {
+        order_id: Number(orderId),
+        amount: Number(amount),
+        method: method,
+        collaborator_id: collaboratorId,
+      };
+      console.debug('[OrderManager.setOrderAmount] RPC set_order_amount payload:', rpcPayload);
+      const { data, error } = await supabaseConfig.client.rpc('set_order_amount', rpcPayload);
+      if (error) {
+        console.error('[OrderManager.setOrderAmount] RPC error:', error);
+        throw error;
+      }
+      return data;
+    } catch (err) {
+      console.error('[OrderManager.setOrderAmount] Error:', err);
+      this._toast('No se pudo guardar el monto.');
+      throw err;
+    }
+  },
+
    /**
     * Cancela un trabajo activo marcándolo como Cancelado
     */

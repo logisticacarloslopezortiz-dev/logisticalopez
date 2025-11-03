@@ -830,28 +830,20 @@ document.addEventListener('DOMContentLoaded', function() {
       notifications.warning('Dato requerido', 'Debes ingresar un monto.');
       return;
     }
-
-    const { data, error } = await supabaseConfig.client
-      .from('orders')
-      .update({
-        monto_cobrado: parseFloat(monto),
-        metodo_pago: metodo
-      })
-      .eq('id', selectedOrderIdForPrice)
-      .select()
-      .single();
-
-    if (error) {
-      notifications.error('Error al guardar', error.message);
-    } else {
+    try {
+      // Preferir RPC para evitar errores de RLS/406
+      const updated = await OrderManager.setOrderAmount(selectedOrderIdForPrice, monto, metodo);
       const orderIndex = allOrders.findIndex(o => o.id == selectedOrderIdForPrice);
-      if (orderIndex !== -1) {
-        allOrders[orderIndex].monto_cobrado = data.monto_cobrado;
-        allOrders[orderIndex].metodo_pago = data.metodo_pago;
+      if (orderIndex !== -1 && updated) {
+        allOrders[orderIndex].monto_cobrado = updated.monto_cobrado ?? parseFloat(monto);
+        allOrders[orderIndex].metodo_pago = updated.metodo_pago ?? metodo;
       }
       renderOrders();
       notifications.success('Éxito', 'El monto y método de pago han sido actualizados.');
       closePriceModal();
+    } catch (error) {
+      console.error('[savePriceData] Error al guardar monto por RPC:', error);
+      notifications.error('Error al guardar', error.message || 'No se pudo guardar el monto');
     }
   }
 
