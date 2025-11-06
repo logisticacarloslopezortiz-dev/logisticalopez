@@ -876,9 +876,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Crear mensaje personalizado con información de la orden
-    const serviceName = order.service?.name || order.service || 'servicio solicitado';
-    const orderRef = order.short_id || order.id;
-    const message = `¡Hola ${order.name}! 👋\n\nTe contacto sobre tu orden #${orderRef} de ${serviceName}.\n\n¿En qué puedo ayudarte?`;
+    const message = `👋 ¡Hola, ${order.name}! Somos del equipo de Logística López Ortiz 🚛.\nQueríamos informarle que recibimos su solicitud y estamos revisando algunos detalles importantes antes de proceder.\nEn breve nos pondremos en contacto con más información.\n¡Gracias por elegirnos! 💼`;
     
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');

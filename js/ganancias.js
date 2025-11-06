@@ -21,7 +21,7 @@ async function loadAndProcessOrders() {
         const { data, error } = await supabaseConfig.client
   .from('orders')
   .select('id, completed_at, monto_cobrado, service:services(name), vehicle:vehicles(name), completed:profiles!orders_completed_by_fkey(full_name)')
-  .eq('status', 'Completado')
+  .in('status', ['Completado', 'Completada'])
   .not('completed_at', 'is', null);
 
 
@@ -51,7 +51,7 @@ function updateSummaryCards() {
     let monthEarnings = 0;
 
     allCompletedOrders.forEach(order => {
-        const price = parsePrice(order.estimated_price);
+        const price = order.monto_cobrado || 0;
         totalEarnings += price;
 
         const completedDate = new Date(order.completed_at);
@@ -81,7 +81,7 @@ function getChartData() {
 
     allCompletedOrders.forEach(order => {
         const date = new Date(order.completed_at);
-        const price = parsePrice(order.estimated_price);
+        const price = order.monto_cobrado || 0;
         let key;
 
         if (currentPeriod === 'day') {
@@ -230,7 +230,7 @@ function exportToExcel() {
         'Servicio': order.service?.name || 'N/A',
         'Vehículo': order.vehicle?.name || 'N/A',
         'Completado por': order.completed?.full_name || 'N/A',
-        'Precio': parsePrice(order.estimated_price)
+        'Precio': order.monto_cobrado || 0
     }));
 
     // Crear la hoja de cálculo
