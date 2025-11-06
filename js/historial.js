@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
     } else {
       tableBody.innerHTML = filteredOrders.map(order => {
-        const completadoPorNombre = order.completed_by_full_name || 'No disponible';
+        const completadoPorNombre = order.profiles?.full_name || 'No disponible';
         const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleDateString('es-ES', {
           year: 'numeric',
           month: 'short',
@@ -113,55 +113,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Carga inicial de datos
   const loadHistory = async () => {
     try {
-      console.log('[Historial] Iniciando carga de solicitudes finalizadas y canceladas...');
-      
-      // Primera consulta: Obtener órdenes con status = 'Completada'
-      const { data: completedData, error: completedError } = await supabaseConfig.client
-        .from('orders_with_client')
-        .select('*')
-        .eq('status', 'Completada')
+      const { data, error } = await supabaseConfig.client
+        .from('orders')
+        .select(`
+          *,
+          client:client_id (name),
+          service:service_id (name),
+          profiles:completed_by (full_name)
+        `)
+        .in('status', ['Completada', 'Cancelado'])
         .order('completed_at', { ascending: false });
-      
-      if (completedError) {
-        throw completedError;
-      }
-      
-      console.log(`[Historial] Encontradas ${completedData?.length || 0} órdenes completadas`);
-      
-      // Segunda consulta: Obtener órdenes con status = 'Cancelado'
-      const { data: canceledData, error: canceledError } = await supabaseConfig.client
-        .from('orders_with_client')
-        .select('*')
-        .eq('status', 'Cancelado')
-        .order('completed_at', { ascending: false });
-      
-      if (canceledError) {
-        throw canceledError;
-      }
-      
-      console.log(`[Historial] Encontradas ${canceledData?.length || 0} órdenes canceladas`);
-      
-      // Combinar resultados
-      allHistoryOrders = [...(completedData || []), ...(canceledData || [])];
-      
-      // Ordenar por fecha de completado (más reciente primero)
-      allHistoryOrders.sort((a, b) => {
-        const dateA = a.completed_at ? new Date(a.completed_at) : new Date(0);
-        const dateB = b.completed_at ? new Date(b.completed_at) : new Date(0);
-        return dateB - dateA;
-      });
-      
-      console.log(`[Historial] Total de órdenes cargadas: ${allHistoryOrders.length}`);
-      
-      // Verificar si hay órdenes con estado completado pero sin fecha de completado
-      const ordersWithoutCompletedAt = allHistoryOrders.filter(
-        order => order.status === 'Completada' && !order.completed_at
-      );
-      
-      if (ordersWithoutCompletedAt.length > 0) {
-        console.warn(`[Historial] Hay ${ordersWithoutCompletedAt.length} órdenes con estado Completado pero sin fecha de completado`);
-      }
-      
+
+      if (error) throw error;
+
+      allHistoryOrders = data.map(o => ({
+        ...o,
+        client_name: o.client?.name || o.name,
+        service_name: o.service?.name || 'N/A',
+      }));
+
       filterAndRender();
     } catch (error) {
       console.error('[Historial] Error al cargar el historial:', error);
