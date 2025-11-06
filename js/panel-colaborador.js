@@ -868,11 +868,13 @@ function filterAndRender(){
   // Función para órdenes pendientes (no completadas)
   const visibleForCollab = (o) => {
     if (!state.collabSession) return false;
-  // ✅ CORRECCIÓN: Mostrar solo la orden asignada activamente a este colaborador.
-    return o.assigned_to === state.collabSession.user.id &&
-           o.status !== 'Completado' &&
-           o.status !== 'Cancelado' &&
-           o.last_collab_status !== 'entregado';
+    // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador que NO estén completadas.
+    const isPendingAndUnassigned = o.status === 'Pendiente' && !o.assigned_to;
+    const isAssignedToMe = o.assigned_to === state.collabSession.user.id &&
+                          o.status !== 'Completado' &&
+                          o.status !== 'Cancelado' &&
+                          o.last_collab_status !== 'entregado';
+    return isPendingAndUnassigned || isAssignedToMe;
   };
 
   // Función para órdenes del historial (completadas)
