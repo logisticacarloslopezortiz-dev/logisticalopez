@@ -516,7 +516,14 @@ async function openAssignModal(orderId){
   const invoiceBtn = document.getElementById('generateInvoiceBtn');
   const cancelBtn = document.getElementById('assignCancelBtn');
   const deleteBtn = document.getElementById('deleteOrderBtn');
-  if (whatsappBtn) whatsappBtn.onclick = () => openWhatsApp(order);
+
+  // ✅ CORRECCIÓN: Asignar evento con addEventListener para mayor fiabilidad.
+  if (whatsappBtn) {
+    // Eliminar cualquier listener anterior para evitar duplicados
+    whatsappBtn.replaceWith(whatsappBtn.cloneNode(true));
+    document.getElementById('whatsappBtn').addEventListener('click', () => openWhatsApp(order));
+  }
+
   if (invoiceBtn) invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
   if (cancelBtn) cancelBtn.onclick = () => closeAssignModal();
   if (deleteBtn) deleteBtn.onclick = () => deleteSelectedOrder();

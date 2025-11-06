@@ -1292,8 +1292,13 @@ function setupEventListeners() {
     });
   }
 
-  document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    supabaseConfig.client.auth.signOut();
+  document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+    // ✅ MEJORA: Limpieza completa de sesión para el colaborador.
+    const { error } = await supabaseConfig.client.auth.signOut();
+    localStorage.clear(); // Eliminar todos los datos para evitar fugas.
+    if (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
     window.location.href = 'login-colaborador.html';
   });
 

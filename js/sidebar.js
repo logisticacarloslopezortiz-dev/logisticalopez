@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userRole = localStorage.getItem('userRole');
     if (userRole !== 'administrador') {
         console.error('Acceso denegado. Se requiere rol de administrador.');
+        localStorage.clear(); // Limpieza completa para evitar fugas de datos
         await supabaseConfig.client.auth.signOut();
         window.location.href = '/login.html';
         return;
@@ -141,9 +142,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         logoutButton.addEventListener('click', async () => {
             const { error } = await supabaseConfig.client.auth.signOut();
             
-            // Limpiar datos de sesión del localStorage
-            localStorage.removeItem('userRole');
-            localStorage.removeItem('userData');
+            // ✅ MEJORA: Limpieza completa de localStorage para asegurar que no queden datos de la sesión anterior.
+            localStorage.clear();
 
             if (error) {
                 console.error('Error al cerrar sesión:', error);
