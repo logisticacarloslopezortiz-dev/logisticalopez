@@ -329,26 +329,14 @@
               </h3>
 
               <!-- Contenedor del Mapa Dinámico -->
-              <div id="activeJobMap" class="w-full h-64 rounded-xl overflow-hidden border-2 border-gray-200 shadow-lg mb-4 bg-gray-200">
-                <!-- El mapa se renderizará aquí vía JS -->
-              </div>
-              <p id="activeJobMapHint" class="text-xs text-center text-gray-500 -mt-2 mb-4">Cargando mapa...</p>
-
-              <!-- Botones de acción -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button id="viewLocationBtn" 
-                        class="flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold rounded-2xl hover:from-blue-600 hover:to-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-                        style="font-family: 'Poppins', sans-serif;">
-                  <i data-lucide="map-pin" class="w-5 h-5"></i>
-                  Ver Origen
-                </button>
-                
-                <button id="viewRouteBtn" 
-                        class="flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-2xl hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-                        style="font-family: 'Poppins', sans-serif;">
-                  <i data-lucide="route" class="w-5 h-5"></i>
-                  Ver Ruta
-                </button>
+              <div id="map-container" class="w-full h-64 rounded-xl overflow-hidden border-2 border-gray-200 shadow-lg mb-4 bg-gray-200">
+                <iframe
+                  width="100%"
+                  height="100%"
+                  frameborder="0" style="border:0"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3782.990595243904!2d-70.40822698509285!3d18.46368998740638!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8eaf5a3a8b4b4e7b%3A0x4a4b4e7b4a4b4e7b!2sSanto%20Domingo!5e0!3m2!1ses!2sdo!4v1633020000000!5m2!1ses!2sdo"
+                  allowfullscreen="">
+                </iframe>
               </div>
             </div>
             <!-- Evidencia Fotográfica -->
