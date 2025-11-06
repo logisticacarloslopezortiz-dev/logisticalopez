@@ -1,39 +1,72 @@
--- Function: public.set_order_amount
--- Purpose: Update monto_cobrado and metodo_pago for an order via SECURITY DEFINER to bypass RLS safely.
--- Note: Grant execute to role 'authenticated'.
+-- ==========================================================
+-- ✅ Function: public.set_order_amount
+-- ----------------------------------------------------------
+-- Purpose:
+--  Actualiza monto_cobrado y metodo_pago de una orden.
+--  - Administradores pueden editar cualquier orden.
+--  - Colaboradores solo las órdenes asignadas a ellos.
+--  - Ejecuta con SECURITY DEFINER para bypass RLS de forma segura.
+-- ==========================================================
 
-create or replace function public.set_order_amount(
+CREATE OR REPLACE FUNCTION public.set_order_amount(
   order_id integer,
   amount numeric,
   method text,
-  collaborator_id uuid default null
+  collaborator_id uuid DEFAULT NULL
 )
-returns json
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
   v_order record;
-begin
-  update public.orders
-  set monto_cobrado = amount,
-      metodo_pago = method
-  where id = order_id
-  returning id, short_id, monto_cobrado, metodo_pago into v_order;
+  user_role text;
+  is_admin boolean;
+BEGIN
+  -- 1️⃣ Verificar rol del usuario autenticado
+  SELECT role INTO user_role
+  FROM public.profiles
+  WHERE id = auth.uid();
 
-  if not found then
-    raise exception 'Order % not found' using errcode = 'P0002';
-  end if;
+  is_admin := (user_role = 'admin');
 
-  return json_build_object(
+  -- 2️⃣ Actualización según rol
+  IF is_admin THEN
+    UPDATE public.orders
+    SET 
+      monto_cobrado = amount,
+      metodo_pago = NULLIF(method, '')
+    WHERE id = order_id
+    RETURNING id, short_id, monto_cobrado, metodo_pago
+    INTO v_order;
+  ELSE
+    UPDATE public.orders
+    SET 
+      monto_cobrado = amount,
+      metodo_pago = NULLIF(method, '')
+    WHERE id = order_id
+      AND (assigned_to = collaborator_id OR assigned_to = auth.uid())
+    RETURNING id, short_id, monto_cobrado, metodo_pago
+    INTO v_order;
+  END IF;
+
+  -- 3️⃣ Validar resultado
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Orden no encontrada o sin autorización' 
+      USING errcode = 'P0002';
+  END IF;
+
+  -- 4️⃣ Retornar objeto JSON con los campos actualizados
+  RETURN json_build_object(
     'id', v_order.id,
     'short_id', v_order.short_id,
     'monto_cobrado', v_order.monto_cobrado,
     'metodo_pago', v_order.metodo_pago
   );
-end;
+END;
 $$;
 
-revoke all on function public.set_order_amount(integer, numeric, text, uuid) from public;
-grant execute on function public.set_order_amount(integer, numeric, text, uuid) to authenticated;
+-- 🔒 Permisos seguros
+REVOKE ALL ON FUNCTION public.set_order_amount(integer, numeric, text, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.set_order_amount(integer, numeric, text, uuid) TO authenticated;

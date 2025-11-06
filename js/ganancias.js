@@ -19,10 +19,11 @@ function parsePrice(priceString) {
 async function loadAndProcessOrders() {
     try {
         const { data, error } = await supabaseConfig.client
-            .from('orders')
-            .select('id, completed_at, estimated_price, service:services(name), vehicle:vehicles(name), completed:profiles!orders_completed_by_fkey(full_name)')
-            .eq('status', 'Completado')
-            .not('completed_at', 'is', null);
+  .from('orders')
+  .select('id, completed_at, monto_cobrado, service:services(name), vehicle:vehicles(name), completed:profiles!orders_completed_by_fkey(full_name)')
+  .eq('status', 'Completado')
+  .not('completed_at', 'is', null);
+
 
         if (error) throw error;
 
