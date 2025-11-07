@@ -116,7 +116,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       console.log('[Historial] Iniciando carga de solicitudes finalizadas y canceladas...');
 
-      // ✅ MEJORA: Unificar las consultas y hacer el join con profiles para obtener el nombre.
       const { data, error } = await supabaseConfig.client
         .from('orders')
         .select(`
@@ -128,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           monto_cobrado,
           status,
           evidence_photos,
-          profiles: completed_by (full_name)
+          profiles:completed_by(full_name)
         `)
         .or('status.eq.Completada,status.eq.Cancelado')
         .order('completed_at', { ascending: false });
