@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
     } else {
       tableBody.innerHTML = filteredOrders.map(order => {
+        // ✅ CORRECCIÓN: Acceder al nombre del colaborador a través del objeto anidado 'profiles'.
         const completadoPorNombre = order.profiles?.full_name || 'No disponible';
         const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleDateString('es-ES', {
           year: 'numeric',
@@ -73,16 +74,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }) : 'No disponible';
         
         // Determinar clase de fila según el estado
-        const rowClass = order.status === 'Cancelado' ? 'hover:bg-red-50 bg-red-50/30' : 'hover:bg-green-50';
+        const rowClass = order.status === 'Cancelada' ? 'hover:bg-red-50 bg-red-50/30' : 'hover:bg-green-50';
 
         return `
           <tr class="${rowClass}">
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.client_name || order.name}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service_name || order.service?.name || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service?.name || 'N/A'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${fechaCompletado}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${completadoPorNombre}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${order.status === 'Cancelado' ? 'text-red-600' : 'text-green-700'}">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${order.status === 'Cancelada' ? 'text-red-600' : 'text-green-700'}">
               ${order.monto_cobrado ? `$${order.monto_cobrado.toLocaleString('es-DO')}` : 'N/A'}
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -113,24 +114,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Carga inicial de datos
   const loadHistory = async () => {
     try {
+      console.log('[Historial] Iniciando carga de solicitudes finalizadas y canceladas...');
+
       const { data, error } = await supabaseConfig.client
         .from('orders')
         .select(`
-          *,
-          client:client_id (name),
-          service:service_id (name),
-          profiles:completed_by (full_name)
+          id,
+          name,
+          client_name,
+          completed_at,
+          monto_cobrado,
+          status,
+          evidence_photos,
+          service:services(name),
+          profiles:completed_by(full_name)
         `)
-        .in('status', ['Completada', 'Cancelado'])
+        .or('status.eq.Completada,status.eq.Cancelada')
         .order('completed_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      allHistoryOrders = data.map(o => ({
-        ...o,
-        client_name: o.client?.name || o.name,
-        service_name: o.service?.name || 'N/A',
-      }));
+      allHistoryOrders = data || [];
+      console.log(`[Historial] Total de órdenes cargadas: ${allHistoryOrders.length}`);
 
       filterAndRender();
     } catch (error) {
@@ -138,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tableBody.innerHTML = `
         <tr>
           <td colspan="7" class="text-center py-10 text-red-500">
-            Error al cargar el historial. Inténtalo de nuevo más tarde.
+            Error al cargar el historial. Revisa la consola para más detalles.
           </td>
         </tr>
       `;
@@ -155,7 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           event: '*', 
           schema: 'public', 
           table: 'orders',
-          filter: 'status=in.(Completada,Cancelado)'
+          filter: 'status=in.(Completada,Cancelada)'
         }, 
         (payload) => {
           console.log('[Historial] Cambio en tiempo real detectado:', payload);

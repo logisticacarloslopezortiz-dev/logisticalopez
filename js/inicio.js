@@ -516,7 +516,14 @@ async function openAssignModal(orderId){
   const invoiceBtn = document.getElementById('generateInvoiceBtn');
   const cancelBtn = document.getElementById('assignCancelBtn');
   const deleteBtn = document.getElementById('deleteOrderBtn');
-  if (whatsappBtn) whatsappBtn.onclick = () => openWhatsApp(order);
+
+  // ✅ CORRECCIÓN: Asignar evento con addEventListener para mayor fiabilidad.
+  if (whatsappBtn) {
+    // Eliminar cualquier listener anterior para evitar duplicados
+    whatsappBtn.replaceWith(whatsappBtn.cloneNode(true));
+    document.getElementById('whatsappBtn').addEventListener('click', () => openWhatsApp(order));
+  }
+
   if (invoiceBtn) invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
   if (cancelBtn) cancelBtn.onclick = () => closeAssignModal();
   if (deleteBtn) deleteBtn.onclick = () => deleteSelectedOrder();
@@ -758,16 +765,10 @@ function handleRealtimeUpdate(payload) {
       // Encontrar y actualizar la orden en el array
       const indexToUpdate = allOrders.findIndex(order => order.id === newRecord.id);
       if (indexToUpdate !== -1) {
-        // Guardar los filtros actuales antes de actualizar
-        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-        const statusFilter = document.getElementById('statusFilter').value;
-        const serviceFilter = document.getElementById('serviceFilter').value;
-        const dateFilter = document.getElementById('dateFilter').value;
-        
         // Actualizar la orden en el array
         allOrders[indexToUpdate] = { ...allOrders[indexToUpdate], ...newRecord };
         
-        // Reaplicar los filtros con los valores guardados
+        // Reaplicar los filtros
         filterOrders();
       }
       break;
@@ -796,6 +797,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.generateAndSendInvoice = generateAndSendInvoice;
   window.toggleActionsMenu = toggleActionsMenu;
   window.showServiceDetails = showServiceDetails;
+  window.openWhatsApp = openWhatsApp;
 
   // Suscribirse a los cambios en tiempo real de la tabla 'orders'
   const ordersSubscription = supabaseConfig.client

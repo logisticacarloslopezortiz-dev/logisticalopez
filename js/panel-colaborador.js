@@ -868,11 +868,13 @@ function filterAndRender(){
   // Función para órdenes pendientes (no completadas)
   const visibleForCollab = (o) => {
     if (!state.collabSession) return false;
-  // ✅ CORRECCIÓN: Mostrar solo la orden asignada activamente a este colaborador.
-    return o.assigned_to === state.collabSession.user.id &&
-           o.status !== 'Completado' &&
-           o.status !== 'Cancelado' &&
-           o.last_collab_status !== 'entregado';
+    // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador que NO estén completadas.
+    const isPendingAndUnassigned = o.status === 'Pendiente' && !o.assigned_to;
+    const isAssignedToMe = o.assigned_to === state.collabSession.user.id &&
+                          o.status !== 'Completada' &&
+                          o.status !== 'Cancelada' &&
+                          o.last_collab_status !== 'entregado';
+    return isPendingAndUnassigned || isAssignedToMe;
   };
 
   // Función para órdenes del historial (completadas)
@@ -880,7 +882,7 @@ function filterAndRender(){
     if (!state.collabSession) return false;
     // Mostrar órdenes completadas que fueron asignadas a este colaborador
     return o.assigned_to === state.collabSession.user.id && 
-           (o.status === 'Completado' || o.last_collab_status === 'entregado');
+           (o.status === 'Completada' || o.last_collab_status === 'entregado');
   };
 
   let base = state.allOrders.filter(visibleForCollab);
@@ -1290,8 +1292,13 @@ function setupEventListeners() {
     });
   }
 
-  document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    supabaseConfig.client.auth.signOut();
+  document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+    // ✅ MEJORA: Limpieza completa de sesión para el colaborador.
+    const { error } = await supabaseConfig.client.auth.signOut();
+    localStorage.clear(); // Eliminar todos los datos para evitar fugas.
+    if (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
     window.location.href = 'login-colaborador.html';
   });
 
