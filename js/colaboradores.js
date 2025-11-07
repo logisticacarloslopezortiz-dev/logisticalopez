@@ -9,6 +9,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const emailInput = document.getElementById('colaboradorEmail');
   const passwordInput = document.getElementById('colaboradorPassword');
   const msgDiv = document.getElementById('colabMsg');
+  // Elementos del modal de edición
+  const editModal = document.getElementById('editCollaboratorModal');
+  const editForm = document.getElementById('editCollaboratorForm');
+  const editMsg = document.getElementById('editCollabMsg');
+  const editId = document.getElementById('editCollabId');
+  const editName = document.getElementById('editCollabName');
+  const editEmail = document.getElementById('editCollabEmail');
+  const editPhone = document.getElementById('editCollabPhone');
+  const editMatricula = document.getElementById('editCollabMatricula');
+  const editPassword = document.getElementById('editCollabPassword');
+  const closeEditBtn = document.getElementById('closeEditCollabModal');
+  const cancelEditBtn = document.getElementById('cancelEditCollab');
+  const resetPasswordBtn = document.getElementById('resetPasswordCollab');
   
   const totalColaboradoresEl = document.getElementById('totalColaboradores');
   const colaboradoresActivosEl = document.getElementById('colaboradoresActivos');
@@ -190,9 +203,130 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --- FUNCIONES DE ACCIÓN (EDITAR/ELIMINAR) ---
 
   window.editCollaborator = (id) => {
-    // Lógica para abrir un modal de edición (no implementada en este snippet)
-    alert(`Funcionalidad de editar para el colaborador ID: ${id} no implementada.`);
+    const colab = allCollaborators.find(c => c.id === id);
+    if (!colab) {
+      alert('No se encontró el colaborador');
+      return;
+    }
+    editId.value = colab.id || '';
+    editName.value = colab.name || '';
+    editEmail.value = colab.email || '';
+    editPhone.value = colab.phone || '';
+    editMatricula.value = colab.matricula || '';
+    editPassword.value = '';
+    editMsg.textContent = '';
+    editMsg.classList.remove('text-green-600','text-red-600');
+    editModal.classList.remove('hidden');
+    // Bloquear scroll del body y enfocar el primer campo
+    document.body.classList.add('overflow-hidden');
+    setTimeout(() => { try { editName.focus(); } catch(_){} }, 50);
+    // Trap de foco básico dentro del modal
+    const focusable = editModal.querySelectorAll('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    const firstEl = focusable[0];
+    const lastEl = focusable[focusable.length - 1];
+    function trap(e){
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey && document.activeElement === firstEl){
+        e.preventDefault(); lastEl.focus();
+      } else if (!e.shiftKey && document.activeElement === lastEl){
+        e.preventDefault(); firstEl.focus();
+      }
+    }
+    editModal.addEventListener('keydown', trap);
+    // Guardar para remover al cerrar
+    editModal._trapHandler = trap;
+    if (window.lucide) lucide.createIcons();
   };
+
+  function closeEditModal(){
+    editModal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    if (editModal._trapHandler) {
+      editModal.removeEventListener('keydown', editModal._trapHandler);
+      editModal._trapHandler = null;
+    }
+  }
+  if (closeEditBtn) closeEditBtn.addEventListener('click', closeEditModal);
+  if (cancelEditBtn) cancelEditBtn.addEventListener('click', closeEditModal);
+
+  // Restablecer/generar contraseña segura
+  function generateSecurePassword(len = 12){
+    try {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{}';
+      const buf = new Uint32Array(len);
+      crypto.getRandomValues(buf);
+      return Array.from(buf).map(v => chars[v % chars.length]).join('');
+    } catch {
+      return Math.random().toString(36).slice(-len);
+    }
+  }
+  if (resetPasswordBtn) {
+    resetPasswordBtn.addEventListener('click', () => {
+      const newPass = generateSecurePassword(12);
+      editPassword.type = 'text';
+      editPassword.value = newPass;
+      editMsg.textContent = 'Nueva contraseña generada. Guarda para aplicar los cambios.';
+      editMsg.classList.remove('text-red-600');
+      editMsg.classList.add('text-yellow-600');
+      setTimeout(() => { editPassword.type = 'password'; }, 2500);
+    });
+  }
+
+  if (editForm) {
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const user_id = editId.value;
+      const payload = {
+        user_id,
+        name: editName.value.trim(),
+        email: editEmail.value.trim(),
+        phone: editPhone.value.trim() || undefined,
+        matricula: editMatricula.value.trim() || undefined,
+        password: editPassword.value.trim() || undefined,
+      };
+      // Limpiar mensajes
+      editMsg.textContent = 'Guardando cambios...';
+      editMsg.classList.remove('text-green-600','text-red-600');
+
+      try {
+        // Invocar Edge Function segura para actualizar colaborador
+        const { data, error } = await supabaseConfig.client.functions.invoke('update-collaborator', {
+          body: payload
+        });
+        if (error) throw error;
+        if (data && data.error) throw new Error(data.error);
+
+        editMsg.textContent = 'Cambios guardados correctamente';
+        editMsg.classList.add('text-green-600');
+        // Refrescar lista y cerrar
+        await loadCollaborators();
+        setTimeout(() => {
+          closeEditModal();
+          editMsg.textContent = '';
+          editMsg.classList.remove('text-green-600');
+        }, 800);
+      } catch (err) {
+        console.error('Error al actualizar colaborador:', err);
+        const msg = (err && err.message) ? err.message : 'Error al guardar cambios';
+        editMsg.textContent = msg;
+        editMsg.classList.add('text-red-600');
+      }
+    });
+  }
+
+  // Carga lazy de Chart.js bajo demanda
+  async function ensureChartJsLoaded(){
+    if (window.Chart) return true;
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => reject(new Error('No se pudo cargar Chart.js'));
+      document.head.appendChild(script);
+    });
+  }
+  // Exponer por si se necesita al abrir métricas
+  window.ensureChartJsLoaded = ensureChartJsLoaded;
 
   window.deleteCollaborator = async (id) => {
     if (!confirm('¿Estás seguro de que quieres eliminar a este colaborador? Esta acción no se puede deshacer.')) {
