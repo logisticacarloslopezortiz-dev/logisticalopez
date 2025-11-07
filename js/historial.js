@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <tr class="${rowClass}">
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.client_name || order.name}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.services?.name || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service?.name || 'N/A'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${fechaCompletado}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${completadoPorNombre}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${order.status === 'Cancelada' ? 'text-red-600' : 'text-green-700'}">
@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           monto_cobrado,
           status,
           evidence_photos,
-          services(name),
+          service:services(name),
           profiles:completed_by(full_name)
         `)
         .or('status.eq.Completada,status.eq.Cancelada')

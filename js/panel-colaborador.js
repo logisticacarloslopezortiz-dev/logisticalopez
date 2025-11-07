@@ -871,8 +871,8 @@ function filterAndRender(){
     // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador que NO estén completadas.
     const isPendingAndUnassigned = o.status === 'Pendiente' && !o.assigned_to;
     const isAssignedToMe = o.assigned_to === state.collabSession.user.id &&
-                          o.status !== 'Completado' &&
-                          o.status !== 'Cancelado' &&
+                          o.status !== 'Completada' &&
+                          o.status !== 'Cancelada' &&
                           o.last_collab_status !== 'entregado';
     return isPendingAndUnassigned || isAssignedToMe;
   };
@@ -882,7 +882,7 @@ function filterAndRender(){
     if (!state.collabSession) return false;
     // Mostrar órdenes completadas que fueron asignadas a este colaborador
     return o.assigned_to === state.collabSession.user.id && 
-           (o.status === 'Completado' || o.last_collab_status === 'entregado');
+           (o.status === 'Completada' || o.last_collab_status === 'entregado');
   };
 
   let base = state.allOrders.filter(visibleForCollab);
