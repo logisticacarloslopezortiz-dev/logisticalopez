@@ -29,8 +29,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Comic+Neue:wght@300;400;700&display=swap" rel="stylesheet">
   
   <!-- Tailwind y Lucide -->
-  <script src="https://cdn.tailwindcss.com" defer></script>
-  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide: usar ruta UMD versionada para evitar errores de 'latest' -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.428.0/dist/umd/lucide.min.js" defer></script>
+  
+  <!-- Mitigación FOUC: ocultar el cuerpo hasta que los estilos estén listos -->
+  <style>
+    body.preload-hidden { opacity: 0; }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      try { document.body.classList.remove('preload-hidden'); } catch(_){}
+    });
+  </script>
   
   <style>
     /* --- Base Layout --- */
@@ -139,7 +150,7 @@
     }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen preload-hidden">
   <!-- Skip link for keyboard users -->
   <a href="#mainContent" class="sr-only">Saltar al contenido</a>
   <!-- Mobile Header with Hamburger -->
@@ -175,7 +186,7 @@
           </div>
         </div>
         <!-- Botón para colapsar el sidebar -->
-        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors" style="background-color: rgba(30, 138, 149, 0.2); hover:background-color: rgba(30, 138, 149, 0.4);">
+        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[rgba(30,138,149,0.4)]" style="background-color: rgba(30, 138, 149, 0.2);">
           <i data-lucide="panel-left-close" class="w-4 h-4 text-white"></i>
         </button>
       </div>
@@ -384,7 +395,8 @@
     </main>
 
   <!-- Dependencias externas (una sola vez) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <!-- Supabase JS v2: UMD explícito para navegador -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
 
   <!-- Scripts de la aplicación (ordenados y sin duplicados) -->

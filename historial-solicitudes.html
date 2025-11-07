@@ -102,7 +102,55 @@
     </div>
   </div>
 
+  <!-- Modal de Descarga de PDF -->
+  <div id="pdfModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="flex items-center justify-between border-b px-6 py-4">
+        <h4 class="text-lg font-semibold text-gray-900">Descargar Reporte PDF</h4>
+        <button id="closePdfModal" class="text-gray-500 hover:text-gray-700 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-6">
+        <div class="mb-4">
+          <p class="text-sm text-gray-600 mb-2">Orden seleccionada:</p>
+          <div id="selectedOrderInfo" class="bg-gray-50 p-3 rounded-lg">
+            <p class="font-medium text-gray-900" id="selectedOrderDetails"></p>
+          </div>
+        </div>
+        <div class="mb-4">
+          <p class="text-sm text-gray-600 mb-2">El reporte incluirá:</p>
+          <ul class="text-sm text-gray-700 space-y-1">
+            <li class="flex items-center gap-2">
+              <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i>
+              Resumen del pedido
+            </li>
+            <li class="flex items-center gap-2">
+              <i data-lucide="user" class="w-4 h-4 text-blue-600"></i>
+              Datos del colaborador que completó
+            </li>
+            <li class="flex items-center gap-2">
+              <i data-lucide="calendar" class="w-4 h-4 text-blue-600"></i>
+              Fecha y evidencia
+            </li>
+          </ul>
+        </div>
+        <div class="flex gap-3">
+          <button id="downloadPdfBtn" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            Descargar PDF
+          </button>
+          <button id="cancelPdfBtn" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/sidebar.js"></script>
   <script src="js/historial.js?v=1.2"></script>

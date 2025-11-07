@@ -290,9 +290,89 @@ function saveCompletionMetrics(metrics, orderId) {
         if (res.error) console.error('[Métricas] Error al guardar en Supabase:', res.error);
         else console.log('[Métricas] Guardadas en Supabase correctamente');
       });
+
+      // Conexión solicitada: actualizar agregados en collaborator_performance (por período diario)
+      try {
+        const collabId = metrics.colaborador_id || state.collabSession?.user?.id;
+        const completedAt = metrics.fecha_completado ? new Date(metrics.fecha_completado) : new Date();
+        const periodStart = new Date(completedAt);
+        periodStart.setHours(0,0,0,0);
+        const periodEnd = new Date(completedAt);
+        periodEnd.setHours(23,59,59,999);
+
+        const periodStartISO = periodStart.toISOString().slice(0,10); // date
+        const periodEndISO = periodEnd.toISOString().slice(0,10); // date
+
+        if (collabId) {
+          upsertCollaboratorPerformance({
+            collaborator_id: collabId,
+            period_start: periodStartISO,
+            period_end: periodEndISO,
+            completion_minutes: Number(metrics.tiempo_total) || null
+          });
+        }
+      } catch (aggErr) {
+        console.warn('[Métricas] No se pudo preparar agregados:', aggErr);
+      }
     }
   } catch (err) {
     console.error('[Métricas] Error al guardar:', err);
+  }
+}
+
+/**
+ * Upsert diario en collaborator_performance con incremento de jobs_completed
+ * y actualización de avg_completion_minutes.
+ */
+async function upsertCollaboratorPerformance({ collaborator_id, period_start, period_end, completion_minutes }) {
+  if (!supabaseConfig?.client) return;
+  try {
+    const { data: existing, error: selectErr } = await supabaseConfig.client
+      .from('collaborator_performance')
+      .select('*')
+      .eq('collaborator_id', collaborator_id)
+      .eq('period_start', period_start)
+      .eq('period_end', period_end)
+      .limit(1)
+      .maybeSingle();
+
+    if (selectErr) {
+      console.warn('[Perf] Error seleccionando fila existente:', selectErr.message);
+    }
+
+    if (existing) {
+      const prevCount = Number(existing.jobs_completed) || 0;
+      const prevAvg = Number(existing.avg_completion_minutes) || 0;
+      const add = Number(completion_minutes) || 0;
+      const newCount = prevCount + 1;
+      const newAvg = newCount > 0 ? ((prevAvg * prevCount) + add) / newCount : add;
+
+      const updatePayload = {
+        jobs_completed: newCount,
+        avg_completion_minutes: newAvg,
+      };
+      const { error: updErr } = await supabaseConfig.client
+        .from('collaborator_performance')
+        .update(updatePayload)
+        .eq('id', existing.id);
+      if (updErr) console.error('[Perf] Error al actualizar agregados:', updErr.message);
+      else console.log('[Perf] Agregados actualizados (diario):', updatePayload);
+    } else {
+      const insertPayload = {
+        collaborator_id,
+        period_start,
+        period_end,
+        jobs_completed: 1,
+        avg_completion_minutes: Number(completion_minutes) || null
+      };
+      const { error: insErr } = await supabaseConfig.client
+        .from('collaborator_performance')
+        .insert([insertPayload]);
+      if (insErr) console.error('[Perf] Error al insertar agregados:', insErr.message);
+      else console.log('[Perf] Agregados insertados (diario):', insertPayload);
+    }
+  } catch (err) {
+    console.error('[Perf] Fallo al upsert en collaborator_performance:', err);
   }
 }
 
@@ -446,35 +526,66 @@ async function changeStatus(orderId, newKey) {
     }
   }
 
-  // Centralizar la lógica de negocio en el OrderManager.
-  // El OrderManager ahora decidirá si el estado global debe cambiar.
-  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newKey, {
-    collaborator_id: state.collabSession.user.id
-  });
+  // Guardar el estado actual en localStorage antes de intentar actualizar
+  const statusUpdate = {
+    orderId: orderId,
+    newStatus: newKey,
+    previousStatus: order.last_collab_status,
+    timestamp: new Date().toISOString(),
+    collaboratorId: state.collabSession.user.id
+  };
+  
+  // Guardar en localStorage para recuperación en caso de fallo de conexión
+  localStorage.setItem(`tlc_pending_status_${orderId}`, JSON.stringify(statusUpdate));
 
-  if (success) {
-    notifyClient(orderId, newKey);
-    handleStatusUpdate(orderId, newKey); // UI optimista
-    filterAndRender();
+  try {
+    // Centralizar la lógica de negocio en el OrderManager.
+    // El OrderManager ahora decidirá si el estado global debe cambiar.
+    const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newKey, {
+      collaborator_id: state.collabSession.user.id
+    });
 
-    if (newKey === 'entregado') {
-      // Registrar métricas de finalización
-      try {
-        const metrics = {
-          colaborador_id: state.collabSession.user.id,
-          tiempo_total: calculateTotalTime(orderId),
-          fecha_completado: new Date().toISOString()
-        };
-        saveCompletionMetrics(metrics, orderId);
-      } catch (err) {
-        console.error('[Métricas] Error al registrar:', err);
+    if (success) {
+      // Si la actualización fue exitosa, eliminar el estado pendiente guardado
+      localStorage.removeItem(`tlc_pending_status_${orderId}`);
+      
+      notifyClient(orderId, newKey);
+      handleStatusUpdate(orderId, newKey); // UI optimista
+      filterAndRender();
+
+      if (newKey === 'entregado') {
+        // Registrar métricas de finalización
+        try {
+          const metrics = {
+            colaborador_id: state.collabSession.user.id,
+            tiempo_total: calculateTotalTime(orderId),
+            fecha_completado: new Date().toISOString()
+          };
+          saveCompletionMetrics(metrics, orderId);
+        } catch (err) {
+          console.error('[Métricas] Error al registrar:', err);
+        }
+        handleOrderCompletion(orderId);
       }
-      handleOrderCompletion(orderId);
-    }
 
-    showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
-  } else {
-    showError('No se pudo actualizar el estado', error);
+      showSuccess('Estado actualizado', STATUS_MAP[newKey]?.label || newKey);
+    } else {
+      // Si falló la actualización, mantener el estado guardado para sincronización posterior
+      console.error('[Estado] Error al actualizar estado - se guardó para sincronización posterior:', error);
+      showError('No se pudo actualizar el estado', 'El cambio se guardó localmente y se sincronizará cuando esté disponible.');
+      
+      // Aunque falló en el servidor, actualizar localmente para continuar el flujo
+      handleStatusUpdate(orderId, newKey);
+      filterAndRender();
+    }
+  } catch (err) {
+    // Error de red o conexión - mantener el estado guardado
+    console.error('[Estado] Error de conexión - estado guardado para sincronización:', err);
+    showWarning('Sin conexión', 'El cambio se guardó localmente y se sincronizará cuando esté disponible.');
+    
+    // Actualizar localmente para continuar el flujo
+    handleStatusUpdate(orderId, newKey);
+    filterAndRender();
   }
 }
 
@@ -532,6 +643,8 @@ const state = {
   collabSession: null,
   activeJobMap: null,
   collabNameCache: new Map(),
+  isOnline: true,
+  connectionCheckInterval: null
 };
 
 function collabDisplayName(email){
@@ -575,12 +688,43 @@ function closeAcceptModal(){
 function handleCardClick(orderId) {
   const order = state.allOrders.find(o => o.id === Number(orderId));
   if (!order) return;
+  
+  // Verificar si hay un trabajo activo guardado
+  const activeJob = loadActiveJob();
+  
+  // Si ya hay un trabajo activo, mostrar solo ese trabajo
+  if (activeJob) {
+    const activeOrder = state.allOrders.find(o => o.id === activeJob.orderId);
+    if (activeOrder) {
+      showActiveJob(activeOrder);
+      return;
+    }
+  }
+  
+  // Si no hay trabajo activo, proceder según el estado de la orden
   if (!order.assigned_to && order.status === 'Pendiente') {
     openAcceptModal(order);
-  } else {
+  } else if (order.assigned_to === state.collabSession.user.id) {
+    // Si la orden está asignada a este colaborador, guardarla como trabajo activo
+    saveActiveJob({
+      orderId: order.id,
+      assignedAt: new Date().toISOString(),
+      status: order.status
+    });
     showActiveJob(order);
-    // al mostrar trabajo activo, ocultar tarjetas
-    document.getElementById('ordersCardContainer')?.classList.add('hidden');
+  }
+}
+
+function showWarning(title, message) {
+  try {
+    if (window.notifications && window.notifications.warning) {
+      window.notifications.warning(message, { title });
+    } else {
+      alert(`${title}: ${message}`);
+    }
+  } catch (err) {
+    console.warn('[Notificación] Error al mostrar advertencia:', err);
+    alert(`${title}: ${message}`);
   }
 }
 
@@ -595,8 +739,6 @@ function showActiveJob(order){
   localStorage.setItem('tlc_collab_active_job', state.activeJobId);
   const section = document.getElementById('activeJobSection');
   section.classList.remove('hidden');
-  // Ocultar contenedores de tarjetas mientras hay trabajo activo visible
-  document.getElementById('ordersCardContainer')?.classList.add('hidden');
   const info = document.getElementById('activeJobInfo');
   // ✅ MEJORA: Diseño de información de trabajo activo más limpio y organizado
   info.innerHTML = /*html*/`
@@ -865,19 +1007,34 @@ function filterAndRender(){
   const term = '';
   const statusFilter = '';
   
-  // Función para órdenes pendientes (no completadas)
-  const visibleForCollab = (o) => {
-    if (!state.collabSession) return false;
-    // ✅ CORRECCIÓN: Mostrar solicitudes pendientes (no asignadas) Y las asignadas a este colaborador que NO estén completadas.
-    const isPendingAndUnassigned = o.status === 'Pendiente' && !o.assigned_to;
-    const isAssignedToMe = o.assigned_to === state.collabSession.user.id &&
-                          o.status !== 'Completada' &&
-                          o.status !== 'Cancelada' &&
-                          o.last_collab_status !== 'entregado';
-    return isPendingAndUnassigned || isAssignedToMe;
-  };
-
-  // Función para órdenes del historial (completadas)
+  // Verificar si hay un trabajo activo guardado
+  const activeJob = loadActiveJob();
+  const collabId = state.collabSession?.user?.id;
+  const all = state.allOrders || [];
+  // Órdenes pendientes visibles para todos (no asignadas)
+  const pendingOrders = all.filter(o => o.status === 'Pendiente' && !o.assigned_to);
+  // Órdenes asignadas visibles solo para el colaborador dueño
+  const myAssigned = all.filter(o => o.assigned_to === collabId && o.status !== 'Completado' && o.status !== 'Cancelado');
+  
+  // Si hay un trabajo activo, mostrarlo y mantener visibles las pendientes + asignadas propias
+  if (activeJob) {
+    const activeOrder = state.allOrders.find(order => order.id === activeJob.orderId);
+    if (activeOrder) {
+      showActiveJob(activeOrder);
+      // Renderizar unión de pendientes + asignadas propias excluyendo la activa
+      const visible = [...pendingOrders, ...myAssigned].filter(o => o.id !== activeOrder.id);
+      renderOrders(visible);
+      return;
+    } else {
+      // Si no se encuentra la orden activa, limpiar el trabajo activo
+      clearActiveJob();
+    }
+  }
+  
+  // Si no hay trabajo activo, mostrar pendientes + asignadas propias
+  renderOrders([...pendingOrders, ...myAssigned]);
+  
+  // Función para órdenes del historial (completadas) - se mantiene igual
   const historialForCollab = (o) => {
     if (!state.collabSession) return false;
     // Mostrar órdenes completadas que fueron asignadas a este colaborador
@@ -885,25 +1042,8 @@ function filterAndRender(){
            (o.status === 'Completada' || o.last_collab_status === 'entregado');
   };
 
-  let base = state.allOrders.filter(visibleForCollab);
   let historialBase = state.allOrders.filter(historialForCollab);
   
-  // Lógica de filtrado para trabajo activo eliminada para mayor claridad.
-  // La visibilidad de la sección de trabajo activo se maneja por separado.
-  
-  baseVisibleCount = base.length;
-  state.filteredOrders = base.filter(o => {
-    // ✅ CORRECCIÓN: Convertir el ID a String para evitar errores al buscar.
-    const m1 = !term 
-      || o.name.toLowerCase().includes(term) 
-      || String(o.id).toLowerCase().includes(term)
-      || String(o.short_id || '').toLowerCase().includes(term)
-      || o.service.toLowerCase().includes(term);
-    const currentStatus = o.last_collab_status || o.status;
-    const m2 = !statusFilter || statusFilter === currentStatus;
-    return m1 && m2;
-  });
-
   // Filtrar historial
   state.historialOrders = historialBase.filter(o => {
     const m1 = !term 
@@ -914,8 +1054,6 @@ function filterAndRender(){
     return m1;
   });
 
-  render();
-  // renderHistorial(); // Eliminado
   updateCollaboratorStats(state.collabSession.user.id);
 }
 
@@ -961,6 +1099,23 @@ function renderMobileCards(orders){
   }).join('');
 
   if (window.lucide) lucide.createIcons();
+}
+
+// Adaptador para compatibilidad: algunas rutas siguen llamando a renderOrders
+function renderOrders(orders){
+  try {
+    const container = ensureMobileContainer();
+    if (!container) return;
+    if (!orders || orders.length === 0) {
+      container.classList.remove('hidden');
+      container.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
+      return;
+    }
+    container.classList.remove('hidden');
+    renderMobileCards(orders);
+  } catch (err) {
+    console.error('Error en renderOrders:', err);
+  }
 }
 
 // === FUNCIÓN ELIMINADA: renderHistorial ===
@@ -1083,6 +1238,38 @@ async function preloadCollaboratorNames(orders){
 }
 
 // Función para cargar órdenes
+async function syncPendingStatusUpdates() {
+  try {
+    const pendingUpdates = Object.keys(localStorage)
+      .filter(key => key.startsWith('tlc_pending_status_'))
+      .map(key => {
+        const orderId = key.replace('tlc_pending_status_', '');
+        const data = JSON.parse(localStorage.getItem(key));
+        return { orderId, ...data };
+      });
+
+    if (pendingUpdates.length === 0) return;
+
+    console.log(`[Sincronización] Encontrados ${pendingUpdates.length} estados pendientes`);
+
+    for (const update of pendingUpdates) {
+      try {
+        await OrderManager.actualizarEstadoPedido(update.orderId, update.newStatus, update.collaboratorId);
+        localStorage.removeItem(`tlc_pending_status_${update.orderId}`);
+        console.log(`[Sincronización] Estado sincronizado para orden ${update.orderId}`);
+      } catch (error) {
+        console.error(`[Sincronización] Error al sincronizar orden ${update.orderId}:`, error);
+      }
+    }
+
+    if (pendingUpdates.length > 0) {
+      showSuccess('Sincronización completada', `${pendingUpdates.length} actualizaciones sincronizadas`);
+    }
+  } catch (error) {
+    console.error('[Sincronización] Error general:', error);
+  }
+}
+
 async function loadInitialOrders() {
   let timeout = null;
   const loadingIndicator = document.getElementById('loadingIndicator');
@@ -1335,6 +1522,14 @@ function setupEventListeners() {
       state.activeJobId = orderId;
       localStorage.setItem('tlc_collab_active_job', String(orderId));
 
+      // Guardar el trabajo activo en localStorage con estructura robusta
+      saveActiveJob({
+        orderId: orderId,
+        assignedAt: new Date().toISOString(),
+        status: 'en_camino_recoger',
+        collaboratorId: state.collabSession.user.id
+      });
+
       // Actualización optimista
       const order = state.allOrders.find(o => o.id === orderId);
       if (order) {
@@ -1368,6 +1563,56 @@ function setupEventListeners() {
   }
 }
 
+// Manejo del estado de conexión y sincronización automática
+function setupConnectionHandlers() {
+  try {
+    // Estado inicial basado en el navegador
+    state.isOnline = navigator.onLine;
+
+    // Listener: conexión restablecida
+    window.addEventListener('online', async () => {
+      state.isOnline = true;
+      try { if (window.notifications?.success) window.notifications.success('Sincronizando cambios pendientes...', { title: 'Conexión restablecida' }); } catch(_) {}
+      try { if (typeof showSuccess === 'function') showSuccess('Conexión restablecida', 'Sincronizando cambios pendientes...'); } catch(_) {}
+      try {
+        await syncPendingStatusUpdates();
+        // Refrescar datos para reflejar posibles cambios
+        await loadInitialOrders();
+      } catch (err) {
+        console.warn('[Conexión] Error al sincronizar tras reconexión:', err);
+      }
+    });
+
+    // Listener: se pierde la conexión
+    window.addEventListener('offline', () => {
+      state.isOnline = false;
+      try { if (typeof showWarning === 'function') showWarning('Sin conexión', 'Los cambios se guardarán localmente y se sincronizarán al volver.'); } catch(_) {}
+    });
+
+    // Chequeo periódico por si los eventos del navegador fallan
+    if (state.connectionCheckInterval) clearInterval(state.connectionCheckInterval);
+    state.connectionCheckInterval = setInterval(async () => {
+      const nowOnline = navigator.onLine;
+      if (nowOnline && !state.isOnline) {
+        // Detectamos reconexión
+        state.isOnline = true;
+        try { if (typeof showSuccess === 'function') showSuccess('Conexión restablecida', 'Sincronizando cambios pendientes...'); } catch(_) {}
+        try {
+          await syncPendingStatusUpdates();
+        } catch (err) {
+          console.warn('[Conexión] Error en chequeo periódico de sincronización:', err);
+        }
+      } else if (!nowOnline && state.isOnline) {
+        // Detectamos desconexión
+        state.isOnline = false;
+        try { if (typeof showWarning === 'function') showWarning('Sin conexión', 'Trabajarás en modo offline temporalmente.'); } catch(_) {}
+      }
+    }, 15000);
+  } catch (err) {
+    console.warn('[Conexión] No se pudo inicializar manejadores de conexión:', err);
+  }
+}
+
 // --- INICIALIZACIÓN ---
 
 // La sesión ya fue verificada al inicio del IIFE.
@@ -1377,6 +1622,7 @@ if (window.lucide) lucide.createIcons();
 
 setupSidebarToggles();
 setupEventListeners();
+setupConnectionHandlers();
 // setupTabs(); // Eliminado
 
 supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
@@ -1390,6 +1636,9 @@ const cardsContainer = document.getElementById('ordersCardContainer');
 
 loadingIndicator.classList.remove('hidden');
 cardsContainer.classList.add('hidden');
+
+// Intentar sincronizar cambios pendientes antes de cargar
+await syncPendingStatusUpdates();
 
 await loadInitialOrders();
 

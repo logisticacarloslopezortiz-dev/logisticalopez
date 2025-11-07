@@ -10,8 +10,11 @@ let selectedOrderIdForAssign = null; // Guardará el ID del pedido a asignar
 // Carga inicial de órdenes
 async function loadOrders() {
   try {
+    // Usar el cliente adecuado para la vista orders_with_client
+    const client = supabaseConfig.client || supabaseConfig.getPublicClient();
+    
     const [ordersRes, services, vehicles] = await Promise.all([
-      supabaseConfig.client
+      client
         .from('orders_with_client')
         .select('*')
         .order('created_at', { ascending: false }),
@@ -200,13 +203,13 @@ function renderOrders(){
     tr.innerHTML = /*html*/`
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
       <td class="px-6 py-4 whitespace-nowrap">
-        <div class="text-sm font-medium text-gray-900">${o.client_name || o.name}</div>
+        <div class="text-sm font-medium text-gray-900">${o.client_name || o.name || 'N/A'}</div>
         <div class="text-sm text-gray-500">${o.client_phone || o.phone || ''}</div>
         ${o.client_email || o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.client_email || o.email}">${o.client_email || o.email}</div>` : ''}
         ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block" title="Empresa: ${o.empresa || 'N/A'}">RNC: ${o.rnc}</div>` : ''}
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
-        <div class="text-sm text-gray-900">${o.service?.name || 'N/A'}</div>
+        <div class="text-sm text-gray-900">${o.service_name || o.service?.name || 'N/A'}</div>
         ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
           `<button onclick="showServiceDetails(${o.id})" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">
             <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>Ver detalles
@@ -214,7 +217,7 @@ function renderOrders(){
           : ''
         }
       </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle?.name || 'N/A'}</td>
+      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle_name || o.vehicle?.name || 'N/A'}</td>
       <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">
         ${o.pickup} → ${o.delivery}
       </td>
@@ -274,7 +277,7 @@ function renderOrders(){
         <div class="grid grid-cols-2 gap-3 text-sm mb-3">
           <div>
             <p class="text-gray-500">Cliente</p>
-            <p class="text-gray-900">${o.name}</p>
+            <p class="text-gray-900">${o.client_name || o.name || 'N/A'}</p>
           </div>
           <div>
             <p class="text-gray-500">Fecha</p>

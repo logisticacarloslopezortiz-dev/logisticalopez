@@ -376,6 +376,7 @@ DROP POLICY IF EXISTS "user_manage_own_notifications" ON public.notifications;
 -- Vehículos y servicios
 CREATE POLICY "public_read_vehicles" ON public.vehicles FOR SELECT USING (true);
 CREATE POLICY "public_read_services" ON public.services FOR SELECT USING (true);
+CREATE POLICY "public_read_services_name" ON public.services FOR SELECT USING (true);
 CREATE POLICY "owner_all_access_vehicles" ON public.vehicles FOR ALL USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
@@ -386,6 +387,14 @@ CREATE POLICY "owner_all_access_services" ON public.services FOR ALL USING (
 -- Profiles
 CREATE POLICY "public_read_profiles" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "users_update_own_profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+-- Permitir lectura pública de perfiles de colaboradores que completaron órdenes
+CREATE POLICY "public_read_completed_by_profiles" ON public.profiles FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.orders o
+    WHERE o.completed_by = profiles.id AND o.status IN ('Completada', 'Cancelada')
+  )
+);
 
 -- Orders
 -- Importante para evitar el error RLS en INSERT desde cliente anónimo o autenticado sin client_id
@@ -407,6 +416,11 @@ CREATE POLICY "collaborator_read_assigned_orders" ON public.orders FOR SELECT US
 CREATE POLICY "collaborator_update_own_orders" ON public.orders FOR UPDATE USING (assigned_to = auth.uid());
 CREATE POLICY "owner_admin_all_orders" ON public.orders FOR ALL USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+);
+
+-- Permitir lectura pública de órdenes completadas y canceladas (historial)
+CREATE POLICY "public_read_completed_orders" ON public.orders FOR SELECT USING (
+  status IN ('Completada', 'Cancelada')
 );
 
 -- Collaborators y Matrículas

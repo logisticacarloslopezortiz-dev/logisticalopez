@@ -513,6 +513,10 @@
             <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
           </div>
           <form id="form-mudanza" class="space-y-4">
+            <div class="bg-blue-50 border border-blue-200 text-blue-900 text-sm p-3 rounded">
+              <i class="fas fa-info-circle mr-1"></i>
+              Selecciona los objetos y coloca la cantidad aproximada. Puedes añadir detalles específicos en los campos de descripción.
+            </div>
             <div>
               <label class="block text-sm font-medium mb-2">¿Qué tipo de objetos necesita trasladar?</label>
               <textarea name="objetos_trasladar" placeholder="muebles, electrodomésticos, cajas, cama, estufa, lavadora, sillones, mesas, etc." class="w-full border p-2 rounded h-20" required></textarea>
@@ -520,6 +524,55 @@
             <div>
               <label class="block text-sm font-medium mb-2">¿Hay objetos frágiles o de valor que necesiten un trato especial? Describa.</label>
               <textarea name="objetos_fragiles" placeholder="Describa los objetos frágiles o de valor" class="w-full border p-2 rounded h-20"></textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2">Selecciona objetos y cantidades</label>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Camas</label>
+                  <input type="number" min="0" name="item_camas_qty" data-item="camas" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Sofás</label>
+                  <input type="number" min="0" name="item_sofas_qty" data-item="sofas" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Mesas</label>
+                  <input type="number" min="0" name="item_mesas_qty" data-item="mesas" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Sillas</label>
+                  <input type="number" min="0" name="item_sillas_qty" data-item="sillas" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Cajas</label>
+                  <input type="number" min="0" name="item_cajas_qty" data-item="cajas" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Neveras</label>
+                  <input type="number" min="0" name="item_neveras_qty" data-item="nevera" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Lavadoras</label>
+                  <input type="number" min="0" name="item_lavadoras_qty" data-item="lavadora" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Estufas</label>
+                  <input type="number" min="0" name="item_estufas_qty" data-item="estufa" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">TV</label>
+                  <input type="number" min="0" name="item_tv_qty" data-item="tv" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Escritorios</label>
+                  <input type="number" min="0" name="item_escritorios_qty" data-item="escritorio" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="w-32">Armarios/Roperos</label>
+                  <input type="number" min="0" name="item_armarios_qty" data-item="armario" class="border p-2 rounded w-20" placeholder="0">
+                </div>
+              </div>
             </div>
             <div>
               <label class="block text-sm font-medium mb-2">¿En qué tipo de vivienda o local se encuentra actualmente?</label>

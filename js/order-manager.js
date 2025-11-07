@@ -391,8 +391,8 @@ const OrderManager = {
 
       console.log(`[OrderManager] Orden #${orderId} actualizada exitosamente en la BD.`);
 
-      // 4. Enviar notificación push (si aplica)
-      // Esta lógica se puede expandir para notificar a diferentes roles.
+      // 4. Enviar notificaciones push (cliente y roles)
+      // Cliente: mantener notificación existente
       try {
         // Crear el cuerpo de la solicitud para diagnóstico detallado
         const notificationBody = {
@@ -420,6 +420,40 @@ const OrderManager = {
             newStatus: newStatus
           }
         });
+      }
+
+      // Notificar a administradores del cambio de estado
+      try {
+        const rolePayload = {
+          role: 'administrador',
+          orderId: usedFilter?.val ?? orderId,
+          title: 'Estado de orden actualizado',
+          body: `La orden #${usedFilter?.val ?? orderId} cambió a "${newStatus}"`,
+          data: { newStatus }
+        };
+        const adminNotify = await supabaseConfig.client.functions.invoke('notify-role', { body: rolePayload });
+        console.log('[OrderManager] Notificación rol admin:', adminNotify);
+      } catch (e) {
+        console.warn('[OrderManager] No se pudo notificar a administradores:', e?.message || e);
+      }
+
+      // Notificar al colaborador asignado cuando aplique
+      try {
+        const collaboratorId = additionalData?.collaborator_id || updatePayload?.assigned_to || null;
+        if (collaboratorId) {
+          const rolePayload = {
+            role: 'colaborador',
+            orderId: usedFilter?.val ?? orderId,
+            title: 'Actualización de tu trabajo',
+            body: `Tu orden asignada #${usedFilter?.val ?? orderId} cambió a "${newStatus}"`,
+            data: { newStatus },
+            targetIds: [String(collaboratorId)]
+          };
+          const collabNotify = await supabaseConfig.client.functions.invoke('notify-role', { body: rolePayload });
+          console.log('[OrderManager] Notificación rol colaborador:', collabNotify);
+        }
+      } catch (e) {
+        console.warn('[OrderManager] No se pudo notificar a colaborador:', e?.message || e);
       }
 
       return { success: true, error: null };

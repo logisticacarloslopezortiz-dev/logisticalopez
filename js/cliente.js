@@ -4,7 +4,6 @@ let selectedService = null; // Ahora será un objeto {id, name}
 let serviceQuestions = {};
 let modalFilled = false; // Nueva variable para controlar si el modal fue llenado
 
-// Función para obtener o generar client_id
 function getClientId() {
   let clientId = localStorage.getItem('client_id');
   if (!clientId) {
@@ -292,13 +291,40 @@ function displayOrderSummary() {
       <p><strong>Servicio:</strong> ${service}</p>
       <p><strong>Vehículo:</strong> ${vehicle}</p>`;
 
-  // Añadir preguntas del modal si existen
+  // Añadir preguntas del modal si existen, con formato especial para Mudanza
   if (Object.keys(serviceQuestions).length > 0) {
     summaryHTML += `<div class="mt-2 pl-4 border-l-2 border-gray-200">`;
-    for (const [key, value] of Object.entries(serviceQuestions)) {
+
+    // Detectar y formatear items de mudanza con cantidades
+    const entries = Object.entries(serviceQuestions);
+    const mudanzaItems = entries.filter(([k, v]) => /^item_.+_qty$/.test(k) && Number(v) > 0);
+    if (mudanzaItems.length > 0) {
+      const labelMap = {
+        item_camas_qty: 'Camas',
+        item_sofas_qty: 'Sofás',
+        item_mesas_qty: 'Mesas',
+        item_sillas_qty: 'Sillas',
+        item_cajas_qty: 'Cajas',
+        item_neveras_qty: 'Neveras',
+        item_lavadoras_qty: 'Lavadoras',
+        item_estufas_qty: 'Estufas',
+        item_tv_qty: 'TV',
+        item_escritorios_qty: 'Escritorios',
+        item_armarios_qty: 'Armarios/Roperos'
+      };
+      const itemsText = mudanzaItems
+        .map(([k, v]) => `${labelMap[k] || k}: ${v}`)
+        .join(', ');
+      summaryHTML += `<p><strong>Objetos y cantidades:</strong> ${itemsText}</p>`;
+    }
+
+    // Mostrar el resto de entries excluyendo los items de mudanza ya resumidos
+    for (const [key, value] of entries) {
+      if (/^item_.+_qty$/.test(key)) continue;
       const questionText = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
       summaryHTML += `<p><strong>${questionText}:</strong> ${value}</p>`;
     }
+
     summaryHTML += `</div>`;
   }
   summaryHTML += `</div>`;
@@ -523,7 +549,16 @@ function fitMapToBounds() {
     markerCount++;
   }
   if (markerCount > 0) {
-    map.fitBounds(bounds, { padding: [50, 50] });
+    // Padding responsive según tamaño de pantalla y limitar zoom para evitar acercamiento excesivo
+    const width = window.innerWidth || document.documentElement.clientWidth;
+    const padding = width < 480
+      ? [24, 24]
+      : width < 768
+        ? [32, 32]
+        : width < 1024
+          ? [48, 48]
+          : [64, 64];
+    map.fitBounds(bounds, { padding, maxZoom: 16 });
   }
 }
 
@@ -829,6 +864,30 @@ document.addEventListener('DOMContentLoaded', function() {
       
       for (let [key, value] of formData.entries()) {
         serviceQuestions[key] = value;
+      }
+
+      // Manejo especial para Mudanza: agregar resumen de cantidades
+      if (this.id === 'form-mudanza') {
+        const labelMap = {
+          item_camas_qty: 'Camas',
+          item_sofas_qty: 'Sofás',
+          item_mesas_qty: 'Mesas',
+          item_sillas_qty: 'Sillas',
+          item_cajas_qty: 'Cajas',
+          item_neveras_qty: 'Neveras',
+          item_lavadoras_qty: 'Lavadoras',
+          item_estufas_qty: 'Estufas',
+          item_tv_qty: 'TV',
+          item_escritorios_qty: 'Escritorios',
+          item_armarios_qty: 'Armarios/Roperos'
+        };
+        const itemsSummary = Object.entries(serviceQuestions)
+          .filter(([k, v]) => /^item_.+_qty$/.test(k) && Number(v) > 0)
+          .map(([k, v]) => `${labelMap[k] || k}: ${v}`)
+          .join(', ');
+        if (itemsSummary) {
+          serviceQuestions.mudanza_items_summary = itemsSummary;
+        }
       }
       
       modalFilled = true; // Marcar que el modal fue completado
@@ -1213,3 +1272,4 @@ document.addEventListener('DOMContentLoaded', function() {
     showStep(currentStep);
   }
 });
+
