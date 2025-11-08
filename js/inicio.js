@@ -17,8 +17,8 @@ async function loadOrders() {
       .from('orders_with_client')
       .select(`
         *,
-        service:services(name),
-        vehicle:vehicles(name)
+        service:service_id(name),
+        vehicle:vehicle_id(name)
       `)
       .order('created_at', { ascending: false });
 
