@@ -14,11 +14,12 @@ async function loadOrders() {
     const client = supabaseConfig.client || supabaseConfig.getPublicClient();
     
     const { data: orders, error } = await client
-      .from('orders_with_client')
+      .from('orders')
       .select(`
         *,
         service:service_id(name),
-        vehicle:vehicle_id(name)
+        vehicle:vehicle_id(name),
+        profile:client_id(full_name, email, phone)
       `)
       .order('created_at', { ascending: false });
 
@@ -195,9 +196,9 @@ function renderOrders(){
     tr.innerHTML = /*html*/`
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
       <td class="px-6 py-4 whitespace-nowrap">
-        <div class="text-sm font-medium text-gray-900">${o.client_name || o.name || 'N/A'}</div>
-        <div class="text-sm text-gray-500">${o.client_phone || o.phone || ''}</div>
-        ${o.client_email || o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.client_email || o.email}">${o.client_email || o.email}</div>` : ''}
+        <div class="text-sm font-medium text-gray-900">${o.profile?.full_name || o.name || 'N/A'}</div>
+        <div class="text-sm text-gray-500">${o.profile?.phone || o.phone || ''}</div>
+        ${o.profile?.email || o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.profile?.email || o.email}">${o.profile?.email || o.email}</div>` : ''}
         ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block" title="Empresa: ${o.empresa || 'N/A'}">RNC: ${o.rnc}</div>` : ''}
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
@@ -269,7 +270,7 @@ function renderOrders(){
         <div class="grid grid-cols-2 gap-3 text-sm mb-3">
           <div>
             <p class="text-gray-500">Cliente</p>
-            <p class="text-gray-900">${o.name || 'N/A'}</p>
+            <p class="text-gray-900">${o.profile?.full_name || o.name || 'N/A'}</p>
           </div>
           <div>
             <p class="text-gray-500">Fecha</p>
