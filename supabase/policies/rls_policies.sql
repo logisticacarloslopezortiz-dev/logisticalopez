@@ -89,3 +89,111 @@ for delete using (
     where c.id = auth.uid() and lower(c.role) = 'administrador'
   )
 );
+
+-- Device Bindings table
+alter table public.device_bindings enable row level security;
+
+-- Allow admins full access
+create policy "admin select device_bindings" on public.device_bindings
+for select using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+create policy "admin insert device_bindings" on public.device_bindings
+for insert with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+create policy "admin update device_bindings" on public.device_bindings
+for update using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+) with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+create policy "admin delete device_bindings" on public.device_bindings
+for delete using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+-- Allow regular users to view their own device bindings
+create policy "user select own device_bindings" on public.device_bindings
+for select using (user_id = auth.uid());
+
+-- Profile Changes table
+alter table public.profile_changes enable row level security;
+
+create policy "admin select profile_changes" on public.profile_changes
+for select using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+create policy "admin insert profile_changes" on public.profile_changes
+for insert with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+create policy "admin update profile_changes" on public.profile_changes
+for update using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+) with check (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+create policy "admin delete profile_changes" on public.profile_changes
+for delete using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+-- Allow users to view their own profile changes
+create policy "user select own profile_changes" on public.profile_changes
+for select using (target_user_id = auth.uid());
+
+-- Client Logs table
+alter table public.client_logs enable row level security;
+
+create policy "admin select client_logs" on public.client_logs
+for select using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(c.role) = 'administrador'
+  )
+);
+
+-- Allow authenticated users to insert their own logs
+create policy "user insert own client_logs" on public.client_logs
+for insert with check (user_id = auth.uid());
+
+-- Allow users to select their own logs
+create policy "user select own client_logs" on public.client_logs
+for select using (user_id = auth.uid());

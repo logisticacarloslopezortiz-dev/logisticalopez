@@ -46,41 +46,39 @@ class GoogleSheetsIntegration {
      * @returns {Object} - Formatted data for sheets
      */
     formatDataForSheets(orderData) {
+        const mudanzaSummary = this.formatMudanzaItemsSummary(orderData?.serviceDetails?.mudanza);
         return {
-            // Basic Information
+            // Orden y tiempo
             orderId: orderData.id || '',
-            orderType: orderData.orderType || 'ORDEN REGULAR',
             timestamp: new Date().toLocaleString('es-DO'),
+            orderType: orderData.orderType || 'ORDEN REGULAR',
             
-            // Client Information
+            // Cliente
             clientName: orderData.clientName || '',
             clientPhone: orderData.clientPhone || '',
             clientEmail: orderData.clientEmail || '',
             
-            // RNC Information (if applicable)
-            rncNumber: orderData.rncData?.rncNumber || '',
-            companyName: orderData.rncData?.companyName || '',
-            
-            // Service Information
+            // Servicio
             service: orderData.service || '',
             vehicle: orderData.vehicle || '',
             serviceDescription: orderData.serviceDescription || '',
-            
-            // Service-specific details
             serviceDetails: this.formatServiceDetails(orderData.serviceDetails),
+            mudanza_items_summary: mudanzaSummary,
             
-            // Location Information
+            // Ubicación y agenda
             pickupAddress: orderData.pickupAddress || '',
             deliveryAddress: orderData.deliveryAddress || '',
-            
-            // Schedule Information
             serviceDate: orderData.serviceDate || '',
             serviceTime: orderData.serviceTime || '',
             
-            // Status
+            // Estado
             status: orderData.status || 'Pendiente',
             
-            // Additional Information
+            // RNC (opcional)
+            rncNumber: orderData.rncData?.rncNumber || '',
+            companyName: orderData.rncData?.companyName || '',
+            
+            // Metadatos
             createdAt: orderData.createdAt || new Date().toISOString()
         };
     }
@@ -139,6 +137,31 @@ class GoogleSheetsIntegration {
         }
 
         return details.join(' | ');
+    }
+
+    /**
+     * Crea un resumen compacto de artículos de mudanza
+     * @param {Object} mudanza - Detalles específicos de mudanza
+     * @returns {string}
+     */
+    formatMudanzaItemsSummary(mudanza) {
+        if (!mudanza || typeof mudanza !== 'object') return '';
+        const items = Array.isArray(mudanza.items) ? mudanza.items : [];
+        const base = [];
+        if (mudanza.tipoVivienda) base.push(mudanza.tipoVivienda);
+        if (mudanza.tieneElevador) base.push('Elevador');
+        if (mudanza.necesitaEmbalaje) base.push('Embalaje');
+        if (mudanza.articulosFragiles) base.push('Frágiles');
+        const itemsStr = items.map(i => {
+            if (typeof i === 'string') return i;
+            if (i && typeof i === 'object') {
+                const name = i.nombre || i.name || 'Artículo';
+                const qty = i.cantidad || i.qty || 1;
+                return `${name} x${qty}`;
+            }
+            return String(i);
+        }).join(', ');
+        return [base.join(' | '), itemsStr].filter(Boolean).join(' | ');
     }
 
     /**

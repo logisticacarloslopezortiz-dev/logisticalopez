@@ -268,11 +268,11 @@
           </div>
           <div class="space-y-2">
             <label class="text-sm font-medium text-gray-700">Teléfono</label>
-            <input type="tel" id="editCollabPhone" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500" placeholder="Opcional" />
+            <input type="tel" id="editCollabPhone" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500" placeholder="Opcional" pattern="^[0-9]{8,15}$" title="Ingrese entre 8 y 15 dígitos" />
           </div>
           <div class="space-y-2">
             <label class="text-sm font-medium text-gray-700">Matrícula</label>
-            <input type="text" id="editCollabMatricula" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500" placeholder="Opcional" />
+            <input type="text" id="editCollabMatricula" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500" placeholder="Opcional" pattern="^[A-Za-z0-9-]{4,20}$" title="Use letras, números o guiones (4-20 caracteres)" />
           </div>
           <div class="space-y-2 md:col-span-2">
             <label class="text-sm font-medium text-gray-700">Contraseña (dejar en blanco para no cambiar)</label>

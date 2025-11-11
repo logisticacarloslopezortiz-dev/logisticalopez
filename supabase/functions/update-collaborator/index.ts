@@ -20,6 +20,8 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     const body = await req.json();
     const { user_id, email, password, name, matricula, phone } = body || {};
+    const authHeader = req.headers.get('Authorization') || '';
+    const jwt = authHeader.replace('Bearer ', '').trim();
 
     if (!user_id) {
       return jsonResponse({ error: 'Falta user_id' }, 400);
@@ -79,6 +81,41 @@ Deno.serve(async (req: Request) => {
         .from('matriculas')
         .upsert({ user_id, matricula, status: 'activo', created_at: new Date().toISOString() }, { onConflict: 'user_id' });
       if (matErr) return jsonResponse({ error: matErr.message }, 400);
+    }
+
+    // 5) Registrar cambios de perfil para auditoría
+    try {
+      // Obtener el usuario que realiza el cambio (si hay JWT proporcionado)
+      let changedBy: string | null = null;
+      if (jwt) {
+        const { data: u, error: uErr } = await admin.auth.getUser(jwt);
+        if (!uErr && u?.user?.id) changedBy = u.user.id;
+      }
+
+      // Construir campos cambiados (solo los definidos en el body)
+      const changedFields: Record<string, any> = {};
+      if (email !== undefined) changedFields.email = email;
+      if (name !== undefined) changedFields.name = name;
+      if (phone !== undefined) changedFields.phone = phone;
+      if (matricula !== undefined) changedFields.matricula = matricula;
+      if (password !== undefined) changedFields.password_changed = true;
+
+      if (Object.keys(changedFields).length > 0) {
+        const { error: insAuditErr } = await admin
+          .from('profile_changes')
+          .insert({
+            target_user_id: user_id,
+            changed_by: changedBy,
+            changed_fields: changedFields,
+            created_at: new Date().toISOString()
+          });
+        if (insAuditErr) {
+          // No interrumpir la operación principal si falla la auditoría
+          console.warn('[update-collaborator] No se pudo registrar profile_changes:', insAuditErr.message);
+        }
+      }
+    } catch (auditErr) {
+      console.warn('[update-collaborator] Error al registrar auditoría:', auditErr instanceof Error ? auditErr.message : String(auditErr));
     }
 
     return jsonResponse({ success: true }, 200);
