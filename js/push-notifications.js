@@ -158,15 +158,19 @@ class PushNotificationManager {
             const subscriptionData = {
                 user_id: user.id,
                 endpoint: subscription.endpoint,
-                // Adaptar a esquema: guardar llaves en JSONB `keys`
+                // Según esquema: JSONB `keys` obligatorio con p256dh y auth
                 keys: {
                     p256dh: keys.p256dh,
                     auth: keys.auth
-                },
-                user_agent: navigator.userAgent
+                }
             };
 
-            const { error } = await supabase
+            const client = supabaseConfig?.client;
+            if (!client || typeof client.from !== 'function') {
+                throw new Error('Supabase client no inicializado o inválido en saveSubscriptionToServer');
+            }
+
+            const { error } = await client
                 .from('push_subscriptions')
                 .upsert(subscriptionData, {
                     onConflict: 'user_id,endpoint'
@@ -189,7 +193,12 @@ class PushNotificationManager {
             if (!user) return;
 
             // Verificar si la suscripción existe en el servidor
-            const { data: existingSubscription, error } = await supabase
+            const client = supabaseConfig?.client;
+            if (!client || typeof client.from !== 'function') {
+                throw new Error('Supabase client no inicializado o inválido en syncSubscriptionWithServer');
+            }
+
+            const { data: existingSubscription, error } = await client
                 .from('push_subscriptions')
                 .select('id')
                 .eq('user_id', user.id)
@@ -212,11 +221,16 @@ class PushNotificationManager {
 
     async removeSubscriptionFromServer(subscription) {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await supabaseConfig.client.auth.getUser();
             
             if (!user) return;
 
-            const { error } = await supabase
+            const client = supabaseConfig?.client;
+            if (!client || typeof client.from !== 'function') {
+                throw new Error('Supabase client no inicializado o inválido en removeSubscriptionFromServer');
+            }
+
+            const { error } = await client
                 .from('push_subscriptions')
                 .delete()
                 .eq('user_id', user.id)
@@ -234,7 +248,7 @@ class PushNotificationManager {
 
     async sendTestNotification() {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await supabaseConfig.client.auth.getUser();
             
             if (!user) {
                 throw new Error('User not authenticated');
