@@ -150,7 +150,7 @@ const OrderManager = {
   },
 
    /**
-    * Cancela un trabajo activo marcándolo como Cancelado
+    * Cancela un trabajo activo marcándolo como Cancelada
     */
    async cancelActiveJob(orderId) {
      console.log(`[OrderManager] Cancelando trabajo activo #${orderId}`);
@@ -158,7 +158,7 @@ const OrderManager = {
      try {
        const { error } = await supabaseConfig.client
          .from('orders')
-         .update({ status: 'Cancelado' })
+         .update({ status: 'Cancelada' })
          .eq('id', orderId);
        
        if (error) throw error;
@@ -253,8 +253,8 @@ const OrderManager = {
     else if (['En curso', 'en curso'].includes(newStatus)) {
       updatePayload.status = 'En curso';
     }
-    else if (['Cancelado', 'cancelado'].includes(newStatus)) {
-      updatePayload.status = 'Cancelado';
+    else if (['Cancelado', 'cancelado', 'Cancelada', 'cancelada'].includes(newStatus)) {
+      updatePayload.status = 'Cancelada';
     }
     else if (['Pendiente', 'pendiente'].includes(newStatus)) {
       updatePayload.status = 'Pendiente';

@@ -48,15 +48,16 @@ function initializeMap(order) {
     }
     
     // Verificar que existan coordenadas
-    if (!order.pickup_coords || !order.delivery_coords) {
+  // Usar nombres de columnas del esquema: origin_coords y destination_coords
+  if (!order.origin_coords || !order.destination_coords) {
       console.error('[Mapa] Error: Faltan coordenadas de origen o destino');
       // El elemento mapErrorMessage no existe, se elimina la referencia para evitar errores.
       return;
     }
     
     // Parsear coordenadas
-    const pickupCoords = parseCoordinates(order.pickup_coords);
-    const deliveryCoords = parseCoordinates(order.delivery_coords);
+  const pickupCoords = parseCoordinates(order.origin_coords);
+  const deliveryCoords = parseCoordinates(order.destination_coords);
     
     if (!pickupCoords || !deliveryCoords) {
       console.error('[Mapa] Error: Formato de coordenadas inválido');
@@ -79,12 +80,12 @@ function initializeMap(order) {
     const pickupMarker = L.marker([pickupCoords.lat, pickupCoords.lng], {
       icon: createCustomIcon('green', 'A')
     }).addTo(map);
-    pickupMarker.bindPopup('<strong>Origen:</strong> ' + order.pickup_address).openPopup();
+  pickupMarker.bindPopup('<strong>Origen:</strong> ' + (order.pickup || 'Origen')).openPopup();
     
     const deliveryMarker = L.marker([deliveryCoords.lat, deliveryCoords.lng], {
       icon: createCustomIcon('red', 'B')
     }).addTo(map);
-    deliveryMarker.bindPopup('<strong>Destino:</strong> ' + order.delivery_address);
+  deliveryMarker.bindPopup('<strong>Destino:</strong> ' + (order.delivery || 'Destino'));
     
     // Dibujar ruta entre puntos
     const points = [
@@ -1014,7 +1015,7 @@ function filterAndRender(){
   // Órdenes pendientes visibles para todos (no asignadas)
   const pendingOrders = all.filter(o => o.status === 'Pendiente' && !o.assigned_to);
   // Órdenes asignadas visibles solo para el colaborador dueño
-  const myAssigned = all.filter(o => o.assigned_to === collabId && o.status !== 'Completado' && o.status !== 'Cancelado');
+  const myAssigned = all.filter(o => o.assigned_to === collabId && o.status !== 'Completada' && o.status !== 'Cancelada');
   
   // Si hay un trabajo activo, mostrarlo y mantener visibles las pendientes + asignadas propias
   if (activeJob) {
@@ -1335,8 +1336,8 @@ async function loadInitialOrders() {
       ...order,
       service: order.service?.name || order.service || 'Sin servicio',
       vehicle: order.vehicle?.name || order.vehicle || 'Sin vehículo',
-      origin_coords: parseCoordinates(order.pickup_coords),
-      destination_coords: parseCoordinates(order.delivery_coords),
+    origin_coords: parseCoordinates(order.origin_coords),
+    destination_coords: parseCoordinates(order.destination_coords),
       last_collab_status: order.last_collab_status || deriveLastStatus(order)
     }));
     await preloadCollaboratorNames(state.allOrders);
@@ -1548,7 +1549,7 @@ function setupEventListeners() {
   if (cancelBtn) {
     cancelBtn.addEventListener('click', async () => {
       if (!state.activeJobId) return;
-      const ok = confirm('¿Cancelar este trabajo activo? Esto marcará la solicitud como Cancelado.');
+      const ok = confirm('¿Cancelar este trabajo activo? Esto marcará la solicitud como Cancelada.');
       if (!ok) return;
 
       const { success, error } = await OrderManager.cancelActiveJob(state.activeJobId);
@@ -1737,8 +1738,8 @@ function buildStatusMessage(order, statusKey) {
     'Confirmado': `Tu pedido #${order.id} ha sido confirmado y será procesado pronto.`,
     'Asignado': `Tu pedido #${order.id} ha sido asignado a un colaborador.`,
     'En proceso': `Tu pedido #${order.id} está siendo procesado por nuestro colaborador.`,
-    'Completado': `Tu pedido #${order.id} ha sido completado exitosamente. ¡Gracias!`,
-    'Cancelado': `Tu pedido #${order.id} ha sido cancelado.`
+    'Completada': `Tu pedido #${order.id} ha sido completada exitosamente. ¡Gracias!`,
+    'Cancelada': `Tu pedido #${order.id} ha sido cancelada.`
   };
   
   // Si el estado existe en el mapa, usar ese mensaje, sino construir uno genérico

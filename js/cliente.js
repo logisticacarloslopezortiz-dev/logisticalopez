@@ -704,7 +704,7 @@ async function subscribeUserToPush(orderId) {
         // Fallback: guardar en la orden para clientes anónimos
         await supabaseConfig.client
           .from('orders')
-          .update({ notification_subscription: subscription })
+          .update({ push_subscription: subscription })
           .eq('id', orderId);
         console.log('Suscripción guardada en la orden (anónimo):', orderId);
       }
@@ -1010,8 +1010,7 @@ document.addEventListener('DOMContentLoaded', function() {
           // Estado y precio inicial
           status: orderData.status,
           estimated_price: orderData.estimated_price,
-          tracking_data: orderData.tracking_data,
-          tracking: orderData.tracking || orderData.tracking_data
+          tracking_data: orderData.tracking_data
         };
 
         // Crear contacto de cliente si no hay usuario autenticado y asociarlo a la orden
@@ -1056,19 +1055,7 @@ document.addEventListener('DOMContentLoaded', function() {
           baseOrder.client_id = user.id;
           console.log('Usuario autenticado, asignando client_id:', user.id);
 
-          // Guardar suscripción push a nivel de perfil (si disponible)
-          try {
-            if (pushSubscription) {
-              const { error: upErr } = await supabaseConfig.client
-                .from('profiles')
-                .update({ push_subscription: pushSubscription })
-                .eq('id', user.id);
-              if (upErr) console.warn('No se pudo guardar push_subscription en profiles:', upErr.message || upErr);
-              else console.log('push_subscription guardada en profiles');
-            }
-          } catch (e) {
-            console.warn('Error al actualizar push_subscription en profiles:', e);
-          }
+          // Suscripción push del usuario se gestiona vía tabla public.push_subscriptions
         } else {
           try {
             const contact = await createClientContact({
@@ -1077,9 +1064,8 @@ document.addEventListener('DOMContentLoaded', function() {
               email: orderData.email,
               pushSubscription
             });
-            baseOrder.client_contact_id = contact.id;
             baseOrder.client_id = null; // Evitar FK hacia profiles cuando no hay usuario
-            console.log('Cliente sin login, contact_id asociado:', contact.id);
+            console.log('Cliente sin login, contacto creado:', contact.id);
           } catch (e) {
             // Si falla la creación del contacto, continuar sin client_id ni contact_id
             baseOrder.client_id = null;
@@ -1087,11 +1073,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
 
-        // Agregar suscripción push a la orden (si disponible)
-        if (pushSubscription) {
-          baseOrder.notification_subscription = pushSubscription;
-          console.log('Suscripción push agregada a la orden');
-        }
+        // Fallback de suscripción se guarda post-creación en orders.push_subscription
 
         const origin_coords2 = orderData.origin_coords;
         const destination_coords2 = orderData.destination_coords;

@@ -34,24 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.user) {
                 // --- Bloqueo por dispositivo: solo un usuario por dispositivo ---
                 const deviceKeyName = 'tlc_device_id';
-                const boundKeyName = 'tlc_bound_user_id';
                 let deviceId = localStorage.getItem(deviceKeyName);
                 if (!deviceId) {
                     deviceId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
                     localStorage.setItem(deviceKeyName, deviceId);
                 }
-
-                const boundUserId = localStorage.getItem(boundKeyName);
-                const currentUserId = data.user.id;
-                if (boundUserId && boundUserId !== currentUserId) {
-                    // Si el dispositivo ya está vinculado a otro usuario, bloquear acceso
-                    await supabaseConfig.client.auth.signOut();
-                    errorMsg.textContent = 'Este dispositivo está vinculado a otro usuario. Contacta al administrador para desvincularlo.';
-                    errorMsg.classList.remove('hidden');
-                    return;
-                }
-                // Vincular si aún no está
-                if (!boundUserId) localStorage.setItem(boundKeyName, currentUserId);
 
                 // Vinculación server-side del dispositivo para reforzar seguridad
                 try {
@@ -69,12 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
                   console.warn('No se pudo vincular servidor-side el dispositivo:', e?.message || e);
                   // Continuar si el cliente ya está vinculado localmente; el admin puede revisar luego
                 }
-
-                // Guardar datos básicos para utilizar en el panel si fuera necesario
-                const fullName = data.user.user_metadata?.name || data.user.user_metadata?.full_name || '';
-                const placa = data.user.user_metadata?.matricula || '';
-                if (fullName) localStorage.setItem('collabName', fullName);
-                if (placa) localStorage.setItem('collabMatricula', placa);
 
                 window.location.href = 'panel-colaborador.html';
             }

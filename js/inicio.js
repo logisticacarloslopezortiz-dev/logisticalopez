@@ -12,9 +12,10 @@ async function loadOrders() {
   try {
     // Usar el cliente adecuado para la vista orders_with_client
     const client = supabaseConfig.client || supabaseConfig.getPublicClient();
-    
+
+    // Consultar directamente la tabla orders con relaciones definidas
     const { data: orders, error } = await client
-      .from('orders_with_client')
+      .from('orders')
       .select(`
         *,
         service:services(name),
@@ -99,7 +100,8 @@ async function loadAdminInfo() {
 function filterOrders() {
   // YA NO HAY FILTROS EN LA UI. Se aplica el filtro por defecto de no mostrar completados/cancelados.
   filteredOrders = (allOrders || []).filter(order => {
-    const matchesStatus = !['Completada', 'Cancelado'].includes(order.status);
+    // Usar estados canónicos: Cancelada en lugar de Cancelado
+    const matchesStatus = !['Completada', 'Cancelada'].includes(order.status);
     return matchesStatus;
   });
 
@@ -181,7 +183,7 @@ function renderOrders(){
       'Aceptada': 'bg-blue-100 text-blue-800',
       'En curso': 'bg-purple-100 text-purple-800',
       'Completada': 'bg-green-100 text-green-800',
-      'Cancelado': 'bg-red-100 text-red-800'
+      'Cancelada': 'bg-red-100 text-red-800'
     }[o.status] || 'bg-gray-100 text-gray-800';
 
     const displayStatus = (
@@ -222,8 +224,8 @@ function renderOrders(){
           <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
           <option value="Aceptada" ${o.status === 'Aceptada' ? 'selected' : ''}>En Proceso</option>
           <option value="En curso" ${o.status === 'En curso' ? 'selected' : ''}>En curso</option>
-          <option value="Completada" ${o.status === 'Completada' ? 'selected' : ''}>Completado</option>
-          <option value="Cancelado" ${o.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
+          <option value="Completada" ${o.status === 'Completada' ? 'selected' : ''}>Completada</option>
+          <option value="Cancelada" ${o.status === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
         </select>
         ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
       </td>
@@ -248,11 +250,11 @@ function renderOrders(){
         'Aceptada': 'bg-blue-100 text-blue-800',
         'En curso': 'bg-purple-100 text-purple-800',
         'Completada': 'bg-green-100 text-green-800',
-        'Cancelado': 'bg-red-100 text-red-800'
+        'Cancelada': 'bg-red-100 text-red-800'
       }[o.status] || 'bg-gray-100 text-gray-800';
       const displayStatusMobile = (
         o.status === 'Aceptada' ? 'En proceso' :
-        o.status === 'Completada' ? 'Completado' :
+        o.status === 'Completada' ? 'Completada' :
         o.status
       );
       const card = document.createElement('div');
@@ -364,7 +366,7 @@ function updateResumen(){
   const today = new Date().toISOString().split('T')[0];
   const todayOrders = allOrders.filter(o => o.date === today);
   const completedOrders = allOrders.filter(o => o.status === 'Completada').length;
-  const pendingOrders = allOrders.filter(o => !['Completada', 'Cancelado'].includes(o.status));
+  const pendingOrders = allOrders.filter(o => !['Completada', 'Cancelada'].includes(o.status));
   const urgentOrders = pendingOrders.filter(o => {
     const serviceTime = new Date(`${o.date}T${o.time || '00:00'}`);
     const now = new Date();
@@ -467,14 +469,14 @@ async function openAssignModal(orderId){
   const colaboradores = await loadCollaborators();
 
   modalTitle.textContent = `Gestionar Orden #${order.short_id || order.id}`;
+  const displayClient = [order.name, order.phone || order.email].filter(Boolean).join(' · ');
   body.innerHTML = `
     <div class="space-y-1 text-sm text-gray-700">
-      <p><strong>ID:</strong> ${order.id}</p>
-      <p><strong>Cliente:</strong> ${order.name} (${order.phone})</p>
-      ${order.rnc ? `<p><strong>RNC:</strong> ${order.rnc} (${order.empresa || 'N/A'})</p>` : ''}
+      <p><strong>ID:</strong> ${order.short_id || order.id}</p>
+      <p><strong>Cliente:</strong> ${displayClient || 'Anónimo'}</p>
       <p><strong>Servicio:</strong> ${order.service?.name || 'N/A'}</p>
       <p><strong>Ruta:</strong> ${order.pickup} → ${order.delivery}</p>
-      <p><strong>Fecha/Hora:</strong> ${order.date} ${order.time}</p>
+      <p><strong>Fecha/Hora:</strong> ${order.date} ${order.time || ''}</p>
       ${order.service_questions && Object.keys(order.service_questions).length > 0 ? `
         <div class="mt-2 pt-2 border-t">
           <strong class="block mb-1">Detalles Adicionales:</strong>

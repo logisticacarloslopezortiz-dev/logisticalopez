@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const isNumeric = /^[0-9]+$/.test(orderIdValue);
 
             let query = supabaseConfig.client
-                .from('orders_with_client')
+                .from('orders')
                 .select('*');
 
             if (isHex32) {
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('JWT expirado o no autorizado para buscar orden. Reintentando con cliente anon...');
                 try {
                     const publicClient = supabaseConfig.getPublicClient();
-                    const publicQuery = publicClient.from('orders_with_client').select('*');
+                    const publicQuery = publicClient.from('orders').select('*');
                     if (isHex32) publicQuery.eq('client_tracking_id', orderIdValue.toLowerCase());
                     else if (isUUID) publicQuery.eq('id', orderIdValue);
                     else if (isNumeric) publicQuery.eq('supabase_seq_id', Number(orderIdValue));
@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'Aceptada': 'Un colaborador ha sido asignado a tu solicitud',
             'En curso': 'Tu servicio está en proceso',
             'Completada': 'Tu servicio ha sido completado exitosamente',
-            'Cancelado': 'Tu solicitud ha sido cancelada',
+            'Cancelada': 'Tu solicitud ha sido cancelada',
             // Estados de acción del colaborador
             'en_camino_recoger': 'El colaborador está en camino a recoger',
             'cargando': 'El colaborador está cargando el servicio',
@@ -376,8 +376,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'Pendiente': 'status-pending',
             'Asignado': 'status-assigned',
             'En proceso': 'status-in-progress',
-            'Completado': 'status-completed',
-            'Cancelado': 'status-canceled'
+            'Completada': 'status-completed',
+            'Cancelada': 'status-canceled'
         };
         return statusClasses[mapped] || 'status-pending';
     }
@@ -386,9 +386,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!status) return 'Pendiente';
         if (status === 'Aceptada') return 'Asignado';
         if (status === 'En curso') return 'En proceso';
-        if (status === 'Completada') return 'Completado';
+        if (status === 'Completada') return 'Completada';
         if (status === 'Pendiente') return 'Pendiente';
-        if (status === 'Cancelado') return 'Cancelado';
+        if (status === 'Cancelada') return 'Cancelada';
         const actionMap = {
             'en_camino_recoger': 'En camino a recoger',
             'cargando': 'Cargando',
