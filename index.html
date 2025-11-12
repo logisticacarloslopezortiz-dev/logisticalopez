@@ -146,6 +146,10 @@
             <span class="text-gray-700 hover:text-azulOscuro transition-colors">Ver Estado</span>
             <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
           </a>
+          <a href="#colaboradores" class="relative group">
+            <span class="text-gray-700 hover:text-azulOscuro transition-colors">Colaboración</span>
+            <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
+          </a>
         </div>
         
         <!-- CTA Buttons -->
@@ -190,6 +194,10 @@
           <a href="seguimiento.html" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
             <i class="fas fa-map-location-dot text-azulClaro group-hover:text-acento transition-colors"></i>
             <span class="font-medium">Ver Estado</span>
+          </a>
+          <a href="#colaboradores" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
+            <i class="fas fa-hands-helping text-azulClaro group-hover:text-acento transition-colors"></i>
+            <span class="font-medium">Colaboración</span>
           </a>
         </nav>
         
@@ -369,6 +377,40 @@
     </div>
   </section>
 
+  <!-- Colaboradores -->
+  <section id="colaboradores" class="py-16 lg:py-24 bg-white">
+    <div class="max-w-7xl mx-auto px-6 text-center">
+      <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-4">Únete a Nuestro Equipo</h3>
+      <p class="max-w-2xl mx-auto text-gray-600 text-lg mb-12">
+        Buscamos personas comprometidas y con ganas de crecer. Si tienes un vehículo de carga y quieres formar parte de nuestra red de colaboradores, completa el formulario y nos pondremos en contacto contigo.
+      </p>
+
+      <!-- Formulario de Colaboración -->
+      <div class="max-w-2xl mx-auto">
+        <form id="colaborador-form" class="grid grid-cols-1 gap-6 text-left">
+          <div>
+            <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre Completo</label>
+            <input type="text" id="nombre" name="nombre" required class="mt-1 block w-full px-4 py-3 bg-gray-100 border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-azulClaro transition">
+          </div>
+          <div>
+            <label for="telefono" class="block text-sm font-medium text-gray-700">Teléfono (WhatsApp)</label>
+            <input type="tel" id="telefono" name="telefono" required class="mt-1 block w-full px-4 py-3 bg-gray-100 border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-azulClaro transition">
+          </div>
+          <div>
+            <label for="mensaje" class="block text-sm font-medium text-gray-700">Mensaje (Opcional)</label>
+            <textarea id="mensaje" name="mensaje" rows="4" class="mt-1 block w-full px-4 py-3 bg-gray-100 border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-azulClaro transition" placeholder="Háblanos de ti, tu vehículo y tu experiencia."></textarea>
+          </div>
+          <div class="text-center">
+            <button type="submit" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-azulOscuro hover:bg-azulOscuro/90 text-white px-8 py-3 rounded-lg font-bold transition-transform hover:scale-105 shadow-lg">
+              <i class="fab fa-whatsapp"></i>
+              <span>Enviar Solicitud</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
   <!-- CTA Final -->
   <section id="nosotros" class="py-16 lg:py-24 bg-azulOscuro">
     <div class="max-w-4xl mx-auto px-6 text-center text-white">
@@ -402,7 +444,7 @@
           <h4 class="text-lg font-semibold">Visítanos</h4>
           <p class="text-white/80 text-sm">San Cristobal, República Dominicana. Lun–Sáb 8:00am–6:00pm.</p>
           <div class="rounded-lg overflow-hidden shadow">
-            <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3785.5038338180843!2d-70.11383450321048!3d18.41541940000002!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8ea55fef226a8a05%3A0xb77b6f03eacff4f1!2sLog%C3%ADstica%20L%C3%B3pez%20Ortiz!5e0!3m2!1ses-419!2sdo!4v1760744245879!5m2!1ses-419!2sdo" width="100%" height="220" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3785.5038338180843!2d-70.1138345!3d18.4154194!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8ea55fef226a8a05%3A0xb77b6f03eacff4f1!2sLog%C3%ADstica%20L%C3%B3pez%20Ortiz!5e0!3m2!1ses-419!2sdo!4v1620000000000!5m2!1ses-419!2sdo" width="100%" height="220" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
           </div>
         </div>
         <div class="space-y-3">
@@ -461,5 +503,28 @@
     // --- FIN: Lógica para activar animación ---
   </script>
   <script src="js/pwa.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('colaborador-form');
+      form.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const nombre = document.getElementById('nombre').value;
+        const telefono = document.getElementById('telefono').value;
+        const mensaje = document.getElementById('mensaje').value;
+
+        const numeroEmpresa = '18297293822';
+        let textoWhatsApp = `¡Hola! Quisiera colaborar con ustedes.\n\n*Nombre:* ${nombre}\n*Teléfono:* ${telefono}`;
+
+        if (mensaje) {
+          textoWhatsApp += `\n\n*Mensaje:* ${mensaje}`;
+        }
+
+        const urlWhatsApp = `https://wa.me/${numeroEmpresa}?text=${encodeURIComponent(textoWhatsApp)}`;
+
+        window.open(urlWhatsApp, '_blank');
+      });
+    });
+  </script>
 </body>
 </html>
