@@ -535,6 +535,31 @@ async function initMap() {
     calculateAndDisplayDistance();
     fitMapToBounds();
   }
+  // Búsqueda programática desde inputs con debounce para UX móvil
+  const provider = new GeoSearch.OpenStreetMapProvider();
+  let debounceTimer = null;
+  const debouncedSearch = (inputEl, isOrigin) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      const q = inputEl.value.trim();
+      if (!q) return;
+      try {
+        const results = await provider.search({ query: q });
+        if (results && results[0]) {
+          const r = results[0];
+          if (!isOriginSet && isOrigin) {
+            updateMarkerAndAddress({ lat: r.y, lng: r.x }, r.label);
+          } else if (isOriginSet && !isOrigin) {
+            updateMarkerAndAddress({ lat: r.y, lng: r.x }, r.label);
+          }
+          map.setView([r.y, r.x], Math.min(16, map.getZoom() || 15));
+        }
+      } catch(e) { /* no-op */ }
+    }, 350);
+  };
+
+  pickupInput.addEventListener('input', () => debouncedSearch(pickupInput, true));
+  deliveryInput.addEventListener('input', () => debouncedSearch(deliveryInput, false));
 }
 
 function fitMapToBounds() {
@@ -813,6 +838,18 @@ document.addEventListener('DOMContentLoaded', function() {
   const timeInput = document.querySelector('input[type="time"]');
   if (timeInput) {
       timeInput.addEventListener('change', () => document.getElementById('time-message').classList.remove('hidden'));
+  }
+  // Restringir calendario a fechas futuras o de hoy
+  const dateInput = document.querySelector('input[type="date"]');
+  if (dateInput) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dateInput.min = `${yyyy}-${mm}-${dd}`;
+    if (dateInput.value && dateInput.value < dateInput.min) {
+      dateInput.value = dateInput.min;
+    }
   }
 
   // Añadir validación en tiempo real para el paso 1

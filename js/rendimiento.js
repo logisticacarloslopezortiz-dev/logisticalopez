@@ -28,11 +28,24 @@ async function getSupabaseSession() {
     }
 }
 
-// Función para cargar órdenes y métricas
-function loadOrders() {
-    const orders = JSON.parse(localStorage.getItem('tlc_orders') || '[]');
-    const metrics = JSON.parse(localStorage.getItem('tlc_collab_metrics') || '{}');
-    return { orders, metrics };
+// Consulta a Supabase de órdenes del colaborador
+async function fetchCollaboratorOrders(collabId) {
+    try {
+        const { data, error } = await supabaseConfig.client
+            .from('orders')
+            .select(`*, service:services(name), vehicle:vehicles(name)`) 
+            .or(`assigned_to.eq.${collabId},status.eq.Completada`)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []).map(o => ({
+            ...o,
+            service_name: o.service?.name || o.service || 'N/A',
+            vehicle_name: o.vehicle?.name || o.vehicle || 'N/A'
+        }));
+    } catch (e) {
+        console.error('Error cargando órdenes de Supabase:', e);
+        return [];
+    }
 }
 
 // Función para formatear nombre del colaborador
@@ -42,44 +55,35 @@ function collabDisplayName(email) {
 }
 
 // Función para calcular métricas principales
-function calculateMainMetrics(data, email) {
-    const collaboratorOrders = data.orders.filter(order => order.completedBy === email || order.assignedEmail === email);
-    const metrics = data.metrics[email] || { completedOrders: 0, totalTime: 0, serviceTypes: {} };
-    
-    const completed = collaboratorOrders.filter(order => 
-        order.lastCollabStatus === 'entregado' || order.status === 'Completado'
-    );
-    
-    const active = collaboratorOrders.filter(order => 
-        ['en_camino_recoger', 'cargando', 'en_camino_entregar'].includes(order.lastCollabStatus)
-    );
-    
-    const total = metrics.completedOrders;
-    const successRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
-    
-    // Calcular tiempo promedio real
-    const avgTime = metrics.totalTime > 0 ? Math.round(metrics.totalTime / (1000 * 60 * metrics.completedOrders)) : 0;
-    
+function calculateMainMetrics(orders, collabId) {
+    const mine = orders.filter(o => o.assigned_to === collabId);
+    const completed = mine.filter(o => o.status === 'Completada' || o.last_collab_status === 'entregado');
+    const active = mine.filter(o => ['en_camino_recoger','cargando','en_camino_entregar'].includes(o.last_collab_status) || o.status === 'En proceso');
+    const successRate = mine.length > 0 ? Math.round((completed.length / mine.length) * 100) : 0;
+    const avgTimeMin = Math.round(completed.reduce((sum, o) => {
+        const start = new Date(o.created_at).getTime();
+        const end = new Date(o.completed_at || o.updated_at || o.created_at).getTime();
+        return sum + Math.max(0, (end - start) / 60000);
+    }, 0) / Math.max(1, completed.length));
     return {
-        completed: metrics.completedOrders,
+        completed: completed.length,
         active: active.length,
         successRate,
-        avgTime
+        avgTime: Math.round(avgTimeMin / 60)
     };
 }
 
 // Función para obtener datos semanales
-function getWeeklyData(data, email) {
+function getWeeklyData(orders, collabId) {
     const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     const weekData = new Array(7).fill(0);
     
     const now = new Date();
     const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 1));
-    
-    const collaboratorOrders = data.orders.filter(order => order.completedBy === email);
-    collaboratorOrders.forEach(order => {
-        if (order.completedAt) {
-            const orderDate = new Date(order.completedAt);
+    const mine = orders.filter(o => o.assigned_to === collabId);
+    mine.forEach(order => {
+        if (order.completed_at) {
+            const orderDate = new Date(order.completed_at);
             const daysDiff = Math.floor((orderDate - startOfWeek) / (1000 * 60 * 60 * 24));
             if (daysDiff >= 0 && daysDiff < 7) {
                 weekData[daysDiff]++;
@@ -91,27 +95,18 @@ function getWeeklyData(data, email) {
 }
 
 // Función para obtener distribución de servicios
-function getServicesDistribution(data, email) {
-    const metrics = data.metrics[email] || { serviceTypes: {} };
-    const services = metrics.serviceTypes;
-    
-    return {
-        labels: Object.keys(services),
-        data: Object.values(services)
-    };
+function getServicesDistribution(orders, collabId) {
+    const mine = orders.filter(o => o.assigned_to === collabId);
+    const map = {};
+    mine.forEach(o => { map[o.service_name] = (map[o.service_name] || 0) + 1; });
+    return { labels: Object.keys(map), data: Object.values(map) };
 }
 
 // Función para obtener estadísticas por vehículo
-function getVehicleStats(data, email) {
-    const collaboratorOrders = data.orders.filter(order => order.completedBy === email);
+function getVehicleStats(orders, collabId) {
+    const mine = orders.filter(o => o.assigned_to === collabId && (o.status === 'Completada' || o.last_collab_status === 'entregado'));
     const vehicles = {};
-    
-    collaboratorOrders.forEach(order => {
-        if (order.vehicle && order.completedAt) {
-            vehicles[order.vehicle] = (vehicles[order.vehicle] || 0) + 1;
-        }
-    });
-    
+    mine.forEach(o => { vehicles[o.vehicle_name] = (vehicles[o.vehicle_name] || 0) + 1; });
     return vehicles;
 }
 
@@ -344,11 +339,11 @@ function renderTimeStats(timeStats) {
 }
 
 // Función para renderizar historial reciente
-function renderRecentHistory(collaboratorOrders) {
+function renderRecentHistory(orders, collabId) {
     const container = document.getElementById('recentHistory');
-    const recentOrders = collaboratorOrders
-        .filter(order => order.lastCollabStatus === 'entregado' || order.status === 'entregado')
-        .sort((a, b) => new Date(b.fecha || b.createdAt || 0) - new Date(a.fecha || a.createdAt || 0))
+    const recentOrders = orders
+        .filter(order => order.assigned_to === collabId && (order.status === 'Completada' || order.last_collab_status === 'entregado'))
+        .sort((a, b) => new Date(b.completed_at || b.updated_at || b.created_at || 0) - new Date(a.completed_at || a.updated_at || a.created_at || 0))
         .slice(0, 10);
     
     container.innerHTML = '';
@@ -365,7 +360,7 @@ function renderRecentHistory(collaboratorOrders) {
     }
     
     recentOrders.forEach(order => {
-        const date = new Date(order.fecha || order.createdAt || Date.now());
+        const date = new Date(order.completed_at || order.updated_at || order.created_at || Date.now());
         const formattedDate = date.toLocaleDateString('es-ES', { 
             day: '2-digit', 
             month: '2-digit' 
@@ -377,8 +372,8 @@ function renderRecentHistory(collaboratorOrders) {
         row.className = 'border-b border-gray-100 hover:bg-gray-50';
         row.innerHTML = `
             <td class="py-3">${formattedDate}</td>
-            <td class="py-3">${order.servicio || 'N/A'}</td>
-            <td class="py-3">${order.vehiculo || 'N/A'}</td>
+            <td class="py-3">${order.service_name || 'N/A'}</td>
+            <td class="py-3">${order.vehicle_name || 'N/A'}</td>
             <td class="py-3">
                 <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
                     Completado
@@ -401,41 +396,24 @@ function updateCollaboratorProfile(session) {
 }
 
 // Función principal para cargar datos
-function loadPerformanceData() {
-    const data = loadOrders();
-    
-    // Actualizar métricas principales
-    const mainMetrics = calculateMainMetrics(data, currentCollabEmail);
+async function loadPerformanceData(collabId) {
+    const orders = await fetchCollaboratorOrders(collabId);
+    const mainMetrics = calculateMainMetrics(orders, collabId);
     document.getElementById('completedCount').textContent = mainMetrics.completed;
     document.getElementById('activeCount').textContent = mainMetrics.active;
     document.getElementById('successRate').textContent = mainMetrics.successRate + '%';
     document.getElementById('avgTime').textContent = mainMetrics.avgTime + 'h';
-    
-    // Crear gráficos
-    const weeklyData = getWeeklyData(data, currentCollabEmail);
+    const weeklyData = getWeeklyData(orders, collabId);
     createWeeklyChart(weeklyData);
-    
-    const servicesData = getServicesDistribution(data, currentCollabEmail);
+    const servicesData = getServicesDistribution(orders, collabId);
     createServicesChart(servicesData);
-    
-    // Actualizar progreso circular
-    const monthlyGoal = 50; // Meta mensual
+    const monthlyGoal = 50;
     updateProgressCircle(mainMetrics.completed, monthlyGoal);
-    
-    // Renderizar estadísticas
-    const vehicleStats = getVehicleStats(data, currentCollabEmail);
+    const vehicleStats = getVehicleStats(orders, collabId);
     renderVehicleStats(vehicleStats);
-    
-    // Renderizar horario
-    const schedule = getTimeStats(data, currentCollabEmail);
+    const schedule = getTimeStats({ }, currentCollabEmail);
     renderSchedule(schedule);
-    
-    // Renderizar historial
-    const collaboratorOrders = data.orders.filter(order => 
-        order.completedBy === currentCollabEmail || 
-        order.assignedEmail === currentCollabEmail
-    );
-    renderRecentHistory(collaboratorOrders);
+    renderRecentHistory(orders, collabId);
 }
 
 // Inicialización
@@ -451,9 +429,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         lucide.createIcons();
     }
 
-    // Cargar datos de rendimiento
-    loadPerformanceData();
+    await loadPerformanceData(session.user.id);
 
     // Actualizar cada 30 segundos
-    setInterval(loadPerformanceData, 30000);
+    setInterval(() => loadPerformanceData(session.user.id), 30000);
 });

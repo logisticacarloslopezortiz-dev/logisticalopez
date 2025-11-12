@@ -1,0 +1,115 @@
+[33m76f9aed[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge pull request #36 from logisticacarloslopezortiz-dev/feat/collaboration-and-map-fix
+[33m8addad5[m chore: Finalize changes after review
+[33maca591c[m Merge pull request #35 from logisticacarloslopezortiz-dev/feat-collaboration-and-map-fix
+[33m0ec17ac[m feat: Add collaboration section and fix map
+[33m85f3ea9[m actualizacion de la base de datos
+[33m66c0cee[m actualizacion de tabla
+[33mac8ce5f[m a
+[33m681527c[m Merge pull request #33 from logisticacarloslopezortiz-dev/fix-undefined-data-in-table
+[33md04c7c8[m feat(inicio): Refactoriza la carga de datos para corregir valores 'undefined'
+[33m5738115[m modernizacion
+[33m6dcf8d9[m actualizacion de datos
+[33m6e5dd95[m Merge pull request #32 from logisticacarloslopezortiz-dev/feat-whatsapp-ganancias-correccion
+[33ma1224ea[m fix: Corregir errores en historial, inicio y panel de colaborador
+[33mab43727[m fix: Corregir carga de datos y lógica de estados en historial
+[33m8880609[m feat: Forzar actualización de caché en script de historial
+[33m67fb3b5[m fix: Aplica cache busting para forzar la actualización del script de historial
+[33m5403fe4[m chore: Verify collaborator name query on history page
+[33mf14df6c[m feat: Corrige consulta de historial y refuerza la gestión de sesiones
+[33m13891c4[m feat: Refuerza la gestión de sesiones y corrige el botón de WhatsApp
+[33mdccdffb[m feat: Implementa correcciones en botón de WhatsApp y cálculo de ganancias
+[33mea4f586[m Merge pull request #31 from logisticacarloslopezortiz-dev/feat-whatsapp-ganancias-correccion
+[33mca33520[m feat: Ajusta vista de colaborador y enriquece historial
+[33m87d6117[m Merge pull request #30 from logisticacarloslopezortiz-dev/feat-whatsapp-ganancias-correccion
+[33m94cd76d[m feat: Actualiza mensaje de WhatsApp y corrige cálculo de ganancias
+[33m2d2a41f[m actualizacion de sql
+[33m8196557[m proyecto actualizacion de nortificacion
+[33mde94de0[m actualizaciom amplio
+[33m49cdef8[m odificacion de archivos
+[33m45b8d05[m actualizacion de mi proyecto
+[33mc583e9f[m Actualiza todos los archivos y sincroniza cambios
+[33meae5791[m a
+[33m31d0e86[m a
+[33mbc8854e[m a
+[33mea24070[m a
+[33mdc2f54f[m Merge pull request #29 from logisticacarloslopezortiz-dev/feat-branded-animations
+[33m906d76b[m[33m ([m[1;31morigin/feat-branded-animations[m[33m)[m fix(js): Corrige errores de JS por referencias a DOM obsoleto
+[33m3912f07[m Merge pull request #28 from logisticacarloslopezortiz-dev/feat-branded-animations
+[33m6186716[m feat: Rediseño integral del panel, mejoras visuales y verificación funcional
+[33m0922610[m fix: Elimina advertencia de múltiples instancias de Supabase
+[33mec3c5da[m Merge pull request #27 from logisticacarloslopezortiz-dev/feat-branded-animations
+[33mef5980f[m feat: Rediseño completo del panel de administración y corrección de errores
+[33m88d4c78[m Merge pull request #26 from logisticacarloslopezortiz-dev/feat-branded-animations
+[33m22440cf[m fix: Mejorar la robustez del panel de colaborador
+[33m0656b3b[m Merge pull request #25 from logisticacarloslopezortiz-dev/feat-branded-animations
+[33mafb25b7[m feat: Rediseño de la interfaz de usuario y refactorización del panel de colaboradores
+[33m2160055[m Merge pull request #24 from logisticacarloslopezortiz-dev/feat-branded-animations
+[33m85b3962[m Fix(panel): Correct RLS error and improve loading UX
+[33m156ea86[m Merge pull request #23 from logisticacarloslopezortiz-dev/feat-branded-animations
+[33mf9ca65b[m Refactor collaborator panel with Google Maps and performance improvements.
+[33mf7c5c61[m Merge pull request #22 from logisticacarloslopezortiz-dev/feat-branded-animations
+[33me0c7128[m Merge branch 'main' into feat-branded-animations
+[33m74efed5[m feat: Implementa animaciones personalizadas y de marca
+[33mb3389bc[m a
+[33mf6901ff[m a
+[33m564af54[m Merge pull request #21 from logisticacarloslopezortiz-dev/refactor-collab-panel
+[33me9f9af0[m[33m ([m[1;31morigin/refactor-collab-panel[m[33m)[m feat(colaborador): Unifica el panel y el historial en una vista con pestañas
+[33me7e3bc1[m Merge pull request #20 from logisticacarloslopezortiz-dev/refactor-collab-panel
+[33m12b89ab[m feat(colaborador): Optimiza y corrige el panel de colaborador
+[33m746ae3f[m Merge pull request #19 from logisticacarloslopezortiz-dev/refactor-collab-panel
+[33m8774c63[m feat: Refactor and improve collaborator panel
+[33m2ec8ebe[m a
+[33mf5bb571[m a
+[33m3c0505a[m a
+[33m9def254[m a
+[33m5c8bd3a[m Actualización de historial y panel colaborador
+[33m21f7407[m Actualización de historial y panel colaborador
+[33mf08d203[m Actualización del proyecto: mejoras en panel y corrección de errores
+[33m4f4b131[m Actualización del proyecto: mejoras en panel y corrección de errores
+[33mfe058c7[m Manteniendo versión local de js/cliente.js tras resolver conflicto
+[33mc69b8e7[m Merge pull request #18 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33mc23246f[m[33m ([m[1;31morigin/feat-collab-panel-improvements-and-table-view[m[33m)[m feat: Añade esquema de base de datos completo y seguro
+[33mfe5686a[m Merge pull request #17 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33mc2d984e[m Mensaje del commit
+[33mf28311f[m fix: Soluciona visualización de colaboradores y error de actualización de estado
+[33m898158c[m Merge pull request #16 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33mb264870[m fix: Soluciona error de notificaciones con nueva estrategia de caché
+[33mf57e21d[m Merge pull request #15 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33ma3412c9[m feat: Sincroniza paneles y corrige notificaciones push
+[33m08aa9fe[m Merge pull request #14 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33meba3cc7[m feat: Mejoras en el panel de dueño y corrección de facturación
+[33mdd6567c[m Merge pull request #13 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33m6256c5c[m Este commit soluciona varios problemas críticos en el panel de colaborador y funcionalidades relacionadas, mejorando la experiencia y la integridad de los datos.
+[33m557f2c4[m Merge pull request #12 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33m509668e[m fix: Mejoras en el Panel de Colaborador
+[33m32d034e[m Merge pull request #11 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33me246c15[m fix: correct sidebar functionality and revert collaborators view
+[33m480ad37[m Merge pull request #10 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33me2a28ed[m fix(collab-panel): Implementa solución de sidebar 100% responsiva
+[33m078ddc8[m Merge pull request #9 from logisticacarloslopezortiz-dev/feat-collab-panel-improvements-and-table-view
+[33m4ee809d[m feat: Mejora paneles y restaura vista de tabla
+[33me7df1bc[m a
+[33m5694b1d[m actualizacion
+[33mb06d9b7[m a
+[33mc50f368[m a
+[33mfccf6ad[m a
+[33m622890a[m a
+[33mdd46439[m a
+[33mdd40981[m actulizacion
+[33m43db791[m actualizaciones del proyecto
+[33m7c15677[m actualizar
+[33m5a84e3d[m actualizacion
+[33mad41a93[m actualizacion en archivos
+[33madc12d5[m actualizaciones
+[33mec5dba2[m actualizacion
+[33m44f29a7[m Actualización: panel de maestra simulado con dashboard arriba
+[33mf9e9bd0[m actualizacion
+[33mc042d00[m Migración: crear tablas faltantes (notifications, push_subscriptions, profiles, collaborators, matriculas, invoices)
+[33ma17f8ba[m Primer commit
+[33mb4fc077[m Actualización general
+[33m6854336[m Actualización general
+[33macc8282[m Actualización general
+[33m8b82959[m Actualización general
+[33mdb0effd[m Actualización general
+[33mc68dfcb[m Actualización del proyecto
+[33mf6e13c9[m Actualización: Landing page completa de Karpus Kids c

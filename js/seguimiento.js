@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let query = supabaseConfig.client
                 .from('orders')
-                .select('*');
+                .select('*, service:services(name), vehicle:vehicles(name)');
 
             if (isHex32) {
                 query = query.eq('client_tracking_id', orderIdValue.toLowerCase());
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('JWT expirado o no autorizado para buscar orden. Reintentando con cliente anon...');
                 try {
                     const publicClient = supabaseConfig.getPublicClient();
-                    const publicQuery = publicClient.from('orders').select('*');
+                    const publicQuery = publicClient.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
                     if (isHex32) publicQuery.eq('client_tracking_id', orderIdValue.toLowerCase());
                     else if (isUUID) publicQuery.eq('id', orderIdValue);
                     else if (isNumeric) publicQuery.eq('supabase_seq_id', Number(orderIdValue));
@@ -270,40 +270,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Poblar Timeline
         const timelineContainer = document.getElementById('timeline');
-        timelineContainer.innerHTML = ''; // Limpiar
+        timelineContainer.innerHTML = '';
 
-        const timelineEvents = new Map();
-
-        // Función para añadir eventos evitando duplicados por nombre
-        const addEvent = (name, date) => {
-            if (name && date && !timelineEvents.has(name)) {
-                const pretty = prettyTimelineLabel(name);
-                timelineEvents.set(pretty, new Date(date));
-            }
+        const events = [];
+        const pushEvent = (name, date) => {
+            if (!name || !date) return;
+            events.push({ name: prettyTimelineLabel(name), date: new Date(date) });
         };
 
-        // 1. Añadir todos los eventos del tracking_data (fuente principal de verdad)
         if (Array.isArray(order.tracking_data)) {
-            order.tracking_data.forEach(trackPoint => addEvent(trackPoint.status, trackPoint.date));
+            order.tracking_data
+                .filter(tp => tp && tp.status && tp.date)
+                .forEach(tp => pushEvent(tp.status, tp.date));
         }
 
-        // 2. Añadir eventos clave que podrían no estar en tracking_data, como respaldo
-        addEvent('Solicitud Creada', order.created_at);
-        if (order.assigned_at) addEvent('Servicio Asignado', order.assigned_at);
-        if (order.completed_at) addEvent('Servicio Completado', order.completed_at);
+        pushEvent('Solicitud Creada', order.created_at);
+        if (order.assigned_at) pushEvent('Servicio Asignado', order.assigned_at);
+        if (order.completed_at) pushEvent('Servicio Completado', order.completed_at);
 
-        // Convertir el mapa a un array, ordenar por fecha y renderizar
-        Array.from(timelineEvents.entries())
-            .sort(([, dateA], [, dateB]) => dateA - dateB)
-            .forEach(([name, date]) => {
-                const item = document.createElement('div');
-                item.className = 'timeline-item active';
-                item.innerHTML = `
-                    <h4 class="font-semibold text-gray-800">${name}</h4>
-                    <p class="text-sm text-gray-500">${date.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-                `;
-                timelineContainer.appendChild(item);
-            });
+        events.sort((a, b) => a.date - b.date).forEach(ev => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item active';
+            item.innerHTML = `
+                <h4 class="font-semibold text-gray-800">${ev.name}</h4>
+                <p class="text-sm text-gray-500">${ev.date.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+            `;
+            timelineContainer.appendChild(item);
+        });
 
         // ✅ NUEVO: Inicializar el mapa con las coordenadas de la orden
         initializeMap(order);
@@ -326,6 +319,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ✅ NUEVO: Función para inicializar y dibujar en el mapa
+    function normalizeCoords(coords) {
+        try {
+            if (!coords) return null;
+            if (typeof coords === 'string') {
+                const cleaned = coords.replace(/[\[\]\(\)]/g, '');
+                const parts = cleaned.split(',').map(p => parseFloat(p.trim()));
+                if (parts.length === 2 && parts.every(n => !isNaN(n))) return { lat: parts[0], lng: parts[1] };
+                return null;
+            }
+            if (Array.isArray(coords) && coords.length === 2) {
+                const [lat, lng] = coords.map(p => parseFloat(p));
+                if (![lat, lng].some(isNaN)) return { lat, lng };
+                return null;
+            }
+            if (typeof coords === 'object' && typeof coords.lat === 'number' && typeof coords.lng === 'number') return coords;
+            return null;
+        } catch (_) { return null; }
+    }
+
     function initializeMap(order) {
         if (!trackingMap) { // Inicializar el mapa solo una vez
             trackingMap = L.map('trackingMap').setView([18.4861, -69.9312], 9); // Vista por defecto en RD
@@ -341,8 +353,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        const origin = order.origin_coords;
-        const destination = order.destination_coords;
+        const origin = normalizeCoords(order.origin_coords);
+        const destination = normalizeCoords(order.destination_coords);
 
         if (origin && destination) {
             const originLatLng = [origin.lat, origin.lng];

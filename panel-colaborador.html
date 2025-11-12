@@ -279,6 +279,10 @@
           </div>
           <!-- Contenedor de tarjetas: grid responsive para mostrar varias tarjetas por fila -->
           <div id="ordersCardContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden"></div>
+          <div id="pendingSection" class="mt-8">
+            <h2 class="text-lg font-semibold text-gray-800 mb-3">Solicitudes pendientes</h2>
+            <div id="pendingCardContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+          </div>
         </div>
       </div>
     
@@ -330,33 +334,19 @@
           <!-- Columna de Información (ocupa 3/5) -->
           <div id="activeJobInfo" class="lg:col-span-3"></div>
 
-          <!-- Columna de Mapa y Fotos (ocupa 2/5) -->
+          <!-- Columna derecha compacta: Acciones de mapa y fotos -->
           <div class="lg:col-span-2 space-y-6">
-            <!-- Mapa Google Maps Embebido -->
-            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200 shadow-lg">
-              <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2" style="font-family: 'Poppins', 'Comic Neue', sans-serif;">
+            <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow">
+              <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
-                Origen y Destino (desde Supabase)
+                Acciones de Mapa
               </h3>
-
-              <!-- Contenedor del Mapa Dinámico -->
-              <div id="activeJobMap" class="w-full h-64 rounded-xl overflow-hidden border-2 border-gray-200 shadow-lg mb-4 bg-gray-200">
-                <!-- El mapa se renderizará aquí vía JS -->
-              </div>
-              <p id="activeJobMapHint" class="text-xs text-center text-gray-500 -mt-2 mb-4">Cargando mapa...</p>
-
-              <!-- Botones de acción -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button id="viewLocationBtn"
-                        class="flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold rounded-2xl hover:from-blue-600 hover:to-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-                        style="font-family: 'Poppins', sans-serif;">
+                <button id="viewLocationBtn" class="flex items-center justify-center gap-3 px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition">
                   <i data-lucide="map-pin" class="w-5 h-5"></i>
                   Ver Origen
                 </button>
-
-                <button id="viewRouteBtn"
-                        class="flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold rounded-2xl hover:from-green-600 hover:to-green-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-                        style="font-family: 'Poppins', sans-serif;">
+                <button id="viewRouteBtn" class="flex items-center justify-center gap-3 px-4 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition">
                   <i data-lucide="route" class="w-5 h-5"></i>
                   Ver Ruta
                 </button>
@@ -406,6 +396,7 @@
   <script src="js/theme.js" defer></script>
   <script src="js/rating-system.js" defer></script>
   <script src="js/order-manager.js" defer></script>
+  <script src="js/push-notifications.js" defer></script>
   <script src="js/panel-colaborador.js" defer></script>
   <script src="js/pwa.js" defer></script>
   

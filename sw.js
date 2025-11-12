@@ -1,10 +1,11 @@
 // sw.js
 
 // COMENTARIO: Se añade versionado de caché para forzar la actualización de archivos.
-const CACHE_NAME = 'tlc-cache-v2';
+const CACHE_NAME = 'tlc-cache-v3';
 const urlsToCache = [
   '/',
   '/index.html',
+  '/offline.html',
   '/cliente.html',
   '/login.html',
   '/inicio.html',
@@ -12,8 +13,12 @@ const urlsToCache = [
   '/seguimiento.html',
   '/historial-solicitudes.html',
   '/css/styles.css',
-  '/js/cliente.js?v=1.2', // Se cachea la nueva versión
+  '/css/animations.css',
+  '/css/tailwind.min.css',
+  '/css/custom-styles.css',
+  '/js/cliente.js',
   '/js/inicio.js',
+  '/js/index.js',
   '/js/panel-colaborador.js',
   '/js/seguimiento.js',
   '/js/historial.js',
@@ -23,6 +28,10 @@ const urlsToCache = [
   '/js/pwa.js',
   '/img/1vertical.png',
   '/img/favicon.ico',
+  '/img/android-chrome-192x192.png',
+  '/img/android-chrome-512x512.png',
+  '/img/apple-touch-icon.png',
+  '/img/cargo.jpg',
   '/manifest.json'
 ];
 
@@ -62,17 +71,32 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
+  const dest = event.request.destination; // 'document', 'script', 'style', 'image', 'font', ''
+
   event.respondWith((async () => {
     const cached = await caches.match(event.request);
     try {
-      const network = await fetch(event.request);
-      // Devuelve respuesta de red si existe; si no, fallback a caché
-      return network || cached || new Response('Service Unavailable', { status: 503 });
+      const networkResponse = await fetch(event.request);
+      // Cachea en segundo plano algunos recursos estáticos para mejor experiencia offline
+      if (['script', 'style', 'image', 'font'].includes(dest)) {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(event.request, networkResponse.clone());
+        } catch (_) {}
+      }
+      return networkResponse;
     } catch (e) {
-      // En modo offline o si la red falla, devolver caché si existe
+      // Fallback a caché si existe
       if (cached) return cached;
-      // Último recurso: respuesta 503 para evitar errores no capturados
-      return new Response('Service Unavailable', { status: 503 });
+      // Para documentos, servir una página offline si está disponible
+      if (dest === 'document') {
+        const offline = await caches.match('/offline.html');
+        if (offline) return offline;
+      }
+      // Como último recurso, permitir que el navegador gestione el error sin forzar 503
+      return new Response('', { status: 408 });
     }
   })());
 });

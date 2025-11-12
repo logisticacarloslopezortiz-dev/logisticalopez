@@ -27,6 +27,19 @@
     } catch (err) {
       console.warn('Error al registrar ServiceWorker:', err);
     }
+
+    try {
+      if ('Notification' in window) {
+        const seen = localStorage.getItem('tlc_push_prompt_seen');
+        if (Notification.permission === 'default' && !seen) {
+          const proceed = confirm('¿Deseas recibir notificaciones sobre tus solicitudes?');
+          localStorage.setItem('tlc_push_prompt_seen', '1');
+          if (proceed && window.pushNotifications && window.pushNotifications.isSupported) {
+            try { await window.pushNotifications.enable(); } catch(_){}
+          }
+        }
+      }
+    } catch(_){}
   });
 
   // beforeinstallprompt handling moved to each page; expose helper

@@ -595,6 +595,7 @@ function returnToOrdersView() {
   localStorage.removeItem('tlc_collab_active_job');
   document.getElementById('activeJobSection').classList.add('hidden');
   document.getElementById('ordersCardContainer')?.classList.remove('hidden');
+  document.getElementById('pendingSection')?.classList.remove('hidden');
 }
 
 async function handleOrderCompletion(orderId) {
@@ -809,12 +810,6 @@ function showActiveJob(order){
   if (window.lucide) lucide.createIcons(); // Renderizar iconos
   renderPhotoGallery(order.evidence_photos || []); // Renderizar fotos
 
-  // Llamar a la función del mapa del HTML
-  if (typeof updateActiveJobMap === 'function') {
-    updateActiveJobMap(order.origin_coords, order.destination_coords);
-  }
-
-  // Enganchar botones de rutas para usar datos desde Supabase
   const originBtn = document.getElementById('viewLocationBtn');
   const routeBtn = document.getElementById('viewRouteBtn');
   if (originBtn) originBtn.onclick = handleViewOrigin;
@@ -848,7 +843,16 @@ function renderPhotoGallery(photos) {
   });
 }
 
-// Obtiene coordenadas y direcciones actuales desde Supabase para el trabajo activo
+
+
+// Cache de nombres de colaboradores para evitar mostrar UUIDs
+function getCollaboratorName(userId){
+  if (!userId) return '';
+  const cached = state.collabNameCache.get(userId);
+  return cached || userId; // Fallback al ID mientras se resuelve el nombre real
+}
+
+// Obtener datos de origen/destino para el trabajo activo
 async function fetchActiveOrderCoordsAndAddresses() {
   if (!state.activeJobId) throw new Error('No hay trabajo activo');
   const { data, error } = await supabaseConfig.client
@@ -860,7 +864,7 @@ async function fetchActiveOrderCoordsAndAddresses() {
   return data || {};
 }
 
-// Abre Google Maps en el origen usando coordenadas si existen, o texto si no
+// Abrir origen en Google Maps
 async function handleViewOrigin() {
   try {
     const data = await fetchActiveOrderCoordsAndAddresses();
@@ -871,7 +875,6 @@ async function handleViewOrigin() {
     if (origin && typeof origin.lat === 'number' && typeof origin.lng === 'number') {
       const url = `https://www.google.com/maps?q=${origin.lat},${origin.lng}`;
       window.open(url, '_blank');
-      if (typeof updateActiveJobMap === 'function') updateActiveJobMap(origin, null);
     } else if (pickupText) {
       const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickupText)}`;
       window.open(url, '_blank');
@@ -884,7 +887,7 @@ async function handleViewOrigin() {
   }
 }
 
-// Abre Google Maps con la ruta entre origen y destino
+// Abrir ruta en Google Maps
 async function handleViewRoute() {
   try {
     const data = await fetchActiveOrderCoordsAndAddresses();
@@ -897,7 +900,6 @@ async function handleViewRoute() {
     if (origin && destination && typeof origin.lat === 'number' && typeof origin.lng === 'number' && typeof destination.lat === 'number' && typeof destination.lng === 'number') {
       const url = `https://www.google.com/maps/dir/${origin.lat},${origin.lng}/${destination.lat},${destination.lng}`;
       window.open(url, '_blank');
-      if (typeof updateActiveJobMap === 'function') updateActiveJobMap(origin, destination);
     } else if (pickupText && deliveryText) {
       const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pickupText)}&destination=${encodeURIComponent(deliveryText)}`;
       window.open(url, '_blank');
@@ -908,13 +910,6 @@ async function handleViewRoute() {
     console.error('Error al abrir ruta en Maps:', err);
     showError('Error', 'No se pudo obtener la ruta desde Supabase.');
   }
-}
-
-// Cache de nombres de colaboradores para evitar mostrar UUIDs
-function getCollaboratorName(userId){
-  if (!userId) return '';
-  const cached = state.collabNameCache.get(userId);
-  return cached || userId; // Fallback al ID mientras se resuelve el nombre real
 }
 
 /**
@@ -1012,28 +1007,29 @@ function filterAndRender(){
   const activeJob = loadActiveJob();
   const collabId = state.collabSession?.user?.id;
   const all = state.allOrders || [];
-  // Órdenes pendientes visibles para todos (no asignadas)
   const pendingOrders = all.filter(o => o.status === 'Pendiente' && !o.assigned_to);
-  // Órdenes asignadas visibles solo para el colaborador dueño
   const myAssigned = all.filter(o => o.assigned_to === collabId && o.status !== 'Completada' && o.status !== 'Cancelada');
   
-  // Si hay un trabajo activo, mostrarlo y mantener visibles las pendientes + asignadas propias
   if (activeJob) {
     const activeOrder = state.allOrders.find(order => order.id === activeJob.orderId);
     if (activeOrder) {
       showActiveJob(activeOrder);
-      // Renderizar unión de pendientes + asignadas propias excluyendo la activa
-      const visible = [...pendingOrders, ...myAssigned].filter(o => o.id !== activeOrder.id);
-      renderOrders(visible);
+      const assignedContainer = document.getElementById('ordersCardContainer');
+      const pendingContainer = document.getElementById('pendingSection');
+      if (assignedContainer) assignedContainer.classList.add('hidden');
+      if (pendingContainer) pendingContainer.classList.add('hidden');
       return;
     } else {
-      // Si no se encuentra la orden activa, limpiar el trabajo activo
       clearActiveJob();
     }
   }
   
-  // Si no hay trabajo activo, mostrar pendientes + asignadas propias
-  renderOrders([...pendingOrders, ...myAssigned]);
+  const assignedContainer = document.getElementById('ordersCardContainer');
+  const pendingContainer = document.getElementById('pendingSection');
+  if (assignedContainer) assignedContainer.classList.toggle('hidden', myAssigned.length === 0);
+  if (pendingContainer) pendingContainer.classList.toggle('hidden', pendingOrders.length === 0);
+  renderAssignedCards(myAssigned);
+  renderPendingCards(pendingOrders);
   
   // Función para órdenes del historial (completadas) - se mantiene igual
   const historialForCollab = (o) => {
@@ -1064,7 +1060,7 @@ function ensureMobileContainer(){
   return document.getElementById('ordersCardContainer');
 }
 
-function renderMobileCards(orders){
+function renderAssignedCards(orders){
   const container = ensureMobileContainer();
   if (!container) return;
   if (!orders || orders.length === 0){
@@ -1088,17 +1084,50 @@ function renderMobileCards(orders){
         ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
           ? `<div class='mt-3'><button class='px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full' data-details-id="${o.id}">Detalles</button></div>`
           : ''}
-        <div class="mt-3 grid grid-cols-2 gap-2">
-          <button data-id="${o.id}" data-next="en_camino_recoger" class="mob-step-btn px-2 py-2 text-xs bg-blue-600 text-white rounded">Recoger</button>
-          <button data-id="${o.id}" data-next="cargando" class="mob-step-btn px-2 py-2 text-xs bg-yellow-600 text-white rounded">Cargando</button>
-          <button data-id="${o.id}" data-next="en_camino_entregar" class="mob-step-btn px-2 py-2 text-xs bg-indigo-600 text-white rounded">Entregar</button>
-          <button data-id="${o.id}" data-next="retraso_tapon" class="mob-step-btn px-2 py-2 text-xs bg-orange-600 text-white rounded">Retraso</button>
-          <button data-id="${o.id}" data-next="entregado" class="mob-step-btn col-span-2 px-2 py-2 text-xs bg-green-600 text-white rounded">Finalizar</button>
+        <div class="mt-3">
+          <button data-view-id="${o.id}" class="w-full px-2 py-2 text-xs bg-blue-600 text-white rounded">Ver</button>
         </div>
       </div>
     `;
   }).join('');
 
+  if (window.lucide) lucide.createIcons();
+}
+
+function ensurePendingContainer(){
+  return document.getElementById('pendingCardContainer');
+}
+
+function renderPendingCards(orders){
+  const container = ensurePendingContainer();
+  if (!container) return;
+  if (!orders || orders.length === 0){
+    container.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
+    return;
+  }
+  container.innerHTML = orders.map(o => {
+    const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
+    const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
+    return `
+      <div class="bg-white rounded-lg shadow p-4 border border-gray-100 cursor-pointer" data-order-id="${o.id}">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-semibold text-gray-900">#${o.id}</div>
+          <span class="px-2 py-1 rounded-full text-xs font-semibold ${status.badge}">${status.label}</span>
+        </div>
+        <div class="text-sm text-gray-800 font-medium">${o.name}</div>
+        <div class="text-xs text-gray-500 mb-2">${o.phone}</div>
+        <div class="text-sm text-gray-700">${o.service}</div>
+        <div class="text-xs text-gray-600 truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</div>
+        <div class="text-xs text-gray-600">${o.date} <span class="text-gray-400">•</span> ${o.time}</div>
+        ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
+          ? `<div class='mt-3'><button class='px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full' data-details-id="${o.id}">Detalles</button></div>`
+          : ''}
+        <div class="mt-3">
+          <button data-id="${o.id}" class="w-full px-2 py-2 text-xs bg-blue-600 text-white rounded">Aceptar</button>
+        </div>
+      </div>
+    `;
+  }).join('');
   if (window.lucide) lucide.createIcons();
 }
 
@@ -1113,7 +1142,7 @@ function renderOrders(orders){
       return;
     }
     container.classList.remove('hidden');
-    renderMobileCards(orders);
+    renderAssignedCards(orders);
   } catch (err) {
     console.error('Error en renderOrders:', err);
   }
@@ -1143,21 +1172,27 @@ function setupSidebarToggles() {
     const updateUI = () => {
         const isDesktop = window.innerWidth >= 768;
 
-        // Manage state transitions on resize
         if (isDesktop) {
             body.classList.remove('sidebar-mobile-open');
-            // Default to open sidebar on desktop if no state is set
             if (!body.classList.contains('sidebar-desktop-open') && !body.classList.contains('sidebar-desktop-closed')) {
                 body.classList.add('sidebar-desktop-open');
             }
+            // Asegurar exclusividad de estado en escritorio
+            if (body.classList.contains('sidebar-desktop-open')) {
+                body.classList.remove('sidebar-desktop-closed');
+            }
+            if (body.classList.contains('sidebar-desktop-closed')) {
+                body.classList.remove('sidebar-desktop-open');
+            }
         }
 
-        // Centralize the logic for the desktop "open" button's visibility
         const isSidebarClosed = body.classList.contains('sidebar-desktop-closed');
         if (isDesktop && isSidebarClosed) {
-            desktopOpenBtn.classList.remove('hidden');
+            desktopOpenBtn.classList.remove('md:hidden');
+            desktopOpenBtn.classList.add('md:block');
         } else {
-            desktopOpenBtn.classList.add('hidden');
+            desktopOpenBtn.classList.remove('md:block');
+            desktopOpenBtn.classList.add('md:hidden');
         }
     };
 
@@ -1460,7 +1495,9 @@ function setupEventListeners() {
     mainContent.addEventListener('click', (e) => {
       const card = e.target.closest('[data-order-id]');
       const detailsButton = e.target.closest('[data-details-id]');
-      const stepButton = e.target.closest('.mob-step-btn');
+      const stepButton = null;
+      const acceptBtn = e.target.closest('button[data-id]');
+      const viewBtn = e.target.closest('button[data-view-id]');
 
       if (detailsButton) {
         e.stopPropagation();
@@ -1468,14 +1505,30 @@ function setupEventListeners() {
         return;
       }
 
-      if (stepButton) {
-        e.stopPropagation();
-        changeStatus(Number(stepButton.dataset.id), stepButton.dataset.next);
-        return;
-      }
+      // se elimina manejo de stepButton para tarjetas compactas
 
       if (card) {
         handleCardClick(card.dataset.orderId);
+        return;
+      }
+      if (viewBtn) {
+        e.stopPropagation();
+        const id = Number(viewBtn.dataset.viewId);
+        const order = state.allOrders.find(o => o.id === id);
+        if (order) {
+          showActiveJob(order);
+          document.getElementById('ordersCardContainer')?.classList.add('hidden');
+          document.getElementById('pendingSection')?.classList.add('hidden');
+        }
+        return;
+      }
+      if (acceptBtn) {
+        e.stopPropagation();
+        const id = e.target.closest('button[data-id]').dataset.id;
+        const order = state.allOrders.find(o => o.id === Number(id));
+        if (order && !order.assigned_to && order.status === 'Pendiente') {
+          openAcceptModal(order);
+        }
       }
     });
   }
@@ -1538,6 +1591,8 @@ function setupEventListeners() {
         order.status = 'En proceso';
         order.last_collab_status = 'en_camino_recoger';
         showActiveJob(order);
+        document.getElementById('ordersCardContainer')?.classList.add('hidden');
+        document.getElementById('pendingSection')?.classList.add('hidden');
       }
     } else {
       showError('Error al aceptar la solicitud', error);
@@ -1694,8 +1749,8 @@ function restoreActiveJob() {
   // Primero intentar cargar desde localStorage
   const savedJob = loadActiveJob();
   if (savedJob) {
-    state.activeJobId = savedJob.id;
-    console.log(`[Persistencia] Trabajo activo cargado desde localStorage: #${savedJob.id}`);
+    state.activeJobId = savedJob.orderId || savedJob.id;
+    console.log(`[Persistencia] Trabajo activo cargado desde localStorage: #${state.activeJobId}`);
   }
 
   if (state.activeJobId) {
@@ -1709,6 +1764,8 @@ function restoreActiveJob() {
       showActiveJob(order);
       // Guardar el trabajo activo actualizado
       saveActiveJob(order);
+      document.getElementById('ordersCardContainer')?.classList.add('hidden');
+      document.getElementById('pendingSection')?.classList.add('hidden');
       return; // Éxito: Salir de la función
     }
 
