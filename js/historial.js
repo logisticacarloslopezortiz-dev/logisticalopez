@@ -467,10 +467,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loadHistory = async () => {
     try {
       console.log('[Historial] Iniciando carga de solicitudes...');
-      const publicClient = supabaseConfig.getPublicClient();
+      const authenticatedClient = supabaseConfig.client; // Usar el cliente autenticado
 
       // Paso 1: Obtener todas las órdenes completadas y canceladas sin joins
-      const { data: orders, error: ordersError } = await publicClient
+      const { data: orders, error: ordersError } = await authenticatedClient
         .from('orders')
         .select('*')
         .or('status.eq.Completada,status.eq.Cancelada')
@@ -498,7 +498,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       let services = [];
 
       if (collaboratorIds.length > 0) {
-        const { data: collabData, error: collabError } = await publicClient
+        const { data: collabData, error: collabError } = await authenticatedClient
           .from('profiles')
           .select('id, full_name')
           .in('id', collaboratorIds);
@@ -507,7 +507,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       if (serviceIds.length > 0) {
-        const { data: serviceData, error: serviceError } = await publicClient
+        const { data: serviceData, error: serviceError } = await authenticatedClient
           .from('services')
           .select('id, name')
           .in('id', serviceIds);
