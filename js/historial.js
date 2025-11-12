@@ -641,9 +641,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  // Carga inicial
-  await loadHistory();
-  
-  // Configurar suscripción en tiempo real
-  setupRealtimeSubscription();
+  // Carga inicial y suscripción en tiempo real
+  const initialize = async () => {
+    await loadHistory();
+    setupRealtimeSubscription();
+  };
+
+  // Esperar a que la sesión del administrador esté lista
+  window.addEventListener('admin-session-ready', initialize);
 });
