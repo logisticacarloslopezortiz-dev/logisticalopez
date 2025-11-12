@@ -322,6 +322,9 @@ CREATE TABLE public.notifications (
   read_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id);
+-- Índice para ordenar por fecha y filtrar no leídas
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON public.notifications((read_at IS NULL)) WHERE read_at IS NULL;
 
 -- Suscripciones push
 DROP TABLE IF EXISTS public.push_subscriptions CASCADE;
@@ -333,6 +336,15 @@ CREATE TABLE public.push_subscriptions (
   created_at timestamptz not null default now()
 );
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON public.push_subscriptions(user_id);
+-- Evitar duplicados de endpoint por usuario
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uniq_push_subscriptions_user_endpoint'
+  ) THEN
+    CREATE UNIQUE INDEX uniq_push_subscriptions_user_endpoint
+    ON public.push_subscriptions(user_id, endpoint);
+  END IF;
+END $$;
 
 -- --------------------------------------------------------------
 -- 6. POLÍTICAS RLS (SEGURIDAD)
@@ -451,6 +463,22 @@ FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 -- Notifications
 CREATE POLICY "user_manage_own_notifications" ON public.notifications
 FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- Permitir a administradores/owner gestionar notificaciones de cualquier usuario
+DROP POLICY IF EXISTS "admin_manage_notifications" ON public.notifications;
+CREATE POLICY "admin_manage_notifications" ON public.notifications
+FOR ALL USING (
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+) WITH CHECK (
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+);
+
+-- (Opcional) Permitir a administradores/owner leer suscripciones push para soporte
+DROP POLICY IF EXISTS "admin_read_push_subscriptions" ON public.push_subscriptions;
+CREATE POLICY "admin_read_push_subscriptions" ON public.push_subscriptions
+FOR SELECT USING (
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+);
 
 -- --------------------------------------------------------------
 -- 7. SEED DE CATÁLOGOS
@@ -2197,45 +2225,14 @@ to public
 with check (true);
 
 -- 🔹 2. Evitar que usuarios anónimos lean todas las órdenes
+-- Política correcta: solo admins/owners pueden leer todas las órdenes
 drop policy if exists "Solo lectura para admins" on public.orders;
 create policy "Solo lectura para admins"
 on public.orders
 for select
-to authenticated
-using (true);
-
--- 🔹 3. Asegurarte de que las columnas necesarias existen
-alter table public.orders
-add column if not exists notification_subscription jsonb,
-add column if not exists client_contact_id uuid references public.clients (id) on delete set null;
-
--- 🔹 4. (Opcional) Crear vista simplificada para administración
-create or replace view public.orders_with_clients as
-select 
-  o.id,
-  o.short_id,
-  o.created_at,
-  o.name,
-  o.phone,
-  o.status,
-  o.date,
-  o.time,
-  o.monto_cobrado,
-  o.metodo_pago,
-  o.assigned_to,
-  o.accepted_by,
-  o.notification_subscription,
-  o.client_contact_id,
-  c.name as client_name,
-  c.phone as client_phone,
-  c.email as client_email
-from public.orders o
-left join public.clients c on o.client_contact_id = c.id;
-
--- 🔹 5. (Opcional) Activar seguridad del VIEW (recomendado)
-alter view public.orders_with_clients owner to postgres;
-revoke all on public.orders_with_clients from public;
-grant select on public.orders_with_clients to authenticated;
+using (
+  public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+);
 
 
 -- Tabla de rendimiento del colaborador
@@ -2334,6 +2331,54 @@ alter table public.client_logs enable row level security;
 -- Nota: Las políticas RLS deben definirse según roles del proyecto.
 -- En esta migración se habilita RLS pero no se crean políticas, por lo que el acceso
 -- queda restringido por defecto (solo service role). Añade políticas en supabase/policies/rls_policies.sql.
+
+-- Asegurar integridad referencial en tablas nuevas (agregar FKs si faltan)
+DO $$
+BEGIN
+  -- device_bindings.user_id -> profiles(id)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'device_bindings_user_fk'
+  ) THEN
+    ALTER TABLE public.device_bindings
+      ADD CONSTRAINT device_bindings_user_fk
+      FOREIGN KEY (user_id)
+      REFERENCES public.profiles(id)
+      ON DELETE CASCADE;
+  END IF;
+
+  -- profile_changes.user_id -> profiles(id)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'profile_changes_user_fk'
+  ) THEN
+    ALTER TABLE public.profile_changes
+      ADD CONSTRAINT profile_changes_user_fk
+      FOREIGN KEY (user_id)
+      REFERENCES public.profiles(id)
+      ON DELETE CASCADE;
+  END IF;
+
+  -- profile_changes.editor_id -> profiles(id)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'profile_changes_editor_fk'
+  ) THEN
+    ALTER TABLE public.profile_changes
+      ADD CONSTRAINT profile_changes_editor_fk
+      FOREIGN KEY (editor_id)
+      REFERENCES public.profiles(id)
+      ON DELETE SET NULL;
+  END IF;
+
+  -- client_logs.user_id -> profiles(id)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'client_logs_user_fk'
+  ) THEN
+    ALTER TABLE public.client_logs
+      ADD CONSTRAINT client_logs_user_fk
+      FOREIGN KEY (user_id)
+      REFERENCES public.profiles(id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
 
 
 -- RLS policies for collaborators and orders
@@ -2473,6 +2518,15 @@ for delete using (
 create policy "user select own device_bindings" on public.device_bindings
 for select using (user_id = auth.uid());
 
+-- Allow users to create and delete their own device bindings (auto-bind/unbind)
+DROP POLICY IF EXISTS "user insert own device_bindings" ON public.device_bindings;
+CREATE POLICY "user insert own device_bindings" ON public.device_bindings
+FOR INSERT WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "user delete own device_bindings" ON public.device_bindings;
+CREATE POLICY "user delete own device_bindings" ON public.device_bindings
+FOR DELETE USING (user_id = auth.uid());
+
 -- Profile Changes table
 alter table public.profile_changes enable row level security;
 
@@ -2515,7 +2569,7 @@ for delete using (
 
 -- Allow users to view their own profile changes
 create policy "user select own profile_changes" on public.profile_changes
-for select using (target_user_id = auth.uid());
+for select using (user_id = auth.uid());
 
 -- Client Logs table
 alter table public.client_logs enable row level security;
