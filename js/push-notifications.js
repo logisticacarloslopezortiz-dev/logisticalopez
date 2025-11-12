@@ -32,7 +32,7 @@ class PushNotificationManager {
         try {
             // En producción, esto vendría de tu configuración
             // Por ahora usamos la clave del entorno
-            const { data, error } = await supabase.functions.invoke('get-vapid-key');
+            const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key');
             
             if (error) throw error;
             
@@ -46,7 +46,7 @@ class PushNotificationManager {
 
     async registerServiceWorker() {
         try {
-            const registration = await navigator.serviceWorker.register('/sw.js');
+            const registration = await navigator.serviceWorker.register('./sw.js');
             console.log('Service Worker registered:', registration);
             
             // Esperar a que esté activo
@@ -146,7 +146,7 @@ class PushNotificationManager {
 
     async saveSubscriptionToServer(subscription) {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await supabaseConfig.client.auth.getUser();
             
             if (!user) {
                 throw new Error('User not authenticated');
@@ -184,7 +184,7 @@ class PushNotificationManager {
 
     async syncSubscriptionWithServer(subscription) {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await supabaseConfig.client.auth.getUser();
             
             if (!user) return;
 
@@ -240,7 +240,7 @@ class PushNotificationManager {
                 throw new Error('User not authenticated');
             }
 
-            const { data, error } = await supabase.functions.invoke('send-push-notification', {
+            const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
                 body: {
                     to_user_id: user.id,
                     title: 'Notificación de prueba',
