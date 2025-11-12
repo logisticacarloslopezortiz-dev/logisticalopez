@@ -466,75 +466,89 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Carga inicial de datos
   const loadHistory = async () => {
     try {
-      console.log('[Historial] Iniciando carga de solicitudes finalizadas y canceladas...');
-
-      // Primero intentar con cliente público para evitar problemas de autenticación
+      console.log('[Historial] Iniciando carga de solicitudes...');
       const publicClient = supabaseConfig.getPublicClient();
-      
-      let publicQuery = publicClient
+
+      // Paso 1: Obtener todas las órdenes completadas y canceladas sin joins
+      const { data: orders, error: ordersError } = await publicClient
         .from('orders')
-        .select(`
-          id,
-          name,
-          completed_at,
-          monto_cobrado,
-          status,
-          evidence_photos,
-          service:services(name),
-          profiles:completed_by(full_name)
-        `)
+        .select('*')
         .or('status.eq.Completada,status.eq.Cancelada')
         .order('completed_at', { ascending: false });
 
-      let { data, error } = await publicQuery;
-
-      // Si hay error, intentar con consulta simplificada sin relaciones
-      if (error) {
-        console.warn('[Historial] Error en consulta completa, intentando consulta simplificada...', error);
-        
-        const simpleQuery = publicClient
-          .from('orders')
-          .select(`
-            id,
-            name,
-            completed_at,
-            monto_cobrado,
-            status,
-            evidence_photos,
-            service_name,
-            completed_by_name
-          `)
-          .or('status.eq.Completada,status.eq.Cancelada')
-          .order('completed_at', { ascending: false })
-          .limit(50);
-
-        const simpleResult = await simpleQuery;
-        data = simpleResult.data;
-        error = simpleResult.error;
-        
-        if (!error && data) {
-          console.log('[Historial] Consulta simplificada exitosa, cargando relaciones por separado...');
-          // Cargar relaciones por separado si es necesario
-        }
+      if (ordersError) {
+        console.error('[Historial] Error al cargar órdenes:', ordersError);
+        throw new Error(`Error al obtener órdenes: ${ordersError.message}`);
+      }
+       if (!orders || orders.length === 0) {
+        console.log('[Historial] No se encontraron órdenes en el historial.');
+        allHistoryOrders = [];
+        filterAndRender();
+        return;
       }
 
-      if (error) {
-        throw error;
+      console.log(`[Historial] Órdenes cargadas: ${orders.length}`);
+
+      // Paso 2: Recolectar IDs de colaboradores y servicios
+      const collaboratorIds = [...new Set(orders.map(o => o.completed_by).filter(id => id))];
+      const serviceIds = [...new Set(orders.map(o => o.service_id).filter(id => id))];
+
+      // Paso 3: Obtener datos de colaboradores y servicios en paralelo
+      let collaborators = [];
+      let services = [];
+
+      if (collaboratorIds.length > 0) {
+        const { data: collabData, error: collabError } = await publicClient
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', collaboratorIds);
+        if (collabError) console.warn('[Historial] Error al cargar colaboradores:', collabError);
+        else collaborators = collabData;
       }
 
-      allHistoryOrders = data || [];
-      console.log(`[Historial] Total de órdenes cargadas: ${allHistoryOrders.length}`);
+      if (serviceIds.length > 0) {
+        const { data: serviceData, error: serviceError } = await publicClient
+          .from('services')
+          .select('id, name')
+          .in('id', serviceIds);
+        if (serviceError) console.warn('[Historial] Error al cargar servicios:', serviceError);
+        else services = serviceData;
+      }
 
+      // Mapear para búsqueda rápida
+      const collaboratorsMap = new Map(collaborators.map(c => [c.id, c.full_name]));
+      const servicesMap = new Map(services.map(s => [s.id, s.name]));
+
+      // Paso 4: Combinar los datos
+      allHistoryOrders = orders.map(order => {
+        return {
+          ...order,
+          // Asignar nombre de colaborador
+          profiles: {
+            full_name: collaboratorsMap.get(order.completed_by) || null
+          },
+          // Asignar nombre de servicio
+          service: {
+            name: servicesMap.get(order.service_id) || null
+          }
+        };
+      });
+
+      console.log(`[Historial] Datos combinados. Total: ${allHistoryOrders.length}`);
       filterAndRender();
+
     } catch (error) {
-      console.error('[Historial] Error al cargar el historial:', error);
-      tableBody.innerHTML = `
-        <tr>
-          <td colspan="7" class="text-center py-10 text-red-500">
-            Error al cargar el historial: ${error.message || 'Error desconocido'}
-          </td>
-        </tr>
-      `;
+      console.error('[Historial] Error crítico al cargar el historial:', error);
+      if (tableBody) {
+        tableBody.innerHTML = `
+          <tr>
+            <td colspan="7" class="text-center py-10 text-red-600">
+              <b>Error al cargar el historial:</b> ${error.message || 'Error desconocido'}.
+              <br>Por favor, revise la consola para más detalles y contacte a soporte si el problema persiste.
+            </td>
+          </tr>
+        `;
+      }
     }
   };
 
