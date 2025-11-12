@@ -19,11 +19,10 @@ function parsePrice(priceString) {
 async function loadAndProcessOrders() {
     try {
         const { data, error } = await supabaseConfig.client
-  .from('orders')
-  .select('id, completed_at, monto_cobrado, service:services(name), vehicle:vehicles(name), completed:profiles!orders_completed_by_fkey(full_name)')
-  .in('status', ['Completado', 'Completada'])
-  .not('completed_at', 'is', null);
-
+            .from('orders')
+            .select('id, completed_at, monto_cobrado, service:services(name), vehicle:vehicles(name), profiles:completed_by(full_name)')
+            .eq('status', 'Completada')
+            .not('completed_at', 'is', null);
 
         if (error) throw error;
 
@@ -265,20 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
-    let loaded = false;
-    function safeLoad() {
-      if (loaded) return;
-      loaded = true;
-      loadAndProcessOrders();
-    }
-    // Esperar a la sesión admin lista
-    window.addEventListener('admin-session-ready', () => {
-      safeLoad();
-    });
-    // Fallback: si la sesión ya existe
-    supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
-      if (session && localStorage.getItem('userRole') === 'administrador') {
-        safeLoad();
-      }
-    }).catch(() => {});
+    // Esperar a que la sesión del administrador esté lista
+    window.addEventListener('admin-session-ready', loadAndProcessOrders);
 });
