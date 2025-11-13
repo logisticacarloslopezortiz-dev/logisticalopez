@@ -18,6 +18,35 @@ window.addEventListener('beforeinstallprompt', (e) => {
   }
 });
 
+// --- Lógica para el formulario de Colaboradores ---
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('colaborador-form');
+  if (form) {
+    form.addEventListener('submit', function(event) {
+      event.preventDefault();
+
+      const nombreInput = document.getElementById('nombre');
+      const telefonoInput = document.getElementById('telefono');
+      const mensajeInput = document.getElementById('mensaje');
+
+      const nombre = nombreInput ? nombreInput.value : '';
+      const telefono = telefonoInput ? telefonoInput.value : '';
+      const mensaje = mensajeInput ? mensajeInput.value : '';
+
+      const numeroEmpresa = '18297293822';
+      let textoWhatsApp = `¡Hola! Quisiera colaborar con ustedes.\n\n*Nombre:* ${nombre}\n*Teléfono:* ${telefono}`;
+
+      if (mensaje) {
+        textoWhatsApp += `\n\n*Mensaje:* ${mensaje}`;
+      }
+
+      const urlWhatsApp = `https://wa.me/${numeroEmpresa}?text=${encodeURIComponent(textoWhatsApp)}`;
+
+      window.open(urlWhatsApp, '_blank');
+    });
+  }
+});
+
 // Detectar iOS para mostrar instrucciones de instalación manual
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);

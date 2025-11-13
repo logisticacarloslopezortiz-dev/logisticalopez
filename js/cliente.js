@@ -815,18 +815,36 @@ function copyToClipboard(text) {
 // Inicialización cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', function() {
   
-  // Inicializar elementos del DOM
-  steps = document.querySelectorAll('.step');
-  nextBtn = document.getElementById('nextBtn');
-  prevBtn = document.getElementById('prevBtn');
-  progressBar = document.getElementById('progress-bar');
-  // Evitar doble envío del formulario
-  let isSubmittingOrder = false;
-  
-  // Cargar datos dinámicos
-  loadServices();
-  loadVehicles();
-  initMap();
+  // --- Welcome Screen Logic ---
+  const welcomeScreen = document.getElementById('welcome-screen');
+  const formContent = document.getElementById('form-content');
+  const startBtn = document.getElementById('startBtn');
+
+  if (startBtn) {
+    startBtn.addEventListener('click', () => {
+      welcomeScreen.classList.add('hidden');
+      formContent.classList.remove('hidden');
+      // Inicializar el formulario solo después de que el usuario haga clic en comenzar
+      initializeForm();
+    });
+  } else {
+    // Si no hay pantalla de bienvenida, inicializar directamente
+    initializeForm();
+  }
+
+  function initializeForm() {
+    // Inicializar elementos del DOM
+    steps = document.querySelectorAll('.step');
+    nextBtn = document.getElementById('nextBtn');
+    prevBtn = document.getElementById('prevBtn');
+    progressBar = document.getElementById('progress-bar');
+    // Evitar doble envío del formulario
+    let isSubmittingOrder = false;
+
+    // Cargar datos dinámicos
+    loadServices();
+    loadVehicles();
+    initMap();
 
   // Manejar checkbox de RNC
   const rncCheckbox = document.getElementById('hasRNC');
@@ -834,21 +852,54 @@ document.addEventListener('DOMContentLoaded', function() {
     rncCheckbox.addEventListener('change', toggleRNCField);
   }
 
-  // Manejar mensaje de hora
-  const timeInput = document.querySelector('input[type="time"]');
-  if (timeInput) {
-      timeInput.addEventListener('change', () => document.getElementById('time-message').classList.remove('hidden'));
-  }
-  // Restringir calendario a fechas futuras o de hoy
+  // --- Date and Time Input Logic ---
   const dateInput = document.querySelector('input[type="date"]');
-  if (dateInput) {
+  const timeInput = document.querySelector('input[type="time"]');
+  const timeMessage = document.getElementById('time-message');
+
+  if (dateInput && timeInput) {
     const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    dateInput.min = `${yyyy}-${mm}-${dd}`;
-    if (dateInput.value && dateInput.value < dateInput.min) {
-      dateInput.value = dateInput.min;
+    // Ajustar la zona horaria a la de República Dominicana (UTC-4)
+    today.setHours(today.getHours() - 4);
+
+    const yyyy = today.getUTCFullYear();
+    const mm = String(today.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(today.getUTCDate()).padStart(2, '0');
+    const todayString = `${yyyy}-${mm}-${dd}`;
+
+    dateInput.min = todayString;
+
+    const updateMinTime = () => {
+      const now = new Date();
+      now.setHours(now.getHours() - 4); // Ajustar a UTC-4
+
+      if (dateInput.value === todayString) {
+        const hh = String(now.getUTCHours()).padStart(2, '0');
+        const min = String(now.getUTCMinutes()).padStart(2, '0');
+        timeInput.min = `${hh}:${min}`;
+
+        // Si la hora seleccionada ya es pasada, la reseteamos
+        if (timeInput.value && timeInput.value < timeInput.min) {
+          timeInput.value = '';
+          notifications.warning('La hora seleccionada ya pasó. Por favor, elige una hora futura.', { title: 'Hora Inválida' });
+        }
+      } else {
+        timeInput.min = ''; // Quitar restricción para fechas futuras
+      }
+    };
+
+    dateInput.addEventListener('input', updateMinTime);
+    timeInput.addEventListener('focus', updateMinTime); // Re-check when user focuses on time
+    timeInput.addEventListener('input', () => {
+        if(timeMessage) timeMessage.classList.remove('hidden');
+    });
+
+    // Llamar una vez al inicio por si la fecha ya está seteada
+    if (dateInput.value) {
+      updateMinTime();
+    } else {
+      dateInput.value = todayString; // Pre-seleccionar hoy por defecto
+      updateMinTime();
     }
   }
 
@@ -1289,6 +1340,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Mostrar primer paso
   if (steps && steps.length > 0) {
     showStep(currentStep);
+  }
   }
 });
 

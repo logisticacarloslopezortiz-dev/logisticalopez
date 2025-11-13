@@ -506,28 +506,5 @@
     // --- FIN: Lógica para activar animación ---
   </script>
   <script src="js/pwa.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const form = document.getElementById('colaborador-form');
-      form.addEventListener('submit', function(event) {
-        event.preventDefault();
-
-        const nombre = document.getElementById('nombre').value;
-        const telefono = document.getElementById('telefono').value;
-        const mensaje = document.getElementById('mensaje').value;
-
-        const numeroEmpresa = '18297293822';
-        let textoWhatsApp = `¡Hola! Quisiera colaborar con ustedes.\n\n*Nombre:* ${nombre}\n*Teléfono:* ${telefono}`;
-
-        if (mensaje) {
-          textoWhatsApp += `\n\n*Mensaje:* ${mensaje}`;
-        }
-
-        const urlWhatsApp = `https://wa.me/${numeroEmpresa}?text=${encodeURIComponent(textoWhatsApp)}`;
-
-        window.open(urlWhatsApp, '_blank');
-      });
-    });
-  </script>
 </body>
 </html>
