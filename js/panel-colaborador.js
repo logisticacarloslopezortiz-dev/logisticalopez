@@ -2,11 +2,31 @@
   "use strict";
 
   // Envoltura de seguridad: verificar la sesión al inicio.
+  if (!window.supabaseConfig || !supabaseConfig.client) {
+    console.warn('Cliente de Supabase no inicializado, redirigiendo al login.');
+    window.location.href = 'login-colaborador.html';
+    return;
+  }
   const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
   if (sessionError || !session) {
     console.warn('Sesión no encontrada, redirigiendo al login.');
     window.location.href = 'login-colaborador.html';
     return; // Detener la ejecución si no hay sesión.
+  }
+
+  function setupAriaCurrent(){
+    try {
+      const links = document.querySelectorAll('#collabSidebar nav a[href]');
+      const current = (window.location.pathname.split('/').pop() || '').toLowerCase();
+      links.forEach(a => a.removeAttribute('aria-current'));
+      let active = null;
+      active = Array.from(links).find(a => {
+        const href = (a.getAttribute('href') || '').toLowerCase();
+        if (!href || href === '#') return current.includes('panel-colaborador');
+        return current.endsWith(href);
+      }) || document.getElementById('sidebar-activos-btn');
+      if (active) active.setAttribute('aria-current', 'page');
+    } catch(_) {}
   }
 
   // Usar OrderManager global importado desde order-manager.js
@@ -282,38 +302,15 @@ function saveCompletionMetrics(metrics, orderId) {
 
     // Enviar a Supabase usando la instancia consistente del config
     if (supabaseConfig.client) {
-      supabaseConfig.client.from('completion_metrics').insert([{
-        order_id: orderId,
-        colaborador_id: metrics.colaborador_id,
-        tiempo_total_minutos: metrics.tiempo_total,
-        fecha_completado: metrics.fecha_completado
-      }]).then(res => {
-        if (res.error) console.error('[Métricas] Error al guardar en Supabase:', res.error);
-        else console.log('[Métricas] Guardadas en Supabase correctamente');
-      });
-
-      // Conexión solicitada: actualizar agregados en collaborator_performance (por período diario)
+      // Tu esquema no tiene completion_metrics; las métricas agregadas se gestionan por triggers/RPC
+      // Aquí solo refrescamos la vista agregada después de completar.
       try {
         const collabId = metrics.colaborador_id || state.collabSession?.user?.id;
-        const completedAt = metrics.fecha_completado ? new Date(metrics.fecha_completado) : new Date();
-        const periodStart = new Date(completedAt);
-        periodStart.setHours(0,0,0,0);
-        const periodEnd = new Date(completedAt);
-        periodEnd.setHours(23,59,59,999);
-
-        const periodStartISO = periodStart.toISOString().slice(0,10); // date
-        const periodEndISO = periodEnd.toISOString().slice(0,10); // date
-
         if (collabId) {
-          upsertCollaboratorPerformance({
-            collaborator_id: collabId,
-            period_start: periodStartISO,
-            period_end: periodEndISO,
-            completion_minutes: Number(metrics.tiempo_total) || null
-          });
+          refreshPerformanceFor(collabId);
         }
       } catch (aggErr) {
-        console.warn('[Métricas] No se pudo preparar agregados:', aggErr);
+        console.warn('[Métricas] No se pudo refrescar agregados:', aggErr);
       }
     }
   } catch (err) {
@@ -325,55 +322,26 @@ function saveCompletionMetrics(metrics, orderId) {
  * Upsert diario en collaborator_performance con incremento de jobs_completed
  * y actualización de avg_completion_minutes.
  */
-async function upsertCollaboratorPerformance({ collaborator_id, period_start, period_end, completion_minutes }) {
-  if (!supabaseConfig?.client) return;
+async function refreshPerformanceFor(collaborator_id) {
   try {
-    const { data: existing, error: selectErr } = await supabaseConfig.client
-      .from('collaborator_performance')
+    // Consulta vista diaria entre fechas (hoy como ejemplo)
+    const today = new Date();
+    const d = today.toISOString().slice(0,10);
+    const { data, error } = await supabaseConfig.client
+      .from('collaborator_performance_view')
       .select('*')
       .eq('collaborator_id', collaborator_id)
-      .eq('period_start', period_start)
-      .eq('period_end', period_end)
-      .limit(1)
-      .maybeSingle();
-
-    if (selectErr) {
-      console.warn('[Perf] Error seleccionando fila existente:', selectErr.message);
+      .eq('metric_date', d)
+      .limit(1);
+    if (error) {
+      console.warn('[Perf] Error al consultar vista de rendimiento:', error.message);
+      return null;
     }
-
-    if (existing) {
-      const prevCount = Number(existing.jobs_completed) || 0;
-      const prevAvg = Number(existing.avg_completion_minutes) || 0;
-      const add = Number(completion_minutes) || 0;
-      const newCount = prevCount + 1;
-      const newAvg = newCount > 0 ? ((prevAvg * prevCount) + add) / newCount : add;
-
-      const updatePayload = {
-        jobs_completed: newCount,
-        avg_completion_minutes: newAvg,
-      };
-      const { error: updErr } = await supabaseConfig.client
-        .from('collaborator_performance')
-        .update(updatePayload)
-        .eq('id', existing.id);
-      if (updErr) console.error('[Perf] Error al actualizar agregados:', updErr.message);
-      else console.log('[Perf] Agregados actualizados (diario):', updatePayload);
-    } else {
-      const insertPayload = {
-        collaborator_id,
-        period_start,
-        period_end,
-        jobs_completed: 1,
-        avg_completion_minutes: Number(completion_minutes) || null
-      };
-      const { error: insErr } = await supabaseConfig.client
-        .from('collaborator_performance')
-        .insert([insertPayload]);
-      if (insErr) console.error('[Perf] Error al insertar agregados:', insErr.message);
-      else console.log('[Perf] Agregados insertados (diario):', insertPayload);
-    }
+    console.log('[Perf] Métricas diarias (vista):', data);
+    return data;
   } catch (err) {
-    console.error('[Perf] Fallo al upsert en collaborator_performance:', err);
+    console.error('[Perf] Error al refrescar rendimiento:', err);
+    return null;
   }
 }
 
@@ -1064,7 +1032,13 @@ function renderAssignedCards(orders){
   const container = ensureMobileContainer();
   if (!container) return;
   if (!orders || orders.length === 0){
-    container.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
+    container.innerHTML = `
+      <div class="col-span-full">
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center">
+          <i data-lucide="inbox" class="w-6 h-6 text-gray-400 mx-auto mb-3"></i>
+          <p class="text-gray-600">Sin solicitudes asignadas</p>
+        </div>
+      </div>`;
     return;
   }
   container.innerHTML = orders.map(o => {
@@ -1102,7 +1076,13 @@ function renderPendingCards(orders){
   const container = ensurePendingContainer();
   if (!container) return;
   if (!orders || orders.length === 0){
-    container.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
+    container.innerHTML = `
+      <div class="col-span-full">
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center">
+          <i data-lucide="inbox" class="w-6 h-6 text-gray-400 mx-auto mb-3"></i>
+          <p class="text-gray-600">Sin solicitudes pendientes</p>
+        </div>
+      </div>`;
     return;
   }
   container.innerHTML = orders.map(o => {
@@ -1163,6 +1143,8 @@ function setupSidebarToggles() {
     const desktopOpenBtn = document.getElementById('desktopMenuBtn');
     const overlay = document.getElementById('sidebarOverlay');
     const body = document.body;
+    let lastFocused = null;
+    let initialized = false;
 
     if (!mobileMenuBtn || !sidebarCloseBtn || !desktopOpenBtn || !overlay) {
         console.error("One or more sidebar control elements are missing.");
@@ -1175,7 +1157,8 @@ function setupSidebarToggles() {
         if (isDesktop) {
             body.classList.remove('sidebar-mobile-open');
             if (!body.classList.contains('sidebar-desktop-open') && !body.classList.contains('sidebar-desktop-closed')) {
-                body.classList.add('sidebar-desktop-open');
+                const saved = localStorage.getItem('collabSidebarDesktopClosed') === 'true';
+                body.classList.add(saved ? 'sidebar-desktop-closed' : 'sidebar-desktop-open');
             }
             // Asegurar exclusividad de estado en escritorio
             if (body.classList.contains('sidebar-desktop-open')) {
@@ -1194,6 +1177,9 @@ function setupSidebarToggles() {
             desktopOpenBtn.classList.remove('md:block');
             desktopOpenBtn.classList.add('md:hidden');
         }
+        if (mobileMenuBtn) mobileMenuBtn.setAttribute('aria-expanded', body.classList.contains('sidebar-mobile-open') ? 'true' : 'false');
+        if (sidebarCloseBtn) sidebarCloseBtn.setAttribute('aria-expanded', body.classList.contains('sidebar-desktop-open') ? 'true' : 'false');
+        initialized = true;
     };
 
     // --- Event Listeners only modify state, then call updateUI ---
@@ -1202,7 +1188,10 @@ function setupSidebarToggles() {
     mobileMenuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         body.classList.add('sidebar-mobile-open');
-        // No UI update needed here as it only affects mobile overlay
+        lastFocused = document.activeElement;
+        const firstLink = document.querySelector('#collabSidebar nav a');
+        if (firstLink) { try { firstLink.focus(); } catch(_){} } else if (sidebarCloseBtn) { try { sidebarCloseBtn.focus(); } catch(_){} }
+        updateUI();
     });
 
     // Close sidebar with the button inside it (works for both views)
@@ -1211,6 +1200,7 @@ function setupSidebarToggles() {
         if (window.innerWidth >= 768) { // isDesktop
             body.classList.remove('sidebar-desktop-open');
             body.classList.add('sidebar-desktop-closed');
+            localStorage.setItem('collabSidebarDesktopClosed', 'true');
         } else {
             body.classList.remove('sidebar-mobile-open');
         }
@@ -1220,6 +1210,8 @@ function setupSidebarToggles() {
     // Close sidebar on mobile via overlay
     overlay.addEventListener('click', () => {
         body.classList.remove('sidebar-mobile-open');
+        if (lastFocused) { try { lastFocused.focus(); } catch(_){} }
+        updateUI();
     });
 
     // Re-open sidebar on desktop
@@ -1227,7 +1219,16 @@ function setupSidebarToggles() {
         e.stopPropagation();
         body.classList.remove('sidebar-desktop-closed');
         body.classList.add('sidebar-desktop-open');
+        localStorage.setItem('collabSidebarDesktopClosed', 'false');
         updateUI(); // Update UI based on new state
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && body.classList.contains('sidebar-mobile-open')) {
+            body.classList.remove('sidebar-mobile-open');
+            if (lastFocused) { try { lastFocused.focus(); } catch(_){} }
+            updateUI();
+        }
     });
 
     // --- Initialization ---
@@ -1677,6 +1678,7 @@ state.collabSession = session;
 if (window.lucide) lucide.createIcons();
 
 setupSidebarToggles();
+setupAriaCurrent();
 setupEventListeners();
 setupConnectionHandlers();
 // setupTabs(); // Eliminado
@@ -1732,9 +1734,16 @@ function handleStatusUpdate(orderId, newStatus) {
 }
 
 if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
+  let rtTimer;
+  const debouncedRealtime = (payload) => {
+    clearTimeout(rtTimer);
+    rtTimer = setTimeout(() => {
+      handleRealtimeUpdate(payload);
+    }, 200);
+  };
   supabaseConfig.client
     .channel('public:orders')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, debouncedRealtime)
     .subscribe();
 } else {
   setInterval(filterAndRender, 5000);

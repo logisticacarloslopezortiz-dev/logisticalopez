@@ -19,10 +19,10 @@ function parsePrice(priceString) {
 async function loadAndProcessOrders() {
     try {
         const { data, error } = await supabaseConfig.client
-  .from('orders')
-  .select('id, completed_at, monto_cobrado, service:services(name), vehicle:vehicles(name), completed:profiles!orders_completed_by_fkey(full_name)')
-  .in('status', ['Completado', 'Completada'])
-  .not('completed_at', 'is', null);
+          .from('orders')
+          .select('id, completed_at, monto_cobrado, service:services(name), vehicle:vehicles(name), completed:profiles!orders_completed_by_fkey(full_name)')
+          .eq('status', 'Completada')
+          .not('completed_at', 'is', null);
 
 
         if (error) throw error;
@@ -76,42 +76,48 @@ function updateSummaryCards() {
  * @returns {object} - Objeto con etiquetas (labels) y datos (data) para el gráfico.
  */
 function getChartData() {
-    const data = {};
-    const now = new Date();
+    const buckets = new Map();
 
     allCompletedOrders.forEach(order => {
-        const date = new Date(order.completed_at);
-        const price = order.monto_cobrado || 0;
-        let key;
-
-        if (currentPeriod === 'day') {
-            key = date.toLocaleDateString('es-DO', { weekday: 'short' });
-        } else if (currentPeriod === 'week') {
-            const weekNumber = Math.ceil(date.getDate() / 7);
-            key = `Semana ${weekNumber}`;
-        } else { // month
-            key = date.toLocaleDateString('es-DO', { month: 'long' });
-        }
-
-        if (!data[key]) {
-            data[key] = 0;
-        }
-        data[key] += price;
+      const d = new Date(order.completed_at);
+      const val = Number(order.monto_cobrado) || 0;
+      let key;
+      if (currentPeriod === 'day') {
+        key = d.toISOString().slice(0,10); // YYYY-MM-DD
+      } else if (currentPeriod === 'week') {
+        const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        const day = tmp.getUTCDay();
+        const diff = (day === 0 ? -6 : 1) - day; // lunes como inicio de semana
+        const monday = new Date(tmp);
+        monday.setUTCDate(tmp.getUTCDate() + diff);
+        key = monday.toISOString().slice(0,10);
+      } else {
+        key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; // YYYY-MM
+      }
+      buckets.set(key, (buckets.get(key) || 0) + val);
     });
 
-    // Ordenar las etiquetas para una mejor visualización
-    const sortedLabels = Object.keys(data).sort((a, b) => {
-        if (currentPeriod === 'day') {
-            const days = ['dom.', 'lun.', 'mar.', 'mié.', 'jue.', 'vie.', 'sáb.'];
-            return days.indexOf(a) - days.indexOf(b);
-        }
-        // Para semana y mes, la clasificación alfabética/numérica suele ser suficiente.
-        return a.localeCompare(b, undefined, { numeric: true });
+    // Ordenar claves cronológicamente
+    const labels = Array.from(buckets.keys()).sort((a,b) => a.localeCompare(b));
+    const data = labels.map(k => buckets.get(k));
+
+    // Humanizar etiquetas
+    const humanLabels = labels.map(k => {
+      if (currentPeriod === 'day') {
+        const d = new Date(k);
+        return d.toLocaleDateString('es-DO', { day:'2-digit', month:'short' });
+      } else if (currentPeriod === 'week') {
+        const d = new Date(k);
+        const end = new Date(d);
+        end.setDate(d.getDate()+6);
+        return `${d.toLocaleDateString('es-DO',{ day:'2-digit', month:'short' })} - ${end.toLocaleDateString('es-DO',{ day:'2-digit', month:'short' })}`;
+      } else {
+        const [y,m] = k.split('-');
+        return `${new Date(Number(y), Number(m)-1, 1).toLocaleDateString('es-DO',{ month:'long' })} ${y}`;
+      }
     });
 
-    const sortedData = sortedLabels.map(label => data[label]);
-
-    return { labels: sortedLabels, data: sortedData };
+    return { labels: humanLabels, data };
 }
 
 /**
@@ -270,6 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (loaded) return;
       loaded = true;
       loadAndProcessOrders();
+      setupRealtime();
     }
     // Esperar a la sesión admin lista
     window.addEventListener('admin-session-ready', () => {
@@ -282,3 +289,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }).catch(() => {});
 });
+
+function setupRealtime() {
+  const channel = supabaseConfig.client.channel('ganancias:orders');
+  let t;
+  const scheduleRefresh = () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      loadAndProcessOrders();
+    }, 300);
+  };
+  channel.on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, scheduleRefresh).subscribe();
+}

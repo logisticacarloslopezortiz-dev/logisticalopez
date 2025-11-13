@@ -32,15 +32,21 @@ class PushNotificationManager {
         try {
             // En producción, esto vendría de tu configuración
             // Por ahora usamos la clave del entorno
-            const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key');
+            const client = supabaseConfig?.client;
+            if (!client || !client.functions || typeof client.functions.invoke !== 'function') {
+                throw new Error('Supabase client/functions no disponible');
+            }
+            const { data, error } = await client.functions.invoke('get-vapid-key');
             
             if (error) throw error;
             
             this.vapidPublicKey = data.publicKey;
+            console.log('VAPID key obtenida desde Supabase Functions');
         } catch (error) {
             console.error('Error loading VAPID key:', error);
             // Fallback: usar clave hardcodeada (solo para desarrollo)
             this.vapidPublicKey = 'BMuGvI89RtY2N2hFDLwkCmNitzvYP9iDrRCQlq8JmFfGtDjgFQWJGLaEHX9O8lF8Vl9WsXOYMbBq94vKwpWoXVE';
+            console.warn('Usando VAPID key de desarrollo (fallback). Configura get-vapid-key en producción.');
         }
     }
 

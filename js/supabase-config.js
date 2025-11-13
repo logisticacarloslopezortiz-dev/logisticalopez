@@ -10,17 +10,21 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Evitar múltiples instancias de GoTrueClient: reutilizar cliente único y cachear public client
 if (!window.supabaseConfig) {
   let mainClient = null;
-  try {
-    mainClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-        storageKey: 'sb-tlc-main'
-      }
-    });
-  } catch (e) {
-    console.error('Error al inicializar el cliente principal de Supabase:', e);
+  if (typeof supabase !== 'undefined' && supabase?.createClient) {
+    try {
+      mainClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true,
+          storageKey: 'sb-tlc-main'
+        }
+      });
+    } catch (e) {
+      console.error('Error al inicializar el cliente principal de Supabase:', e);
+    }
+  } else {
+    console.error('Supabase JS no cargado: verifica el script UMD antes de supabase-config.js');
   }
 
   window.supabaseConfig = {
@@ -54,10 +58,13 @@ if (!window.supabaseConfig) {
     // Reutilizar cliente público cacheado para evitar múltiples GoTrueClient con mismo storageKey
     if (this._publicClient) return this._publicClient;
     try {
-      this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
-      });
-      return this._publicClient;
+      if (typeof supabase !== 'undefined' && supabase?.createClient) {
+        this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+        });
+        return this._publicClient;
+      }
+      throw new Error('Supabase JS no cargado');
     } catch (e) {
       console.error('Error creando public client de Supabase:', e);
       return this.client; // fallback al cliente principal

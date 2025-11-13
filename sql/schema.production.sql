@@ -255,6 +255,10 @@ create table if not exists public.orders (
   updated_at timestamptz not null default now(),
   constraint orders_status_check check (status in ('Pendiente','Aceptada','En curso','Completada','Cancelada'))
 );
+-- Asegurar columnas de aceptación para compatibilidad con historial
+alter table public.orders add column if not exists accepted_by uuid;
+alter table public.orders add column if not exists accepted_at timestamptz;
+create index if not exists idx_orders_accepted_by on public.orders(accepted_by);
 create index if not exists idx_orders_status on public.orders(status);
 create index if not exists idx_orders_date on public.orders("date");
 create index if not exists idx_orders_assigned_to on public.orders(assigned_to);
@@ -575,6 +579,8 @@ begin
   set
     status = 'Aceptada',
     assigned_at = coalesce(assigned_at, _now),
+    accepted_at = coalesce(accepted_at, _now),
+    accepted_by = coalesce(accepted_by, auth.uid()),
     tracking_data = coalesce(tracking_data, '[]'::jsonb) || jsonb_build_array(
       jsonb_build_object('status','en_camino_recoger','date',_now,'description','Orden aceptada, en camino a recoger')
     )

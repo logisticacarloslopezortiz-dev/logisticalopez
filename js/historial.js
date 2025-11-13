@@ -467,12 +467,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loadHistory = async () => {
     try {
       console.log('[Historial] Iniciando carga de solicitudes...');
+      const client = supabaseConfig.client || supabaseConfig.getPublicClient();
       const publicClient = supabaseConfig.getPublicClient();
 
-      // Paso 1: Obtener todas las órdenes completadas y canceladas sin joins
-      const { data: orders, error: ordersError } = await publicClient
+      // Obtener órdenes Completadas y Canceladas, con columnas necesarias
+      const { data: orders, error: ordersError } = await client
         .from('orders')
-        .select('*')
+        .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions')
         .or('status.eq.Completada,status.eq.Cancelada')
         .order('completed_at', { ascending: false });
 
@@ -492,6 +493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Paso 2: Recolectar IDs de colaboradores y servicios
       const collaboratorIds = [...new Set(orders.map(o => o.completed_by).filter(id => id))];
       const serviceIds = [...new Set(orders.map(o => o.service_id).filter(id => id))];
+      const vehicleIds = [...new Set(orders.map(o => o.vehicle_id).filter(id => id))];
 
       // Paso 3: Obtener datos de colaboradores y servicios en paralelo
       let collaborators = [];
@@ -507,17 +509,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       if (serviceIds.length > 0) {
-        const { data: serviceData, error: serviceError } = await publicClient
+        const { data: serviceData, error: serviceError } = await client
           .from('services')
           .select('id, name')
           .in('id', serviceIds);
         if (serviceError) console.warn('[Historial] Error al cargar servicios:', serviceError);
         else services = serviceData;
       }
+      let vehicles = [];
+      if (vehicleIds.length > 0) {
+        const { data: vehicleData, error: vehicleError } = await client
+          .from('vehicles')
+          .select('id, name')
+          .in('id', vehicleIds);
+        if (vehicleError) console.warn('[Historial] Error al cargar vehículos:', vehicleError);
+        else vehicles = vehicleData;
+      }
 
       // Mapear para búsqueda rápida
       const collaboratorsMap = new Map(collaborators.map(c => [c.id, c.full_name]));
       const servicesMap = new Map(services.map(s => [s.id, s.name]));
+      const vehiclesMap = new Map(vehicles.map(v => [v.id, v.name]));
 
       // Paso 4: Combinar los datos
       allHistoryOrders = orders.map(order => {
@@ -530,6 +542,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           // Asignar nombre de servicio
           service: {
             name: servicesMap.get(order.service_id) || null
+          },
+          vehicle: {
+            name: vehiclesMap.get(order.vehicle_id) || null
           }
         };
       });

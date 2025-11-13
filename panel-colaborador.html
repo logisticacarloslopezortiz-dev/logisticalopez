@@ -27,15 +27,33 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Comic+Neue:wght@300;400;700&display=swap" rel="stylesheet">
-  
-  <!-- Tailwind y Lucide -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide: usar ruta UMD versionada para evitar errores de 'latest' -->
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.428.0/dist/umd/lucide.min.js" defer></script>
+  
+  <!-- Tailwind y Lucide (local) -->
+  <link rel="stylesheet" href="css/tailwind.min.css">
+  <script src="vendor/lucide.min.js" defer></script>
   
   <!-- Mitigación FOUC: ocultar el cuerpo hasta que los estilos estén listos -->
   <style>
+    :root {
+      --color-primario: #1E405A;
+      --color-secundario: #1E8A95;
+      --color-acento: #FBBF24;
+    }
     body.preload-hidden { opacity: 0; }
+  </style>
+  <style>
+    @media (max-width: 380px) {
+      header.md\:hidden span.font-semibold { display: none; }
+      header.md\:hidden .w-8.h-8 { width: 32px; height: 32px; }
+    }
+    @media (min-width: 768px) and (max-width: 1024px) {
+      #collabSidebar { width: 14rem; }
+      body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
+    }
+  </style>
+  <style>
+    #collabSidebar nav a[aria-current="page"] { background-color: #1E8A95; }
   </style>
   <script>
     document.addEventListener('DOMContentLoaded', function(){
@@ -156,7 +174,7 @@
   <!-- Mobile Header with Hamburger -->
   <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
     <div class="flex items-center justify-between px-4 py-3">
-      <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+      <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
         <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
       </button>
       <div class="flex items-center gap-2">
@@ -173,12 +191,12 @@
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
 
   <!-- ✅ MEJORA: Sidebar rediseñado -->
-  <aside id="collabSidebar" class="w-80 md:w-72 shadow-2xl h-screen flex flex-col z-50" style="background-color: #1E405A;">
+  <aside id="collabSidebar" class="w-80 md:w-72 shadow-2xl h-screen flex flex-col z-50" style="background-color: var(--color-primario);" role="navigation" aria-label="Menú del colaborador">
     <!-- Header del Sidebar -->
     <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: #1E8A95;">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: var(--color-secundario);">
             LLO
           </div>
           <div>
@@ -186,7 +204,7 @@
           </div>
         </div>
         <!-- Botón para colapsar el sidebar -->
-        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[rgba(30,138,149,0.4)]" style="background-color: rgba(30, 138, 149, 0.2);">
+        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[rgba(30,138,149,0.4)]" style="background-color: rgba(30, 138, 149, 0.2);" aria-expanded="true" aria-controls="collabSidebar">
           <i data-lucide="panel-left-close" class="w-4 h-4 text-white"></i>
         </button>
       </div>
@@ -223,7 +241,7 @@
     <!-- Navegación -->
     <nav class="flex-1 p-6" role="navigation" aria-label="Navegación principal">
       <div class="space-y-2">
-        <a href="#" id="sidebar-activos-btn" class="flex items-center gap-3 p-3 rounded-xl text-white transition-all duration-200 group" style="background-color: #1E8A95;">
+        <a href="#" id="sidebar-activos-btn" aria-current="page" class="flex items-center gap-3 p-3 rounded-xl text-white transition-all duration-200 group" style="background-color: #1E8A95;">
           <i data-lucide="list" class="w-5 h-5 text-white"></i>
           <span class="font-medium">Trabajos Activos</span>
           <span class="ml-auto text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount" style="background-color: #1E405A;">0</span>
@@ -258,15 +276,7 @@
         <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
       </button>
 
-      <!-- Pestañas de Navegación -->
-      <div class="border-b border-gray-200 mb-6">
-        <nav class="-mb-px flex space-x-6" aria-label="Tabs">
-          <button id="tab-activos" type="button" role="tab" aria-controls="panel-activos" aria-selected="true" class="tab-btn group inline-flex items-center py-3 px-1 border-b-2 font-semibold text-sm" style="color: #1E405A; border-color: #1E405A;">
-            <i data-lucide="list" class="mr-2 h-5 w-5" style="color: #1E8A95;"></i>
-            <span>Trabajos Activos</span>
-          </button>
-        </nav>
-      </div>
+      
 
       <!-- Paneles de Contenido -->
       <div>
@@ -384,12 +394,12 @@
     </div>
     </main>
 
-  <!-- Dependencias externas (una sola vez) -->
-  <!-- Supabase JS v2: UMD explícito para navegador -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
+  <!-- Dependencias locales para evitar Tracking Prevention en desarrollo -->
+  <!-- Supabase UMD no es necesario si ya se usa js/supabase-config.js que refiere a window.supabase (inyectado en otra parte); si lo necesitas, copia el UMD a vendor/ y referéncialo -->
+  <script src="vendor/leaflet.js" defer></script>
 
   <!-- Scripts de la aplicación (ordenados y sin duplicados) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
   <script src="js/supabase-config.js" defer></script>
   <script src="js/notifications.js" defer></script>
   <script src="js/backup.js" defer></script>
@@ -424,10 +434,10 @@
         // Cargar Leaflet CSS/JS como fallback sin clave
         const lcss = document.createElement('link');
         lcss.rel = 'stylesheet';
-        lcss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        lcss.href = 'vendor/leaflet.css';
         document.head.appendChild(lcss);
         const ljs = document.createElement('script');
-        ljs.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        ljs.src = 'vendor/leaflet.js';
         ljs.onload = () => { window.leafletReady = true; try { initActiveJobMap(); } catch(_){ } };
         document.head.appendChild(ljs);
         try {
