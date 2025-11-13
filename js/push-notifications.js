@@ -176,13 +176,22 @@ class PushNotificationManager {
                 throw new Error('Supabase client no inicializado o inválido en saveSubscriptionToServer');
             }
 
-            const { error } = await client
+            const r = await client
                 .from('push_subscriptions')
-                .upsert(subscriptionData, {
-                    onConflict: 'user_id,endpoint'
-                });
+                .upsert(subscriptionData, { onConflict: 'user_id,endpoint' });
 
-            if (error) throw error;
+            if (r.error) {
+                const alt = {
+                    user_id: user.id,
+                    endpoint: subscription.endpoint,
+                    p256dh: keys.p256dh,
+                    auth: keys.auth
+                };
+                const r2 = await client
+                    .from('push_subscriptions')
+                    .upsert(alt, { onConflict: 'user_id,endpoint' });
+                if (r2.error) throw r2.error;
+            }
             
             console.log('Push subscription saved to server');
             

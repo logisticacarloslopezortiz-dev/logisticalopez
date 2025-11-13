@@ -72,58 +72,91 @@ Deno.serve(async (req: Request) => {
     // Extraer datos del cuerpo de la solicitud
     const { 
       orderId, 
-      title = 'Actualización de TLC', 
+      to_user_id,
+      contact_id,
+      newStatus,
+      title,
       body, 
       icon = '/img/logo-tlc.png',
       data = {}
     } = await req.json();
     
-    if (!orderId || !body) {
-      return jsonResponse({ error: 'Se requiere orderId y body para la notificación' }, 400);
+    if (!orderId && !to_user_id && !contact_id) {
+      return jsonResponse({ error: 'Faltan destinatarios: orderId, to_user_id o contact_id' }, 400);
+    }
+    let finalTitle = title;
+    let finalBody = body;
+    if (!finalBody && newStatus) {
+      const statusLabel = String(newStatus);
+      finalBody = `La orden ${orderId ? '#' + orderId : ''} cambió a "${statusLabel}"`;
+    }
+    if (!finalTitle) {
+      finalTitle = orderId ? `Actualización de la orden #${orderId}` : 'Actualización de orden';
+    }
+    if (!finalBody) {
+      return jsonResponse({ error: 'Se requiere body o newStatus para la notificación' }, 400);
     }
     
-    // Buscar la orden
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, client_id, name, phone, email')
-      .eq('id', orderId)
-      .single();
-    
-    if (orderError || !order) {
-      logDebug('Error al buscar la orden', orderError);
-      return jsonResponse({ error: 'No se encontró la orden especificada' }, 404);
-    }
-    
-    // Buscar suscripciones push para el cliente
     let pushSubscriptions: Array<{ endpoint: string; keys: { p256dh: string; auth: string } }> = [];
-    
-    // Buscar en push_subscriptions si hay client_id
-    if (order.client_id) {
-      // Cliente registrado - buscar en push_subscriptions
-      const { data: subscriptions, error: subError } = await supabase
+
+    async function fetchUserSubscriptions(userId: string) {
+      const results: Array<{ endpoint: string; keys: { p256dh: string; auth: string } }> = [];
+      const r1 = await supabase
         .from('push_subscriptions')
         .select('endpoint, keys')
-        .eq('user_id', order.client_id);
-      
-      if (!subError && subscriptions) {
-        pushSubscriptions = subscriptions;
+        .eq('user_id', userId);
+      if (!r1.error && Array.isArray(r1.data) && r1.data.length > 0 && r1.data[0]?.keys) {
+        for (const s of r1.data) {
+          const k = (s as any).keys;
+          if (k && k.p256dh && k.auth) results.push({ endpoint: (s as any).endpoint, keys: { p256dh: k.p256dh, auth: k.auth } });
+        }
+        return results;
       }
+      const r2 = await supabase
+        .from('push_subscriptions')
+        .select('endpoint, p256dh, auth')
+        .eq('user_id', userId);
+      if (!r2.error && Array.isArray(r2.data) && r2.data.length > 0) {
+        for (const s of r2.data) {
+          const p = (s as any).p256dh;
+          const a = (s as any).auth;
+          if (p && a) results.push({ endpoint: (s as any).endpoint, keys: { p256dh: p, auth: a } });
+        }
+      }
+      return results;
     }
-    
-    // Fallback: si no hay suscripciones por user_id, intentar usar la suscripción guardada en la orden
-    if (pushSubscriptions.length === 0) {
-      try {
-        const { data: orderWithSub } = await supabase
-          .from('orders')
-          .select('id, push_subscription')
-          .eq('id', orderId)
-          .maybeSingle();
-        const sub = (orderWithSub as any)?.push_subscription || null;
+
+    if (orderId) {
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('id, client_id, push_subscription')
+        .eq('id', orderId)
+        .single();
+      if (orderError || !order) {
+        return jsonResponse({ error: 'No se encontró la orden especificada' }, 404);
+      }
+      if (order.client_id) {
+        const subs = await fetchUserSubscriptions(order.client_id);
+        pushSubscriptions = subs;
+      }
+      if (pushSubscriptions.length === 0) {
+        const sub = (order as any)?.push_subscription || null;
         if (sub && sub.endpoint && sub.keys && sub.keys.p256dh && sub.keys.auth) {
           pushSubscriptions = [{ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }];
         }
-      } catch (e) {
-        logDebug('Fallback de suscripción en orden falló', e);
+      }
+    } else if (to_user_id) {
+      const subs = await fetchUserSubscriptions(String(to_user_id));
+      pushSubscriptions = subs;
+    } else if (contact_id) {
+      const { data: contact } = await supabase
+        .from('clients')
+        .select('id, push_subscription')
+        .eq('id', contact_id)
+        .maybeSingle();
+      const sub = (contact as any)?.push_subscription || null;
+      if (sub && sub.endpoint && sub.keys && sub.keys.p256dh && sub.keys.auth) {
+        pushSubscriptions = [{ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }];
       }
     }
 
@@ -140,8 +173,8 @@ Deno.serve(async (req: Request) => {
       };
       const notificationPayload = {
         notification: {
-          title,
-          body,
+          title: finalTitle,
+          body: finalBody,
           icon,
           vibrate: [100, 50, 100],
           data: {
@@ -166,14 +199,20 @@ Deno.serve(async (req: Request) => {
       }
     }
     
-    // Registrar la notificación en la base de datos
-    await supabase.from('notifications').insert({
-      user_id: order.client_id,
-      title,
-      body,
-      data: { orderId, results },
-      created_at: new Date().toISOString()
-    });
+    const targetUserId = orderId ? (await supabase
+      .from('orders')
+      .select('client_id')
+      .eq('id', orderId)
+      .single()).data?.client_id : (to_user_id || null);
+    if (targetUserId) {
+      await supabase.from('notifications').insert({
+        user_id: targetUserId,
+        title: finalTitle,
+        body: finalBody,
+        data: { orderId, results },
+        created_at: new Date().toISOString()
+      });
+    }
     
     const successCount = results.filter(r => r.success).length;
     

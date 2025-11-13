@@ -1730,7 +1730,6 @@ await syncPendingStatusUpdates();
 await loadInitialOrders();
 
 loadingIndicator.classList.add('hidden');
-cardsContainer.classList.remove('hidden');
 
 restoreActiveJob();
 

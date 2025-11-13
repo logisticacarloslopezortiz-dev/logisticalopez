@@ -39,8 +39,17 @@
       --color-primario: #1E405A;
       --color-secundario: #1E8A95;
       --color-acento: #FBBF24;
+      --sidebar-rail: 3rem;
     }
     body.preload-hidden { opacity: 0; }
+  </style>
+  <style>
+    @media (min-width: 768px) {
+      body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.75rem; }
+      body.sidebar-desktop-closed #sidebarLogo { width: 2.25rem; height: 2.25rem; }
+      body.sidebar-desktop-closed #collabSidebar nav a { justify-content: center; padding: 0.75rem; }
+      body.sidebar-desktop-closed #collabSidebar nav i { margin: 0; }
+    }
   </style>
   <style>
     @media (min-width: 768px) {
@@ -169,11 +178,14 @@
 
       /* Estado: sidebar cerrado en escritorio */
       body.sidebar-desktop-closed #mainContent {
-        margin-left: 0;
+        margin-left: var(--sidebar-rail);
       }
       body.sidebar-desktop-closed #collabSidebar {
-        transform: translateX(-100%);
+        transform: translateX(calc(-100% + var(--sidebar-rail)));
       }
+      body.sidebar-desktop-closed #collabSidebar nav span.font-medium { display: none; }
+      body.sidebar-desktop-closed #collabSidebar #pendingRequestsCount { display: none; }
+      body.sidebar-desktop-closed #collabSidebar .rounded-xl.p-4 .text-xs { display: none; }
     }
   </style>
 </head>
@@ -190,7 +202,7 @@
         <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
           LLO
         </div>
-        <span class="font-semibold text-gray-800">Colaborador</span>
+        <span class="font-semibold text-gray-800 flex items-center gap-1"><i data-lucide="user" class="w-4 h-4 text-gray-600"></i> Colaborador</span>
       </div>
       <div class="w-10"></div> <!-- Spacer for centering -->
     </div>
@@ -206,7 +218,7 @@
     <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: var(--color-secundario);">
+          <div id="sidebarLogo" class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: var(--color-secundario);">
             LLO
           </div>
           <div>
