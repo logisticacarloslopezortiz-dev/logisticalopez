@@ -1587,9 +1587,21 @@ function setupEventListeners() {
   }
 
   document.getElementById('logoutBtn')?.addEventListener('click', async () => {
-    // ✅ MEJORA: Limpieza completa de sesión para el colaborador.
     const { error } = await supabaseConfig.client.auth.signOut();
-    localStorage.clear(); // Eliminar todos los datos para evitar fugas.
+    try {
+      const keysToPreserve = [];
+      const uid = state.collabSession?.user?.id;
+      if (uid) {
+        keysToPreserve.push(`tlc_active_job_${uid}`);
+      }
+      keysToPreserve.push('tlc_collab_active_job');
+      const allKeys = Object.keys(localStorage);
+      for (const k of allKeys) {
+        if (!keysToPreserve.includes(k)) {
+          try { localStorage.removeItem(k); } catch(_){}
+        }
+      }
+    } catch(_){}
     if (error) {
       console.error('Error al cerrar sesión:', error);
     }
@@ -1728,8 +1740,6 @@ function setupConnectionHandlers() {
 state.collabSession = session;
 
 if (window.lucide) lucide.createIcons();
-
-setupSidebarToggles();
 setupAriaCurrent();
 setupEventListeners();
 setupConnectionHandlers();
@@ -1754,7 +1764,7 @@ await loadInitialOrders();
 
 loadingIndicator.classList.add('hidden');
 
-restoreActiveJob();
+await restoreActiveJob();
 
 // Mover handleStatusUpdate fuera de la inicialización para un scope correcto.
 function handleStatusUpdate(orderId, newStatus) {
@@ -1805,7 +1815,7 @@ if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
  * Si no es válido, limpia el estado y vuelve a la vista de órdenes para evitar
  * una pantalla en blanco.
  */
-function restoreActiveJob() {
+async function restoreActiveJob() {
   // Primero intentar cargar desde localStorage
   const savedJob = loadActiveJob();
   if (savedJob) {
@@ -1814,7 +1824,7 @@ function restoreActiveJob() {
   }
 
   if (state.activeJobId) {
-    const order = state.allOrders.find(o => o.id === state.activeJobId);
+    let order = state.allOrders.find(o => o.id === state.activeJobId);
     const assignedId = order?.assigned_to;
     const lastStatus = order?.last_collab_status;
     
@@ -1828,6 +1838,23 @@ function restoreActiveJob() {
       document.getElementById('pendingSection')?.classList.add('hidden');
       return; // Éxito: Salir de la función
     }
+
+    // Fallback: si no está en memoria, intentar cargarlo desde Supabase
+    try {
+      const { data, error } = await supabaseConfig.client
+        .from('orders')
+        .select('*')
+        .eq('id', state.activeJobId)
+        .maybeSingle();
+      if (!error && data && data.assigned_to === state.collabSession.user.id && (data.last_collab_status !== 'entregado')) {
+        order = data;
+        showActiveJob(order);
+        saveActiveJob(order);
+        document.getElementById('ordersCardContainer')?.classList.add('hidden');
+        document.getElementById('pendingSection')?.classList.add('hidden');
+        return;
+      }
+    } catch (e) { console.warn('[Continuidad] Fallback activo desde Supabase falló:', e?.message || e); }
 
     // Si la condición falla, el trabajo en caché es inválido.
     console.warn(`[Cache] El trabajo activo #${state.activeJobId} ya no es válido. Limpiando.`);

@@ -40,8 +40,8 @@
 <body class="bg-gray-50 flex flex-col md:flex-row">
     <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
       <div class="flex items-center justify-between px-4 py-3">
-        <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-          <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
+        <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/80 backdrop-blur shadow-sm ring-1 ring-gray-200 hover:bg-white hover:shadow transition">
+          <i data-lucide="menu" class="w-6 h-6" style="color: #1E405A;"></i>
         </button>
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">LLO</div>
@@ -374,96 +374,7 @@
         }
       })();
     </script>
-    <script>
-      document.addEventListener('DOMContentLoaded', () => { if (window.lucide) lucide.createIcons(); });
-      (function(){
-        const body = document.body;
-        const mobileBtn = document.getElementById('mobileMenuBtn');
-        const overlay = document.getElementById('sidebarOverlay');
-        const collapseBtn = document.getElementById('sidebarCollapseBtn');
-        const desktopOpenBtn = document.getElementById('desktopMenuBtn');
-        const sidebar = document.getElementById('collabSidebar');
-        const logoutBtn = document.getElementById('logoutBtn');
-        function update(){
-          if (mobileBtn) mobileBtn.setAttribute('aria-expanded', body.classList.contains('sidebar-mobile-open') ? 'true' : 'false');
-          if (collapseBtn) collapseBtn.setAttribute('aria-expanded', body.classList.contains('sidebar-desktop-open') ? 'true' : 'false');
-          if (desktopOpenBtn){
-            const isClosed = body.classList.contains('sidebar-desktop-closed');
-            // Tailwind no aplica dinámicamente md:hidden/md:block 
-            desktopOpenBtn.style.display = (window.innerWidth >= 768 && isClosed) ? 'block' : 'none';
-          }
-          // Re-generar íconos tras cambios dinámicos
-          if (window.lucide && typeof lucide.createIcons === 'function') {
-            lucide.createIcons();
-          }
-        }
-        if (mobileBtn){ mobileBtn.addEventListener('click', () => { body.classList.toggle('sidebar-mobile-open'); update(); }); }
-        if (overlay){ overlay.addEventListener('click', () => { body.classList.remove('sidebar-mobile-open'); update(); }); }
-        if (collapseBtn){
-          collapseBtn.addEventListener('click', () => {
-            if (window.innerWidth >= 768){
-              body.classList.remove('sidebar-desktop-open');
-              body.classList.add('sidebar-desktop-closed');
-              localStorage.setItem('collabSidebarDesktopClosed', 'true');
-            } else {
-              // En móvil, cerrar overlay y asegurar reseteo visual
-              body.classList.remove('sidebar-mobile-open');
-              if (sidebar) sidebar.style.transform = '';
-            }
-            update();
-          });
-        }
-        if (desktopOpenBtn){
-          desktopOpenBtn.addEventListener('click', () => {
-            body.classList.remove('sidebar-desktop-closed');
-            body.classList.add('sidebar-desktop-open');
-            localStorage.setItem('collabSidebarDesktopClosed', 'false');
-            update();
-          });
-        }
-        if (sidebar){
-          sidebar.addEventListener('mouseenter', () => {
-            if (window.innerWidth >= 768 && body.classList.contains('sidebar-desktop-closed')){
-              body.classList.add('sidebar-desktop-hover-open');
-            }
-          });
-          sidebar.addEventListener('mouseleave', () => {
-            if (window.innerWidth >= 768){
-              body.classList.remove('sidebar-desktop-hover-open');
-            }
-          });
-        }
-        if (logoutBtn){
-          logoutBtn.addEventListener('click', async () => {
-            try { await supabaseConfig.client.auth.signOut(); } catch(e){}
-            try { localStorage.clear(); } catch(_){}
-            window.location.href = 'login-colaborador.html';
-          });
-        }
-        function initDesktop(){
-          if (window.innerWidth >= 768){
-            // Asegurar que el overlay esté oculto en escritorio para evitar parpadeos
-            if (overlay) overlay.style.display = 'none';
-            if (!body.classList.contains('sidebar-desktop-open') && !body.classList.contains('sidebar-desktop-closed')){
-              const saved = localStorage.getItem('collabSidebarDesktopClosed') === 'true';
-              body.classList.add(saved ? 'sidebar-desktop-closed' : 'sidebar-desktop-open');
-            }
-          } else {
-            // En móvil, resetear transform para evitar glitches
-            if (sidebar) sidebar.style.transform = '';
-            if (overlay) overlay.style.display = '';
-            body.classList.remove('sidebar-desktop-open','sidebar-desktop-closed','sidebar-desktop-hover-open');
-          }
-          update();
-        }
-        let resizeTimer = null;
-        window.addEventListener('resize', () => {
-          if (resizeTimer) clearTimeout(resizeTimer);
-          resizeTimer = setTimeout(() => { initDesktop(); }, 200);
-        });
-        initDesktop();
-      })();
-    </script>
+    <script src="js/sidebar-collab.js" defer></script>
     <script src="js/rendimiento.js"></script>
 </body>
 </html>

@@ -397,6 +397,20 @@ function updateCollaboratorProfile(session) {
 
 // Función principal para cargar datos
 async function loadPerformanceData(collabId) {
+    if (!window.Chart) {
+        try {
+            await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+                s.async = true;
+                s.onload = () => resolve(true);
+                s.onerror = () => reject(new Error('No se pudo cargar Chart.js'));
+                document.head.appendChild(s);
+            });
+        } catch (e) {
+            console.warn('Carga de Chart.js falló:', e?.message || e);
+        }
+    }
     const orders = await fetchCollaboratorOrders(collabId);
     const mainMetrics = calculateMainMetrics(orders, collabId);
     document.getElementById('completedCount').textContent = mainMetrics.completed;
@@ -433,4 +447,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Actualizar cada 30 segundos
     setInterval(() => loadPerformanceData(session.user.id), 30000);
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn){
+        logoutBtn.addEventListener('click', async () => {
+            try { await supabaseConfig.client.auth.signOut(); } catch(e){}
+            try {
+                const uid = session.user?.id;
+                const preserve = [`tlc_collab_active_job`];
+                if (uid) preserve.push(`tlc_active_job_${uid}`);
+                const keys = Object.keys(localStorage);
+                for (const k of keys) { if (!preserve.includes(k)) { try { localStorage.removeItem(k); } catch(_){} } }
+            } catch(_){}
+            window.location.href = 'login-colaborador.html';
+        });
+    }
 });
