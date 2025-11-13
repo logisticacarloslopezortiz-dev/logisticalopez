@@ -43,6 +43,15 @@
     body.preload-hidden { opacity: 0; }
   </style>
   <style>
+    @media (min-width: 768px) {
+      .sidebar-hover-handle { position: fixed; top: 0; left: 0; height: 100vh; width: 8px; z-index: 45; background: transparent; cursor: ew-resize; display: none; }
+      body.sidebar-desktop-closed .sidebar-hover-handle { display: block; }
+      body.sidebar-desktop-open .sidebar-hover-handle { display: none; }
+      body.sidebar-desktop-hover-open #mainContent { margin-left: 18rem; }
+      body.sidebar-desktop-hover-open #collabSidebar { transform: translateX(0); }
+    }
+  </style>
+  <style>
     @media (max-width: 380px) {
       header.md\:hidden span.font-semibold { display: none; }
       header.md\:hidden .w-8.h-8 { width: 32px; height: 32px; }
@@ -172,7 +181,7 @@
   <!-- Skip link for keyboard users -->
   <a href="#mainContent" class="sr-only">Saltar al contenido</a>
   <!-- Mobile Header with Hamburger -->
-  <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
+  <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
     <div class="flex items-center justify-between px-4 py-3">
       <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
         <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
@@ -189,6 +198,7 @@
 
   <!-- ✅ MEJORA: Sidebar Overlay for Mobile -->
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
+  <div id="sidebarHoverHandle" class="sidebar-hover-handle"></div>
 
   <!-- ✅ MEJORA: Sidebar rediseñado -->
   <aside id="collabSidebar" class="w-80 md:w-72 shadow-2xl h-screen flex flex-col z-50" style="background-color: var(--color-primario);" role="navigation" aria-label="Menú del colaborador">

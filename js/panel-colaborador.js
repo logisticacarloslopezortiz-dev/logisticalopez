@@ -1142,6 +1142,8 @@ function setupSidebarToggles() {
     const sidebarCloseBtn = document.getElementById('sidebarCollapseBtn');
     const desktopOpenBtn = document.getElementById('desktopMenuBtn');
     const overlay = document.getElementById('sidebarOverlay');
+    const hoverHandle = document.getElementById('sidebarHoverHandle');
+    const sidebar = document.getElementById('collabSidebar');
     const body = document.body;
     let lastFocused = null;
     let initialized = false;
@@ -1163,9 +1165,11 @@ function setupSidebarToggles() {
             // Asegurar exclusividad de estado en escritorio
             if (body.classList.contains('sidebar-desktop-open')) {
                 body.classList.remove('sidebar-desktop-closed');
+                body.classList.remove('sidebar-desktop-hover-open');
             }
             if (body.classList.contains('sidebar-desktop-closed')) {
                 body.classList.remove('sidebar-desktop-open');
+                body.classList.remove('sidebar-desktop-hover-open');
             }
         }
 
@@ -1222,6 +1226,31 @@ function setupSidebarToggles() {
         localStorage.setItem('collabSidebarDesktopClosed', 'false');
         updateUI(); // Update UI based on new state
     });
+
+    if (hoverHandle) {
+        hoverHandle.addEventListener('mouseenter', () => {
+            if (window.innerWidth >= 768 && body.classList.contains('sidebar-desktop-closed')) {
+                body.classList.add('sidebar-desktop-hover-open');
+            }
+        });
+        hoverHandle.addEventListener('mouseleave', () => {
+            if (window.innerWidth >= 768) {
+                body.classList.remove('sidebar-desktop-hover-open');
+            }
+        });
+    }
+    if (sidebar) {
+        sidebar.addEventListener('mouseenter', () => {
+            if (window.innerWidth >= 768 && body.classList.contains('sidebar-desktop-closed')) {
+                body.classList.add('sidebar-desktop-hover-open');
+            }
+        });
+        sidebar.addEventListener('mouseleave', () => {
+            if (window.innerWidth >= 768 && body.classList.contains('sidebar-desktop-closed')) {
+                body.classList.remove('sidebar-desktop-hover-open');
+            }
+        });
+    }
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && body.classList.contains('sidebar-mobile-open')) {
