@@ -14,6 +14,22 @@
     return; // Detener la ejecución si no hay sesión.
   }
 
+  try {
+    const { data: collab, error: collabErr } = await supabaseConfig.client
+      .from('collaborators')
+      .select('id, role, status')
+      .eq('id', session.user.id)
+      .maybeSingle();
+    if (collabErr || !collab || String(collab.status || '').toLowerCase() !== 'activo') {
+      console.warn('Perfil de colaborador no activo o inexistente. Redirigiendo.');
+      window.location.href = 'login-colaborador.html';
+      return;
+    }
+  } catch (_) {
+    window.location.href = 'login-colaborador.html';
+    return;
+  }
+
   function setupAriaCurrent(){
     try {
       const links = document.querySelectorAll('#collabSidebar nav a[href]');
@@ -1191,10 +1207,13 @@ function setupSidebarToggles() {
     // Open sidebar on mobile
     mobileMenuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        body.classList.add('sidebar-mobile-open');
+        const willOpen = !body.classList.contains('sidebar-mobile-open');
+        body.classList.toggle('sidebar-mobile-open');
         lastFocused = document.activeElement;
         const firstLink = document.querySelector('#collabSidebar nav a');
-        if (firstLink) { try { firstLink.focus(); } catch(_){} } else if (sidebarCloseBtn) { try { sidebarCloseBtn.focus(); } catch(_){} }
+        if (willOpen) {
+          if (firstLink) { try { firstLink.focus(); } catch(_){} } else if (sidebarCloseBtn) { try { sidebarCloseBtn.focus(); } catch(_){} }
+        }
         updateUI();
     });
 
@@ -1261,7 +1280,11 @@ function setupSidebarToggles() {
     });
 
     // --- Initialization ---
-    window.addEventListener('resize', updateUI);
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { updateUI(); }, 200);
+    });
     updateUI(); // Set initial state on page load
 }
 

@@ -52,17 +52,22 @@
     </header>
     <!-- Sidebar -->
     <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
-    <aside id="collabSidebar" class="w-full md:w-72 shadow-2xl min-h-screen flex flex-col" style="background-color: #1E405A;">
+    <aside id="collabSidebar" class="w-full md:w-72 shadow-2xl min-h-screen flex flex-col z-50" style="background-color: #1E405A;">
         <!-- Header del Sidebar -->
         <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: #1E8A95;">
-                    LLO
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: #1E8A95;">
+                        LLO
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Rendimiento</h2>
+                        <p class="text-xs" style="color: #1E8A95;">Panel de Colaborador</p>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-lg font-bold text-white">Rendimiento</h2>
-                    <p class="text-xs" style="color: #1E8A95;">Panel de Colaborador</p>
-                </div>
+                <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[rgba(30,138,149,0.4)]" style="background-color: rgba(30, 138, 149, 0.2);" aria-expanded="true" aria-controls="collabSidebar">
+                  <i data-lucide="panel-left-close" class="w-4 h-4 text-white"></i>
+                </button>
             </div>
             
             <!-- Perfil del Colaborador -->
@@ -104,7 +109,10 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 p-8">
+    <main class="flex-1 p-8 relative">
+        <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-lg hover:bg-gray-100 transition-colors hidden md:block absolute top-4 left-4 z-40">
+          <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
+        </button>
         <!-- Métricas Principales -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div class="metric-card text-white p-6 rounded-xl card-hover">
@@ -370,22 +378,89 @@
       document.addEventListener('DOMContentLoaded', () => { if (window.lucide) lucide.createIcons(); });
       (function(){
         const body = document.body;
-        const btn = document.getElementById('mobileMenuBtn');
+        const mobileBtn = document.getElementById('mobileMenuBtn');
         const overlay = document.getElementById('sidebarOverlay');
-        const desktopOpenBtn = null;
+        const collapseBtn = document.getElementById('sidebarCollapseBtn');
+        const desktopOpenBtn = document.getElementById('desktopMenuBtn');
+        const sidebar = document.getElementById('collabSidebar');
+        const logoutBtn = document.getElementById('logoutBtn');
         function update(){
-          if (btn) btn.setAttribute('aria-expanded', body.classList.contains('sidebar-mobile-open') ? 'true' : 'false');
-        }
-        if (btn){ btn.addEventListener('click', () => { body.classList.add('sidebar-mobile-open'); update(); }); }
-        if (overlay){ overlay.addEventListener('click', () => { body.classList.remove('sidebar-mobile-open'); update(); }); }
-        function initDesktop(){
-          if (window.innerWidth >= 768){
-            if (!body.classList.contains('sidebar-desktop-open') && !body.classList.contains('sidebar-desktop-closed')){
-              body.classList.add('sidebar-desktop-open');
-            }
+          if (mobileBtn) mobileBtn.setAttribute('aria-expanded', body.classList.contains('sidebar-mobile-open') ? 'true' : 'false');
+          if (collapseBtn) collapseBtn.setAttribute('aria-expanded', body.classList.contains('sidebar-desktop-open') ? 'true' : 'false');
+          if (desktopOpenBtn){
+            const isClosed = body.classList.contains('sidebar-desktop-closed');
+            // Tailwind no aplica dinámicamente md:hidden/md:block 
+            desktopOpenBtn.style.display = (window.innerWidth >= 768 && isClosed) ? 'block' : 'none';
+          }
+          // Re-generar íconos tras cambios dinámicos
+          if (window.lucide && typeof lucide.createIcons === 'function') {
+            lucide.createIcons();
           }
         }
-        window.addEventListener('resize', initDesktop);
+        if (mobileBtn){ mobileBtn.addEventListener('click', () => { body.classList.toggle('sidebar-mobile-open'); update(); }); }
+        if (overlay){ overlay.addEventListener('click', () => { body.classList.remove('sidebar-mobile-open'); update(); }); }
+        if (collapseBtn){
+          collapseBtn.addEventListener('click', () => {
+            if (window.innerWidth >= 768){
+              body.classList.remove('sidebar-desktop-open');
+              body.classList.add('sidebar-desktop-closed');
+              localStorage.setItem('collabSidebarDesktopClosed', 'true');
+            } else {
+              // En móvil, cerrar overlay y asegurar reseteo visual
+              body.classList.remove('sidebar-mobile-open');
+              if (sidebar) sidebar.style.transform = '';
+            }
+            update();
+          });
+        }
+        if (desktopOpenBtn){
+          desktopOpenBtn.addEventListener('click', () => {
+            body.classList.remove('sidebar-desktop-closed');
+            body.classList.add('sidebar-desktop-open');
+            localStorage.setItem('collabSidebarDesktopClosed', 'false');
+            update();
+          });
+        }
+        if (sidebar){
+          sidebar.addEventListener('mouseenter', () => {
+            if (window.innerWidth >= 768 && body.classList.contains('sidebar-desktop-closed')){
+              body.classList.add('sidebar-desktop-hover-open');
+            }
+          });
+          sidebar.addEventListener('mouseleave', () => {
+            if (window.innerWidth >= 768){
+              body.classList.remove('sidebar-desktop-hover-open');
+            }
+          });
+        }
+        if (logoutBtn){
+          logoutBtn.addEventListener('click', async () => {
+            try { await supabaseConfig.client.auth.signOut(); } catch(e){}
+            try { localStorage.clear(); } catch(_){}
+            window.location.href = 'login-colaborador.html';
+          });
+        }
+        function initDesktop(){
+          if (window.innerWidth >= 768){
+            // Asegurar que el overlay esté oculto en escritorio para evitar parpadeos
+            if (overlay) overlay.style.display = 'none';
+            if (!body.classList.contains('sidebar-desktop-open') && !body.classList.contains('sidebar-desktop-closed')){
+              const saved = localStorage.getItem('collabSidebarDesktopClosed') === 'true';
+              body.classList.add(saved ? 'sidebar-desktop-closed' : 'sidebar-desktop-open');
+            }
+          } else {
+            // En móvil, resetear transform para evitar glitches
+            if (sidebar) sidebar.style.transform = '';
+            if (overlay) overlay.style.display = '';
+            body.classList.remove('sidebar-desktop-open','sidebar-desktop-closed','sidebar-desktop-hover-open');
+          }
+          update();
+        }
+        let resizeTimer = null;
+        window.addEventListener('resize', () => {
+          if (resizeTimer) clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => { initDesktop(); }, 200);
+        });
         initDesktop();
       })();
     </script>
