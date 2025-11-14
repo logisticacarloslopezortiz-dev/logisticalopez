@@ -52,7 +52,7 @@ class PushNotificationManager {
 
     async registerServiceWorker() {
         try {
-            const registration = await navigator.serviceWorker.register('./sw.js');
+            const registration = await navigator.serviceWorker.register('/sw.js');
             console.log('Service Worker registered:', registration);
             
             // Esperar a que esté activo

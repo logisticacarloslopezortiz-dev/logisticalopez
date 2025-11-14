@@ -112,21 +112,21 @@ self.addEventListener('message', (event) => {
 // --- Lógica de Notificaciones Push (sin cambios) ---
 
 self.addEventListener('push', (event) => {
-  const data = event.data.json();
-  console.log('[SW] Push Recibido:', data);
-
+  let incoming = {};
+  try { incoming = event.data && typeof event.data.json === 'function' ? event.data.json() : {}; } catch (_) {}
+  const payload = incoming && typeof incoming === 'object' && incoming.notification ? incoming.notification : incoming;
+  const title = typeof payload.title === 'string' ? payload.title : 'TLC';
+  const body = typeof payload.body === 'string' ? payload.body : '';
+  const icon = payload.icon || '/img/android-chrome-192x192.png';
+  const badge = payload.badge || '/img/favicon-32x32.png';
+  const dataObj = payload.data || {};
   const options = {
-    body: data.body,
-    icon: data.icon || '/img/android-chrome-192x192.png',
-    badge: data.badge || '/img/favicon-32x32.png',
-    data: {
-      url: data.url || '/'
-    }
+    body,
+    icon,
+    badge,
+    data: { url: dataObj.url || '/' }
   };
-
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {
