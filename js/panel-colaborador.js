@@ -244,8 +244,8 @@ function loadActiveJob() {
         const now = new Date();
         const hoursDiff = (now - savedAt) / (1000 * 60 * 60);
         
-        if (hoursDiff < 24) {
-          console.log('[Persistencia] Trabajo activo recuperado:', jobData.id);
+        if (hoursDiff < 720) {
+          console.log('[Persistencia] Trabajo activo recuperado:', jobData.orderId);
           return jobData;
         } else {
           // Limpiar trabajo antiguo
@@ -1345,19 +1345,37 @@ function handleRealtimeUpdate(payload) {
 
   switch (eventType) {
     case 'INSERT':
-      // Añadir si es una nueva orden pendiente
       if (newRecord.status === 'Pendiente') {
-        state.allOrders.unshift(newRecord);
+        const normalized = {
+          ...newRecord,
+          service: newRecord.service?.name || newRecord.service || 'Sin servicio',
+          vehicle: newRecord.vehicle?.name || newRecord.vehicle || 'Sin vehículo',
+          origin_coords: parseCoordinates(newRecord.origin_coords),
+          destination_coords: parseCoordinates(newRecord.destination_coords)
+        };
+        state.allOrders.unshift(normalized);
       }
       break;
     case 'UPDATE':
       // ✅ CORRECCIÓN: Comparar IDs como números para evitar inconsistencias.
       const index = state.allOrders.findIndex(o => Number(o.id) === Number(newRecord.id));
       if (index !== -1) {
-        state.allOrders[index] = { ...state.allOrders[index], ...newRecord };
+        const prev = state.allOrders[index];
+        const merged = { ...prev, ...newRecord };
+        merged.service = prev.service;
+        merged.vehicle = prev.vehicle;
+        merged.origin_coords = parseCoordinates(merged.origin_coords);
+        merged.destination_coords = parseCoordinates(merged.destination_coords);
+        state.allOrders[index] = merged;
       } else {
-        // Si no estaba, es una orden que ahora es relevante (ej. asignada)
-        state.allOrders.unshift(newRecord);
+        const normalized = {
+          ...newRecord,
+          service: newRecord.service?.name || newRecord.service || 'Sin servicio',
+          vehicle: newRecord.vehicle?.name || newRecord.vehicle || 'Sin vehículo',
+          origin_coords: parseCoordinates(newRecord.origin_coords),
+          destination_coords: parseCoordinates(newRecord.destination_coords)
+        };
+        state.allOrders.unshift(normalized);
       }
       break;
     case 'DELETE':
@@ -1663,11 +1681,17 @@ async function restoreActiveJob() {
     try {
       const { data, error } = await supabaseConfig.client
         .from('orders')
-        .select('*')
+        .select('*, service:services(name), vehicle:vehicles(name)')
         .eq('id', state.activeJobId)
         .single();
       if (!error && data && data.assigned_to === state.collabSession.user.id && (data.last_collab_status !== 'entregado')) {
-        order = data;
+        order = {
+          ...data,
+          service: data.service?.name || data.service || 'Sin servicio',
+          vehicle: data.vehicle?.name || data.vehicle || 'Sin vehículo',
+          origin_coords: parseCoordinates(data.origin_coords),
+          destination_coords: parseCoordinates(data.destination_coords)
+        };
         showActiveJob(order);
         saveActiveJob(order);
         document.getElementById('ordersCardContainer')?.classList.add('hidden');
