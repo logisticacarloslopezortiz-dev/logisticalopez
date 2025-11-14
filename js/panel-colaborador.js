@@ -210,12 +210,13 @@ function createCustomIcon(color, text) {
  * @param {Object} activeJob - Datos del trabajo activo
  */
 function saveActiveJob(activeJob) {
+  if (!activeJob || !activeJob.id) return;
   try {
     const collaboratorId = state.collabSession?.user?.id;
-    if (collaboratorId && activeJob) {
+    if (collaboratorId) {
       const key = `tlc_active_job_${collaboratorId}`;
       const jobData = {
-        ...activeJob,
+        orderId: activeJob.id,
         savedAt: new Date().toISOString()
       };
       localStorage.setItem(key, JSON.stringify(jobData));
@@ -264,12 +265,12 @@ function loadActiveJob() {
  * Elimina el trabajo activo guardado
  */
 function clearActiveJob() {
+  state.activeJobId = null;
   try {
     const collaboratorId = state.collabSession?.user?.id;
     if (collaboratorId) {
       const key = `tlc_active_job_${collaboratorId}`;
       localStorage.removeItem(key);
-      console.log('[Persistencia] Trabajo activo eliminado del almacenamiento');
     }
   } catch (err) {
     console.error('[Persistencia] Error al limpiar trabajo activo:', err);
@@ -619,10 +620,22 @@ async function handleOrderCompletion(orderId) {
   }
 }
 
-// ✅ MEJORA: Agrupar variables globales en un objeto de estado para mayor claridad.
+// Objeto para cachear elementos del DOM y evitar búsquedas repetitivas
+const ui = {
+  loadingIndicator: document.getElementById('loadingIndicator'),
+  ordersCardContainer: document.getElementById('ordersCardContainer'),
+  pendingSection: document.getElementById('pendingSection'),
+  pendingCardContainer: document.getElementById('pendingCardContainer'),
+  activeJobSection: document.getElementById('activeJobSection'),
+  activeJobInfo: document.getElementById('activeJobInfo'),
+  activeJobStatus: document.getElementById('activeJobStatus'),
+  photoGallery: document.getElementById('photoGallery'),
+  acceptModal: document.getElementById('acceptModal'),
+  acceptModalBody: document.getElementById('acceptModalBody'),
+};
+
 const state = {
   allOrders: [],
-  filteredOrders: [],
   historialOrders: [],
   selectedOrderIdForAccept: null,
   activeJobId: Number(localStorage.getItem('tlc_collab_active_job')) || null,
@@ -647,9 +660,7 @@ function openAcceptModal(order){
     return;
   }
   state.selectedOrderIdForAccept = order.id;
-  const modal = document.getElementById('acceptModal');
-  const body = document.getElementById('acceptModalBody');
-  body.innerHTML = `
+  ui.acceptModalBody.innerHTML = `
     <div class="space-y-1">
       <div><span class="font-semibold">ID:</span> ${order.id}</div>
       <div><span class="font-semibold">Cliente:</span> ${order.name} (${order.phone})</div>
@@ -658,15 +669,14 @@ function openAcceptModal(order){
       <div><span class="font-semibold">Fecha/Hora:</span> ${order.date} ${order.time}</div>
     </div>
   `;
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
+  ui.acceptModal.classList.remove('hidden');
+  ui.acceptModal.classList.add('flex');
   if (window.lucide) lucide.createIcons();
 }
 
 function closeAcceptModal(){
-  const modal = document.getElementById('acceptModal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  ui.acceptModal.classList.add('hidden');
+  ui.acceptModal.classList.remove('flex');
   state.selectedOrderIdForAccept = null;
 }
 
@@ -677,27 +687,10 @@ function handleCardClick(orderId) {
   
   // Verificar si hay un trabajo activo guardado
   const activeJob = loadActiveJob();
-  
-  // Si ya hay un trabajo activo, mostrar solo ese trabajo
-  if (activeJob) {
-    const activeOrder = state.allOrders.find(o => o.id === activeJob.orderId);
-    if (activeOrder) {
-      showActiveJob(activeOrder);
-      return;
-    }
-  }
-  
+
   // Si no hay trabajo activo, proceder según el estado de la orden
   if (!order.assigned_to && order.status === 'Pendiente') {
     openAcceptModal(order);
-  } else if (order.assigned_to === state.collabSession.user.id) {
-    // Si la orden está asignada a este colaborador, guardarla como trabajo activo
-    saveActiveJob({
-      orderId: order.id,
-      assignedAt: new Date().toISOString(),
-      status: order.status
-    });
-    showActiveJob(order);
   }
 }
 
@@ -722,12 +715,11 @@ function showActiveJob(order){
   }
   
   state.activeJobId = Number(order.id);
-  localStorage.setItem('tlc_collab_active_job', state.activeJobId);
-  const section = document.getElementById('activeJobSection');
-  section.classList.remove('hidden');
-  const info = document.getElementById('activeJobInfo');
+  saveActiveJob(order); // Guardar el trabajo activo de forma robusta
+  ui.activeJobSection.classList.remove('hidden');
+
   // ✅ MEJORA: Diseño de información de trabajo activo más limpio y organizado
-  info.innerHTML = /*html*/`
+  ui.activeJobInfo.innerHTML = /*html*/`
     <div class="space-y-4">
       <div class="flex flex-wrap items-center gap-3">
         <span class="px-3 py-1.5 text-sm rounded-lg bg-gray-100 text-gray-800 font-bold font-mono shadow-sm">ID: ${order.id}</span>
@@ -809,9 +801,8 @@ function updateActiveJobView(){
   const statusKey = order.last_collab_status || 'en_camino_recoger';
   const statusLabel = STATUS_MAP[statusKey]?.label || statusKey;
   const badge = document.getElementById('activeJobStatus');
-  if (badge) {
-    badge.textContent = statusLabel;
-  }
+  if (badge) badge.textContent = statusLabel;
+
   // Se eliminó la lógica de la barra de progreso (jobProgressBar) porque el elemento no existe en el HTML.
 }
 
@@ -826,8 +817,6 @@ function renderPhotoGallery(photos) {
     gallery.appendChild(imgContainer);
   });
 }
-
-
 
 // Cache de nombres de colaboradores para evitar mostrar UUIDs
 function getCollaboratorName(userId){
@@ -958,26 +947,6 @@ async function handlePhotoUpload(event) {
   }
 }
 
-let baseVisibleCount = 0;
-function render(){
-  const cardsContainer = document.getElementById('ordersCardContainer');
-  // Note: 'assignedOrdersContainer' was removed from the HTML. All cards render into ordersCardContainer.
-
-  if (!cardsContainer) return;
-
-  if (state.filteredOrders.length === 0){
-    cardsContainer.innerHTML = '<div class="text-center py-6 text-gray-500">Sin solicitudes</div>';
-    return;
-  }
-
-  try {
-    renderMobileCards(state.filteredOrders);
-  } catch(err) {
-    console.warn('No se pudo renderizar tarjetas móviles:', err);
-  }
-  if (window.lucide) lucide.createIcons();
-}
-
 /**
  * Filtra las órdenes según los criterios de búsqueda y estado, y luego las renderiza.
  * Esta función es el punto central para actualizar la vista de la tabla.
@@ -998,20 +967,16 @@ function filterAndRender(){
     const activeOrder = state.allOrders.find(order => order.id === activeJob.orderId);
     if (activeOrder) {
       showActiveJob(activeOrder);
-      const assignedContainer = document.getElementById('ordersCardContainer');
-      const pendingContainer = document.getElementById('pendingSection');
-      if (assignedContainer) assignedContainer.classList.add('hidden');
-      if (pendingContainer) pendingContainer.classList.add('hidden');
+      if (ui.ordersCardContainer) ui.ordersCardContainer.classList.add('hidden');
+      if (ui.pendingSection) ui.pendingSection.classList.add('hidden');
       return;
     } else {
       clearActiveJob();
     }
   }
   
-  const assignedContainer = document.getElementById('ordersCardContainer');
-  const pendingContainer = document.getElementById('pendingSection');
-  if (assignedContainer) assignedContainer.classList.toggle('hidden', myAssigned.length === 0);
-  if (pendingContainer) pendingContainer.classList.toggle('hidden', pendingOrders.length === 0);
+  if (ui.ordersCardContainer) ui.ordersCardContainer.classList.toggle('hidden', myAssigned.length === 0);
+  if (ui.pendingSection) ui.pendingSection.classList.toggle('hidden', pendingOrders.length === 0);
   renderAssignedCards(myAssigned);
   renderPendingCards(pendingOrders);
   
@@ -1153,140 +1118,8 @@ function renderOrders(orders){
 // usando la función renderMobileCards que es responsiva.
 
 // === Lógica Unificada del Sidebar (Móvil y Escritorio) ===
-function setupSidebarToggles() {
-    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-    const sidebarCloseBtn = document.getElementById('sidebarCollapseBtn');
-    const desktopOpenBtn = document.getElementById('desktopMenuBtn');
-    const overlay = document.getElementById('sidebarOverlay');
-    const hoverHandle = document.getElementById('sidebarHoverHandle');
-    const sidebar = document.getElementById('collabSidebar');
-    const body = document.body;
-    let lastFocused = null;
-    let initialized = false;
-
-    if (!mobileMenuBtn || !sidebarCloseBtn || !desktopOpenBtn || !overlay) {
-        console.error("One or more sidebar control elements are missing.");
-        return;
-    }
-
-    const updateUI = () => {
-        const isDesktop = window.innerWidth >= 768;
-
-        if (isDesktop) {
-            body.classList.remove('sidebar-mobile-open');
-            if (!body.classList.contains('sidebar-desktop-open') && !body.classList.contains('sidebar-desktop-closed')) {
-                const saved = localStorage.getItem('collabSidebarDesktopClosed') === 'true';
-                body.classList.add(saved ? 'sidebar-desktop-closed' : 'sidebar-desktop-open');
-            }
-            // Asegurar exclusividad de estado en escritorio
-            if (body.classList.contains('sidebar-desktop-open')) {
-                body.classList.remove('sidebar-desktop-closed');
-                body.classList.remove('sidebar-desktop-hover-open');
-            }
-            if (body.classList.contains('sidebar-desktop-closed')) {
-                body.classList.remove('sidebar-desktop-open');
-                body.classList.remove('sidebar-desktop-hover-open');
-            }
-        }
-
-        const isSidebarClosed = body.classList.contains('sidebar-desktop-closed');
-        if (isDesktop && isSidebarClosed) {
-            desktopOpenBtn.classList.remove('md:hidden');
-            desktopOpenBtn.classList.add('md:block');
-        } else {
-            desktopOpenBtn.classList.remove('md:block');
-            desktopOpenBtn.classList.add('md:hidden');
-        }
-        if (mobileMenuBtn) mobileMenuBtn.setAttribute('aria-expanded', body.classList.contains('sidebar-mobile-open') ? 'true' : 'false');
-        if (sidebarCloseBtn) sidebarCloseBtn.setAttribute('aria-expanded', body.classList.contains('sidebar-desktop-open') ? 'true' : 'false');
-        initialized = true;
-    };
-
-    // --- Event Listeners only modify state, then call updateUI ---
-
-    // Open sidebar on mobile
-    mobileMenuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const willOpen = !body.classList.contains('sidebar-mobile-open');
-        body.classList.toggle('sidebar-mobile-open');
-        lastFocused = document.activeElement;
-        const firstLink = document.querySelector('#collabSidebar nav a');
-        if (willOpen) {
-          if (firstLink) { try { firstLink.focus(); } catch(_){} } else if (sidebarCloseBtn) { try { sidebarCloseBtn.focus(); } catch(_){} }
-        }
-        updateUI();
-    });
-
-    // Close sidebar with the button inside it (works for both views)
-    sidebarCloseBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (window.innerWidth >= 768) { // isDesktop
-            body.classList.remove('sidebar-desktop-open');
-            body.classList.add('sidebar-desktop-closed');
-            localStorage.setItem('collabSidebarDesktopClosed', 'true');
-        } else {
-            body.classList.remove('sidebar-mobile-open');
-        }
-        updateUI(); // Update UI based on new state
-    });
-
-    // Close sidebar on mobile via overlay
-    overlay.addEventListener('click', () => {
-        body.classList.remove('sidebar-mobile-open');
-        if (lastFocused) { try { lastFocused.focus(); } catch(_){} }
-        updateUI();
-    });
-
-    // Re-open sidebar on desktop
-    desktopOpenBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        body.classList.remove('sidebar-desktop-closed');
-        body.classList.add('sidebar-desktop-open');
-        localStorage.setItem('collabSidebarDesktopClosed', 'false');
-        updateUI(); // Update UI based on new state
-    });
-
-    if (hoverHandle) {
-        hoverHandle.addEventListener('mouseenter', () => {
-            if (window.innerWidth >= 768 && body.classList.contains('sidebar-desktop-closed')) {
-                body.classList.add('sidebar-desktop-hover-open');
-            }
-        });
-        hoverHandle.addEventListener('mouseleave', () => {
-            if (window.innerWidth >= 768) {
-                body.classList.remove('sidebar-desktop-hover-open');
-            }
-        });
-    }
-    if (sidebar) {
-        sidebar.addEventListener('mouseenter', () => {
-            if (window.innerWidth >= 768 && body.classList.contains('sidebar-desktop-closed')) {
-                body.classList.add('sidebar-desktop-hover-open');
-            }
-        });
-        sidebar.addEventListener('mouseleave', () => {
-            if (window.innerWidth >= 768 && body.classList.contains('sidebar-desktop-closed')) {
-                body.classList.remove('sidebar-desktop-hover-open');
-            }
-        });
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && body.classList.contains('sidebar-mobile-open')) {
-            body.classList.remove('sidebar-mobile-open');
-            if (lastFocused) { try { lastFocused.focus(); } catch(_){} }
-            updateUI();
-        }
-    });
-
-    // --- Initialization ---
-    let resizeTimer = null;
-    window.addEventListener('resize', () => {
-      if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => { updateUI(); }, 200);
-    });
-    updateUI(); // Set initial state on page load
-}
+// La lógica del sidebar fue eliminada de este archivo para evitar duplicidad.
+// El archivo `js/sidebar-collab.js` ya se encarga de esta funcionalidad.
 
 // Funciones para actualizar el sidebar
 function updateCollaboratorProfile(session) {
@@ -1361,7 +1194,6 @@ async function syncPendingStatusUpdates() {
 
 async function loadInitialOrders() {
   let timeout = null;
-  const loadingIndicator = document.getElementById('loadingIndicator');
 
   try {
     // Iniciar temporizador de carga
@@ -1369,8 +1201,7 @@ async function loadInitialOrders() {
       if (loadingIndicator && !loadingIndicator.classList.contains('hidden')) {
         showError('Tiempo de carga excedido', 'No se pudieron cargar los datos. Por favor, recarga la página.');
         loadingIndicator.classList.add('hidden');
-      }
-    }, 10000); // 10 segundos
+      }    }, 10000); // 10 segundos
 
     // Helper para ejecutar la consulta
     const doQuery = async () => {
@@ -1589,12 +1420,12 @@ function setupEventListeners() {
   document.getElementById('logoutBtn')?.addEventListener('click', async () => {
     const { error } = await supabaseConfig.client.auth.signOut();
     try {
-      const keysToPreserve = [];
+      // ✅ MEJORA: Preservar la clave del trabajo activo al cerrar sesión.
+      const keysToPreserve = ['tlc_theme']; // Mantener el tema
       const uid = state.collabSession?.user?.id;
       if (uid) {
         keysToPreserve.push(`tlc_active_job_${uid}`);
       }
-      keysToPreserve.push('tlc_collab_active_job');
       const allKeys = Object.keys(localStorage);
       for (const k of allKeys) {
         if (!keysToPreserve.includes(k)) {
@@ -1639,15 +1470,6 @@ function setupEventListeners() {
     if (success) {
       showSuccess('¡Solicitud aceptada!', 'El trabajo ahora es tuyo.');
       state.activeJobId = orderId;
-      localStorage.setItem('tlc_collab_active_job', String(orderId));
-
-      // Guardar el trabajo activo en localStorage con estructura robusta
-      saveActiveJob({
-        orderId: orderId,
-        assignedAt: new Date().toISOString(),
-        status: 'en_camino_recoger',
-        collaboratorId: state.collabSession.user.id
-      });
 
       // Actualización optimista
       const order = state.allOrders.find(o => o.id === orderId);
@@ -1656,6 +1478,7 @@ function setupEventListeners() {
         order.status = 'En proceso';
         order.last_collab_status = 'en_camino_recoger';
         showActiveJob(order);
+        saveActiveJob(order); // Guardar el trabajo activo de forma robusta
         document.getElementById('ordersCardContainer')?.classList.add('hidden');
         document.getElementById('pendingSection')?.classList.add('hidden');
       }
@@ -1751,18 +1574,15 @@ supabaseConfig.client.auth.onAuthStateChange((_event, newSession) => {
 
 updateCollaboratorProfile(session);
 
-const loadingIndicator = document.getElementById('loadingIndicator');
-const cardsContainer = document.getElementById('ordersCardContainer');
-
-loadingIndicator.classList.remove('hidden');
-cardsContainer.classList.add('hidden');
+ui.loadingIndicator.classList.remove('hidden');
+ui.ordersCardContainer.classList.add('hidden');
 
 // Intentar sincronizar cambios pendientes antes de cargar
 await syncPendingStatusUpdates();
 
 await loadInitialOrders();
 
-loadingIndicator.classList.add('hidden');
+ui.loadingIndicator.classList.add('hidden');
 
 await restoreActiveJob();
 
@@ -1816,10 +1636,10 @@ if (supabaseConfig.client && !supabaseConfig.useLocalStorage) {
  * una pantalla en blanco.
  */
 async function restoreActiveJob() {
-  // Primero intentar cargar desde localStorage
+  // Cargar desde localStorage usando la clave específica del usuario
   const savedJob = loadActiveJob();
   if (savedJob) {
-    state.activeJobId = savedJob.orderId || savedJob.id;
+    state.activeJobId = savedJob.orderId;
     console.log(`[Persistencia] Trabajo activo cargado desde localStorage: #${state.activeJobId}`);
   }
 
@@ -1829,7 +1649,7 @@ async function restoreActiveJob() {
     const lastStatus = order?.last_collab_status;
     
     // Condición para un trabajo activo válido
-    if (order && assignedId === state.collabSession.user.id && lastStatus !== 'entregado') {
+    if (order && assignedId === state.collabSession.user.id && lastStatus !== 'entregado' && order.status !== 'Completada' && order.status !== 'Cancelada') {
       console.log(`[Cache] Restaurando trabajo activo #${order.id}`);
       showActiveJob(order);
       // Guardar el trabajo activo actualizado
@@ -1845,7 +1665,7 @@ async function restoreActiveJob() {
         .from('orders')
         .select('*')
         .eq('id', state.activeJobId)
-        .maybeSingle();
+        .single();
       if (!error && data && data.assigned_to === state.collabSession.user.id && (data.last_collab_status !== 'entregado')) {
         order = data;
         showActiveJob(order);

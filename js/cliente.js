@@ -43,7 +43,7 @@ let destinationMarker;
 let isOriginSet = false; // Controla si el origen ya fue establecido
 
 // Elementos del DOM
-let steps, nextBtn, prevBtn, progressBar;
+let steps, nextBtn, prevBtn, progressBar, helpText;
 
 function showStep(step) {
   steps.forEach(s => s.classList.add('hidden'));
@@ -60,6 +60,33 @@ function showStep(step) {
     setTimeout(() => map.invalidateSize(), 100);
   }
   progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
+  updateHelpText(step);
+}
+
+function updateHelpText(step) {
+  if (!helpText) return;
+  let message = '';
+  switch(step) {
+    case 1:
+      message = 'Ingresa tus datos de contacto. Nos comunicaremos contigo a través de estos medios.';
+      break;
+    case 2:
+      message = 'Selecciona el tipo de servicio que necesitas. Aparecerán preguntas adicionales si es necesario.';
+      break;
+    case 3:
+      message = 'Elige el vehículo que mejor se adapte a tu carga. Esto nos ayuda a asignar el equipo correcto.';
+      break;
+    case 4:
+      message = 'Usa el mapa para marcar el punto de recogida y el de entrega. Puedes buscar por dirección o usar tu ubicación actual.';
+      break;
+    case 5:
+      message = 'Indícanos cuándo necesitas el servicio. Haremos lo posible por cumplir con tu horario.';
+      break;
+    case 6:
+      message = '¡Casi listo! Revisa que toda la información sea correcta antes de enviar tu solicitud.';
+      break;
+  }
+  helpText.textContent = message;
 }
 
 // --- Carga dinámica de datos desde Supabase ---
@@ -459,6 +486,10 @@ async function initMap() {
   const deliveryInput = document.getElementById('deliveryAddress');
   const useCurrentLocationBtn = document.getElementById('use-current-location-btn');
   const instructionText = document.getElementById('map-instruction-text');
+  // --- INICIO: Mejoras para mapa en móvil ---
+  const expandMapBtn = document.getElementById('expand-map-btn');
+  const confirmMapPointsBtn = document.getElementById('confirm-map-points-btn');
+  const mapContainer = document.getElementById('map-container');
 
   map.on('click', (e) => { updateMarkerAndAddress(e.latlng); });
 
@@ -470,6 +501,21 @@ async function initMap() {
   });
 
   useCurrentLocationBtn.addEventListener('click', locateUserAndSetOrigin);
+
+  if (expandMapBtn) {
+    expandMapBtn.addEventListener('click', () => {
+      mapContainer.classList.add('fixed', 'inset-0', 'z-[100]');
+      document.body.classList.add('overflow-hidden');
+      map.invalidateSize();
+    });
+  }
+  if (confirmMapPointsBtn) {
+    confirmMapPointsBtn.addEventListener('click', () => {
+      mapContainer.classList.remove('fixed', 'inset-0', 'z-[100]');
+      document.body.classList.remove('overflow-hidden');
+      map.invalidateSize();
+    });
+  }
 
   // Lógica principal para actualizar marcadores
   async function updateMarkerAndAddress(latlng, label = null) {
@@ -820,6 +866,7 @@ document.addEventListener('DOMContentLoaded', function() {
   nextBtn = document.getElementById('nextBtn');
   prevBtn = document.getElementById('prevBtn');
   progressBar = document.getElementById('progress-bar');
+  helpText = document.getElementById('help-text');
   // Evitar doble envío del formulario
   let isSubmittingOrder = false;
   
@@ -1291,4 +1338,3 @@ document.addEventListener('DOMContentLoaded', function() {
     showStep(currentStep);
   }
 });
-

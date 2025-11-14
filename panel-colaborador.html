@@ -42,44 +42,6 @@
       --sidebar-rail: 3rem;
     }
     body.preload-hidden { opacity: 0; }
-  </style>
-  <style>
-    @media (min-width: 768px) {
-      body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.75rem; }
-      body.sidebar-desktop-closed #sidebarLogo { width: 2.25rem; height: 2.25rem; }
-      body.sidebar-desktop-closed #collabSidebar nav a { justify-content: center; padding: 0.75rem; }
-      body.sidebar-desktop-closed #collabSidebar nav i { margin: 0; }
-    }
-  </style>
-  <style>
-    @media (min-width: 768px) {
-      .sidebar-hover-handle { position: fixed; top: 0; left: 0; height: 100vh; width: 8px; z-index: 45; background: transparent; cursor: ew-resize; display: none; }
-      body.sidebar-desktop-closed .sidebar-hover-handle { display: block; }
-      body.sidebar-desktop-open .sidebar-hover-handle { display: none; }
-      body.sidebar-desktop-hover-open #mainContent { margin-left: 18rem; }
-      body.sidebar-desktop-hover-open #collabSidebar { transform: translateX(0); }
-    }
-  </style>
-  <style>
-    @media (max-width: 380px) {
-      header.md\:hidden span.font-semibold { display: none; }
-      header.md\:hidden .w-8.h-8 { width: 32px; height: 32px; }
-    }
-    @media (min-width: 768px) and (max-width: 1024px) {
-      #collabSidebar { width: 14rem; }
-      body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
-    }
-  </style>
-  <style>
-    #collabSidebar nav a[aria-current="page"] { background-color: #1E8A95; }
-  </style>
-  <script>
-    document.addEventListener('DOMContentLoaded', function(){
-      try { document.body.classList.remove('preload-hidden'); } catch(_){}
-    });
-  </script>
-  
-  <style>
     /* --- Base Layout --- */
     body {
       display: flex;
@@ -125,9 +87,7 @@
 
     /* --- Vista Móvil (< 768px) --- */
     @media (max-width: 767.98px) {
-      body {
-        flex-direction: row; /* Mantener row para consistencia */
-      }
+      body { flex-direction: column; }
       #collabSidebar {
         position: fixed;
         top: 0;
@@ -135,12 +95,11 @@
         height: 100vh;
         transform: translateX(-100%);
         z-index: 50;
-        width: 320px; /* Ancho fijo para evitar distorsión */
+        width: 320px !important; /* Ancho fijo para evitar distorsión */
       }
       #mainContent {
         width: 100%;
-        margin-left: 0 !important; /* Asegurar que no haya margen */
-        padding-top: 60px; /* Espacio para el header móvil */
+        margin-left: 0 !important;
       }
 
       /* Estado: sidebar abierto en móvil */
@@ -156,6 +115,14 @@
       }
     }
 
+    /* --- Media Queries Adicionales --- */
+    @media (max-width: 380px) {
+      header.md\:hidden span.font-semibold { display: none; }
+    }
+    @media (min-width: 768px) and (max-width: 1024px) {
+      body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
+    }
+
     /* --- Vista de Escritorio (>= 768px) --- */
     @media (min-width: 768px) {
       #collabSidebar {
@@ -163,6 +130,7 @@
         top: 0;
         left: 0;
         height: 100vh;
+        width: 18rem; /* Ancho por defecto en escritorio */
       }
       #sidebarOverlay {
         display: none !important; /* El overlay nunca se usa en escritorio */
@@ -170,7 +138,11 @@
 
       /* Estado: sidebar abierto en escritorio (por defecto) */
       body.sidebar-desktop-open #mainContent {
-        margin-left: 18rem; /* 288px, igual a md:w-72 */
+        margin-left: 18rem;
+      }
+      @media (min-width: 768px) and (max-width: 1024px) {
+        #collabSidebar { width: 14rem; }
+        body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
       }
       body.sidebar-desktop-open #collabSidebar {
         transform: translateX(0);
@@ -180,40 +152,54 @@
       body.sidebar-desktop-closed #mainContent {
         margin-left: var(--sidebar-rail);
       }
+      body.sidebar-desktop-closed #desktopMenuBtn {
+        display: block;
+      }
       body.sidebar-desktop-closed #collabSidebar {
         transform: translateX(calc(-100% + var(--sidebar-rail)));
       }
+      body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.75rem; }
+      body.sidebar-desktop-closed #sidebarLogo { width: 2.25rem; height: 2.25rem; }
+      body.sidebar-desktop-closed #collabSidebar nav a { justify-content: center; padding: 0.75rem; }
+      body.sidebar-desktop-closed #collabSidebar nav i { margin: 0; }
       body.sidebar-desktop-closed #collabSidebar nav span.font-medium { display: none; }
+      body.sidebar-desktop-closed #collabSidebar .flex-1.min-w-0, body.sidebar-desktop-closed #collabSidebar .w-2.h-2.bg-green-500 { display: none; }
       body.sidebar-desktop-closed #collabSidebar #pendingRequestsCount { display: none; }
       body.sidebar-desktop-closed #collabSidebar .rounded-xl.p-4 .text-xs { display: none; }
     }
+
+    /* Estilo para el enlace activo */
+    #collabSidebar nav a[aria-current="page"] { background-color: #1E8A95; }
   </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      try { document.body.classList.remove('preload-hidden'); } catch(_){}
+    });
+  </script>
 </head>
-<body class="bg-gray-50 min-h-screen preload-hidden">
+<body class="bg-gray-50 preload-hidden">
   <!-- Skip link for keyboard users -->
   <a href="#mainContent" class="sr-only">Saltar al contenido</a>
-  <!-- Mobile Header with Hamburger -->
+  <!-- Mobile Header (Estandarizado como en rendimiento.html) -->
   <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
     <div class="flex items-center justify-between px-4 py-3">
       <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/80 backdrop-blur shadow-sm ring-1 ring-gray-200 hover:bg-white hover:shadow transition">
         <i data-lucide="menu" class="w-6 h-6" style="color: var(--color-primario);"></i>
       </button>
       <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm" style="background-color: var(--color-secundario);">
           LLO
         </div>
-        <span class="font-semibold text-gray-800 flex items-center gap-1"><i data-lucide="user" class="w-4 h-4 text-gray-600"></i> Colaborador</span>
+        <span class="font-semibold text-gray-800">Panel Colaborador</span>
       </div>
       <div class="w-10"></div> <!-- Spacer for centering -->
     </div>
   </header>
 
-  <!-- ✅ MEJORA: Sidebar Overlay for Mobile -->
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
   <div id="sidebarHoverHandle" class="sidebar-hover-handle"></div>
 
-  <!-- ✅ MEJORA: Sidebar rediseñado -->
-  <aside id="collabSidebar" class="w-80 md:w-72 shadow-2xl h-screen flex flex-col z-50" style="background-color: var(--color-primario);" role="navigation" aria-label="Menú del colaborador">
+  <aside id="collabSidebar" class="shadow-2xl h-screen flex flex-col z-50" style="background-color: var(--color-primario);" role="navigation" aria-label="Menú del colaborador">
     <!-- Header del Sidebar -->
     <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
       <div class="flex items-center justify-between mb-4">
@@ -222,17 +208,17 @@
             LLO
           </div>
           <div>
-            <p class="text-xs text-white">Panel de Control</p>
+            <h2 class="text-lg font-bold text-white">Colaborador</h2>
+            <p class="text-xs" style="color: var(--color-secundario);">Panel de Control</p>
           </div>
         </div>
-        <!-- Botón para colapsar el sidebar -->
-        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[rgba(30,138,149,0.4)]" style="background-color: rgba(30, 138, 149, 0.2);" aria-expanded="true" aria-controls="collabSidebar">
-          <i data-lucide="panel-left-close" class="w-4 h-4 text-white"></i>
+        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[rgba(30,138,149,0.4)] group" style="background-color: rgba(30, 138, 149, 0.2);" aria-expanded="true" aria-controls="collabSidebar" title="Colapsar menú">
+        <i data-lucide="panel-left-close" class="w-4 h-4 text-white transition-transform duration-300 group-hover:scale-90"></i>
         </button>
       </div>
       
       <!-- Perfil del Colaborador -->
-      <div class="rounded-xl p-4" style="background-color: rgba(30, 138, 149, 0.1); border: 1px solid rgba(30, 138, 149, 0.3);">
+      <div class="rounded-xl p-4" style="background-color: rgba(30, 138, 149, 0.1); border: 1px solid rgba(30, 138, 149, 0.3);" id="profile-card">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar" style="background-color: #1E8A95;">
             C
@@ -290,12 +276,11 @@
     </nav>
   </aside>
 
-  <!-- Contenedor principal -->
   <!-- Sidebar and main are siblings for predictable layout and easier CSS control -->
   <main id="mainContent" class="p-4 md:p-8 transition-all duration-300 relative">
       <!-- Botón para abrir el sidebar en escritorio cuando está colapsado -->
-      <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-lg hover:bg-gray-100 transition-colors hidden md:block absolute top-4 left-4 z-40">
-        <i data-lucide="menu" class="w-6 h-6 text-gray-600"></i>
+      <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-lg hover:bg-gray-100 transition-colors hidden absolute top-4 left-4 z-40 group" title="Abrir menú">
+        <i data-lucide="menu" class="w-6 h-6 text-gray-600 transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110"></i>
       </button>
 
       

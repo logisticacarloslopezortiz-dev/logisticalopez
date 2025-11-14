@@ -43,11 +43,6 @@
       // A11Y
       setAria(mobileBtn, body.classList.contains('sidebar-mobile-open'));
       setAria(collapseBtn, body.classList.contains('sidebar-desktop-open'));
-      // Mostrar botón de abrir en escritorio solo cuando está cerrado
-      if (desktopOpenBtn){
-        const closed = body.classList.contains('sidebar-desktop-closed');
-        desktopOpenBtn.style.display = (isDesktop() && closed) ? 'block' : 'none';
-      }
       updateLucide();
     }
 
