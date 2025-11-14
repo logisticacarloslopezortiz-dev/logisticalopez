@@ -519,115 +519,156 @@
     </div>
   </div>
 
-  <!-- Modal Mudanza -->
+  <!-- Modal Mudanza (Optimizado) -->
   <div id="modal-mudanza" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
       <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-azulOscuro">🏠 Servicio de Mudanza</h3>
-            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            <button type="button" class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
           </div>
-          <form id="form-mudanza" class="space-y-4">
+          <form id="form-mudanza" class="space-y-6">
             <div class="bg-blue-50 border border-blue-200 text-blue-900 text-sm p-3 rounded">
               <i class="fas fa-info-circle mr-1"></i>
-              Selecciona los objetos y coloca la cantidad aproximada. Puedes añadir detalles específicos en los campos de descripción.
+              Indica la cantidad de cada objeto a trasladar. Esto nos ayuda a estimar el tamaño del camión y el personal necesario.
             </div>
-            <div>
-              <label class="block text-sm font-medium mb-2">¿Qué tipo de objetos necesita trasladar?</label>
-              <textarea name="objetos_trasladar" placeholder="muebles, electrodomésticos, cajas, cama, estufa, lavadora, sillones, mesas, etc." class="w-full border p-2 rounded h-20" required></textarea>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2">¿Hay objetos frágiles o de valor que necesiten un trato especial? Describa.</label>
-              <textarea name="objetos_fragiles" placeholder="Describa los objetos frágiles o de valor" class="w-full border p-2 rounded h-20"></textarea>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2">Selecciona objetos y cantidades</label>
-              <div class="grid grid-cols-2 gap-3">
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Camas</label>
-                  <input type="number" min="0" name="item_camas_qty" data-item="camas" class="border p-2 rounded w-20" placeholder="0">
+
+            <!-- 1. Inventario de Objetos -->
+            <fieldset>
+              <legend class="text-lg font-semibold text-azulOscuro mb-3">1. Inventario de Objetos</legend>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-bed text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Camas</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_camas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Sofás</label>
-                  <input type="number" min="0" name="item_sofas_qty" data-item="sofas" class="border p-2 rounded w-20" placeholder="0">
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-couch text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Sofás</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_sofas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Mesas</label>
-                  <input type="number" min="0" name="item_mesas_qty" data-item="mesas" class="border p-2 rounded w-20" placeholder="0">
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-box-open text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Cajas</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_cajas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Sillas</label>
-                  <input type="number" min="0" name="item_sillas_qty" data-item="sillas" class="border p-2 rounded w-20" placeholder="0">
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-chair text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Sillas</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_sillas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Cajas</label>
-                  <input type="number" min="0" name="item_cajas_qty" data-item="cajas" class="border p-2 rounded w-20" placeholder="0">
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-tv text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Nevera/TV</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_electro_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Neveras</label>
-                  <input type="number" min="0" name="item_neveras_qty" data-item="nevera" class="border p-2 rounded w-20" placeholder="0">
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Lavadoras</label>
-                  <input type="number" min="0" name="item_lavadoras_qty" data-item="lavadora" class="border p-2 rounded w-20" placeholder="0">
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Estufas</label>
-                  <input type="number" min="0" name="item_estufas_qty" data-item="estufa" class="border p-2 rounded w-20" placeholder="0">
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">TV</label>
-                  <input type="number" min="0" name="item_tv_qty" data-item="tv" class="border p-2 rounded w-20" placeholder="0">
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Escritorios</label>
-                  <input type="number" min="0" name="item_escritorios_qty" data-item="escritorio" class="border p-2 rounded w-20" placeholder="0">
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="w-32">Armarios/Roperos</label>
-                  <input type="number" min="0" name="item_armarios_qty" data-item="armario" class="border p-2 rounded w-20" placeholder="0">
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-ellipsis-h text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Otros</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_otros_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2">¿En qué tipo de vivienda o local se encuentra actualmente?</label>
-              <select name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
-                <option value="">Seleccione una opción</option>
-                <option value="casa">Casa</option>
-                <option value="apartamento">Apartamento</option>
-                <option value="oficina">Oficina</option>
-                <option value="local_comercial">Local comercial</option>
-                <option value="otro">Otro</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2">¿En qué piso se encuentra el punto de origen y el de destino?</label>
-              <div class="grid grid-cols-2 gap-4">
-                <input type="text" name="piso_origen" placeholder="Piso origen" class="border p-2 rounded" required>
-                <input type="text" name="piso_destino" placeholder="Piso destino" class="border p-2 rounded" required>
+              <div class="col-span-2 sm:col-span-3 mt-2">
+                <label class="block text-sm font-medium mb-1">Describa otros objetos (si aplica)</label>
+                <input type="text" name="otros_objetos_desc" placeholder="Ej: 1 escritorio, 2 armarios, etc." class="w-full border p-2 rounded">
               </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2">¿Hay ascensor o solo escaleras?</label>
-              <div class="grid grid-cols-2 gap-4">
-                <select name="acceso_origen" class="border p-2 rounded" required>
-                  <option value="">Origen</option>
-                  <option value="ascensor">Ascensor</option>
-                  <option value="escaleras">Solo escaleras</option>
-                  <option value="ambos">Ambos</option>
-                </select>
-                <select name="acceso_destino" class="border p-2 rounded" required>
-                  <option value="">Destino</option>
-                  <option value="ascensor">Ascensor</option>
-                  <option value="escaleras">Solo escaleras</option>
-                  <option value="ambos">Ambos</option>
+            </fieldset>
+
+            <!-- 2. Objetos Frágiles -->
+            <fieldset>
+              <legend class="text-lg font-semibold text-azulOscuro mb-3">2. Objetos Especiales</legend>
+              <div>
+                <label class="block text-sm font-medium mb-1">¿Hay objetos frágiles o de valor?</label>
+                <select id="tiene_fragiles" name="tiene_fragiles" class="w-full border p-2 rounded" required>
+                  <option value="no">No</option>
+                  <option value="si">Sí</option>
                 </select>
               </div>
-            </div>
-            <div class="flex justify-end space-x-2 pt-4">
+              <div id="descripcion_fragiles_container" class="hidden mt-2">
+                <label class="block text-sm font-medium mb-1">Describa los objetos frágiles</label>
+                <textarea name="objetos_fragiles_desc" placeholder="Ej: Espejos grandes, cuadros, TV de 75 pulgadas" class="w-full border p-2 rounded h-20"></textarea>
+              </div>
+            </fieldset>
+
+            <!-- 3. Acceso en Origen y Destino -->
+            <fieldset>
+              <legend class="text-lg font-semibold text-azulOscuro mb-3">3. Detalles de Acceso</legend>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                <!-- Origen -->
+                <div class="space-y-2">
+                  <h5 class="font-semibold text-gray-700">Punto de Origen</h5>
+                  <label class="block text-sm font-medium">Tipo de vivienda</label>
+                  <select name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
+                    <option value="">Seleccione...</option>
+                    <option value="casa">Casa</option>
+                    <option value="apartamento">Apartamento</option>
+                    <option value="oficina">Oficina</option>
+                    <option value="local_comercial">Local comercial</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                  <label class="block text-sm font-medium">Piso y Acceso</label>
+                  <div class="flex gap-2">
+                    <input type="text" name="piso_origen" placeholder="Piso" class="w-1/2 border p-2 rounded" required>
+                    <select name="acceso_origen" class="w-1/2 border p-2 rounded" required>
+                      <option value="">Acceso</option>
+                      <option value="ascensor">Ascensor</option>
+                      <option value="escaleras">Escaleras</option>
+                    </select>
+                  </div>
+                </div>
+                <!-- Destino -->
+                <div class="space-y-2">
+                  <h5 class="font-semibold text-gray-700">Punto de Destino</h5>
+                  <label class="block text-sm font-medium">Tipo de vivienda</label>
+                  <select name="tipo_vivienda_destino" class="w-full border p-2 rounded" required>
+                    <option value="">Seleccione...</option>
+                    <option value="casa">Casa</option>
+                    <option value="apartamento">Apartamento</option>
+                    <option value="oficina">Oficina</option>
+                    <option value="local_comercial">Local comercial</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                  <label class="block text-sm font-medium">Piso y Acceso</label>
+                  <div class="flex gap-2">
+                    <input type="text" name="piso_destino" placeholder="Piso" class="w-1/2 border p-2 rounded" required>
+                    <select name="acceso_destino" class="w-1/2 border p-2 rounded" required>
+                      <option value="">Acceso</option>
+                      <option value="ascensor">Ascensor</option>
+                      <option value="escaleras">Escaleras</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+
+            <div class="flex justify-end space-x-2 pt-6 border-t mt-6">
               <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
-              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Continuar</button>
+              <button type="submit" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Guardar y Continuar</button>
             </div>
           </form>
         </div>
@@ -647,7 +688,7 @@
           <form id="form-grua-vehiculo" class="space-y-4">
             <div>
               <label class="block text-sm font-medium mb-2">¿Qué tipo de vehículo es?</label>
-              <select name="tipo_vehiculo" class="w-full border p-2 rounded" required>
+              <select name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="carro">Carro</option>
                 <option value="jeepeta">Jeepeta</option>
@@ -766,7 +807,7 @@
             </div>
             <div>
               <label class="block text-sm font-medium mb-2">¿El lugar es accesible para un camión?</label>
-              <select name="accesibilidad" class="w-full border p-2 rounded" required>
+                <select name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si">Sí, es accesible</option>
                 <option value="no">No, es de difícil acceso</option>

@@ -1014,6 +1014,37 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // Lógica para el modal de mudanza (mostrar/ocultar descripción de frágiles)
+  const tieneFragilesSelect = document.getElementById('tiene_fragiles');
+  const descripcionFragilesContainer = document.getElementById('descripcion_fragiles_container');
+  
+  if (tieneFragilesSelect && descripcionFragilesContainer) {
+    tieneFragilesSelect.addEventListener('change', function() {
+      if (this.value === 'si') {
+        descripcionFragilesContainer.classList.remove('hidden');
+      } else {
+        descripcionFragilesContainer.classList.add('hidden');
+      }
+    });
+  }
+
+  // Lógica para los botones de cantidad +/- en el modal de mudanza
+  document.querySelectorAll('#form-mudanza .qty-btn').forEach(button => {
+    button.addEventListener('click', function() {
+      const input = this.parentElement.querySelector('input[type="number"]');
+      let currentValue = parseInt(input.value, 10);
+      if (this.textContent === '+') {
+        currentValue++;
+      } else {
+        currentValue = Math.max(0, currentValue - 1); // No permitir valores negativos
+      }
+      input.value = currentValue;
+      // Disparar un evento de 'input' para que cualquier otro listener reaccione si es necesario
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
+
+
   // Botón siguiente
   if (nextBtn) {
     nextBtn.addEventListener('click', () => {

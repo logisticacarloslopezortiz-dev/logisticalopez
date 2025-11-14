@@ -1,10 +1,10 @@
 /// <reference path="../globals.d.ts" />
 // Implementación de la función de notificaciones push para TLC
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders as _corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
 
 // Función para registrar logs
-function logDebug(message: string, data?: any) {
+function logDebug(message: string, data?: unknown) {
   console.log(`[DEBUG] ${message}`, data ? JSON.stringify(data) : '');
 }
 
@@ -18,10 +18,10 @@ interface WebPushSubscription {
 }
 
 // Función para enviar notificación push usando la API Web Push
-async function sendPushNotification(subscription: WebPushSubscription, payload: any) {
+async function sendPushNotification(subscription: WebPushSubscription, payload: unknown) {
   try {
     // Importar la biblioteca web-push de forma dinámica
-    const webpush = await import('https://esm.sh/web-push@3.6.1');
+    const { default: webpush } = await import('web-push');
     
     // Configurar las credenciales VAPID
     const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
@@ -46,9 +46,49 @@ async function sendPushNotification(subscription: WebPushSubscription, payload: 
     
     return result;
   } catch (error) {
-    logDebug('Error al enviar notificación push', error);
+    const errObj = error as { statusCode?: number; body?: unknown };
+    const detail = {
+      statusCode: typeof errObj?.statusCode === 'number' ? errObj.statusCode : null,
+      body: typeof errObj?.body === 'string' ? errObj.body.slice(0, 200) : null
+    };
+    logDebug('Error al enviar notificación push', detail);
     throw error;
   }
+}
+
+type PushSubKeys = { p256dh: string; auth: string };
+type PushSubRow = { endpoint?: string; keys?: PushSubKeys; p256dh?: string; auth?: string };
+type OrderRow = { id: number; client_id: string | null; push_subscription: WebPushSubscription | null; client_contact_id: string | null };
+type ClientRow = { push_subscription: WebPushSubscription | null };
+
+async function fetchUserSubscriptions(
+  supabaseClient: ReturnType<typeof createClient>,
+  userId: string
+): Promise<Array<{ endpoint: string; keys: PushSubKeys }>> {
+  const results: Array<{ endpoint: string; keys: PushSubKeys }> = [];
+  const r1 = await supabaseClient
+    .from('push_subscriptions')
+    .select('endpoint, keys')
+    .eq('user_id', userId);
+  if (!r1.error && Array.isArray(r1.data) && r1.data.length > 0) {
+    for (const s of r1.data as unknown[]) {
+      const row = s as PushSubRow;
+      const k = row.keys;
+      if (row.endpoint && k?.p256dh && k?.auth) results.push({ endpoint: row.endpoint, keys: { p256dh: k.p256dh, auth: k.auth } });
+    }
+    if (results.length > 0) return results;
+  }
+  const r2 = await supabaseClient
+    .from('push_subscriptions')
+    .select('endpoint, p256dh, auth')
+    .eq('user_id', userId);
+  if (!r2.error && Array.isArray(r2.data) && r2.data.length > 0) {
+    for (const s of r2.data as unknown[]) {
+      const row = s as PushSubRow;
+      if (row.endpoint && row.p256dh && row.auth) results.push({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } });
+    }
+  }
+  return results;
 }
 
 // Manejador principal de la función
@@ -100,32 +140,7 @@ Deno.serve(async (req: Request) => {
     
     let pushSubscriptions: Array<{ endpoint: string; keys: { p256dh: string; auth: string } }> = [];
 
-    async function fetchUserSubscriptions(userId: string) {
-      const results: Array<{ endpoint: string; keys: { p256dh: string; auth: string } }> = [];
-      const r1 = await supabase
-        .from('push_subscriptions')
-        .select('endpoint, keys')
-        .eq('user_id', userId);
-      if (!r1.error && Array.isArray(r1.data) && r1.data.length > 0 && r1.data[0]?.keys) {
-        for (const s of r1.data) {
-          const k = (s as any).keys;
-          if (k && k.p256dh && k.auth) results.push({ endpoint: (s as any).endpoint, keys: { p256dh: k.p256dh, auth: k.auth } });
-        }
-        return results;
-      }
-      const r2 = await supabase
-        .from('push_subscriptions')
-        .select('endpoint, p256dh, auth')
-        .eq('user_id', userId);
-      if (!r2.error && Array.isArray(r2.data) && r2.data.length > 0) {
-        for (const s of r2.data) {
-          const p = (s as any).p256dh;
-          const a = (s as any).auth;
-          if (p && a) results.push({ endpoint: (s as any).endpoint, keys: { p256dh: p, auth: a } });
-        }
-      }
-      return results;
-    }
+    
 
     if (orderId) {
       const { data: order, error: orderError } = await supabase
@@ -136,18 +151,19 @@ Deno.serve(async (req: Request) => {
       if (orderError || !order) {
         return jsonResponse({ error: 'No se encontró la orden especificada' }, 404);
       }
-      if (order.client_id) {
-        const subs = await fetchUserSubscriptions(order.client_id);
+      const ord = order as unknown as OrderRow;
+      if (ord.client_id) {
+        const subs = await fetchUserSubscriptions(supabase, ord.client_id);
         pushSubscriptions = subs;
       }
       if (pushSubscriptions.length === 0) {
-        const sub = (order as any)?.push_subscription || null;
-        if (sub && sub.endpoint && sub.keys && sub.keys.p256dh && sub.keys.auth) {
+        const sub = ord.push_subscription || null;
+        if (sub?.endpoint && sub.keys?.p256dh && sub.keys?.auth) {
           pushSubscriptions = [{ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }];
         }
       }
       if (pushSubscriptions.length === 0) {
-        const ccid0 = (order as any)?.client_contact_id || null;
+        const ccid0 = ord.client_contact_id || null;
         if (ccid0) {
           const { data: subsByContact } = await supabase
             .from('push_subscriptions')
@@ -159,21 +175,22 @@ Deno.serve(async (req: Request) => {
         }
       }
       if (pushSubscriptions.length === 0) {
-        const ccid = (order as any)?.client_contact_id || null;
+        const ccid = ord.client_contact_id || null;
         if (ccid) {
           const { data: contact } = await supabase
             .from('clients')
             .select('push_subscription')
             .eq('id', ccid)
             .maybeSingle();
-          const csub = (contact as any)?.push_subscription || null;
-          if (csub && csub.endpoint && csub.keys && csub.keys.p256dh && csub.keys.auth) {
+          const c = contact as unknown as ClientRow | null;
+          const csub = c?.push_subscription || null;
+          if (csub?.endpoint && csub.keys?.p256dh && csub.keys?.auth) {
             pushSubscriptions = [{ endpoint: csub.endpoint, keys: { p256dh: csub.keys.p256dh, auth: csub.keys.auth } }];
           }
         }
       }
     } else if (to_user_id) {
-      const subs = await fetchUserSubscriptions(String(to_user_id));
+      const subs = await fetchUserSubscriptions(supabase, String(to_user_id));
       pushSubscriptions = subs;
     } else if (contact_id) {
       const { data: contact } = await supabase
@@ -181,8 +198,9 @@ Deno.serve(async (req: Request) => {
         .select('id, push_subscription')
         .eq('id', contact_id)
         .maybeSingle();
-      const sub = (contact as any)?.push_subscription || null;
-      if (sub && sub.endpoint && sub.keys && sub.keys.p256dh && sub.keys.auth) {
+      const c = contact as unknown as ClientRow | null;
+      const sub = c?.push_subscription || null;
+      if (sub?.endpoint && sub.keys?.p256dh && sub.keys?.auth) {
         pushSubscriptions = [{ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }];
       }
     }
@@ -223,11 +241,26 @@ Deno.serve(async (req: Request) => {
         await sendPushNotification(pushSubscription, notificationPayload);
         results.push({ success: true, endpoint: subscription.endpoint });
       } catch (error) {
-        logDebug('Error enviando a suscripción', { endpoint: subscription.endpoint, error });
+        const errObj = error as { statusCode?: number; body?: unknown; message?: string };
+        const detail = {
+          endpoint: pushSubscription.endpoint,
+          statusCode: typeof errObj?.statusCode === 'number' ? errObj.statusCode : null,
+          body: typeof errObj?.body === 'string' ? errObj.body.slice(0, 200) : null
+        };
+        logDebug('Error enviando a suscripción', detail);
+        if (detail.statusCode === 404 || detail.statusCode === 410) {
+          try {
+            await supabase
+              .from('push_subscriptions')
+              .delete()
+              .eq('endpoint', pushSubscription.endpoint);
+          } catch (e) { const _ignored = e; }
+        }
         results.push({ 
           success: false, 
-          endpoint: subscription.endpoint, 
-          error: error instanceof Error ? error.message : String(error) 
+          endpoint: pushSubscription.endpoint, 
+          statusCode: detail.statusCode,
+          error: typeof errObj?.message === 'string' ? errObj.message : String(error) 
         });
       }
     }
