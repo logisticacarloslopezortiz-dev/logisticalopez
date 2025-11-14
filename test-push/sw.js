@@ -7,15 +7,13 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  try {
-    const data = event.data ? event.data.json() : {};
-    const title = data.title || 'Notificación';
-    const body = data.body || '';
-    event.waitUntil(
-      self.registration.showNotification(title, { body })
-    );
-  } catch (e) {
-    // fallback
-    event.waitUntil(self.registration.showNotification('Notificación', { body: '' }));
-  }
+  let incoming = {};
+  try { incoming = event.data && typeof event.data.json === 'function' ? event.data.json() : {}; } catch (_) {}
+  const payload = incoming && typeof incoming === 'object' && incoming.notification ? incoming.notification : incoming;
+  const title = typeof payload.title === 'string' ? payload.title : 'Notificación';
+  const body = typeof payload.body === 'string' ? payload.body : '';
+  const icon = payload.icon || '/img/android-chrome-192x192.png';
+  const dataObj = payload.data || {};
+  const options = { body, icon, data: { url: dataObj.url || '/' } };
+  event.waitUntil(self.registration.showNotification(title, options));
 });

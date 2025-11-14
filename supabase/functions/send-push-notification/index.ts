@@ -130,7 +130,7 @@ Deno.serve(async (req: Request) => {
     if (orderId) {
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .select('id, client_id, push_subscription')
+        .select('id, client_id, push_subscription, client_contact_id')
         .eq('id', orderId)
         .single();
       if (orderError || !order) {
@@ -144,6 +144,20 @@ Deno.serve(async (req: Request) => {
         const sub = (order as any)?.push_subscription || null;
         if (sub && sub.endpoint && sub.keys && sub.keys.p256dh && sub.keys.auth) {
           pushSubscriptions = [{ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }];
+        }
+      }
+      if (pushSubscriptions.length === 0) {
+        const ccid = (order as any)?.client_contact_id || null;
+        if (ccid) {
+          const { data: contact } = await supabase
+            .from('clients')
+            .select('push_subscription')
+            .eq('id', ccid)
+            .maybeSingle();
+          const csub = (contact as any)?.push_subscription || null;
+          if (csub && csub.endpoint && csub.keys && csub.keys.p256dh && csub.keys.auth) {
+            pushSubscriptions = [{ endpoint: csub.endpoint, keys: { p256dh: csub.keys.p256dh, auth: csub.keys.auth } }];
+          }
         }
       }
     } else if (to_user_id) {

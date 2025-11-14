@@ -669,13 +669,12 @@ function calculateAndDisplayDistance() {
  * Pide permiso al usuario para notificaciones y guarda la suscripción en la orden.
  * @param {string} orderId - El ID de la orden recién creada.
  */
-async function askForNotificationPermission(orderId) {
+async function askForNotificationPermission(savedOrder) {
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     console.log('Este navegador no soporta notificaciones push.');
     return;
   }
-  // Mostrar tarjeta elegante para opt-in de notificaciones
-  showPushOptInCard(orderId);
+  showPushOptInCard(savedOrder);
 }
 
 // Utilidad: convertir Base64 URL-safe a Uint8Array para Push API
@@ -692,7 +691,7 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-async function subscribeUserToPush(orderId) {
+async function subscribeUserToPush(savedOrder) {
   try {
     const registration = await navigator.serviceWorker.ready;
     console.log("Service Worker listo para suscripción");
@@ -788,13 +787,15 @@ async function subscribeUserToPush(orderId) {
         }
         console.log('Suscripción guardada en push_subscriptions para usuario:', userId);
       } else {
-        // Fallback: guardar en la orden para clientes anónimos
-        const jsonSub = typeof subscription?.toJSON === 'function' ? subscription.toJSON() : subscription;
-        await supabaseConfig.client
-          .from('orders')
-          .update({ push_subscription: jsonSub })
-          .eq('id', orderId);
-        console.log('Suscripción guardada en la orden (anónimo):', orderId);
+        const orderId = typeof savedOrder === 'object' ? savedOrder?.id : savedOrder;
+        if (orderId) {
+          const jsonSub = typeof subscription?.toJSON === 'function' ? subscription.toJSON() : subscription;
+          await supabaseConfig.client
+            .from('orders')
+            .update({ push_subscription: jsonSub })
+            .eq('id', orderId);
+          console.log('Suscripción guardada en la orden (anónimo):', orderId);
+        }
       }
     } catch (saveErr) {
       console.error('Error guardando suscripción en Supabase:', saveErr);
@@ -808,7 +809,7 @@ async function subscribeUserToPush(orderId) {
 }
 
 // --- UI elegante para opt-in de notificaciones (tarjeta blanca con logo) ---
-function showPushOptInCard(orderId) {
+function showPushOptInCard(savedOrder) {
   // Evitar duplicados
   if (document.getElementById('push-optin-overlay')) return;
 
@@ -836,7 +837,7 @@ function showPushOptInCard(orderId) {
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        const subscription = await subscribeUserToPush(orderId);
+        const subscription = await subscribeUserToPush(savedOrder);
         if (subscription) {
           showSuccess('Notificaciones activadas.');
         }
@@ -1149,6 +1150,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const pushSubscription = await getPushSubscription();
         if (pushSubscription) {
           console.log('Suscripción push obtenida');
+          baseOrder.push_subscription = pushSubscription;
         }
 
         const { data: { user } } = await supabaseConfig.client.auth.getUser();
@@ -1307,8 +1309,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Mostrar tarjeta de opt-in para notificaciones push (si tenemos id)
-        if (savedOrder && savedOrder.id) {
-          askForNotificationPermission(savedOrder.id);
+        if (savedOrder) {
+          askForNotificationPermission(savedOrder);
         }
 
       } catch (error) {
