@@ -1169,6 +1169,22 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             baseOrder.client_id = null; // Evitar FK hacia profiles cuando no hay usuario
             console.log('Cliente sin login, contacto creado:', contact.id);
+            try {
+              if (pushSubscription && contact?.id) {
+                const keys = (pushSubscription.keys) ? pushSubscription.keys : (pushSubscription?.toJSON?.().keys || {});
+                const payload = {
+                  client_contact_id: contact.id,
+                  endpoint: pushSubscription.endpoint,
+                  keys: { p256dh: keys.p256dh, auth: keys.auth }
+                };
+                const { error: upsertErr } = await supabaseConfig.client
+                  .from('push_subscriptions')
+                  .upsert(payload, { onConflict: 'client_contact_id,endpoint' });
+                if (upsertErr) {
+                  await supabaseConfig.client.from('push_subscriptions').insert(payload);
+                }
+              }
+            } catch (_) {}
           } catch (e) {
             // Si falla la creación del contacto, continuar sin client_id ni contact_id
             baseOrder.client_id = null;

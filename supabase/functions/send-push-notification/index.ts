@@ -147,6 +147,18 @@ Deno.serve(async (req: Request) => {
         }
       }
       if (pushSubscriptions.length === 0) {
+        const ccid0 = (order as any)?.client_contact_id || null;
+        if (ccid0) {
+          const { data: subsByContact } = await supabase
+            .from('push_subscriptions')
+            .select('endpoint, keys')
+            .eq('client_contact_id', ccid0);
+          if (subsByContact && subsByContact.length > 0) {
+            pushSubscriptions = subsByContact as any[];
+          }
+        }
+      }
+      if (pushSubscriptions.length === 0) {
         const ccid = (order as any)?.client_contact_id || null;
         if (ccid) {
           const { data: contact } = await supabase
@@ -182,9 +194,12 @@ Deno.serve(async (req: Request) => {
     // Enviar notificación a todas las suscripciones del cliente
     const results = [];
     for (const subscription of pushSubscriptions) {
+      const cleanEndpoint = String(subscription.endpoint || '').replace(/[`\s]+/g, '').trim();
+      const cleanP256 = String(subscription.keys?.p256dh || '').trim();
+      const cleanAuth = String(subscription.keys?.auth || '').trim();
       const pushSubscription = {
-        endpoint: subscription.endpoint,
-        keys: subscription.keys
+        endpoint: cleanEndpoint,
+        keys: { p256dh: cleanP256, auth: cleanAuth }
       };
       const notificationPayload = {
         notification: {

@@ -377,6 +377,19 @@ create index if not exists idx_push_subscriptions_user on public.push_subscripti
 create unique index if not exists uniq_push_subscriptions_user_endpoint
   on public.push_subscriptions(user_id, endpoint);
 
+-- Extender para clientes anónimos
+alter table public.push_subscriptions add column if not exists client_contact_id uuid references public.clients(id) on delete cascade;
+create index if not exists idx_push_subscriptions_contact on public.push_subscriptions(client_contact_id);
+create unique index if not exists uniq_push_subscriptions_contact_endpoint
+  on public.push_subscriptions(client_contact_id, endpoint);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'chk_push_owner') then
+    alter table public.push_subscriptions
+      add constraint chk_push_owner
+      check (user_id is not null or client_contact_id is not null);
+  end if;
+end $$;
+
 -- Sincronía desde collaborators.push_subscription
 create or replace function public.sync_collaborator_push_subscription()
 returns trigger as $$
@@ -765,6 +778,10 @@ create policy user_manage_own_push_subscriptions on public.push_subscriptions
 for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy admin_read_push_subscriptions on public.push_subscriptions
 for select using (public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
+
+create policy anon_insert_push_by_contact on public.push_subscriptions
+for insert to anon, authenticated
+with check (client_contact_id is not null);
 
 -- Notifications
 create policy user_manage_own_notifications on public.notifications

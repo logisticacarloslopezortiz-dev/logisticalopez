@@ -403,6 +403,26 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE public.push_subscriptions ADD COLUMN IF NOT EXISTS client_contact_id uuid REFERENCES public.clients(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_contact ON public.push_subscriptions(client_contact_id);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uniq_push_subscriptions_contact_endpoint'
+  ) THEN
+    CREATE UNIQUE INDEX uniq_push_subscriptions_contact_endpoint
+    ON public.push_subscriptions(client_contact_id, endpoint);
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_push_owner'
+  ) THEN
+    ALTER TABLE public.push_subscriptions
+      ADD CONSTRAINT chk_push_owner
+      CHECK (user_id IS NOT NULL OR client_contact_id IS NOT NULL);
+  END IF;
+END $$;
+
 -- Backfill inicial de colaboradores con push_subscription definido
 DO $$ BEGIN
   INSERT INTO public.push_subscriptions(user_id, endpoint, keys, created_at)
@@ -611,6 +631,10 @@ CREATE POLICY "admin_read_push_subscriptions" ON public.push_subscriptions
 FOR SELECT USING (
   public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
+
+CREATE POLICY "anon_insert_push_by_contact" ON public.push_subscriptions
+FOR INSERT TO anon, authenticated
+WITH CHECK (client_contact_id IS NOT NULL);
 
 -- Order Completion Receipts (Acta de completado)
 CREATE POLICY "client_read_own_receipts" ON public.order_completion_receipts
