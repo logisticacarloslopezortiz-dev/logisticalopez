@@ -194,7 +194,10 @@ Deno.serve(async (req: Request) => {
     // Enviar notificación a todas las suscripciones del cliente
     const results = [];
     for (const subscription of pushSubscriptions) {
-      const cleanEndpoint = String(subscription.endpoint || '').replace(/[`\s]+/g, '').trim();
+      const cleanEndpoint = String(subscription.endpoint || '')
+        .replace(/[`\s]+/g, '')
+        .replace(/,+$/g, '')
+        .trim();
       const cleanP256 = String(subscription.keys?.p256dh || '').trim();
       const cleanAuth = String(subscription.keys?.auth || '').trim();
       const pushSubscription = {
