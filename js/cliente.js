@@ -773,9 +773,10 @@ async function subscribeUserToPush(orderId) {
         console.log('Suscripción guardada en push_subscriptions para usuario:', userId);
       } else {
         // Fallback: guardar en la orden para clientes anónimos
+        const jsonSub = typeof subscription?.toJSON === 'function' ? subscription.toJSON() : subscription;
         await supabaseConfig.client
           .from('orders')
-          .update({ push_subscription: subscription })
+          .update({ push_subscription: jsonSub })
           .eq('id', orderId);
         console.log('Suscripción guardada en la orden (anónimo):', orderId);
       }

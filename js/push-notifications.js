@@ -181,16 +181,7 @@ class PushNotificationManager {
                 .upsert(subscriptionData, { onConflict: 'user_id,endpoint' });
 
             if (r.error) {
-                const alt = {
-                    user_id: user.id,
-                    endpoint: subscription.endpoint,
-                    p256dh: keys.p256dh,
-                    auth: keys.auth
-                };
-                const r2 = await client
-                    .from('push_subscriptions')
-                    .upsert(alt, { onConflict: 'user_id,endpoint' });
-                if (r2.error) throw r2.error;
+                throw r.error;
             }
             
             console.log('Push subscription saved to server');

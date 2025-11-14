@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            // 1. --- Refrescar sesión si es posible ---
             // Nuevo sistema de IDs seguros:
             // - client_tracking_id: 32 caracteres hex aleatorio para clientes
             // - supabase_seq_id: ID secuencial interno (números)
@@ -73,11 +74,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderIdValue);
             const isNumeric = /^[0-9]+$/.test(orderIdValue);
 
-            let query = supabaseConfig.client
+            // 2. --- Determinar qué cliente usar (autenticado o público) ---
+            await supabaseConfig.ensureFreshSession();
+            const { data: { session } } = await supabaseConfig.client.auth.getSession();
+            const clientToUse = session ? supabaseConfig.client : supabaseConfig.getPublicClient();
+            console.log(`[Seguimiento] Usando cliente: ${session ? 'autenticado' : 'público'}`);
+
+            let query = clientToUse
                 .from('orders')
                 .select('*, service:services(name), vehicle:vehicles(name)');
 
             if (isHex32) {
+                // Este campo debería ser legible públicamente por RLS
                 query = query.eq('client_tracking_id', orderIdValue.toLowerCase());
             } else if (isUUID) {
                 query = query.eq('id', orderIdValue);
@@ -90,29 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Formato de ID no válido. Use: ID de seguimiento (32 hex), ID secuencial (números) o UUID');
             }
 
-            // Intentar asegurar sesión fresca antes de la consulta
-            try { await supabaseConfig.ensureFreshSession(); } catch (_) {}
-
-            let { data: order, error } = await query.single(); // .single() espera un solo resultado o ninguno
-
-            // Si fallo por JWT expirado, intentar con cliente público (anon) para lecturas públicas
-            if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
-                console.warn('JWT expirado o no autorizado para buscar orden. Reintentando con cliente anon...');
-                try {
-                    const publicClient = supabaseConfig.getPublicClient();
-                    const publicQuery = publicClient.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
-                    if (isHex32) publicQuery.eq('client_tracking_id', orderIdValue.toLowerCase());
-                    else if (isUUID) publicQuery.eq('id', orderIdValue);
-                    else if (isNumeric) publicQuery.eq('supabase_seq_id', Number(orderIdValue));
-                    else if (looksLikeShortId) publicQuery.eq('short_id', orderIdValue);
-                    else throw new Error('Formato de ID no válido.');
-                    const resp = await publicQuery.single();
-                    order = resp.data;
-                    error = resp.error;
-                } catch (e) {
-                    console.error('Error al intentar con cliente anon:', e);
-                }
-            }
+            const { data: order, error } = await query.single();
 
             if (error || !order) {
                 throw new Error('No se encontró ninguna solicitud con ese ID.');

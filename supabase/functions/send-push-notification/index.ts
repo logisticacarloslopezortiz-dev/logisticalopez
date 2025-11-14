@@ -40,7 +40,8 @@ async function sendPushNotification(subscription: WebPushSubscription, payload: 
     // Enviar la notificación
     const result = await webpush.sendNotification(
       subscription,
-      JSON.stringify(payload)
+      JSON.stringify(payload),
+      { TTL: 2592000 }
     );
     
     return result;

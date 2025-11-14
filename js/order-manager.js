@@ -177,6 +177,10 @@ const OrderManager = {
   async actualizarEstadoPedido(orderId, newStatus, additionalData = {}) {
     console.log(`[OrderManager] Iniciando actualización para orden #${orderId} a estado "${newStatus}"`);
 
+    // ✅ CORRECCIÓN: Asegurar que la sesión esté fresca ANTES de cualquier operación.
+    // Esto previene los errores 401 por token expirado.
+    await supabaseConfig.ensureFreshSession();
+
     const normalizedId = this._normalizeOrderId(orderId);
     const isNumeric = Number.isFinite(normalizedId);
     const candidates = [];
@@ -311,7 +315,7 @@ const OrderManager = {
         console.log('[OrderManager] Fetch intento con:', cand);
         const { data, error } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id, supabase_seq_id')
+          .select('tracking_data, id, short_id')
           .eq(cand.col, cand.val)
           .maybeSingle();
 
@@ -339,8 +343,8 @@ const OrderManager = {
         console.log('[OrderManager] Intentando búsqueda amplia para orderId:', orderId);
         const { data, error } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id, supabase_seq_id')
-          .or(`id.eq.${normalizedId},short_id.eq.${orderId},supabase_seq_id.eq.${normalizedId}`)
+          .select('tracking_data, id, short_id')
+          .or(`id.eq.${normalizedId},short_id.eq.${orderId}`)
           .maybeSingle();
 
         if (data && !error) {
@@ -402,12 +406,20 @@ const OrderManager = {
         
         console.log(`[OrderManager] Enviando notificación push para orden #${orderId}:`, JSON.stringify(notificationBody));
         
-        const response = await supabaseConfig.client.functions.invoke('send-push-notification', {
-          body: notificationBody
+        const { data: { session } } = await supabaseConfig.client.auth.getSession();
+        const fnUrl = 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification';
+        const resp = await fetch(fnUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+          },
+          body: JSON.stringify(notificationBody),
+          keepalive: true
         });
-        
-        console.log(`[OrderManager] Respuesta de notificación para orden #${orderId}:`, response);
-        console.log(`[OrderManager] Solicitud de notificación enviada exitosamente para la orden #${orderId}.`);
+        const respJson = await resp.json().catch(() => ({}));
+        console.log(`[OrderManager] Respuesta de notificación para orden #${orderId}:`, respJson);
+        console.log(`[OrderManager] Solicitud de notificación (keepalive) enviada para la orden #${orderId}.`);
       } catch (invokeError) {
         // Log detallado del error para diagnóstico
         console.error(`[OrderManager] ERROR al enviar notificación para la orden #${orderId}:`, {
