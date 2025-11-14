@@ -509,12 +509,20 @@ async function initMap() {
 
   map.on('click', (e) => { updateMarkerAndAddress(e.latlng); });
 
-  pickupInput.addEventListener('focus', () => {
-    instructionText.innerHTML = "Busca o haz clic en el mapa para establecer el <strong>punto de origen</strong>.";
-  });
-  deliveryInput.addEventListener('focus', () => {
-    instructionText.innerHTML = "Ahora, busca o haz clic para establecer el <strong>punto de destino</strong>.";
-  });
+  if (pickupInput) {
+    pickupInput.addEventListener('focus', () => {
+      if (instructionText) {
+        instructionText.innerHTML = "Busca o haz clic en el mapa para establecer el <strong>punto de origen</strong>.";
+      }
+    });
+  }
+  if (deliveryInput) {
+    deliveryInput.addEventListener('focus', () => {
+      if (instructionText) {
+        instructionText.innerHTML = "Ahora, busca o haz clic para establecer el <strong>punto de destino</strong>.";
+      }
+    });
+  }
 
   useCurrentLocationBtn.addEventListener('click', locateUserAndSetOrigin);
 
@@ -588,10 +596,16 @@ async function initMap() {
     // Lógica de flujo secuencial
     if (!isOriginSet) {
       isOriginSet = true;
-      deliveryInput.disabled = false;
-      deliveryInput.placeholder = "Escribe o selecciona en el mapa";
-      deliveryInput.focus(); // Mover el foco al siguiente campo
-      instructionText.innerHTML = "¡Perfecto! Ahora, establece el <strong>punto de destino</strong>.";
+      if (deliveryInput) {
+        deliveryInput.disabled = false;
+        deliveryInput.placeholder = "Escribe o selecciona en el mapa";
+        if (typeof deliveryInput.focus === 'function') {
+          deliveryInput.focus();
+        }
+      }
+      if (instructionText) {
+        instructionText.innerHTML = "¡Perfecto! Ahora, establece el <strong>punto de destino</strong>.";
+      }
     }
 
     calculateAndDisplayDistance();
