@@ -6,7 +6,7 @@
   // is deployed to a subpath). Also make message sending robust from the window context.
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('./sw.js');
+      const reg = await navigator.serviceWorker.register('/sw.js');
       console.log('ServiceWorker registrado con éxito:', reg.scope);
 
       // If a waiting worker exists, notify the page

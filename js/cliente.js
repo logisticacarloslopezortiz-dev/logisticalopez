@@ -22,14 +22,30 @@ async function getPushSubscription() {
       return null;
     }
 
-    const registration = await navigator.serviceWorker.register('/sw.js');
+    const registration = await navigator.serviceWorker.ready;
+    let vapidKey = null;
+    try {
+      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key', { body: {} });
+      if (error) console.warn('No se pudo obtener VAPID por función:', error.message);
+      vapidKey = data?.vapidPublicKey || data?.publicKey || null;
+    } catch (e) {
+      console.warn('Fallo al invocar get-vapid-key:', e?.message || String(e));
+    }
+    if (!vapidKey || typeof vapidKey !== 'string') {
+      console.warn('VAPID pública no disponible');
+      return null;
+    }
+    const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) await existing.unsubscribe();
+
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: 'BEl62iUYgUivxIkv69yViEuiBIa40HdHSWgDdXU5cp0TJpQrSr90PiZKP-Q_ZdLiRkiWHGfzjFoyBLOAGLbDzfM' // Reemplaza con tu VAPID key
+      applicationServerKey
     });
-    
     console.log('[Push] Suscripción obtenida:', subscription);
-    return subscription.toJSON();
+    return typeof subscription.toJSON === 'function' ? subscription.toJSON() : subscription;
   } catch (error) {
     console.warn('[Push] Error al obtener suscripción:', error);
     return null;
