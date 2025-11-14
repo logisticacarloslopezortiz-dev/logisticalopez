@@ -209,7 +209,7 @@ class PushNotificationManager {
                 .select('id')
                 .eq('user_id', user.id)
                 .eq('endpoint', subscription.endpoint)
-                .single();
+                .maybeSingle();
 
             if (error && error.code !== 'PGRST116') {
                 throw error;

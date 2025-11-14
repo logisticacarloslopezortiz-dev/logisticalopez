@@ -123,8 +123,6 @@ enabled = true
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["https://127.0.0.1:3000"]
-# How long tokens are valid for, in seconds. Defaults to 3600 (1 hour).
-# Set to 30 days for persistent sessions in orders/seguimiento flows.
 jwt_expiry = 2592000
 # Path to JWT signing key. DO NOT commit your signing keys file to git.
 # signing_keys_path = "./signing_keys.json"
