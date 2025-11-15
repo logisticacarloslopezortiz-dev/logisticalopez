@@ -14,7 +14,7 @@ function getClientId() {
   return clientId;
 }
 
-// Función para obtener suscripción push
+// Función para obtener suscripción push (mejorada)
 async function getPushSubscription() {
   try {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -23,6 +23,13 @@ async function getPushSubscription() {
     }
 
     const registration = await navigator.serviceWorker.ready;
+
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      console.log('[Push] Ya existe una suscripción, retornando la existente.');
+      return typeof existingSubscription.toJSON === 'function' ? existingSubscription.toJSON() : existingSubscription;
+    }
+
     let vapidKey = null;
     try {
       const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key', { body: {} });
@@ -37,15 +44,13 @@ async function getPushSubscription() {
     }
     const applicationServerKey = urlBase64ToUint8Array(vapidKey);
 
-    const existing = await registration.pushManager.getSubscription();
-    if (existing) await existing.unsubscribe();
-
-    const subscription = await registration.pushManager.subscribe({
+    const newSubscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey
     });
-    console.log('[Push] Suscripción obtenida:', subscription);
-    return typeof subscription.toJSON === 'function' ? subscription.toJSON() : subscription;
+
+    console.log('[Push] Nueva suscripción creada:', newSubscription);
+    return typeof newSubscription.toJSON === 'function' ? newSubscription.toJSON() : newSubscription;
   } catch (error) {
     console.warn('[Push] Error al obtener suscripción:', error);
     return null;
@@ -688,26 +693,12 @@ function calculateAndDisplayDistance() {
   }
 }
 
-// --- Lógica de Notificaciones Push ---
-
-/**
- * Pide permiso al usuario para notificaciones y guarda la suscripción en la orden.
- * @param {string} orderId - El ID de la orden recién creada.
- */
-async function askForNotificationPermission(savedOrder) {
-  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-    console.log('Este navegador no soporta notificaciones push.');
-    return;
-  }
-  showPushOptInCard(savedOrder);
-}
+// --- Lógica de Notificaciones Push (Refactorizada) ---
 
 // Utilidad: convertir Base64 URL-safe a Uint8Array para Push API
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding)
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; ++i) {
@@ -716,155 +707,73 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-async function subscribeUserToPush(savedOrder) {
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    console.log("Service Worker listo para suscripción");
-    
-    // Obtener la clave VAPID válida desde el servidor
-    let vapidKey = null;
-    try {
-      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key', { body: {} });
-      if (error) {
-        console.warn('No se pudo obtener VAPID por función:', error.message);
-      }
-      vapidKey = data?.vapidPublicKey || null;
-    } catch (e) {
-      console.warn('Fallo al invocar get-vapid-key:', e?.message || String(e));
+/**
+ * Muestra un diálogo para pedir permiso de notificaciones y devuelve la suscripción.
+ * Es una Promise que resuelve con el objeto de suscripción o null.
+ */
+function requestSubscription() {
+  return new Promise((resolve, reject) => {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      console.log('Este navegador no soporta notificaciones push.');
+      return resolve(null); // Resuelve con null si no hay soporte
     }
 
-    if (!vapidKey || typeof vapidKey !== 'string') {
-      throw new Error('VAPID pública no disponible. Contacte al administrador.');
+    const permission = Notification.permission;
+    if (permission === 'denied') {
+      console.warn('[Push] El usuario ha denegado los permisos de notificación.');
+      return resolve(null); // Resuelve con null si ya fue denegado
     }
 
-    // Validar formato de clave VAPID antes de convertir
-    const raw = urlBase64ToUint8Array(vapidKey);
-    if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
-      console.error('Clave VAPID inválida: longitud', raw?.length, 'primer byte', raw?.[0]);
-      throw new Error('Invalid raw ECDSA P-256 public key');
+    // Si ya está concedido, obtener la suscripción directamente
+    if (permission === 'granted') {
+      return resolve(getPushSubscription());
     }
 
-    const applicationServerKey = raw;
-    console.log("applicationServerKey generada y validada correctamente");
-
-    // Si existe una suscripción previa, intentar desuscribir para evitar InvalidStateError
-    let existing = null;
-    try {
-      existing = await registration.pushManager.getSubscription();
-      if (existing) {
-        console.log('[Push] Existe suscripción previa, intentando desuscribir...');
-        await existing.unsubscribe();
-        console.log('[Push] Suscripción previa desuscrita.');
-      }
-    } catch (preErr) {
-      console.warn('[Push] No se pudo desuscribir la suscripción previa:', preErr);
-    }
-
-    let subscription = null;
-    try {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey
-      });
-    } catch (subErr) {
-      // Manejar caso de clave VAPID diferente: desuscribir y reintentar
-      if (String(subErr?.message || '').includes('applicationServerKey') || String(subErr?.name || '') === 'InvalidStateError') {
-        try {
-          existing = await registration.pushManager.getSubscription();
-          if (existing) {
-            console.log('[Push] Reintento: desuscribiendo suscripción conflictiva...');
-            await existing.unsubscribe();
-          }
-        } catch (_) {}
-        // Reintentar suscripción con la nueva clave
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey
-        });
-      } else {
-        throw subErr;
-      }
-    }
-    
-    // Guardar suscripción en Supabase
-    // Preferir tabla push_subscriptions por usuario; si no hay usuario, guardar en la orden como fallback
-    try {
-      const { data: userData } = await supabaseConfig.client.auth.getUser();
-      const userId = userData?.user?.id || null;
-
-      if (userId) {
-        // Inserta o actualiza en push_subscriptions usando formato de keys JSON { p256dh, auth }
-        const payload = {
-          user_id: userId,
-          endpoint: subscription?.endpoint,
-          keys: {
-            p256dh: subscription?.keys?.p256dh || (subscription?.toJSON?.().keys?.p256dh),
-            auth: subscription?.keys?.auth || (subscription?.toJSON?.().keys?.auth)
-          }
-        };
-        // Upsert para evitar duplicados por (user_id, endpoint) cuando el esquema lo soporta
-        const { error: upsertErr } = await supabaseConfig.client
-          .from('push_subscriptions')
-          .upsert(payload, { onConflict: 'user_id,endpoint' });
-        if (upsertErr) {
-          console.warn('Fallo upsert en push_subscriptions, probando insert:', upsertErr?.message || upsertErr);
-          await supabaseConfig.client.from('push_subscriptions').insert(payload);
-        }
-        console.log('Suscripción guardada en push_subscriptions para usuario:', userId);
-      }
-    } catch (saveErr) {
-      console.error('Error guardando suscripción en Supabase:', saveErr);
-    }
-
-    return subscription;
-  } catch (error) {
-    console.error("Error en subscribeUserToPush:", error);
-    throw error;
-  }
-}
-
-// --- UI elegante para opt-in de notificaciones (tarjeta blanca con logo) ---
-function showPushOptInCard(savedOrder) {
-  // Evitar duplicados
-  if (document.getElementById('push-optin-overlay')) return;
-
-  const overlay = document.createElement('div');
-  overlay.id = 'push-optin-overlay';
-  overlay.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4';
-  overlay.innerHTML = `
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-      <div class="p-6 text-center">
-        <img src="img/1vertical.png" alt="Logo LLO" class="h-14 w-14 mx-auto mb-3"/>
-        <h3 class="text-xl font-bold text-gray-900 mb-2">¿Deseas recibir notificaciones?</h3>
-        <p class="text-gray-600 mb-5">Activa las notificaciones para saber cuando tu solicitud avance de estado.</p>
-        <div class="flex flex-col sm:flex-row gap-3 justify-center">
-          <button id="push-decline" class="px-5 py-2.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Ahora no</button>
-          <button id="push-accept" class="px-5 py-2.5 rounded-lg bg-azulClaro text-white hover:bg-azulOscuro">Sí, activar notificaciones</button>
+    // Si el permiso es 'default', mostrar el diálogo
+    const overlay = document.createElement('div');
+    overlay.id = 'push-optin-overlay';
+    overlay.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4';
+    overlay.innerHTML = `
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in-up">
+        <div class="p-6 text-center">
+          <img src="img/1vertical.png" alt="Logo LLO" class="h-14 w-14 mx-auto mb-3"/>
+          <h3 class="text-xl font-bold text-gray-900 mb-2">¿Recibir notificaciones?</h3>
+          <p class="text-gray-600 mb-5">Actívalas para saber cuándo tu solicitud es aceptada y completada.</p>
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <button id="push-decline" class="px-5 py-2.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">Ahora no</button>
+            <button id="push-accept" class="px-5 py-2.5 rounded-lg bg-azulClaro text-white hover:bg-azulOscuro">Sí, activar</button>
+          </div>
         </div>
       </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
+    `;
+    document.body.appendChild(overlay);
 
-  const closeOverlay = () => overlay.remove();
-  document.getElementById('push-decline').addEventListener('click', closeOverlay);
-  document.getElementById('push-accept').addEventListener('click', async () => {
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        const subscription = await subscribeUserToPush(savedOrder);
-        if (subscription) {
-          showSuccess('Notificaciones activadas.');
-        }
-      } else {
-        showInfo('Podrás activarlas más tarde desde tu navegador.');
-      }
-    } catch (e) {
-      console.error('Error al activar notificaciones:', e);
-      showError('No se pudieron activar las notificaciones.');
-    } finally {
+    const closeOverlay = () => {
+      overlay.classList.add('animate-fade-out-down');
+      setTimeout(() => overlay.remove(), 300);
+    };
+
+    document.getElementById('push-decline').addEventListener('click', () => {
       closeOverlay();
-    }
+      resolve(null); // Resuelve con null si el usuario declina
+    });
+
+    document.getElementById('push-accept').addEventListener('click', async () => {
+      try {
+        const userChoice = await Notification.requestPermission();
+        if (userChoice === 'granted') {
+          const subscription = await getPushSubscription();
+          resolve(subscription); // Resuelve con la suscripción si se concede
+        } else {
+          resolve(null); // Resuelve con null si se deniega
+        }
+      } catch (error) {
+        console.error('Error al solicitar permiso de notificación:', error);
+        reject(error); // Rechaza la promesa si hay un error
+      } finally {
+        closeOverlay();
+      }
+    });
   });
 }
 
@@ -1163,11 +1072,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         
 
-        // Obtener suscripción push para notificaciones (una vez, reutilizar)
-        const pushSubscription = await getPushSubscription();
+        // [NUEVO FLUJO] Solicitar permiso y obtener suscripción ANTES de enviar
+        const pushSubscription = await requestSubscription();
         if (pushSubscription) {
-          console.log('Suscripción push obtenida');
-          baseOrder.push_subscription = pushSubscription;
+            console.log('[Push] Suscripción obtenida, se adjuntará al pedido.');
+            baseOrder.push_subscription = pushSubscription;
+        } else {
+            console.log('[Push] No se obtuvo suscripción, el pedido se creará sin ella.');
+            baseOrder.push_subscription = null;
         }
 
         const { data: { user } } = await supabaseConfig.client.auth.getUser();
@@ -1238,13 +1150,8 @@ document.addEventListener('DOMContentLoaded', function() {
           );
         }
 
-        // Mostrar tarjeta de opt-in para notificaciones push (si tenemos id)
-        if (savedOrder) {
-          // [CORRECCIÓN] Se elimina el bloque que intentaba guardar la suscripción desde el cliente.
-          // La función RPC `create_order_with_contact` ya se encarga de esto de forma segura en el backend.
-          // Esto resuelve el error 401 Unauthorized.
-          askForNotificationPermission(savedOrder);
-        }
+        // La lógica de suscripción push ahora se maneja ANTES de crear la orden.
+        // El bloque `askForNotificationPermission` ya no es necesario aquí.
 
       } catch (error) {
         // Log detallado del error para debugging
