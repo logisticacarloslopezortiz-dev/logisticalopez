@@ -251,13 +251,6 @@ function validateCurrentStep() {
     // Solo validar si el modal existe y no ha sido llenado
     if (modalElement && !modalElement.classList.contains('hidden') && !modalFilled) {
       notifications.warning('Por favor, completa y guarda la información adicional del servicio antes de continuar.', { title: 'Información Requerida' });
-    // Si el modal existe, es obligatorio que se haya llenado.
-    if (modalElement && !modalFilled) {
-      notifications.warning('Por favor, completa y guarda la información adicional del servicio.', { title: 'Información Requerida' });
-      // Abrir el modal si está cerrado para que el usuario lo complete
-      if (modalElement.classList.contains('hidden')) {
-        modalElement.classList.remove('hidden');
-      }
       return false;
     } else if (modalElement && modalElement.classList.contains('hidden') && !modalFilled) {
       // Si el modal existe pero fue cerrado sin guardar, también es inválido

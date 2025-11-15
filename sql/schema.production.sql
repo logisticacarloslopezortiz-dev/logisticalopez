@@ -1023,7 +1023,6 @@ BEGIN
     client_payload := jsonb_build_object('contactId', NEW.client_contact_id, 'orderId', NEW.id, 'title', '✅ Solicitud Recibida', 'body', 'Hemos recibido tu solicitud #' || NEW.short_id || '. Pronto será revisada.');
   ELSE
     client_payload := null;
-    client_body := jsonb_build_object('contactId', NEW.client_contact_id, 'orderId', NEW.id, 'title', '✅ Solicitud Recibida', 'body', 'Hemos recibido tu solicitud #' || NEW.short_id || '. Pronto será revisada.');
   END IF;
 
   -- 2. Payload para el Administrador
@@ -1080,10 +1079,6 @@ BEGIN
         VALUES ('notify_order_creation', 'error', SQLERRM, jsonb_build_object('target', 'cliente_anonimo', 'orderId', NEW.id, 'bodySent', contact_body));
       END;
     END IF;
-  -- [SOLUCIÓN] Insertar en la tabla outbox en lugar de llamar a HTTP.
-  -- Esto es atómico, rápido y seguro.
-  INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-  VALUES (NEW.id, 'Creada', 'cliente', COALESCE(NEW.client_id, NEW.client_contact_id), client_body);
 
     BEGIN
       admin_body := jsonb_build_object(
@@ -1100,9 +1095,6 @@ BEGIN
       VALUES ('notify_order_creation', 'error', SQLERRM, jsonb_build_object('target', 'administrador', 'orderId', NEW.id, 'bodySent', admin_body));
     END;
   END IF;
-  INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-  VALUES (NEW.id, 'Creada', 'administrador', admin_body);
-
   -- [CORRECCIÓN] El trigger debe retornar NEW en AFTER INSERT
 
   RETURN NEW;
@@ -1113,7 +1105,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.notify_order_status_change()
 RETURNS trigger AS $$ DECLARE
   client_payload jsonb;
-  admin_payload jsonb;
   collaborator_payload jsonb;
   admin_payload jsonb;
   functions_url text;
@@ -1195,18 +1186,7 @@ BEGIN
         INSERT INTO public.function_logs(fn_name, level, message, payload)
         VALUES ('notify_order_status_change', 'error', SQLERRM, jsonb_build_object('target', 'administrador', 'orderId', NEW.id, 'bodySent', admin_body));
       END;
-    -- [SOLUCIÓN] Insertar en outbox para el cliente.
-    IF client_payload IS NOT NULL THEN
-      INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-      VALUES (NEW.id, NEW.status, 'cliente', COALESCE(NEW.client_id, NEW.client_contact_id), client_payload);
     END IF;
-
-    -- Notificar al Administrador sobre el cambio de estado
-    admin_payload := jsonb_build_object('role', 'administrador', 'orderId', NEW.id, 'title', 'Estado de orden actualizado', 'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status);
-    
-    -- [SOLUCIÓN] Insertar en outbox para el administrador.
-    INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-    VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
   END IF;
 
   -- [NUEVO] Notificar al colaborador cuando se le asigna una orden
@@ -1236,9 +1216,6 @@ BEGIN
         VALUES ('notify_order_status_change', 'error', SQLERRM, jsonb_build_object('target', 'colaborador', 'orderId', NEW.id, 'bodySent', collab_body));
       END;
     END IF;
-    -- [SOLUCIÓN] Insertar en outbox para el colaborador.
-    INSERT INTO public.notification_outbox(order_id, new_status, target_user_id, payload)
-    VALUES (NEW.id, 'Asignada', NEW.assigned_to, collaborator_payload);
   END IF;
   RETURN NEW;
 END;
