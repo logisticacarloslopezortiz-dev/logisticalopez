@@ -253,20 +253,15 @@ function validateCurrentStep() {
   if (currentStep === 2) {
     const modalId = `modal-${selectedService.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ /g, '-')}`;
     const modalElement = document.getElementById(modalId);
-    // Solo validar si el modal existe y no ha sido llenado
-    if (modalElement && !modalElement.classList.contains('hidden') && !modalFilled) {
-      notifications.warning('Por favor, completa y guarda la información adicional del servicio antes de continuar.', { title: 'Información Requerida' });
-    // Si el modal existe, es obligatorio que se haya llenado.
+
+    // Si el modal para este servicio existe Y no ha sido llenado, es un error.
     if (modalElement && !modalFilled) {
       notifications.warning('Por favor, completa y guarda la información adicional del servicio.', { title: 'Información Requerida' });
-      // Abrir el modal si está cerrado para que el usuario lo complete
+
+      // Para ayudar al usuario, abrimos el modal si estaba cerrado.
       if (modalElement.classList.contains('hidden')) {
         modalElement.classList.remove('hidden');
       }
-      return false;
-    } else if (modalElement && modalElement.classList.contains('hidden') && !modalFilled) {
-      // Si el modal existe pero fue cerrado sin guardar, también es inválido
-      notifications.warning('Parece que no guardaste la información adicional del servicio. Por favor, haz clic en "Continuar" dentro del formulario emergente.', { title: 'Información Requerida' });
       return false;
     }
   }
