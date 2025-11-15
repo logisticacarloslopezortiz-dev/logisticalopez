@@ -137,8 +137,11 @@ create table if not exists public.clients (
 );
 comment on table public.clients is 'Tabla para clientes no autenticados (invitados).';
 
-alter table public.clients enable row level security;
-create policy "Public access for clients" on public.clients for all using (true) with check (true);
+-- [CORRECCIÓN] Se elimina esta política antigua y demasiado permisiva.
+-- Las políticas correctas ('clients_insert_any', 'clients_select_any') se definen más adelante.
+-- alter table public.clients enable row level security;
+-- drop policy if exists "Public access for clients" on public.clients;
+-- create policy "Public access for clients" on public.clients for all using (true) with check (true);
 
 -- Matriculas
 create table if not exists public.matriculas (
@@ -1028,27 +1031,116 @@ EXCEPTION WHEN OTHERS THEN
   PERFORM 1;
 END $$;
 
+-- [MODIFICADO] Función para notificar la creación de una orden (a Clientes y Admins)
+CREATE OR REPLACE FUNCTION public.notify_order_creation()
+RETURNS trigger AS $$
+DECLARE
+  url text := 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/notify-role';
+  client_payload jsonb;
+  admin_payload jsonb;
+  ok boolean := false;
+  auth_header jsonb := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ');
+BEGIN
+  -- 1. Payload para el Cliente
+  client_payload := jsonb_build_object(
+    'role', 'cliente',
+    'orderId', NEW.id,
+    'title', '✅ Solicitud Recibida',
+    'body', 'Hemos recibido tu solicitud #' || NEW.short_id || '. Pronto será revisada por nuestro equipo.'
+  );
+
+  -- 2. Payload para el Administrador
+  admin_payload := jsonb_build_object(
+    'role', 'administrador',
+    'orderId', NEW.id,
+    'title', '📢 Nueva Solicitud Recibida',
+    'body', 'Se ha creado la solicitud #' || NEW.short_id || ' por ' || NEW.name || '.'
+  );
+
+  -- Intentar enviar notificación al cliente
+  BEGIN
+    PERFORM net.http_post(url, client_payload, headers := auth_header);
+    ok := true;
+  EXCEPTION WHEN OTHERS THEN
+    ok := false;
+  END;
+  IF NOT ok THEN
+    INSERT INTO public.notification_outbox(order_id, new_status, target_role) VALUES (NEW.id, 'Creada', 'cliente');
+  END IF;
+
+  -- Intentar enviar notificación al administrador
+  BEGIN
+    PERFORM net.http_post(url, admin_payload, headers := auth_header);
+    ok := true;
+  EXCEPTION WHEN OTHERS THEN
+    ok := false;
+  END;
+  IF NOT ok THEN
+    INSERT INTO public.notification_outbox(order_id, new_status, target_role) VALUES (NEW.id, 'Creada', 'administrador');
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- [MODIFICADO] Función para notificar cambios de estado (a Clientes, Colaboradores y Admins)
 CREATE OR REPLACE FUNCTION public.notify_order_status_change()
 RETURNS trigger AS $$
 DECLARE
-  url text := 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification';
-  payload json := json_build_object('orderId', NEW.id, 'newStatus', NEW.status);
+  -- url text := 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification';
+  -- payload json := json_build_object('orderId', NEW.id, 'newStatus', NEW.status);
+  -- [CORRECCIÓN] Usar la función notify-role que es más versátil
+  url text := 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/notify-role';
+  client_payload jsonb;
+  collaborator_payload jsonb;
+  admin_payload jsonb;
   ok boolean := false;
+  auth_header jsonb := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ');
 BEGIN
   IF (OLD.status IS DISTINCT FROM NEW.status) THEN
+    -- Notificar al Cliente sobre el cambio de estado
+    client_payload := jsonb_build_object('role', 'cliente', 'orderId', NEW.id, 'title', 'Tu orden ha sido actualizada', 'body', 'El estado de tu orden #' || NEW.short_id || ' ahora es: ' || NEW.status);
     BEGIN
-      PERFORM public.http_post(url, 'application/json', payload::text, json_build_object('apikey','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ'));
+      PERFORM net.http_post(url, client_payload, headers := auth_header);
       ok := true;
-    EXCEPTION WHEN undefined_function THEN
-      BEGIN
-        PERFORM net.http_post(url, json_build_object('Content-Type','application/json'), payload);
-        ok := true;
-      EXCEPTION WHEN undefined_function THEN
-        ok := false;
-      END;
+    EXCEPTION WHEN OTHERS THEN
+      ok := false;
     END;
     IF NOT ok THEN
-      INSERT INTO public.notification_outbox(order_id, new_status) VALUES (NEW.id, NEW.status);
+      INSERT INTO public.notification_outbox(order_id, new_status, target_role) VALUES (NEW.id, NEW.status, 'cliente');
+    END IF;
+
+    -- Notificar al Administrador sobre el cambio de estado
+    admin_payload := jsonb_build_object('role', 'administrador', 'orderId', NEW.id, 'title', 'Estado de orden actualizado', 'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status);
+    BEGIN
+      PERFORM net.http_post(url, admin_payload, headers := auth_header);
+      ok := true;
+    EXCEPTION WHEN OTHERS THEN
+      ok := false;
+    END;
+    IF NOT ok THEN
+      INSERT INTO public.notification_outbox(order_id, new_status, target_role) VALUES (NEW.id, NEW.status, 'administrador');
+    END IF;
+
+  END IF;
+
+  -- [NUEVO] Notificar al colaborador cuando se le asigna una orden
+  IF (OLD.assigned_to IS DISTINCT FROM NEW.assigned_to AND NEW.assigned_to IS NOT NULL) THEN
+    collaborator_payload := jsonb_build_object(
+      'userId', NEW.assigned_to, -- Apunta a un usuario específico
+      'orderId', NEW.id,
+      'title', '🛠️ Nueva Orden Asignada',
+      'body', 'Se te ha asignado la orden #' || NEW.short_id || '. Cliente: ' || NEW.name
+    );
+    BEGIN
+      PERFORM net.http_post(url, collaborator_payload, headers := auth_header);
+      ok := true;
+    EXCEPTION WHEN OTHERS THEN
+      ok := false;
+    END;
+    IF NOT ok THEN
+      -- Guardamos el ID del colaborador en la bandeja de salida
+      INSERT INTO public.notification_outbox(order_id, new_status, target_user_id) VALUES (NEW.id, 'Asignada', NEW.assigned_to);
     END IF;
   END IF;
   RETURN NEW;
@@ -1057,13 +1149,21 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS trg_orders_notify_status ON public.orders;
 CREATE TRIGGER trg_orders_notify_status
-AFTER UPDATE OF status ON public.orders
+AFTER UPDATE OF status, assigned_to ON public.orders
 FOR EACH ROW EXECUTE FUNCTION public.notify_order_status_change();
+
+-- [NUEVO] Trigger para notificar al crear una orden
+DROP TRIGGER IF EXISTS trg_orders_notify_creation ON public.orders;
+CREATE TRIGGER trg_orders_notify_creation
+AFTER INSERT ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.notify_order_creation();
 
 CREATE TABLE IF NOT EXISTS public.notification_outbox (
   id bigint generated by default as identity primary key,
   order_id bigint not null,
   new_status text not null,
+  target_role text,
+  target_user_id uuid,
   created_at timestamptz not null default now(),
   processed_at timestamptz
 );

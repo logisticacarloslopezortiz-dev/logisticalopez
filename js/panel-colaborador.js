@@ -654,8 +654,8 @@ function collabDisplayName(email){
 }
 
 function openAcceptModal(order){
-  // Bloquear aceptación si ya hay un trabajo activo
-  if (state.activeJobId) {
+  // Permitir aceptar si el trabajo activo es la misma orden; bloquear solo si es distinta
+  if (state.activeJobId && Number(state.activeJobId) !== Number(order.id)) {
     showError('Trabajo activo', 'Ya tienes un trabajo en progreso. Complétalo antes de aceptar otro.');
     return;
   }
@@ -1083,8 +1083,9 @@ function renderPendingCards(orders){
         ${((o.service_questions && Object.keys(o.service_questions || {}).length > 0) || (o.serviceQuestions && Object.keys(o.serviceQuestions || {}).length > 0)) 
           ? `<div class='mt-3'><button class='px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded w-full' data-details-id="${o.id}">Detalles</button></div>`
           : ''}
-        <div class="mt-3">
-          <button data-id="${o.id}" class="w-full px-2 py-2 text-xs bg-blue-600 text-white rounded">Aceptar</button>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <button data-view-id="${o.id}" class="px-2 py-2 text-xs bg-gray-100 text-gray-800 rounded">Ver</button>
+          <button data-id="${o.id}" class="px-2 py-2 text-xs bg-blue-600 text-white rounded">Aceptar</button>
         </div>
       </div>
     `;
@@ -1466,21 +1467,27 @@ function setupEventListeners() {
     actionButtonsContainer.addEventListener('click', (e) => {
       const button = e.target.closest('button[data-status]');
       if (button) {
-        if (state.activeJobId) {
-          changeStatus(state.activeJobId, button.dataset.status);
-        } else {
+        const activeId = state.activeJobId;
+        const order = activeId ? state.allOrders.find(o => o.id === activeId) : null;
+        if (!order) {
           showError('Error', 'No hay un trabajo activo seleccionado.');
+          return;
         }
+        if (!order.assigned_to) {
+          openAcceptModal(order);
+          return;
+        }
+        changeStatus(activeId, button.dataset.status);
       }
     });
   }
 
   document.getElementById('confirmAcceptBtn')?.addEventListener('click', async () => {
-    if (state.activeJobId) {
+    if (!state.selectedOrderIdForAccept) return closeAcceptModal();
+    if (state.activeJobId && Number(state.activeJobId) !== Number(state.selectedOrderIdForAccept)) {
       showError('Trabajo activo', 'Ya tienes un trabajo en progreso. Complétalo antes de aceptar otro.');
       return closeAcceptModal();
     }
-    if (!state.selectedOrderIdForAccept) return closeAcceptModal();
 
     const orderId = state.selectedOrderIdForAccept;
     const { success, error } = await OrderManager.acceptOrder(orderId);
