@@ -173,16 +173,34 @@
       </div>
       <ul id="vehicleList" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></ul>
     </section>
-      <div class="flex flex-col sm:flex-row gap-3 mb-6">
-        <input type="text" id="newVehicle" placeholder="Tipo de vehículo nuevo" 
-               class="flex-1 border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors">
-        <button id="addVehicleBtn" class="btn-primary px-6 py-3 rounded-lg flex items-center gap-2 font-medium">
-          <i data-lucide="plus" class="w-4 h-4"></i>
-          Agregar Vehículo
-        </button>
+    
+    <!-- Modal: Gestión de Servicio/Vehículo -->
+    <div id="manageModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+      <div class="bg-white w-full max-w-md rounded-lg p-6 shadow-xl">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="settings" class="w-5 h-5 text-blue-600"></i>
+          <h3 id="manageModalTitle" class="text-lg font-semibold">Agregar</h3>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label for="modalNameInput" id="manageModalLabel" class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <input type="text" id="modalNameInput" placeholder="Ej: Paquetería / Furgoneta" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label for="modalDescInput" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+            <textarea id="modalDescInput" rows="3" placeholder="Breve descripción" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+          </div>
+          <div>
+            <label for="modalImageInput" class="block text-sm font-medium text-gray-700 mb-1">URL de imagen</label>
+            <input type="url" id="modalImageInput" placeholder="https://..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div class="flex gap-2">
+            <button id="modalCancelBtn" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+            <button id="modalConfirmBtn" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Confirmar</button>
+          </div>
+        </div>
       </div>
-      <ul id="vehicleList" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></ul>
-    </section>
+    </div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

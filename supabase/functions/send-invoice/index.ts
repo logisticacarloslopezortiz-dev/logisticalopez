@@ -24,9 +24,9 @@ async function generateInvoicePDF(orderData: any, businessData: any) {
 }
 
 // Función para enviar email (simulada)
-async function sendEmailWithInvoice(email: string, invoiceData: any) {
+async function sendEmailWithInvoice(email: string, invoiceData: any, fromEmail?: string) {
   // Aquí se integraría con un servicio de email como SendGrid, Resend, etc.
-  logDebug('Enviando factura por email', { email, invoiceNumber: invoiceData.invoiceNumber });
+  logDebug('Enviando factura por email', { email, from: fromEmail || 'no-reply@tlc.com', invoiceNumber: invoiceData.invoiceNumber });
   
   // Simulamos el envío exitoso
   return { success: true, messageId: `msg_${Date.now()}` };
@@ -125,9 +125,10 @@ Deno.serve(async (req: Request) => {
     // Enviar por email si se proporcionó
     let emailResult = null;
     const recipientEmail = email || order.email;
+    const senderEmail = business?.email || undefined;
     
     if (recipientEmail) {
-      emailResult = await sendEmailWithInvoice(recipientEmail, invoiceData);
+      emailResult = await sendEmailWithInvoice(recipientEmail, invoiceData, senderEmail);
     }
     
     // Registrar la factura en tabla invoices

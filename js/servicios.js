@@ -5,10 +5,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Elementos del DOM
-    const addServiceBtn = document.getElementById('addServiceBtn');
-    const addVehicleBtn = document.getElementById('addVehicleBtn');
-    const newServiceInput = document.getElementById('newService');
-    const newVehicleInput = document.getElementById('newVehicle');
+  const addServiceBtn = document.getElementById('addServiceBtn');
+  const addVehicleBtn = document.getElementById('addVehicleBtn');
+  const newServiceInput = document.getElementById('newService');
+  const newVehicleInput = document.getElementById('newVehicle');
+  const manageModal = document.getElementById('manageModal');
+  const modalTitle = document.getElementById('manageModalTitle');
+  const modalLabel = document.getElementById('manageModalLabel');
+  const modalNameInput = document.getElementById('modalNameInput');
+  const modalDescInput = document.getElementById('modalDescInput');
+  const modalImageInput = document.getElementById('modalImageInput');
+  const modalCancelBtn = document.getElementById('modalCancelBtn');
+  const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+  let modalMode = null; // 'service' | 'vehicle'
     const serviceList = document.getElementById('serviceList');
     const vehicleList = document.getElementById('vehicleList');
 
@@ -182,7 +191,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Lógica de Negocio ---
     async function handleAddService() {
-        const serviceName = newServiceInput.value.trim();
+    const sourceInput = modalMode === 'service' && modalNameInput ? modalNameInput : newServiceInput;
+    const serviceName = sourceInput.value.trim();
+    const serviceDesc = (modalMode === 'service' && modalDescInput) ? modalDescInput.value.trim() : '';
+    const serviceImage = (modalMode === 'service' && modalImageInput) ? modalImageInput.value.trim() : '';
         if (!serviceName) return;
 
         try {
@@ -190,11 +202,16 @@ document.addEventListener('DOMContentLoaded', () => {
             addServiceBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Agregando...';
             if (typeof lucide !== 'undefined') lucide.createIcons();
 
-            const newService = await supabaseConfig.addService({ name: serviceName });
+            const payload = { name: serviceName };
+            if (serviceDesc) payload.description = serviceDesc;
+            if (serviceImage) payload.image_url = serviceImage;
+            const newService = await supabaseConfig.addService(payload);
             allServices.push(newService);
             renderServices();
             updateSummary();
-            newServiceInput.value = '';
+            sourceInput.value = '';
+            if (modalDescInput) modalDescInput.value = '';
+            if (modalImageInput) modalImageInput.value = '';
         } catch (error) {
             console.error('Error al agregar servicio:', error.message);
             alert(`No se pudo agregar el servicio. Es posible que ya exista. Error: ${error.message}`);
@@ -206,7 +223,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleAddVehicle() {
-        const vehicleName = newVehicleInput.value.trim();
+    const sourceInputV = modalMode === 'vehicle' && modalNameInput ? modalNameInput : newVehicleInput;
+    const vehicleName = sourceInputV.value.trim();
+    const vehicleDesc = (modalMode === 'vehicle' && modalDescInput) ? modalDescInput.value.trim() : '';
+    const vehicleImage = (modalMode === 'vehicle' && modalImageInput) ? modalImageInput.value.trim() : '';
         if (!vehicleName) return;
 
         try {
@@ -214,11 +234,16 @@ document.addEventListener('DOMContentLoaded', () => {
             addVehicleBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Agregando...';
             if (typeof lucide !== 'undefined') lucide.createIcons();
 
-            const newVehicle = await supabaseConfig.addVehicle({ name: vehicleName });
+            const payloadV = { name: vehicleName };
+            if (vehicleDesc) payloadV.description = vehicleDesc;
+            if (vehicleImage) payloadV.image_url = vehicleImage;
+            const newVehicle = await supabaseConfig.addVehicle(payloadV);
             allVehicles.push(newVehicle);
             renderVehicles();
             updateSummary();
-            newVehicleInput.value = '';
+            sourceInputV.value = '';
+            if (modalDescInput) modalDescInput.value = '';
+            if (modalImageInput) modalImageInput.value = '';
         } catch (error) {
             console.error('Error al agregar vehículo:', error.message);
             alert(`No se pudo agregar el vehículo. Es posible que ya exista. Error: ${error.message}`);
@@ -261,8 +286,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Listeners ---
-    addServiceBtn.addEventListener('click', handleAddService);
-    addVehicleBtn.addEventListener('click', handleAddVehicle);
+    function openManageModal(mode){
+      modalMode = mode;
+      if (!manageModal) return;
+      if (mode === 'service'){
+        modalTitle.textContent = 'Agregar Servicio';
+        modalLabel.textContent = 'Nombre del servicio';
+        modalNameInput.value = newServiceInput?.value || '';
+        if (modalDescInput) modalDescInput.placeholder = 'Descripción del servicio';
+        if (modalImageInput) modalImageInput.placeholder = 'URL de imagen del servicio';
+      } else {
+        modalTitle.textContent = 'Agregar Vehículo';
+        modalLabel.textContent = 'Tipo de vehículo';
+        modalNameInput.value = newVehicleInput?.value || '';
+        if (modalDescInput) modalDescInput.placeholder = 'Descripción del vehículo';
+        if (modalImageInput) modalImageInput.placeholder = 'URL de imagen del vehículo';
+      }
+      manageModal.classList.remove('hidden');
+      manageModal.classList.add('flex');
+      modalNameInput?.focus();
+    }
+
+    function closeManageModal(){
+      if (!manageModal) return;
+      manageModal.classList.add('hidden');
+      manageModal.classList.remove('flex');
+      modalMode = null;
+    }
+
+    if (addServiceBtn) addServiceBtn.addEventListener('click', () => openManageModal('service'));
+    if (addVehicleBtn) addVehicleBtn.addEventListener('click', () => openManageModal('vehicle'));
+    if (modalCancelBtn) modalCancelBtn.addEventListener('click', closeManageModal);
+    if (modalConfirmBtn) modalConfirmBtn.addEventListener('click', () => {
+      if (modalMode === 'service') handleAddService(); else handleAddVehicle();
+      closeManageModal();
+    });
+    
+    newServiceInput.addEventListener('keypress', (e) => e.key === 'Enter' && openManageModal('service'));
+    newVehicleInput.addEventListener('keypress', (e) => e.key === 'Enter' && openManageModal('vehicle'));
     newServiceInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleAddService());
     newVehicleInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleAddVehicle());
     serviceList.addEventListener('click', handleDelete);

@@ -127,6 +127,20 @@ after insert or update of name, email, phone on public.collaborators
 for each row execute function public.sync_profile_name();
 
 -- Matriculas
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text,
+  email text,
+  created_at timestamptz not null default now(),
+  push_subscription jsonb
+);
+comment on table public.clients is 'Tabla para clientes no autenticados (invitados).';
+
+alter table public.clients enable row level security;
+create policy "Public access for clients" on public.clients for all using (true) with check (true);
+
+-- Matriculas
 create table if not exists public.matriculas (
   id bigserial primary key,
   created_at timestamptz not null default now(),
@@ -264,14 +278,14 @@ create index if not exists idx_orders_date on public.orders("date");
 create index if not exists idx_orders_assigned_to on public.orders(assigned_to);
 create index if not exists idx_orders_client_id on public.orders(client_id);
 
--- FK client_contact_id -> public.clients (se creará luego) con condicional
+-- [CORRECCIÓN] FK client_contact_id -> public.clients (descomentado y activado)
 do $$ begin
-  if not exists (
-    select 1 from information_schema.table_constraints
-    where constraint_schema = 'public' and constraint_name = 'orders_client_contact_id_fkey'
-  ) then
-    -- se añade al final tras crear clients
-    perform 1;
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'orders' and column_name = 'client_contact_id') then
+    if not exists (select 1 from pg_constraint where conname = 'orders_client_contact_id_fkey') then
+      alter table public.orders
+        add constraint orders_client_contact_id_fkey
+        foreign key (client_contact_id) references public.clients(id) on delete set null;
+    end if;
   end if;
 end $$;
 
@@ -378,7 +392,7 @@ create unique index if not exists uniq_push_subscriptions_user_endpoint
   on public.push_subscriptions(user_id, endpoint);
 
 -- Extender para clientes anónimos
-alter table public.push_subscriptions add column if not exists client_contact_id uuid references public.clients(id) on delete cascade;
+alter table public.push_subscriptions add column if not exists client_contact_id uuid references public.clients(id) on delete cascade; -- [CORRECCIÓN] Ahora funciona porque `clients` ya existe.
 create index if not exists idx_push_subscriptions_contact on public.push_subscriptions(client_contact_id);
 create unique index if not exists uniq_push_subscriptions_contact_endpoint
   on public.push_subscriptions(client_contact_id, endpoint);
@@ -463,40 +477,6 @@ after update on public.orders
 for each row when (old.status is distinct from new.status)
 execute function public.create_completion_receipt_on_order_complete();
 
--- Invoices
-create table if not exists public.invoices (
-  id bigserial primary key,
-  created_at timestamptz not null default now(),
-  order_id bigint references public.orders(id) on delete set null,
-  client_id uuid references public.profiles(id) on delete set null,
-  file_path text not null,
-  file_url text,
-  total numeric,
-  status text default 'generada',
-  data jsonb
-);
-
--- Function logs (solo lectura admin/owner)
-create table if not exists public.function_logs (
-  id bigserial primary key,
-  fn_name text not null,
-  level text not null default 'error',
-  message text,
-  payload jsonb,
-  created_at timestamptz not null default now()
-);
-
--- 7) CLIENTES (para pedidos anónimos) + RPC create_order_with_contact
-create table if not exists public.clients (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  phone text,
-  email text,
-  created_at timestamptz not null default now()
-);
-
--- FK orders.client_contact_id -> clients.id (idempotente y solo si la columna existe) DO $$ BEGIN IF EXISTS ( SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'client_contact_id' ) THEN IF NOT EXISTS ( SELECT 1 FROM pg_constraint WHERE conname = 'orders_client_contact_id_fkey' ) THEN ALTER TABLE public.orders ADD CONSTRAINT orders_client_contact_id_fkey FOREIGN KEY (client_contact_id) REFERENCES public.clients(id) ON DELETE SET NULL; END IF; END IF; END $$;
-
 -- RPC: crear orden con contacto cuando no hay auth.uid()
 create or replace function public.create_order_with_contact(order_payload jsonb)
 returns public.orders
@@ -506,12 +486,13 @@ declare
   v_contact_id uuid;
   v_order public.orders;
 begin
-  if v_client_id is null then
-    insert into public.clients(name, phone, email)
+  if v_client_id is null then -- Usuario anónimo
+    insert into public.clients(name, phone, email, push_subscription)
     values (
       nullif(order_payload->>'name',''),
       nullif(order_payload->>'phone',''),
-      nullif(order_payload->>'email','')
+      nullif(order_payload->>'email',''),
+      order_payload->'push_subscription'
     ) returning id into v_contact_id;
 
     insert into public.orders (
@@ -651,8 +632,9 @@ create or replace function public.set_order_amount_admin(
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare updated jsonb;
 begin
-  if auth.role() <> 'service_role' then
-    raise exception 'Acceso restringido: solo administradores (service_role)' using errcode = '42501';
+  -- [CORRECCIÓN] Usar helpers de rol para consistencia
+  if not (public.is_admin(auth.uid()) or public.is_owner(auth.uid())) then
+    raise exception 'Acceso restringido: solo administradores pueden modificar montos.' using errcode = '42501';
   end if;
   update public.orders o
   set monto_cobrado = amount, metodo_pago = method
@@ -665,7 +647,30 @@ begin
 end;
 $$;
 
-grant execute on function public.set_order_amount_admin(bigint, numeric, text) to service_role;
+grant execute on function public.set_order_amount_admin(bigint, numeric, text) to authenticated;
+
+-- Invoices
+create table if not exists public.invoices (
+  id bigserial primary key,
+  created_at timestamptz not null default now(),
+  order_id bigint references public.orders(id) on delete set null,
+  client_id uuid references public.profiles(id) on delete set null,
+  file_path text not null,
+  file_url text,
+  total numeric,
+  status text default 'generada',
+  data jsonb
+);
+
+-- Function logs (solo lectura admin/owner)
+create table if not exists public.function_logs (
+  id bigserial primary key,
+  fn_name text not null,
+  level text not null default 'error',
+  message text,
+  payload jsonb,
+  created_at timestamptz not null default now()
+);
 
 -- 9) RLS
 alter table public.vehicles enable row level security;

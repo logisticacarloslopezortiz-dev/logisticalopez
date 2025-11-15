@@ -800,16 +800,6 @@ async function subscribeUserToPush(savedOrder) {
           await supabaseConfig.client.from('push_subscriptions').insert(payload);
         }
         console.log('Suscripción guardada en push_subscriptions para usuario:', userId);
-      } else {
-        const orderId = typeof savedOrder === 'object' ? savedOrder?.id : savedOrder;
-        if (orderId) {
-          const jsonSub = typeof subscription?.toJSON === 'function' ? subscription.toJSON() : subscription;
-          await supabaseConfig.client
-            .from('orders')
-            .update({ push_subscription: jsonSub })
-            .eq('id', orderId);
-          console.log('Suscripción guardada en la orden (anónimo):', orderId);
-        }
       }
     } catch (saveErr) {
       console.error('Error guardando suscripción en Supabase:', saveErr);
@@ -1160,36 +1150,7 @@ document.addEventListener('DOMContentLoaded', function() {
           tracking_data: orderData.tracking_data
         };
 
-        // Crear contacto de cliente si no hay usuario autenticado y asociarlo a la orden
-        async function createClientContact({ name, phone, email, pushSubscription }) {
-          try {
-            // Usar cliente público si no hay sesión
-            let session = null;
-            try {
-              const s = await supabaseConfig.client.auth.getSession();
-              session = s?.data?.session ?? null;
-            } catch (_) {}
-
-            const clientToUse = !session && typeof supabaseConfig.getPublicClient === 'function'
-              ? supabaseConfig.getPublicClient()
-              : supabaseConfig.client;
-
-            const insertPayload = { name, phone, email };
-            // Guardar suscripción push si la columna existe (migración aplicada)
-            if (pushSubscription) insertPayload.push_subscription = pushSubscription;
-
-            const { data, error } = await clientToUse
-              .from('clients')
-              .insert([insertPayload])
-              .select()
-              .single();
-            if (error) throw error;
-            return data;
-          } catch (e) {
-            console.error('Error al crear contacto de cliente:', e);
-            throw e;
-          }
-        }
+        
 
         // Obtener suscripción push para notificaciones (una vez, reutilizar)
         const pushSubscription = await getPushSubscription();
@@ -1201,40 +1162,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const { data: { user } } = await supabaseConfig.client.auth.getUser();
         if (user && user.id) {
           baseOrder.client_id = user.id;
-          console.log('Usuario autenticado, asignando client_id:', user.id);
-
-          // Suscripción push del usuario se gestiona vía tabla public.push_subscriptions
         } else {
-          try {
-            const contact = await createClientContact({
-              name: orderData.name,
-              phone: orderData.phone,
-              email: orderData.email,
-              pushSubscription
-            });
-            baseOrder.client_id = null; // Evitar FK hacia profiles cuando no hay usuario
-            console.log('Cliente sin login, contacto creado:', contact.id);
-            try {
-              if (pushSubscription && contact?.id) {
-                const keys = (pushSubscription.keys) ? pushSubscription.keys : (pushSubscription?.toJSON?.().keys || {});
-                const payload = {
-                  client_contact_id: contact.id,
-                  endpoint: pushSubscription.endpoint,
-                  keys: { p256dh: keys.p256dh, auth: keys.auth }
-                };
-                const { error: upsertErr } = await supabaseConfig.client
-                  .from('push_subscriptions')
-                  .upsert(payload, { onConflict: 'client_contact_id,endpoint' });
-                if (upsertErr) {
-                  await supabaseConfig.client.from('push_subscriptions').insert(payload);
-                }
-              }
-            } catch (_) {}
-          } catch (e) {
-            // Si falla la creación del contacto, continuar sin client_id ni contact_id
-            baseOrder.client_id = null;
-            console.warn('Continuando sin client_contact_id por error al crear contacto.');
-          }
+          baseOrder.client_id = null;
         }
 
         // Fallback de suscripción se guarda post-creación en orders.push_subscription
@@ -1249,87 +1178,16 @@ document.addEventListener('DOMContentLoaded', function() {
           destination_coords: destination_coords2
         });
 
-        // Función auxiliar para intentar insertar y devolver resultado o lanzar error
-        async function tryInsert(payload) {
-          // Obtener la sesión actual de forma compatible con supabase-js v2
-          let session = null;
-          try {
-            const sessionResp = await supabaseConfig.client.auth.getSession();
-            session = sessionResp?.data?.session ?? null;
-          } catch (e) {
-            // No bloquear: asumimos sesión nula si falla
-            session = null;
-          }
-
-          // Si no hay sesión válida, intentar con cliente público (anon) para operaciones de solo lectura/escritura pública
-          const usePublicClient = !session;
-          const clientToUse = usePublicClient && typeof supabaseConfig.getPublicClient === 'function'
-            ? supabaseConfig.getPublicClient()
-            : supabaseConfig.client;
-
-          // Intentar insertar; si falla por columna inexistente (p.ej. 'tracking'), reintentar sin ese campo
-          async function insertWithSanitize(candidatePayload) {
-            // Intento principal: insert + select (requiere política SELECT para órdenes pendientes)
-            let resp = await clientToUse.from('orders').insert([candidatePayload]).select();
-            if (resp.error) {
-              const err = resp.error;
-              const msg = String(err.message || '').toLowerCase();
-              const code = err.code || '';
-              const status = err.status || 0;
-
-              // Si la columna 'tracking' no existe en el esquema, reintentar sin ese campo
-              if (
-                code === 'PGRST204' ||
-                /could not find the 'tracking' column/i.test(err.message || '') ||
-                msg.includes("column \"tracking\"") ||
-                /tracking column/i.test(msg)
-              ) {
-                const sanitized = { ...candidatePayload };
-                delete sanitized.tracking;
-                resp = await clientToUse.from('orders').insert([sanitized]).select();
-                if (resp.error) throw resp.error;
-                if (!resp.data || resp.data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
-                return resp.data[0];
-              }
-
-              // Si falla por RLS/401, hacer insert con retorno mínimo como fallback
-              if (status === 401 || code === 'PGRST303' || /rls|not authorized|permission/i.test(msg)) {
-                const sanitized = { ...candidatePayload };
-                delete sanitized.tracking;
-                const minimal = await clientToUse.from('orders').insert([sanitized], { returning: 'minimal' });
-                if (minimal.error) throw minimal.error;
-                // No podemos leer la fila por RLS; devolvemos marcador para flujos de UI
-                return { id: null, short_id: null, __noSelect: true };
-              }
-
-              throw err;
-            }
-            if (!resp.data || resp.data.length === 0) throw new Error('No se recibió confirmación al guardar la orden.');
-            return resp.data[0];
-          }
-
-          // Ejecutar inserción
-          return await insertWithSanitize(payload);
-        }
+        
 
         let savedOrder;
         try {
-          // Intentar primero vía RPC para evitar problemas de RLS y FKs
-          try {
-            const { data: rpcData, error: rpcError } = await supabaseConfig.client
-              .rpc('create_order_with_contact', { order_payload: variantA });
-            if (rpcError) {
-              console.warn('Fallo RPC create_order_with_contact, se intenta inserción directa:', rpcError);
-            } else if (rpcData) {
-              savedOrder = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-            }
-          } catch (e) {
-            console.warn('Excepción al invocar RPC, se intenta inserción directa:', e);
+          const { data: rpcData, error: rpcError } = await supabaseConfig.client
+            .rpc('create_order_with_contact', { order_payload: variantA });
+          if (rpcError) {
+            throw rpcError;
           }
-
-          if (!savedOrder) {
-            savedOrder = await tryInsert(variantA);
-          }
+          savedOrder = Array.isArray(rpcData) ? rpcData[0] : rpcData;
         } catch (err) {
           console.error('Error al guardar la solicitud:', err);
           let errorMsg = 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';

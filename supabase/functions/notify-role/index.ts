@@ -102,15 +102,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Fallback: suscripción en la orden
-      // Fallback: suscripción en la orden (acepta notification_subscription o push_subscription)
-      const orderSub = (order as any)?.notification_subscription || (order as any)?.push_subscription;
-      if (subscriptions.length === 0 && orderSub) {
-        const ps = orderSub as any;
-        if (ps?.endpoint && ps?.keys?.p256dh && ps?.keys?.auth) {
-          subscriptions = [{ endpoint: ps.endpoint, keys: ps.keys }];
-        }
-      }
+      
 
       if (subscriptions.length === 0) {
         return jsonResponse({ success: false, message: 'Cliente sin suscripciones' }, 200);

@@ -2069,8 +2069,9 @@ DECLARE
   v_client_id uuid := (SELECT auth.uid());
   v_contact_id uuid;
   v_order public.orders;
+  v_endpoint text;
+  v_keys jsonb;
 BEGIN
-  -- Si no hay usuario autenticado, crear contacto anónimo y usar push_subscription
   IF v_client_id IS NULL THEN
     INSERT INTO public.clients(name, phone, email)
     VALUES (
@@ -2080,6 +2081,15 @@ BEGIN
     )
     RETURNING id INTO v_contact_id;
 
+    v_endpoint := COALESCE(order_payload->'push_subscription'->>'endpoint', NULL);
+    v_keys := COALESCE(order_payload->'push_subscription'->'keys', '{}'::jsonb);
+    IF v_endpoint IS NOT NULL AND v_endpoint <> '' THEN
+      INSERT INTO public.push_subscriptions(client_contact_id, endpoint, keys)
+      VALUES (v_contact_id, v_endpoint, v_keys)
+      ON CONFLICT (client_contact_id, endpoint)
+      DO UPDATE SET keys = EXCLUDED.keys;
+    END IF;
+
     INSERT INTO public.orders (
       name, phone, email, rnc, empresa,
       service_id, vehicle_id, service_questions,
@@ -2088,8 +2098,7 @@ BEGIN
       date, time,
       status, estimated_price,
       tracking_data,
-      client_contact_id,
-      push_subscription
+      client_contact_id
     ) VALUES (
       NULLIF(order_payload->>'name',''),
       NULLIF(order_payload->>'phone',''),
@@ -2108,12 +2117,19 @@ BEGIN
       COALESCE(order_payload->>'status','Pendiente'),
       order_payload->>'estimated_price',
       order_payload->'tracking_data',
-      v_contact_id,
-      order_payload->'push_subscription'
+      v_contact_id
     )
     RETURNING * INTO v_order;
   ELSE
-    -- Usuario autenticado: usar client_id y no client_contact_id
+    v_endpoint := COALESCE(order_payload->'push_subscription'->>'endpoint', NULL);
+    v_keys := COALESCE(order_payload->'push_subscription'->'keys', '{}'::jsonb);
+    IF v_endpoint IS NOT NULL AND v_endpoint <> '' THEN
+      INSERT INTO public.push_subscriptions(user_id, endpoint, keys)
+      VALUES (v_client_id, v_endpoint, v_keys)
+      ON CONFLICT (user_id, endpoint)
+      DO UPDATE SET keys = EXCLUDED.keys;
+    END IF;
+
     INSERT INTO public.orders (
       name, phone, email, rnc, empresa,
       service_id, vehicle_id, service_questions,

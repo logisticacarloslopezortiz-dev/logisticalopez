@@ -604,8 +604,9 @@ async function generateAndSendInvoice(orderId) {
     return;
   }
 
-  if (!order.estimated_price || order.estimated_price === 'Por confirmar') {
-    notifications.warning('Debes establecer un precio antes de generar la factura.');
+  const totalForInvoice = (order.monto_cobrado ?? order.estimated_price ?? null);
+  if (!totalForInvoice || totalForInvoice === 'Por confirmar') {
+    notifications.warning('Debes establecer un monto cobrado o precio estimado antes de generar la factura.');
     return;
   }
 
@@ -667,7 +668,10 @@ async function generateAndSendInvoice(orderId) {
     doc.setFontSize(14);
     doc.text('Total:', 140, finalY + 15);
     doc.setFont(undefined, 'bold');
-    doc.text(order.estimated_price, 170, finalY + 15);
+    const totalText = typeof totalForInvoice === 'number' 
+      ? `$${Number(totalForInvoice).toLocaleString('es-DO')}`
+      : String(totalForInvoice);
+    doc.text(totalText, 170, finalY + 15);
 
     // La subida a Storage y el registro en la tabla invoices
     // ahora los realiza la Edge Function `send-invoice` con clave de servicio.

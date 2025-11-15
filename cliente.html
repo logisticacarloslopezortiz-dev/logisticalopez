@@ -200,7 +200,6 @@
               <div class="relative">
                 <div class="flex justify-between items-center mb-1">
                   <label for="pickupAddress" class="block text-sm font-medium text-gray-700">📍 Dirección de Origen</label>
-                  <button type="button" id="use-current-location-btn" class="text-xs text-azulClaro hover:underline flex items-center gap-1"><i class="fas fa-location-arrow text-xs"></i> Usar mi ubicación</button>
                 </div>
                 <input type="text" id="pickupAddress" placeholder="Escribe o selecciona en el mapa" class="w-full border p-2 rounded focus:ring-2 focus:ring-azulClaro">
               </div>
@@ -211,7 +210,7 @@
             </div>
             <!-- Contenedor del mapa mejorado para móvil -->
             <div id="map-container" class="relative transition-all duration-300">
-              <div id="map" class="w-full h-80 rounded-lg border-2 border-gray-200 shadow-inner relative flex items-center justify-center bg-gray-50">
+              <div id="map" class="w-full h-80 rounded-lg border-2 border-green-300 shadow-inner relative flex items-center justify-center bg-green-50">
                 <div id="map-loader" class="text-center p-8 text-gray-500 flex flex-col items-center gap-2 z-10">
                   <i class="fas fa-spinner fa-spin text-2xl text-azulClaro"></i>
                   <span id="map-loader-text">Cargando mapa...</span>
@@ -839,6 +838,6 @@
 
   <script src="js/notifications.js"></script>
   <script src="js/pwa.js"></script>
-  <script src="js/cliente.js?v=1.2"></script>
+  <script src="js/cliente.js?v=1.3"></script>
 </body>
 </html>

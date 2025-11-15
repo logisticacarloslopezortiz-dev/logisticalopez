@@ -58,8 +58,7 @@ async function sendPushNotification(subscription: WebPushSubscription, payload: 
 
 type PushSubKeys = { p256dh: string; auth: string };
 type PushSubRow = { endpoint?: string; keys?: PushSubKeys; p256dh?: string; auth?: string };
-type OrderRow = { id: number; client_id: string | null; push_subscription: WebPushSubscription | null; client_contact_id: string | null };
-type ClientRow = { push_subscription: WebPushSubscription | null };
+type OrderRow = { id: number; client_id: string | null; client_contact_id: string | null };
 
 async function fetchUserSubscriptions(
   supabaseClient: ReturnType<typeof createClient>,
@@ -145,7 +144,7 @@ Deno.serve(async (req: Request) => {
     if (orderId) {
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .select('id, client_id, push_subscription, client_contact_id')
+        .select('id, client_id, client_contact_id')
         .eq('id', orderId)
         .single();
       if (orderError || !order) {
@@ -156,52 +155,25 @@ Deno.serve(async (req: Request) => {
         const subs = await fetchUserSubscriptions(supabase, ord.client_id);
         pushSubscriptions = subs;
       }
-      if (pushSubscriptions.length === 0) {
-        const sub = ord.push_subscription || null;
-        if (sub?.endpoint && sub.keys?.p256dh && sub.keys?.auth) {
-          pushSubscriptions = [{ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }];
-        }
-      }
-      if (pushSubscriptions.length === 0) {
-        const ccid0 = ord.client_contact_id || null;
-        if (ccid0) {
-          const { data: subsByContact } = await supabase
-            .from('push_subscriptions')
-            .select('endpoint, keys')
-            .eq('client_contact_id', ccid0);
-          if (subsByContact && subsByContact.length > 0) {
-            pushSubscriptions = subsByContact as any[];
-          }
-        }
-      }
-      if (pushSubscriptions.length === 0) {
-        const ccid = ord.client_contact_id || null;
-        if (ccid) {
-          const { data: contact } = await supabase
-            .from('clients')
-            .select('push_subscription')
-            .eq('id', ccid)
-            .maybeSingle();
-          const c = contact as unknown as ClientRow | null;
-          const csub = c?.push_subscription || null;
-          if (csub?.endpoint && csub.keys?.p256dh && csub.keys?.auth) {
-            pushSubscriptions = [{ endpoint: csub.endpoint, keys: { p256dh: csub.keys.p256dh, auth: csub.keys.auth } }];
-          }
+      if (pushSubscriptions.length === 0 && ord.client_contact_id) {
+        const { data: subsByContact } = await supabase
+          .from('push_subscriptions')
+          .select('endpoint, keys')
+          .eq('client_contact_id', ord.client_contact_id);
+        if (subsByContact && subsByContact.length > 0) {
+          pushSubscriptions = subsByContact as any[];
         }
       }
     } else if (to_user_id) {
       const subs = await fetchUserSubscriptions(supabase, String(to_user_id));
       pushSubscriptions = subs;
     } else if (contact_id) {
-      const { data: contact } = await supabase
-        .from('clients')
-        .select('id, push_subscription')
-        .eq('id', contact_id)
-        .maybeSingle();
-      const c = contact as unknown as ClientRow | null;
-      const sub = c?.push_subscription || null;
-      if (sub?.endpoint && sub.keys?.p256dh && sub.keys?.auth) {
-        pushSubscriptions = [{ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }];
+      const { data: subsByContact } = await supabase
+        .from('push_subscriptions')
+        .select('endpoint, keys')
+        .eq('client_contact_id', String(contact_id));
+      if (subsByContact && subsByContact.length > 0) {
+        pushSubscriptions = subsByContact as any[];
       }
     }
 
