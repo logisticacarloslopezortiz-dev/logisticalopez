@@ -524,7 +524,9 @@ async function initMap() {
     });
   }
 
-  useCurrentLocationBtn.addEventListener('click', locateUserAndSetOrigin);
+  if (useCurrentLocationBtn) {
+    useCurrentLocationBtn.addEventListener('click', locateUserAndSetOrigin);
+  }
 
   if (expandMapBtn) {
     expandMapBtn.addEventListener('click', () => {

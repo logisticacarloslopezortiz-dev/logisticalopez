@@ -1,5 +1,5 @@
 -- =============================================================
---        ESQUEMA TLC - PRODUCCIÓN (Supabase Ready)
+--        ESQUEMA FINAL TLC - PRODUCCIÓN (Supabase Ready)
 --        Consolidado, idempotente y alineado al frontend
 -- =============================================================
 -- Contiene:
@@ -11,7 +11,7 @@
 -- - Notificaciones y suscripciones push
 -- - Acta de completado (receipts)
 -- - Facturas (invoices)
--- - Tabla de clientes (para pedidos anónimos) + RPC create_order_with_contact
+-- - Tabla de clientes (para pedidos anónimos)
 -- - Function logs
 -- - RLS coherente (clientes, colaboradores activos, administrador/owner)
 -- - RPCs: accept_order, update_order_status, set_order_amount_admin
@@ -137,12 +137,6 @@ create table if not exists public.clients (
 );
 comment on table public.clients is 'Tabla para clientes no autenticados (invitados).';
 
--- [CORRECCIÓN] Se elimina esta política antigua y demasiado permisiva.
--- Las políticas correctas ('clients_insert_any', 'clients_select_any') se definen más adelante.
--- alter table public.clients enable row level security;
--- drop policy if exists "Public access for clients" on public.clients;
--- create policy "Public access for clients" on public.clients for all using (true) with check (true);
-
 -- Matriculas
 create table if not exists public.matriculas (
   id bigserial primary key,
@@ -256,6 +250,10 @@ create table if not exists public.orders (
   "time" time,
   status text not null default 'Pendiente',
   assigned_to uuid references public.profiles(id) on delete set null,
+  -- Columnas de aceptación para compatibilidad
+  accepted_by uuid,
+  accepted_at timestamptz,
+  -- Fin columnas de aceptación
   assigned_at timestamptz,
   completed_at timestamptz,
   completed_by uuid references public.profiles(id) on delete set null,
@@ -272,10 +270,6 @@ create table if not exists public.orders (
   updated_at timestamptz not null default now(),
   constraint orders_status_check check (status in ('Pendiente','Aceptada','En curso','Completada','Cancelada'))
 );
--- Asegurar columnas de aceptación para compatibilidad con historial
-alter table public.orders add column if not exists accepted_by uuid;
-alter table public.orders add column if not exists accepted_at timestamptz;
-create index if not exists idx_orders_accepted_by on public.orders(accepted_by);
 create index if not exists idx_orders_status on public.orders(status);
 create index if not exists idx_orders_date on public.orders("date");
 create index if not exists idx_orders_assigned_to on public.orders(assigned_to);
@@ -439,47 +433,6 @@ do $$ begin
   on conflict (user_id, endpoint) do update set keys = excluded.keys;
 end $$;
 
--- Acta de completado
-create table if not exists public.order_completion_receipts (
-  id bigserial primary key,
-  order_id bigint not null references public.orders(id) on delete cascade,
-  client_id uuid references public.profiles(id) on delete set null,
-  collaborator_id uuid references public.profiles(id) on delete set null,
-  signed_by_client_at timestamptz,
-  signed_by_collaborator_at timestamptz,
-  signature_data jsonb,
-  notes text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique(order_id)
-);
-create index if not exists idx_receipts_order_id on public.order_completion_receipts(order_id);
-create index if not exists idx_receipts_client_id on public.order_completion_receipts(client_id);
-
-drop trigger if exists trg_receipts_touch_updated on public.order_completion_receipts;
-create trigger trg_receipts_touch_updated
-before update on public.order_completion_receipts
-for each row execute function public.touch_updated_at();
-
-create or replace function public.create_completion_receipt_on_order_complete()
-returns trigger as $$
-begin
-  if new.status = 'Completada' then
-    if not exists (select 1 from public.order_completion_receipts r where r.order_id = new.id) then
-      insert into public.order_completion_receipts(order_id, client_id, collaborator_id, signed_by_collaborator_at)
-      values (new.id, new.client_id, new.assigned_to, coalesce(new.completed_at, now()));
-    end if;
-  end if;
-  return new;
-end;
-$$ language plpgsql;
-
-drop trigger if exists trg_orders_create_receipt on public.orders;
-create trigger trg_orders_create_receipt
-after update on public.orders
-for each row when (old.status is distinct from new.status)
-execute function public.create_completion_receipt_on_order_complete();
-
 -- RPC: crear orden con contacto cuando no hay auth.uid()
 create or replace function public.create_order_with_contact(order_payload jsonb)
 returns public.orders
@@ -575,12 +528,12 @@ begin
   update public.orders
   set
     status = 'Aceptada',
-    assigned_at = coalesce(assigned_at, _now),
     accepted_at = coalesce(accepted_at, _now),
     accepted_by = coalesce(accepted_by, auth.uid()),
+    assigned_to = coalesce(assigned_to, auth.uid()),
+    assigned_at = coalesce(assigned_at, _now),
     tracking_data = coalesce(tracking_data, '[]'::jsonb) || jsonb_build_array(
-      jsonb_build_object('status','en_camino_recoger','date',_now,'description','Orden aceptada, en camino a recoger')
-    )
+      jsonb_build_object('status','en_camino_recoger','date',_now,'description','Orden aceptada, en camino a recoger'))
   where id = order_id or short_id = order_id::text;
 end;
 $$;
@@ -607,6 +560,7 @@ begin
     end,
     assigned_to = coalesce(o.assigned_to, collaborator_id),
     assigned_at = case when new_status = 'en_camino_recoger' then now() else assigned_at end,
+    completed_by = case when lower(new_status) = 'entregado' then collaborator_id else completed_by end,
     completed_at = case when lower(new_status) = 'entregado' then now() else completed_at end,
     last_collab_status = new_status,
     tracking_data = coalesce(o.tracking_data, '[]'::jsonb) || jsonb_build_array(tracking_entry)
@@ -626,7 +580,7 @@ $$;
 
 grant execute on function public.update_order_status(bigint, text, uuid, jsonb) to authenticated;
 
--- Modificar monto (solo service_role)
+-- Modificar monto (solo admin/owner)
 create or replace function public.set_order_amount_admin(
   order_id bigint,
   amount numeric,
@@ -635,7 +589,6 @@ create or replace function public.set_order_amount_admin(
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare updated jsonb;
 begin
-  -- [CORRECCIÓN] Usar helpers de rol para consistencia
   if not (public.is_admin(auth.uid()) or public.is_owner(auth.uid())) then
     raise exception 'Acceso restringido: solo administradores pueden modificar montos.' using errcode = '42501';
   end if;
@@ -758,6 +711,21 @@ create policy admin_manage_profiles on public.profiles
 for all using (public.is_owner(auth.uid()) or public.is_admin(auth.uid()))
 with check (public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
 
+-- Crear acta de completado automáticamente
+create or replace function public.create_completion_receipt_on_order_complete()
+returns trigger as $$
+begin
+  if new.status = 'Completada' then
+    if not exists (select 1 from public.order_completion_receipts r where r.order_id = new.id) then
+      insert into public.order_completion_receipts(order_id, client_id, collaborator_id, signed_by_collaborator_at)
+      values (new.id, new.client_id, new.assigned_to, coalesce(new.completed_at, now()));
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+
 -- Collaborators
 create policy collaborator_self_manage on public.collaborators
 for all using (auth.uid() = id or public.is_owner(auth.uid()) or public.is_admin(auth.uid()))
@@ -844,35 +812,6 @@ for all using (
 create policy admin_all_orders on public.orders
 for all using (public.is_owner(auth.uid()) or public.is_admin(auth.uid()))
 with check (public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
-
-drop policy if exists "collaborators_can_view_pending_orders" on public.orders;
-drop policy if exists "collaborators_can_view_assigned_orders" on public.orders;
-drop policy if exists "collaborators_can_claim_orders" on public.orders;
-drop policy if exists "collaborators_can_update_assigned_orders" on public.orders;
-
-create policy "collaborators_can_view_pending_orders" on public.orders 
-for select using (
-  assigned_to is null and lower(trim(status)) in ('pendiente','pending')
-);
-
-create policy "collaborators_can_view_assigned_orders" on public.orders 
-for select using (
-  assigned_to = auth.uid()
-);
-
-create policy "collaborators_can_claim_orders" on public.orders 
-for update using (
-  assigned_to is null and lower(trim(status)) in ('pendiente','pending')
-) with check (
-  assigned_to = auth.uid()
-);
-
-create policy "collaborators_can_update_assigned_orders" on public.orders 
-for update using (
-  assigned_to = auth.uid()
-) with check (
-  assigned_to = auth.uid()
-);
 
 -- 10) MÉTRICAS DE COLABORADOR
 create table if not exists public.collaborator_performance (
@@ -983,6 +922,12 @@ create trigger trg_orders_track_metrics
 after update on public.orders
 for each row execute function public.track_order_metrics();
 
+-- Trigger para crear acta de completado
+drop trigger if exists trg_orders_create_receipt on public.orders;
+create trigger trg_orders_create_receipt
+after update of status on public.orders
+for each row execute function public.track_order_metrics();
+
 create or replace view public.collaborator_performance_view as
 select
   cp.collaborator_id,
@@ -1078,6 +1023,7 @@ BEGIN
   IF NOT ok THEN
     INSERT INTO public.notification_outbox(order_id, new_status, target_role) VALUES (NEW.id, 'Creada', 'administrador');
   END IF;
+  -- [CORRECCIÓN] El trigger debe retornar NEW en AFTER INSERT
 
   RETURN NEW;
 END;
@@ -1085,12 +1031,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- [MODIFICADO] Función para notificar cambios de estado (a Clientes, Colaboradores y Admins)
 CREATE OR REPLACE FUNCTION public.notify_order_status_change()
-RETURNS trigger AS $$
-DECLARE
-  -- url text := 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification';
-  -- payload json := json_build_object('orderId', NEW.id, 'newStatus', NEW.status);
-  -- [CORRECCIÓN] Usar la función notify-role que es más versátil
-  url text := 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/notify-role';
+RETURNS trigger AS $$ DECLARE url text := 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/notify-role';
   client_payload jsonb;
   collaborator_payload jsonb;
   admin_payload jsonb;
