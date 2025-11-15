@@ -1233,6 +1233,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Mostrar tarjeta de opt-in para notificaciones push (si tenemos id)
         if (savedOrder) {
+          try {
+            const { data: authUserData } = await supabaseConfig.client.auth.getUser();
+            const authId = authUserData?.user?.id || null;
+            if (!authId && savedOrder?.client_contact_id && pushSubscription?.endpoint) {
+              const payload = {
+                client_contact_id: savedOrder.client_contact_id,
+                endpoint: pushSubscription.endpoint,
+                keys: {
+                  p256dh: pushSubscription?.keys?.p256dh || (pushSubscription?.toJSON?.().keys?.p256dh),
+                  auth: pushSubscription?.keys?.auth || (pushSubscription?.toJSON?.().keys?.auth)
+                }
+              };
+              const { error: upsertErr } = await supabaseConfig.client
+                .from('push_subscriptions')
+                .upsert(payload, { onConflict: 'client_contact_id,endpoint' });
+              if (upsertErr) {
+                await supabaseConfig.client.from('push_subscriptions').insert(payload);
+              }
+            }
+          } catch (_) {}
           askForNotificationPermission(savedOrder);
         }
 

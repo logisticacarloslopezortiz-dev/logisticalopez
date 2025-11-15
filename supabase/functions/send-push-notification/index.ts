@@ -166,11 +166,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: 'No se encontró la orden especificada' }, 404);
       }
       const ord = order as unknown as OrderRow;
-      if (ord.client_id) {
-        const subs = await fetchUserSubscriptions(supabase, ord.client_id);
-        pushSubscriptions = subs;
-      }
-      if (pushSubscriptions.length === 0 && ord.client_contact_id) {
+      if (ord.client_contact_id) {
         const { data: subsByContact } = await supabase
           .from('push_subscriptions')
           .select('endpoint, keys')
@@ -178,6 +174,10 @@ Deno.serve(async (req: Request) => {
         if (subsByContact && subsByContact.length > 0) {
           pushSubscriptions = subsByContact as Array<{ endpoint: string; keys: PushSubKeys }>;
         }
+      }
+      if (pushSubscriptions.length === 0 && ord.client_id) {
+        const subs = await fetchUserSubscriptions(supabase, ord.client_id);
+        pushSubscriptions = subs;
       }
     } else if (to_user_id) {
       const subs = await fetchUserSubscriptions(supabase, String(to_user_id));
