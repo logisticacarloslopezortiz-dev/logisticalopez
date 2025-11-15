@@ -1,6 +1,6 @@
 /// <reference path="../globals.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
+import { corsHeaders as _corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
 
 type WebPushSubscription = {
   endpoint: string;
@@ -13,12 +13,24 @@ type NotifyRoleRequest = {
   title?: string;
   body: string;
   icon?: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   targetIds?: string[]; // opcional: limitar a usuarios específicos (UUIDs de auth)
 };
 
-function logDebug(message: string, data?: any) {
+function logDebug(message: string, data?: unknown) {
   console.log(`[notify-role] ${message}`, data ? JSON.stringify(data) : '');
+}
+
+async function logDb(
+  supabase: any,
+  fn_name: string,
+  level: 'info' | 'warning' | 'error',
+  message: string,
+  payload?: unknown
+) {
+  try {
+    await supabase.from('function_logs' as any).insert({ fn_name, level, message, payload } as any);
+  } catch (_) { void 0; }
 }
 
 function errorToString(err: unknown): string {
@@ -30,7 +42,7 @@ function errorToString(err: unknown): string {
   }
 }
 
-async function sendPush(subscription: WebPushSubscription, payload: any) {
+async function sendPush(subscription: WebPushSubscription, payload: unknown) {
   const webpush = await import('https://esm.sh/web-push@3.6.1');
   const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
   const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
@@ -59,6 +71,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: false, error: 'Error de configuración del servidor' }, 500);
     }
 
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+
     const body = (await req.json()) as NotifyRoleRequest;
     const {
       role,
@@ -71,13 +85,12 @@ Deno.serve(async (req: Request) => {
     } = body;
 
     if (!role || !orderId || !messageBody) {
+      await logDb(supabase, 'notify-role', 'warning', 'Body o campos requeridos faltantes', { role, orderId });
       return jsonResponse({ success: false, error: 'role, orderId y body son requeridos' }, 200);
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
-
     // Resolver destinatarios según rol
-    let recipientUserIds: string[] = [];
+    const _recipientUserIds: string[] = [];
 
     if (role === 'cliente') {
       // Notificar al cliente de la orden
@@ -88,6 +101,7 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (error) {
         logDebug('Error obteniendo orden para cliente', { error: errorToString(error) });
+        await logDb(supabase, 'notify-role', 'warning', 'Error obteniendo orden para cliente', { orderId, error: errorToString(error) });
       }
 
       // Intentar subscripciones por client_id
@@ -98,13 +112,14 @@ Deno.serve(async (req: Request) => {
           .select('endpoint, keys')
           .eq('user_id', order.client_id);
         if (!subErr && subs) {
-          subscriptions = subs as any;
+          subscriptions = subs as WebPushSubscription[];
         }
       }
 
       
 
       if (subscriptions.length === 0) {
+        await logDb(supabase, 'notify-role', 'info', 'Cliente sin suscripciones', { orderId });
         return jsonResponse({ success: false, message: 'Cliente sin suscripciones' }, 200);
       }
 
@@ -118,13 +133,14 @@ Deno.serve(async (req: Request) => {
         },
       };
 
-      const results: any[] = [];
+      const results: Array<{ success: boolean; endpoint: string; error?: string }> = [];
       for (const sub of subscriptions) {
         try {
           await sendPush(sub, payload);
           results.push({ success: true, endpoint: sub.endpoint });
         } catch (err) {
           results.push({ success: false, endpoint: sub.endpoint, error: errorToString(err) });
+          await logDb(supabase, 'notify-role', 'error', 'Fallo envío web-push', { endpoint: sub.endpoint, bodySent: payload, error: errorToString(err) });
         }
       }
 
@@ -146,6 +162,7 @@ Deno.serve(async (req: Request) => {
       .eq('role', role);
     if (collabErr) {
       logDebug('Error consultando colaboradores', { error: errorToString(collabErr) });
+      await logDb(supabase, 'notify-role', 'error', 'Error consultando colaboradores', { role, error: errorToString(collabErr) });
       return jsonResponse({ success: false, error: 'No se pudieron obtener colaboradores' }, 200);
     }
 
@@ -157,6 +174,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (ids.length === 0) {
+      await logDb(supabase, 'notify-role', 'info', 'No hay destinatarios para el rol solicitado', { role });
       return jsonResponse({ success: false, message: 'No hay destinatarios para el rol solicitado' }, 200);
     }
 
@@ -166,12 +184,14 @@ Deno.serve(async (req: Request) => {
       .in('user_id', ids);
     if (subsErr) {
       logDebug('Error obteniendo suscripciones', { error: errorToString(subsErr) });
+      await logDb(supabase, 'notify-role', 'error', 'Error obteniendo suscripciones', { role, error: errorToString(subsErr) });
       return jsonResponse({ success: false, error: 'No se pudieron obtener suscripciones' }, 200);
     }
 
     const subRows = (subs ?? []) as Array<{ user_id: string; endpoint: string; keys: { p256dh: string; auth: string } }>;
     const subscriptions = subRows.map((s) => ({ endpoint: s.endpoint, keys: s.keys })) as WebPushSubscription[];
     if (subscriptions.length === 0) {
+      await logDb(supabase, 'notify-role', 'info', 'No hay suscripciones para el rol', { role, ids });
       return jsonResponse({ success: false, message: 'No hay suscripciones para el rol' }, 200);
     }
 
@@ -185,13 +205,14 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    const results: any[] = [];
+    const results: Array<{ success: boolean; endpoint: string; error?: string }> = [];
     for (const sub of subscriptions) {
       try {
         await sendPush(sub, payload);
         results.push({ success: true, endpoint: sub.endpoint });
       } catch (err) {
         results.push({ success: false, endpoint: sub.endpoint, error: errorToString(err) });
+        await logDb(supabase, 'notify-role', 'error', 'Fallo envío web-push', { endpoint: sub.endpoint, bodySent: payload, error: errorToString(err) });
       }
     }
 
@@ -209,6 +230,14 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     const msg = errorToString(error);
     logDebug('Fallo en notify-role', { error: msg });
+    try {
+      const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+      const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE) {
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+        await logDb(supabase, 'notify-role', 'error', msg, {});
+      }
+    } catch (_) { void 0; }
     return jsonResponse({ success: false, error: msg }, 200);
   }
 });

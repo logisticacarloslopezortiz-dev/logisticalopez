@@ -627,6 +627,17 @@ create table if not exists public.invoices (
   data jsonb
 );
 
+create table if not exists public.order_completion_receipts (
+  id bigserial primary key,
+  created_at timestamptz not null default now(),
+  order_id bigint references public.orders(id) on delete cascade,
+  client_id uuid references public.profiles(id) on delete set null,
+  collaborator_id uuid references public.collaborators(id) on delete set null,
+  signed_by_collaborator_at timestamptz,
+  signed_by_client_at timestamptz,
+  data jsonb
+);
+
 -- Function logs (solo lectura admin/owner)
 create table if not exists public.function_logs (
   id bigserial primary key,
@@ -797,6 +808,11 @@ for select using (public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
 -- Clients (pedidos anónimos permitidos)
 create policy clients_insert_any on public.clients for insert to anon, authenticated with check (true);
 create policy clients_select_any on public.clients for select to anon, authenticated using (true);
+
+drop trigger if exists trg_orders_create_receipt_on_complete on public.orders;
+create trigger trg_orders_create_receipt_on_complete
+after update of status on public.orders
+for each row execute function public.create_completion_receipt_on_order_complete();
 
 -- Orders: RLS clave
 -- Insert público/cliente autenticado en estado Pendiente sin assigned_to
@@ -1025,11 +1041,11 @@ BEGIN
   IF functions_url IS NULL OR headers IS NULL THEN
     IF client_payload IS NOT NULL THEN
       INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-      VALUES (NEW.id, 'Creada', 'cliente', COALESCE(NEW.client_id, NEW.client_contact_id), client_payload);
+      VALUES (NEW.id, NEW.status, 'cliente', COALESCE(NEW.client_id, NEW.client_contact_id), client_payload);
     END IF;
     IF admin_payload IS NOT NULL THEN
       INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-      VALUES (NEW.id, 'Creada', 'administrador', admin_payload);
+      VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
     END IF;
   ELSE
     IF NEW.client_id IS NOT NULL THEN
@@ -1043,7 +1059,7 @@ BEGIN
         PERFORM net.http_post(url := functions_url || '/send-push-notification', headers := headers, body := client_body);
       EXCEPTION WHEN OTHERS THEN
         INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-        VALUES (NEW.id, 'Creada', 'cliente', NEW.client_id, client_payload);
+        VALUES (NEW.id, NEW.status, 'cliente', NEW.client_id, client_payload);
         INSERT INTO public.function_logs(fn_name, level, message, payload)
         VALUES ('notify_order_creation', 'error', SQLERRM, jsonb_build_object('target', 'cliente', 'orderId', NEW.id, 'bodySent', client_body));
       END;
@@ -1058,7 +1074,7 @@ BEGIN
         PERFORM net.http_post(url := functions_url || '/send-push-notification', headers := headers, body := contact_body);
       EXCEPTION WHEN OTHERS THEN
         INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-        VALUES (NEW.id, 'Creada', 'cliente', NEW.client_contact_id, client_payload);
+        VALUES (NEW.id, NEW.status, 'cliente', NEW.client_contact_id, client_payload);
         INSERT INTO public.function_logs(fn_name, level, message, payload)
         VALUES ('notify_order_creation', 'error', SQLERRM, jsonb_build_object('target', 'cliente_anonimo', 'orderId', NEW.id, 'bodySent', contact_body));
       END;
@@ -1074,7 +1090,7 @@ BEGIN
       PERFORM net.http_post(url := functions_url || '/notify-role', headers := headers, body := admin_body);
     EXCEPTION WHEN OTHERS THEN
       INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-      VALUES (NEW.id, 'Creada', 'administrador', admin_payload);
+      VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
       INSERT INTO public.function_logs(fn_name, level, message, payload)
       VALUES ('notify_order_creation', 'error', SQLERRM, jsonb_build_object('target', 'administrador', 'orderId', NEW.id, 'bodySent', admin_body));
     END;

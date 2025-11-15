@@ -8,6 +8,18 @@ function logDebug(message: string, data?: unknown) {
   console.log(`[DEBUG] ${message}`, data ? JSON.stringify(data) : '');
 }
 
+async function logDb(
+  supabase: any,
+  fn_name: string,
+  level: 'info' | 'warning' | 'error',
+  message: string,
+  payload?: unknown
+) {
+  try {
+    await supabase.from('function_logs' as any).insert({ fn_name, level, message, payload } as any);
+  } catch (_) { void 0; }
+}
+
 // Tipo de suscripción esperado por web-push (evita conflicto con el DOM PushSubscription)
 interface WebPushSubscription {
   endpoint: string;
@@ -61,7 +73,7 @@ type PushSubRow = { endpoint?: string; keys?: PushSubKeys; p256dh?: string; auth
 type OrderRow = { id: number; client_id: string | null; client_contact_id: string | null };
 
 async function fetchUserSubscriptions(
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: any,
   userId: string
 ): Promise<Array<{ endpoint: string; keys: PushSubKeys }>> {
   const results: Array<{ endpoint: string; keys: PushSubKeys }> = [];
@@ -122,6 +134,7 @@ Deno.serve(async (req: Request) => {
     } = await req.json();
     
     if (!orderId && !to_user_id && !contact_id) {
+      await logDb(supabase, 'send-push-notification', 'warning', 'Solicitud sin destinatarios', { body: await req.clone().json().catch(() => ({})) });
       return jsonResponse({ error: 'Faltan destinatarios: orderId, to_user_id o contact_id' }, 400);
     }
     let finalTitle = title;
@@ -134,6 +147,7 @@ Deno.serve(async (req: Request) => {
       finalTitle = orderId ? `Actualización de la orden #${orderId}` : 'Actualización de orden';
     }
     if (!finalBody) {
+      await logDb(supabase, 'send-push-notification', 'warning', 'Body faltante en notificación', { orderId, to_user_id, contact_id, newStatus });
       return jsonResponse({ error: 'Se requiere body o newStatus para la notificación' }, 400);
     }
     
@@ -148,6 +162,7 @@ Deno.serve(async (req: Request) => {
         .eq('id', orderId)
         .single();
       if (orderError || !order) {
+        await logDb(supabase, 'send-push-notification', 'warning', 'Orden no encontrada', { orderId });
         return jsonResponse({ error: 'No se encontró la orden especificada' }, 404);
       }
       const ord = order as unknown as OrderRow;
@@ -161,7 +176,7 @@ Deno.serve(async (req: Request) => {
           .select('endpoint, keys')
           .eq('client_contact_id', ord.client_contact_id);
         if (subsByContact && subsByContact.length > 0) {
-          pushSubscriptions = subsByContact as any[];
+          pushSubscriptions = subsByContact as Array<{ endpoint: string; keys: PushSubKeys }>;
         }
       }
     } else if (to_user_id) {
@@ -173,16 +188,17 @@ Deno.serve(async (req: Request) => {
         .select('endpoint, keys')
         .eq('client_contact_id', String(contact_id));
       if (subsByContact && subsByContact.length > 0) {
-        pushSubscriptions = subsByContact as any[];
+        pushSubscriptions = subsByContact as Array<{ endpoint: string; keys: PushSubKeys }>;
       }
     }
 
     if (pushSubscriptions.length === 0) {
+      await logDb(supabase, 'send-push-notification', 'info', 'Sin suscripciones para destinatario', { orderId, to_user_id, contact_id });
       return jsonResponse({ success: false, message: 'No hay suscripciones push registradas' }, 200);
     }
     
     // Enviar notificación a todas las suscripciones del cliente
-    const results = [];
+    const results: Array<{ success: boolean; endpoint: string; statusCode?: number | null; error?: string }> = [];
     for (const subscription of pushSubscriptions) {
       const cleanEndpoint = String(subscription.endpoint || '')
         .replace(/[`\s]+/g, '')
@@ -220,6 +236,7 @@ Deno.serve(async (req: Request) => {
           body: typeof errObj?.body === 'string' ? errObj.body.slice(0, 200) : null
         };
         logDebug('Error enviando a suscripción', detail);
+        await logDb(supabase, 'send-push-notification', 'error', 'Fallo envío web-push', { detail, bodySent: notificationPayload });
         if (detail.statusCode === 404 || detail.statusCode === 410) {
           try {
             await supabase
@@ -263,6 +280,14 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error desconocido';
     logDebug('Error al procesar la solicitud', error);
+    try {
+      const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+      const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE) {
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+        await logDb(supabase, 'send-push-notification', 'error', message, {});
+      }
+    } catch (_) { void 0; }
     return jsonResponse({ error: message }, 500);
   }
 });
