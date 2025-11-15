@@ -524,6 +524,8 @@ async function initMap() {
     });
   }
 
+  // [CORRECCIÓN] Verificar si el botón existe antes de añadir el listener
+  // para evitar errores en páginas donde fue eliminado.
   if (useCurrentLocationBtn) {
     useCurrentLocationBtn.addEventListener('click', locateUserAndSetOrigin);
   }

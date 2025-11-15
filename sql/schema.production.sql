@@ -132,8 +132,7 @@ create table if not exists public.clients (
   name text not null,
   phone text,
   email text,
-  created_at timestamptz not null default now(),
-  push_subscription jsonb
+  created_at timestamptz not null default now()
 );
 comment on table public.clients is 'Tabla para clientes no autenticados (invitados).';
 
@@ -443,13 +442,21 @@ declare
   v_order public.orders;
 begin
   if v_client_id is null then -- Usuario anónimo
-    insert into public.clients(name, phone, email, push_subscription)
+    -- [CORRECCIÓN] Ya no se guarda la suscripción en la tabla `clients`.
+    -- Se inserta el cliente y luego se maneja la suscripción por separado.
+    insert into public.clients(name, phone, email)
     values (
       nullif(order_payload->>'name',''),
       nullif(order_payload->>'phone',''),
-      nullif(order_payload->>'email',''),
-      order_payload->'push_subscription'
+      nullif(order_payload->>'email','')
     ) returning id into v_contact_id;
+
+    -- [NUEVO] Insertar la suscripción en la tabla `push_subscriptions` vinculada al cliente.
+    if order_payload->'push_subscription' is not null and order_payload->'push_subscription'->>'endpoint' is not null then
+      insert into public.push_subscriptions(client_contact_id, endpoint, keys)
+      values (v_contact_id, order_payload->'push_subscription'->>'endpoint', order_payload->'push_subscription'->'keys')
+      on conflict (client_contact_id, endpoint) do update set keys = excluded.keys;
+    end if;
 
     insert into public.orders (
       name, phone, email, rnc, empresa,
@@ -457,10 +464,8 @@ begin
       pickup, delivery,
       origin_coords, destination_coords,
       "date", "time",
-      status, estimated_price,
-      tracking_data,
-      client_contact_id,
-      push_subscription
+      status, estimated_price, tracking_data,
+      client_contact_id
     ) values (
       nullif(order_payload->>'name',''),
       nullif(order_payload->>'phone',''),
@@ -478,11 +483,16 @@ begin
       (order_payload->>'time')::time,
       coalesce(order_payload->>'status','Pendiente'),
       order_payload->>'estimated_price',
-      order_payload->'tracking_data',
-      v_contact_id,
-      order_payload->'push_subscription'
+      order_payload->'tracking_data', v_contact_id
     ) returning * into v_order;
   else
+    -- [CORRECCIÓN] Para usuarios autenticados, también guardar la suscripción en la tabla correcta.
+    if order_payload->'push_subscription' is not null and order_payload->'push_subscription'->>'endpoint' is not null then
+      insert into public.push_subscriptions(user_id, endpoint, keys)
+      values (v_client_id, order_payload->'push_subscription'->>'endpoint', order_payload->'push_subscription'->'keys')
+      on conflict (user_id, endpoint) do update set keys = excluded.keys;
+    end if;
+
     insert into public.orders (
       name, phone, email, rnc, empresa,
       service_id, vehicle_id, service_questions,
