@@ -251,6 +251,13 @@ function validateCurrentStep() {
     // Solo validar si el modal existe y no ha sido llenado
     if (modalElement && !modalElement.classList.contains('hidden') && !modalFilled) {
       notifications.warning('Por favor, completa y guarda la información adicional del servicio antes de continuar.', { title: 'Información Requerida' });
+    // Si el modal existe, es obligatorio que se haya llenado.
+    if (modalElement && !modalFilled) {
+      notifications.warning('Por favor, completa y guarda la información adicional del servicio.', { title: 'Información Requerida' });
+      // Abrir el modal si está cerrado para que el usuario lo complete
+      if (modalElement.classList.contains('hidden')) {
+        modalElement.classList.remove('hidden');
+      }
       return false;
     } else if (modalElement && modalElement.classList.contains('hidden') && !modalFilled) {
       // Si el modal existe pero fue cerrado sin guardar, también es inválido
@@ -1233,26 +1240,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Mostrar tarjeta de opt-in para notificaciones push (si tenemos id)
         if (savedOrder) {
-          try {
-            const { data: authUserData } = await supabaseConfig.client.auth.getUser();
-            const authId = authUserData?.user?.id || null;
-            if (!authId && savedOrder?.client_contact_id && pushSubscription?.endpoint) {
-              const payload = {
-                client_contact_id: savedOrder.client_contact_id,
-                endpoint: pushSubscription.endpoint,
-                keys: {
-                  p256dh: pushSubscription?.keys?.p256dh || (pushSubscription?.toJSON?.().keys?.p256dh),
-                  auth: pushSubscription?.keys?.auth || (pushSubscription?.toJSON?.().keys?.auth)
-                }
-              };
-              const { error: upsertErr } = await supabaseConfig.client
-                .from('push_subscriptions')
-                .upsert(payload, { onConflict: 'client_contact_id,endpoint' });
-              if (upsertErr) {
-                await supabaseConfig.client.from('push_subscriptions').insert(payload);
-              }
-            }
-          } catch (_) {}
+          // [CORRECCIÓN] Se elimina el bloque que intentaba guardar la suscripción desde el cliente.
+          // La función RPC `create_order_with_contact` ya se encarga de esto de forma segura en el backend.
+          // Esto resuelve el error 401 Unauthorized.
           askForNotificationPermission(savedOrder);
         }
 
