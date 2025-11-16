@@ -370,6 +370,21 @@ async function generateAndSendInvoice(order) {
 
   // Abrir el PDF en una nueva pestaña para visualización
   doc.output('dataurlnewwindow');
+
+  try {
+    const { data: { session } } = await supabaseConfig.client.auth.getSession();
+    const payload = { orderId: order.short_id || order.id, email: order.email };
+    const { data, error } = await supabaseConfig.client.functions.invoke('send-invoice', { body: payload });
+    if (error) {
+      notifications.error('Error enviando factura por correo');
+    } else {
+      notifications.info('Factura enviada por correo');
+    }
+    console.log('[Admin] send-invoice result:', data || error);
+  } catch (e) {
+    console.error('[Admin] Error invocando send-invoice', e);
+    notifications.error('No se pudo invocar el envío de factura');
+  }
 }
 
 // --- Event Listeners ---

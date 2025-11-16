@@ -1262,6 +1262,25 @@ async function loadInitialOrders() {
     }));
     await preloadCollaboratorNames(state.allOrders);
     
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const raw = params.get('orderId') || params.get('order');
+      if (raw) {
+        let target = null;
+        const num = Number(raw);
+        if (!Number.isNaN(num)) {
+          target = state.allOrders.find(o => Number(o.id) === num) || null;
+        }
+        if (!target) {
+          const s = String(raw);
+          target = state.allOrders.find(o => String(o.short_id || '') === s) || null;
+        }
+        if (target) {
+          state.activeJobId = target.id;
+        }
+      }
+    } catch(_) {}
+    
     filterAndRender();
   } catch (error) {
     console.error('Error al cargar órdenes iniciales:', error);

@@ -266,11 +266,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (Array.isArray(order.tracking_data)) {
             order.tracking_data
-                .filter(tp => tp && tp.status && tp.date)
-                .forEach(tp => pushEvent(tp.status, tp.date));
+                .filter(tp => tp && tp.status && (tp.date || tp.timestamp))
+                .forEach(tp => pushEvent(tp.status, tp.date || tp.timestamp));
         }
 
-        pushEvent('Solicitud Creada', order.created_at);
+        const createdLabel = 'Solicitud Creada';
+        const hasCreated = events.some(ev => ev.name === createdLabel || ev.name === 'Pendiente');
+        if (!hasCreated) pushEvent(createdLabel, order.created_at);
         if (order.assigned_at) pushEvent('Servicio Asignado', order.assigned_at);
         if (order.completed_at) pushEvent('Servicio Completado', order.completed_at);
 
@@ -411,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Inicialización ---
     async function init() {
         const params = new URLSearchParams(window.location.search);
-        const orderIdFromUrl = params.get('order') || params.get('codigo');
+        const orderIdFromUrl = params.get('orderId') || params.get('order') || params.get('codigo');
 
         if (orderIdFromUrl) {
             orderIdInput.value = orderIdFromUrl;

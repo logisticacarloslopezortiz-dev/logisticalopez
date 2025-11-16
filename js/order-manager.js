@@ -441,7 +441,7 @@ const OrderManager = {
           orderId: usedFilter?.val ?? orderId,
           title: 'Estado de orden actualizado',
           body: `La orden #${usedFilter?.val ?? orderId} cambió a "${newStatus}"`,
-          data: { newStatus }
+          data: { newStatus, url: `https://logisticalopezortiz.com/inicio.html?orderId=${usedFilter?.val ?? orderId}` }
         };
         const adminNotify = await supabaseConfig.client.functions.invoke('notify-role', { body: rolePayload });
         console.log('[OrderManager] Notificación rol admin:', adminNotify);

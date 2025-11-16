@@ -24,11 +24,25 @@ async function generateInvoicePDF(orderData: any, businessData: any) {
 }
 
 // Función para enviar email (simulada)
-async function sendEmailWithInvoice(email: string, invoiceData: any, fromEmail?: string) {
-  // Aquí se integraría con un servicio de email como SendGrid, Resend, etc.
-  logDebug('Enviando factura por email', { email, from: fromEmail || 'no-reply@tlc.com', invoiceNumber: invoiceData.invoiceNumber });
-  
-  // Simulamos el envío exitoso
+async function sendEmailWithInvoice(email: string, invoiceData: any, fromEmail?: string, linkUrl?: string) {
+  const apiKey = Deno.env.get('RESEND_API_KEY');
+  const from = fromEmail || Deno.env.get('RESEND_FROM') || 'no-reply@logisticalopezortiz.com';
+  if (apiKey) {
+    const subject = `Factura ${invoiceData.invoiceNumber}`;
+    const html = `<p>Estimado cliente,</p><p>Su factura ${invoiceData.invoiceNumber} ha sido generada.</p>${linkUrl ? `<p>Puede verla aquí: <a href="${linkUrl}" target="_blank">${linkUrl}</a></p>` : ''}<p>Total: ${invoiceData.total}</p><p>Gracias por confiar en nosotros.</p>`;
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ from, to: email, subject, html })
+    });
+    const j = await r.json().catch(() => ({}));
+    const ok = r.ok && j?.id;
+    return { success: !!ok, messageId: j?.id || null };
+  }
+  logDebug('Envío simulado de factura', { email, from, invoiceNumber: invoiceData.invoiceNumber });
   return { success: true, messageId: `msg_${Date.now()}` };
 }
 
@@ -52,18 +66,18 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     
     // Extraer datos del cuerpo de la solicitud
-    const { orderId, email } = await req.json();
+    const { orderId, email, contact_id } = await req.json();
     
     if (!orderId) {
       return jsonResponse({ error: 'Se requiere orderId para generar la factura' }, 400);
     }
     
     // Buscar la orden
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId)
-      .single();
+    const isNumericId = typeof orderId === 'number' || (typeof orderId === 'string' && /^\d+$/.test(orderId));
+    const q = supabase.from('orders').select('*');
+    const { data: order, error: orderError } = isNumericId
+      ? await q.eq('id', Number(orderId)).single()
+      : await q.eq('short_id', String(orderId)).single();
     
     if (orderError || !order) {
       logDebug('Error al buscar la orden', orderError);
@@ -124,11 +138,31 @@ Deno.serve(async (req: Request) => {
     
     // Enviar por email si se proporcionó
     let emailResult = null;
-    const recipientEmail = email || order.email;
+    let recipientEmail = email || order.client_email || order.email;
+    if (!recipientEmail && order.client_contact_id) {
+      try {
+        const { data: contactRow } = await supabase
+          .from('clients')
+          .select('email')
+          .eq('id', order.client_contact_id)
+          .maybeSingle();
+        if (contactRow?.email) recipientEmail = contactRow.email;
+      } catch (_) {}
+    }
+    if (!recipientEmail && contact_id) {
+      try {
+        const { data: contactRow2 } = await supabase
+          .from('clients')
+          .select('email')
+          .eq('id', contact_id)
+          .maybeSingle();
+        if (contactRow2?.email) recipientEmail = contactRow2.email;
+      } catch (_) {}
+    }
     const senderEmail = business?.email || undefined;
     
     if (recipientEmail) {
-      emailResult = await sendEmailWithInvoice(recipientEmail, invoiceData, senderEmail);
+      emailResult = await sendEmailWithInvoice(recipientEmail, invoiceData, senderEmail, publicUrl);
     }
     
     // Registrar la factura en tabla invoices

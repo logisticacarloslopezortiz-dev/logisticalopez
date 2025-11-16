@@ -129,7 +129,7 @@ Deno.serve(async (req: Request) => {
       newStatus,
       title,
       body, 
-      icon = '/img/logo-tlc.png',
+      icon = '/img/android-chrome-192x192.png',
       data = {}
     } = await req.json();
     
@@ -215,6 +215,7 @@ Deno.serve(async (req: Request) => {
           title: finalTitle,
           body: finalBody,
           icon,
+          badge: '/img/favicon-32x32.png',
           vibrate: [100, 50, 100],
           data: {
             orderId,

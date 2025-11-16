@@ -1,7 +1,7 @@
 // sw.js
 
 // COMENTARIO: Se añade versionado de caché para forzar la actualización de archivos.
-const CACHE_NAME = 'tlc-cache-v3';
+const CACHE_NAME = 'tlc-cache-v4';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -120,11 +120,16 @@ self.addEventListener('push', (event) => {
   const icon = payload.icon || '/img/android-chrome-192x192.png';
   const badge = payload.badge || '/img/favicon-32x32.png';
   const dataObj = payload.data || {};
+  const orderId = dataObj.orderId || null;
+  const builtUrl = dataObj.url ? dataObj.url : (orderId ? `/seguimiento.html?orderId=${orderId}` : '/');
   const options = {
     body,
     icon,
     badge,
-    data: { url: dataObj.url || '/' }
+    requireInteraction: true,
+    renotify: true,
+    tag: orderId ? `tlc-order-${orderId}` : 'tlc-order',
+    data: { url: builtUrl }
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });

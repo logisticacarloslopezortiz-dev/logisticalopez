@@ -289,7 +289,7 @@ create or replace function public.set_order_tracking_url()
 returns trigger as $$
 begin
   if new.tracking_url is null or new.tracking_url = '' then
-    new.tracking_url := '/seguimiento.html?codigo=' || coalesce(new.short_id::text, new.id::text);
+    new.tracking_url := '/seguimiento.html?orderId=' || coalesce(new.short_id::text, new.id::text);
   end if;
   return new;
 end;
@@ -1030,7 +1030,8 @@ BEGIN
     'role', 'administrador',
     'orderId', NEW.id,
     'title', '📢 Nueva Solicitud Recibida',
-    'body', 'Se ha creado la solicitud #' || NEW.short_id || ' por ' || coalesce(NEW.name, 'No especificado') || '.'
+    'body', 'Se ha creado la solicitud #' || NEW.short_id || ' por ' || coalesce(NEW.name, 'No especificado') || '.',
+    'data', jsonb_build_object('url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text))
   );
   SELECT current_setting('app.settings.functions_url', true) INTO functions_url;
   SELECT current_setting('app.settings.service_role_key', true) INTO service_role;
@@ -1085,7 +1086,8 @@ BEGIN
         'role', 'administrador',
         'orderId', NEW.id,
         'title', '📢 Nueva Solicitud Recibida',
-        'body', 'Se ha creado la solicitud #' || NEW.short_id || ' por ' || coalesce(NEW.name, 'No especificado') || '.'
+        'body', 'Se ha creado la solicitud #' || NEW.short_id || ' por ' || coalesce(NEW.name, 'No especificado') || '.',
+        'data', jsonb_build_object('url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text))
       );
       PERFORM net.http_post(url := functions_url || '/notify-role', headers := headers, body := admin_body);
     EXCEPTION WHEN OTHERS THEN
@@ -1133,7 +1135,7 @@ BEGIN
         INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
         VALUES (NEW.id, NEW.status, 'cliente', COALESCE(NEW.client_id, NEW.client_contact_id), client_payload);
       END IF;
-      admin_payload := jsonb_build_object('role', 'administrador', 'orderId', NEW.id, 'title', 'Estado de orden actualizado', 'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status);
+      admin_payload := jsonb_build_object('role', 'administrador', 'orderId', NEW.id, 'title', 'Estado de orden actualizado', 'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status, 'data', jsonb_build_object('url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text)));
       INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
       VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
     ELSE
@@ -1176,11 +1178,12 @@ BEGIN
           'role', 'administrador',
           'orderId', NEW.id,
           'title', 'Estado de orden actualizado',
-          'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status
+          'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status,
+          'data', jsonb_build_object('url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text))
         );
         PERFORM net.http_post(url := functions_url || '/notify-role', headers := headers, body := admin_body);
       EXCEPTION WHEN OTHERS THEN
-        admin_payload := jsonb_build_object('role', 'administrador', 'orderId', NEW.id, 'title', 'Estado de orden actualizado', 'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status);
+        admin_payload := jsonb_build_object('role', 'administrador', 'orderId', NEW.id, 'title', 'Estado de orden actualizado', 'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status, 'data', jsonb_build_object('url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text)));
         INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
         VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
         INSERT INTO public.function_logs(fn_name, level, message, payload)
@@ -1242,3 +1245,29 @@ CREATE TABLE IF NOT EXISTS public.notification_outbox (
   created_at timestamptz not null default now(),
   processed_at timestamptz
 );
+-- Notificar al colaborador cuando se le asigna una orden
+create or replace function public.notify_assigned_collaborator()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if NEW.assigned_to is not null and (OLD.assigned_to is distinct from NEW.assigned_to) then
+    insert into public.notification_outbox(order_id, new_status, target_user_id, payload)
+    values (
+      NEW.id,
+      'Asignada',
+      NEW.assigned_to,
+      jsonb_build_object(
+        'title','🛠️ Orden asignada',
+        'body','Se te asignó la orden #' || coalesce(NEW.short_id::text, NEW.id::text),
+        'data', jsonb_build_object('url','https://logisticalopezortiz.com/panel-colaborador.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text))
+      )
+    );
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_notify_assigned_collaborator on public.orders;
+create trigger trg_notify_assigned_collaborator
+after update of assigned_to on public.orders
+for each row
+execute function public.notify_assigned_collaborator();
