@@ -374,10 +374,15 @@ if (!window.supabaseConfig) {
 
     // Saneamiento defensivo
     const payload = { id: 1, ...settingsData };
-    // rnc puede ser string o null; evitar tipos inválidos
+    // rnc: normalizar a solo dígitos y validar longitud (9-11)
     if (Object.prototype.hasOwnProperty.call(payload, 'rnc')) {
-      const val = payload.rnc;
-      payload.rnc = (val === undefined || val === null) ? null : String(val).trim() || null;
+      const raw = payload.rnc;
+      let normalized = (raw === undefined || raw === null) ? null : String(raw).replace(/\D+/g, '');
+      if (normalized && normalized.length === 0) normalized = null;
+      if (normalized && (normalized.length < 9 || normalized.length > 11)) {
+        throw new Error('RNC inválido: debe contener entre 9 y 11 dígitos');
+      }
+      payload.rnc = normalized;
     }
     // quotation_rates debe ser objeto JSON serializable
     if (Object.prototype.hasOwnProperty.call(payload, 'quotation_rates')) {
@@ -395,7 +400,11 @@ if (!window.supabaseConfig) {
       .select();
     if (error) {
       console.error('Error detallado al guardar business:', error);
-      throw new Error(`Error al guardar configuración: ${error.message}`);
+      const msg = String(error.message || 'Error');
+      if (/business_rnc_check/i.test(msg)) {
+        throw new Error('Error al guardar configuración: RNC inválido (solo dígitos, 9-11)');
+      }
+      throw new Error(`Error al guardar configuración: ${msg}`);
     }
     console.log('Configuración guardada exitosamente:', data);
     return data;

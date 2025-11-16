@@ -196,7 +196,7 @@
           <!-- Paso 4: Ubicación -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="4">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 4: Dirección de Origen y Destino</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div id="address-inputs" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 hidden">
               <div class="relative">
                 <div class="flex justify-between items-center mb-1">
                   <label for="pickupAddress" class="block text-sm font-medium text-gray-700">📍 Dirección de Origen</label>
@@ -208,9 +208,13 @@
                 <input type="text" id="deliveryAddress" placeholder="Primero selecciona el origen" class="w-full border p-2 rounded focus:ring-2 focus:ring-azulClaro disabled:bg-gray-100 disabled:cursor-not-allowed" disabled>
               </div>
             </div>
+            <div class="flex justify-end -mt-2 mb-2">
+              <button type="button" id="reset-map-btn" class="hidden bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded hover:bg-gray-50">Cambiar direcciones</button>
+            </div>
             <!-- Contenedor del mapa mejorado para móvil -->
             <div id="map-container" class="relative transition-all duration-300">
-              <div id="map" class="w-full h-80 rounded-lg border-2 border-green-300 shadow-inner relative flex items-center justify-center bg-green-50">
+              <div id="map-instruction-text" class="absolute top-2 left-2 z-20 bg-white/90 text-gray-800 text-xs md:text-sm px-3 py-2 rounded">Marque primero el punto de origen y luego el de destino</div>
+              <div id="map" class="w-full h-[65vh] rounded-lg border border-gray-200 shadow relative bg-white">
                 <div id="map-loader" class="text-center p-8 text-gray-500 flex flex-col items-center gap-2 z-10">
                   <i class="fas fa-spinner fa-spin text-2xl text-azulClaro"></i>
                   <span id="map-loader-text">Cargando mapa...</span>
@@ -220,6 +224,7 @@
               <button type="button" id="expand-map-btn" class="md:hidden absolute top-2 right-2 z-20 bg-white p-2 rounded-full shadow-lg text-azulOscuro">
                 <i class="fas fa-expand"></i>
               </button>
+              <button type="button" id="reset-map-chip" class="hidden absolute top-2 right-14 z-20 bg-white px-3 py-2 rounded-full shadow text-gray-700 border border-gray-300">Cambiar</button>
               <!-- Botón para confirmar puntos en vista expandida -->
               <button type="button" id="confirm-map-points-btn" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-[110] bg-azulClaro text-white px-6 py-3 rounded-full shadow-lg font-semibold">
                 Confirmar Puntos
@@ -574,11 +579,56 @@
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
-                  <i class="fas fa-tv text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Nevera/TV</label>
+                  <i class="fas fa-desktop text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Escritorios</label>
                   <div class="flex items-center mt-2">
                     <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_electro_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <input type="number" min="0" name="item_escritorios_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
+                </div>
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-table text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Mesas</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_mesas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
+                </div>
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-archive text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Armarios</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_armarios_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
+                </div>
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-fire text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Estufas</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_estufas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
+                </div>
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-tv text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">TV</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_tv_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                  </div>
+                </div>
+                <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+                  <i class="fas fa-snowflake text-2xl text-azulClaro mb-2"></i>
+                  <label class="font-medium text-sm text-gray-800">Neveras</label>
+                  <div class="flex items-center mt-2">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
+                    <input type="number" min="0" name="item_neveras_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
                     <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
                   </div>
                 </div>
@@ -637,6 +687,7 @@
                       <option value="">Acceso</option>
                       <option value="ascensor">Ascensor</option>
                       <option value="escaleras">Escaleras</option>
+                      <option value="primer_nivel">Primer nivel</option>
                     </select>
                   </div>
                 </div>
@@ -659,6 +710,7 @@
                       <option value="">Acceso</option>
                       <option value="ascensor">Ascensor</option>
                       <option value="escaleras">Escaleras</option>
+                      <option value="primer_nivel">Primer nivel</option>
                     </select>
                   </div>
                 </div>

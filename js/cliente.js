@@ -458,11 +458,19 @@ async function initMap() {
 
   map = L.map(mapElement).setView([18.4273, -70.0976], 13);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  let layersControl = null;
+  let layersHidden = false;
+  const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OSM &copy; CARTO',
     subdomains: 'abcd',
     maxZoom: 19
-  }).addTo(map).on('load', () => loader.style.display = 'none');
+  });
+  const stadiaOutdoors = L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', {
+    attribution: 'Map tiles by Stadia Maps, Data by OpenMapTiles & OpenStreetMap contributors',
+    maxZoom: 20
+  });
+  cartoVoyager.addTo(map).on('load', () => loader.style.display = 'none');
+  layersControl = L.control.layers({ 'CARTO Voyager': cartoVoyager, 'Stadia Outdoors': stadiaOutdoors }).addTo(map);
 
 
   // --- Iconos personalizados para los marcadores ---
@@ -485,13 +493,8 @@ async function initMap() {
   });
 
   // --- Búsqueda de direcciones ---
-  const searchControl = new GeoSearch.GeoSearchControl({
-    provider: new GeoSearch.OpenStreetMapProvider(),
-    style: 'bar',
-    showMarker: false,
-    autoClose: true,
-  });
-  map.addControl(searchControl);
+  let searchControl = null;
+  let searchAdded = false;
 
   map.on('geosearch/showlocation', (result) => {
     updateMarkerAndAddress({ lat: result.location.y, lng: result.location.x }, result.location.label);
@@ -502,10 +505,14 @@ async function initMap() {
   const deliveryInput = document.getElementById('deliveryAddress');
   const useCurrentLocationBtn = document.getElementById('use-current-location-btn');
   const instructionText = document.getElementById('map-instruction-text');
+  const addressInputs = document.getElementById('address-inputs');
+  const mapContainer = document.getElementById('map-container');
+  const mapEl = document.getElementById('map');
+  const resetMapBtn = document.getElementById('reset-map-btn');
+  const resetMapChip = document.getElementById('reset-map-chip');
   // --- INICIO: Mejoras para mapa en móvil ---
   const expandMapBtn = document.getElementById('expand-map-btn');
   const confirmMapPointsBtn = document.getElementById('confirm-map-points-btn');
-  const mapContainer = document.getElementById('map-container');
 
   map.on('click', (e) => { updateMarkerAndAddress(e.latlng); });
 
@@ -544,6 +551,36 @@ async function initMap() {
       map.invalidateSize();
     });
   }
+
+  function resetMap() {
+      if (addressInputs) addressInputs.classList.add('hidden');
+      if (instructionText) instructionText.classList.remove('hidden');
+      isOriginSet = false;
+      if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
+      if (destinationMarker) { map.removeLayer(destinationMarker); destinationMarker = null; }
+      if (pickupInput) pickupInput.value = '';
+      if (deliveryInput) {
+        deliveryInput.value = '';
+        deliveryInput.disabled = true;
+        deliveryInput.placeholder = 'Primero selecciona el origen';
+      }
+      if (mapEl) {
+        mapEl.classList.add('h-[65vh]');
+        mapEl.classList.remove('h-80');
+        setTimeout(() => map.invalidateSize(), 100);
+      }
+      if (searchAdded && searchControl) {
+        try { map.removeControl(searchControl); } catch (_) {}
+        searchAdded = false;
+        searchControl = null;
+      }
+      if (resetMapBtn) resetMapBtn.classList.add('hidden');
+      if (resetMapChip) resetMapChip.classList.add('hidden');
+      if (layersControl && layersHidden) { layersControl.addTo(map); layersHidden = false; }
+      if (expandMapBtn) expandMapBtn.classList.remove('hidden');
+    }
+  if (resetMapBtn) { resetMapBtn.addEventListener('click', resetMap); }
+  if (resetMapChip) { resetMapChip.addEventListener('click', resetMap); }
 
   // Lógica principal para actualizar marcadores
   async function updateMarkerAndAddress(latlng, label = null) {
@@ -614,6 +651,37 @@ async function initMap() {
 
     calculateAndDisplayDistance();
     fitMapToBounds();
+
+    if (originMarker && destinationMarker) {
+      if (addressInputs) addressInputs.classList.remove('hidden');
+      if (instructionText) instructionText.classList.add('hidden');
+      if (mapEl) {
+        mapEl.classList.remove('h-[65vh]');
+        mapEl.classList.add('h-80');
+        setTimeout(() => map.invalidateSize(), 100);
+      }
+      if (!searchAdded) {
+        searchControl = new GeoSearch.GeoSearchControl({
+          provider: new GeoSearch.OpenStreetMapProvider(),
+          style: 'bar',
+          showMarker: false,
+          autoClose: true,
+        });
+        map.addControl(searchControl);
+        searchAdded = true;
+      }
+      if (layersControl && !layersHidden) { try { map.removeControl(layersControl); } catch(_){} layersHidden = true; }
+      if (expandMapBtn) expandMapBtn.classList.add('hidden');
+      if (resetMapChip) resetMapChip.classList.remove('hidden');
+      if (resetMapBtn) resetMapBtn.classList.remove('hidden');
+      loadPOIsForBounds();
+      if (!map._poiMoveHandlerAttached) {
+        map.on('moveend', () => {
+          loadPOIsForBounds();
+        });
+        map._poiMoveHandlerAttached = true;
+      }
+    }
   }
   // Búsqueda programática desde inputs con debounce para UX móvil
   const provider = new GeoSearch.OpenStreetMapProvider();
@@ -679,6 +747,46 @@ function calculateAndDisplayDistance() {
   } else {
     distanceContainer.classList.add('hidden');
   }
+}
+
+let poiLayer = null;
+function loadPOIsForBounds() {
+  const b = map.getBounds();
+  const s = b.getSouth();
+  const w = b.getWest();
+  const n = b.getNorth();
+  const e = b.getEast();
+  const query = `[
+    out:json][timeout:25];(
+    node["amenity"~"school|hospital|clinic|university|police|fire_station"](${s},${w},${n},${e});
+    node["shop"~"mall|supermarket"](${s},${w},${n},${e});
+    node["leisure"~"park"](${s},${w},${n},${e});
+  );out center;`;
+  fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    body: query
+  }).then(r => r.json()).then(json => {
+    if (!poiLayer) { poiLayer = L.layerGroup().addTo(map); } else { poiLayer.clearLayers(); }
+    const iconFor = (tags) => {
+      if (tags.amenity === 'hospital' || tags.amenity === 'clinic') return L.divIcon({ html: '<i class="fas fa-hospital text-red-600"></i>', className: 'poi-icon' });
+      if (tags.amenity === 'school' || tags.amenity === 'university') return L.divIcon({ html: '<i class="fas fa-school text-blue-600"></i>', className: 'poi-icon' });
+      if (tags.shop === 'mall') return L.divIcon({ html: '<i class="fas fa-shopping-bag text-pink-600"></i>', className: 'poi-icon' });
+      if (tags.shop === 'supermarket') return L.divIcon({ html: '<i class="fas fa-store text-green-600"></i>', className: 'poi-icon' });
+      if (tags.leisure === 'park') return L.divIcon({ html: '<i class="fas fa-tree text-green-700"></i>', className: 'poi-icon' });
+      if (tags.amenity === 'police') return L.divIcon({ html: '<i class="fas fa-shield-alt text-gray-700"></i>', className: 'poi-icon' });
+      if (tags.amenity === 'fire_station') return L.divIcon({ html: '<i class="fas fa-fire-extinguisher text-orange-600"></i>', className: 'poi-icon' });
+      return L.divIcon({ html: '<i class="fas fa-map-marker-alt text-azulClaro"></i>', className: 'poi-icon' });
+    };
+    json.elements.forEach(el => {
+      const lat = el.lat || el.center?.lat;
+      const lon = el.lon || el.center?.lon;
+      if (!lat || !lon) return;
+      const tags = el.tags || {};
+      const name = tags.name || 'Sin nombre';
+      const marker = L.marker([lat, lon], { icon: iconFor(tags) }).bindTooltip(name, { permanent: false });
+      poiLayer.addLayer(marker);
+    });
+  }).catch(() => {});
 }
 
 // --- Lógica de Notificaciones Push ---
