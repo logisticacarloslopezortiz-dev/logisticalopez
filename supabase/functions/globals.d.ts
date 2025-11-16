@@ -16,6 +16,11 @@ declare module 'https://esm.sh/@supabase/supabase-js@2.45.4' {
   export function createClient(url: string, key: string, options?: any): any;
 }
 
+// Declaración mínima para el specifier bare "@supabase/supabase-js" usado con import_map
+declare module '@supabase/supabase-js' {
+  export function createClient(url: string, key: string, options?: any): any;
+}
+
 // Declaración mínima del módulo web-push en esm.sh para Deno
 declare module 'https://esm.sh/web-push@3.6.1' {
   export function setVapidDetails(subject: string, publicKey: string, privateKey: string): void;
@@ -28,6 +33,17 @@ declare module 'https://esm.sh/web-push@3.6.1' {
 }
 
 declare module 'https://esm.sh/web-push@3.6.7' {
+  export function setVapidDetails(subject: string, publicKey: string, privateKey: string): void;
+  export function sendNotification(subscription: any, payload: string, options?: any): Promise<any>;
+  const _default: {
+    setVapidDetails: typeof setVapidDetails;
+    sendNotification: typeof sendNotification;
+  };
+  export default _default;
+}
+
+// Declaración mínima para el specifier mapeado "web-push" via import_map
+declare module 'web-push' {
   export function setVapidDetails(subject: string, publicKey: string, privateKey: string): void;
   export function sendNotification(subscription: any, payload: string, options?: any): Promise<any>;
   const _default: {

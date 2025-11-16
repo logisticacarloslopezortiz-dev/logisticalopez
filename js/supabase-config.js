@@ -171,7 +171,8 @@ if (!window.supabaseConfig) {
     const { data, error } = await this.client
       .from('orders')
       .select('*')
-      .eq('assigned_to', collaboratorId);
+      .eq('assigned_to', collaboratorId)
+      .not('status','in', ['Completada','Cancelada']);
     if (error) console.error(`Error fetching orders for collaborator ${collaboratorId}:`, error);
     return data || [];
   },

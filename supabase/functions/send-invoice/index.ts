@@ -1,15 +1,19 @@
 /// <reference path="../globals.d.ts" />
 // Función para generar y enviar facturas por email
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
+import { createClient } from '@supabase/supabase-js';
+import { handleCors, jsonResponse } from '../cors-config.ts';
 
 // Función para registrar logs
-function logDebug(message: string, data?: any) {
+function logDebug(message: string, data?: unknown) {
   console.log(`[DEBUG] ${message}`, data ? JSON.stringify(data) : '');
 }
 
+type OrderDataMinimal = { id: number; short_id?: string; monto_cobrado?: number; client_id?: string | null; client_email?: string | null; email?: string | null; client_contact_id?: string | null };
+type BusinessDataMinimal = { email?: string | null };
+type InvoiceData = { business: BusinessDataMinimal; order: OrderDataMinimal; generatedAt: string; invoiceNumber: string; total: number };
+
 // Función para generar PDF de factura (simulada)
-async function generateInvoicePDF(orderData: any, businessData: any) {
+function generateInvoicePDF(orderData: OrderDataMinimal, businessData: BusinessDataMinimal): InvoiceData {
   // Por ahora retornamos un PDF simulado
   // En el futuro se puede integrar con una librería de PDF como jsPDF
   const invoiceContent = {
@@ -24,7 +28,7 @@ async function generateInvoicePDF(orderData: any, businessData: any) {
 }
 
 // Función para enviar email (simulada)
-async function sendEmailWithInvoice(email: string, invoiceData: any, fromEmail?: string, linkUrl?: string) {
+async function sendEmailWithInvoice(email: string, invoiceData: InvoiceData, fromEmail?: string, linkUrl?: string) {
   const apiKey = Deno.env.get('RESEND_API_KEY');
   const from = fromEmail || Deno.env.get('RESEND_FROM') || 'no-reply@logisticalopezortiz.com';
   if (apiKey) {
@@ -103,26 +107,25 @@ Deno.serve(async (req: Request) => {
     const fileName = `Factura-${order.short_id || order.id}-${Date.now()}.pdf`;
     const filePath = `${order.client_id ? `${order.client_id}/` : ''}${fileName}`;
     const fileBytes = new TextEncoder().encode(JSON.stringify(invoiceData, null, 2));
-    let uploadError = null;
-    let uploadData = null;
+    let uploadError: unknown = null;
     try {
       const res = await supabase.storage.from('invoices')
         .upload(filePath, fileBytes, { contentType: 'application/pdf', upsert: true });
       uploadError = res.error;
-      uploadData = res.data;
     } catch (e) {
-      uploadError = e as any;
+      uploadError = e;
     }
     if (uploadError) {
       // Intentar crear el bucket si no existe y reintentar
-      const msg = String(uploadError?.message || uploadError);
+      const msg = typeof uploadError === 'object' && uploadError && 'message' in (uploadError as Record<string, unknown>)
+        ? String((uploadError as Record<string, unknown>).message)
+        : String(uploadError);
       if (/Bucket not found|does not exist/i.test(msg)) {
         try {
           await supabase.storage.createBucket('invoices', { public: true });
           const retry = await supabase.storage.from('invoices')
             .upload(filePath, fileBytes, { contentType: 'application/pdf', upsert: true });
           uploadError = retry.error;
-          uploadData = retry.data;
         } catch (createErr) {
           logDebug('No se pudo crear el bucket invoices', createErr);
         }
@@ -147,7 +150,7 @@ Deno.serve(async (req: Request) => {
           .eq('id', order.client_contact_id)
           .maybeSingle();
         if (contactRow?.email) recipientEmail = contactRow.email;
-      } catch (_) {}
+      } catch (err) { logDebug('No se pudo obtener email de contacto', err); }
     }
     if (!recipientEmail && contact_id) {
       try {
@@ -157,7 +160,7 @@ Deno.serve(async (req: Request) => {
           .eq('id', contact_id)
           .maybeSingle();
         if (contactRow2?.email) recipientEmail = contactRow2.email;
-      } catch (_) {}
+      } catch (err) { logDebug('No se pudo obtener email por contact_id', err); }
     }
     const senderEmail = business?.email || undefined;
     

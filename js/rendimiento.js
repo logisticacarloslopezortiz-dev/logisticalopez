@@ -34,7 +34,8 @@ async function fetchCollaboratorOrders(collabId) {
         const { data, error } = await supabaseConfig.client
             .from('orders')
             .select(`*, service:services(name), vehicle:vehicles(name)`) 
-            .or(`assigned_to.eq.${collabId},status.eq.Completada`)
+            .eq('assigned_to', collabId)
+            .not('status','in',['Completada','Cancelada'])
             .order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []).map(o => ({

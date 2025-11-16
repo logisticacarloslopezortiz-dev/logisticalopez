@@ -379,3 +379,18 @@ entrypoint = "./functions/send-notification/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/send-notification/*.html" ]
+
+[functions.process-outbox]
+enabled = true
+verify_jwt = true
+import_map = "./functions/process-outbox/deno.json"
+entrypoint = "./functions/process-outbox/index.ts"
+# Ejecutar de forma periódica para baja latencia de entrega
+# Nota: algunos entornos sólo aceptan especificación por minuto. Donde se soporte segundos, usar el campo de segundos.
+schedule = "*/1 * * * * *"
+
+[functions.send-invoice]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-invoice/deno.json"
+entrypoint = "./functions/send-invoice/index.ts"

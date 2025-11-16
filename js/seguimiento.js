@@ -80,25 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const clientToUse = session ? supabaseConfig.client : supabaseConfig.getPublicClient();
             console.log(`[Seguimiento] Usando cliente: ${session ? 'autenticado' : 'público'}`);
 
-            let query = clientToUse
-                .from('orders')
-                .select('*, service:services(name), vehicle:vehicles(name)');
-
-            if (isHex32) {
-                // Este campo debería ser legible públicamente por RLS
-                query = query.eq('client_tracking_id', orderIdValue.toLowerCase());
-            } else if (isUUID) {
-                query = query.eq('id', orderIdValue);
-            } else if (isNumeric) {
-                query = query.eq('supabase_seq_id', Number(orderIdValue));
-            } else if (looksLikeShortId) {
-                // Compatibilidad con formato anterior
-                query = query.eq('short_id', orderIdValue);
-            } else {
-                throw new Error('Formato de ID no válido. Use: ID de seguimiento (32 hex), ID secuencial (números) o UUID');
-            }
-
-            const { data: order, error } = await query.single();
+            const { data: order, error } = await clientToUse.rpc('get_order_details_public', { identifier: orderIdValue });
 
             if (error || !order) {
                 throw new Error('No se encontró ninguna solicitud con ese ID.');
@@ -108,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
             displayOrderDetails(currentOrder);
 
             // Suscribirse a cambios en tiempo real para esta orden
-            // Suscribirse usando el ID primario tal cual (puede ser UUID)
             subscribeToOrderUpdates(currentOrder.id);
 
         } catch (err) {
@@ -148,6 +129,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (payload.new.status && payload.old.status !== payload.new.status) {
                         showStatusNotification(payload.new.status);
                     }
+
+                    try {
+                        var upd = payload.new.updated_at || payload.new.timestamp || payload.new.date || null;
+                        if (upd) {
+                            var ms = Date.now() - Date.parse(upd);
+                            if (!isNaN(ms) && ms >= 0 && ms < 600000) {
+                                localStorage.setItem('tlc_outbox_latency_ms', String(ms));
+                                var a = document.getElementById('notifLatencyIndicator');
+                                if (a) a.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
+                                var b = document.getElementById('notifLatencyIndicatorCliente');
+                                if (b) b.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
+                                var c = document.getElementById('notifLatencyIndicatorCollab');
+                                if (c) c.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
+                            }
+                        }
+                    } catch (_) {}
                 }
 
                 // En DELETE, mostrar mensaje y volver al login/inicio

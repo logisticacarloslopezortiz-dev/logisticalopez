@@ -156,6 +156,7 @@
             Volver
           </a>
         </div>
+        <div id="notifLatencyIndicator" class="mt-2 text-xs text-white/80">Notificaciones ~1s</div>
       </div>
     </header>
 
@@ -253,5 +254,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/seguimiento.js"></script>
+  <script>
+    (function(){
+      try{
+        var el = document.getElementById('notifLatencyIndicator');
+        if(!el) return;
+        var v = localStorage.getItem('tlc_outbox_latency_ms');
+        if(v){
+          var ms = parseInt(v,10);
+          if(!isNaN(ms)) el.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
+        }
+      }catch(_){}
+    })();
+  </script>
 </body>
 </html>

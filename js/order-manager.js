@@ -92,7 +92,7 @@ const OrderManager = {
     if (!Number.isFinite(normalizedId)) {
       console.warn('[OrderManager] ID inválido para RPC accept_order; aplicando fallback...');
       this._toast('ID inválido para RPC. Aplicando fallback…', 'warning');
-      return await this.actualizarEstadoPedido(orderId, 'en_camino_recoger', additionalData);
+      return await this.actualizarEstadoPedido(orderId, 'cargando', additionalData);
     }
 
     const rpcPayload = { order_id: normalizedId };

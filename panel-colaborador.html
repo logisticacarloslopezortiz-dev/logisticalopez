@@ -194,7 +194,21 @@
       </div>
       <div class="w-10"></div> <!-- Spacer for centering -->
     </div>
+    <div class="px-4 pb-2 text-xs text-gray-500" id="notifLatencyIndicatorCollab">Notificaciones ~1s</div>
   </header>
+  <script>
+    (function(){
+      try{
+        var el = document.getElementById('notifLatencyIndicatorCollab');
+        if(!el) return;
+        var v = localStorage.getItem('tlc_outbox_latency_ms');
+        if(v){
+          var ms = parseInt(v,10);
+          if(!isNaN(ms)) el.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
+        }
+      }catch(_){}
+    })();
+  </script>
 
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
   <div id="sidebarHoverHandle" class="sidebar-hover-handle"></div>
