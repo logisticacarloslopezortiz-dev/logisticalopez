@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const clientToUse = session ? supabaseConfig.client : supabaseConfig.getPublicClient();
             console.log(`[Seguimiento] Usando cliente: ${session ? 'autenticado' : 'público'}`);
 
-            const { data: order, error } = await clientToUse.rpc('get_order_details_public', { identifier: orderIdValue });
+            const { data: order, error } = await clientToUse.rpc('get_order_details_public', { identifier: String(orderIdValue) });
 
             if (error || !order) {
                 throw new Error('No se encontró ninguna solicitud con ese ID.');

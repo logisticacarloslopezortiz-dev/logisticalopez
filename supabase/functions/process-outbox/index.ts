@@ -256,7 +256,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const rows = (pending ?? []) as OutboxRow[];
-    for (const row of rows) {
+    const processingPromises = rows.map(row => (async () => {
       try {
         await processRow(supabase, row);
         await supabase
@@ -266,7 +266,9 @@ Deno.serve(async (req: Request) => {
       } catch (err) {
         await logDb(supabase, 'process-outbox', 'error', 'Error procesando outbox row', { outboxId: row.id, error: errToString(err) });
       }
-    }
+    })());
+
+    await Promise.all(processingPromises);
 
     return jsonResponse({ success: true, processed: rows.length });
   } catch (error) {
