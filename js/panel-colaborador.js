@@ -1426,10 +1426,16 @@ function handleRealtimeUpdate(payload) {
         const merged = { ...prev, ...newRecord, service: prev.service, vehicle: prev.vehicle };
         state.allOrders[index] = merged;
       } else if (newRecord.assigned_to === collabId) {
-        // La orden no existe, pero ahora está asignada a mí. La buscamos y la inyectamos.
-        fetchAndInjectOrder(newRecord.id).then(injected => {
-          if (injected) filterAndRender(); // Re-renderizar solo si se añadió algo
-        });
+        // La orden no existe, pero ahora está asignada a mí. La añadimos directamente.
+        const normalized = {
+          ...newRecord,
+          service: newRecord.service?.name || newRecord.service || 'Sin servicio',
+          vehicle: newRecord.vehicle?.name || newRecord.vehicle || 'Sin vehículo',
+          origin_coords: parseCoordinates(newRecord.origin_coords),
+          destination_coords: parseCoordinates(newRecord.destination_coords)
+        };
+        state.allOrders.unshift(normalized);
+        filterAndRender(); // Forzar re-renderizado
       }
       break;
     }
