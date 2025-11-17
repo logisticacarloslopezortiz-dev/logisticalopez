@@ -37,13 +37,21 @@ async function getPushSubscription() {
     }
     const applicationServerKey = urlBase64ToUint8Array(vapidKey);
 
+    if ((window as any).__push_subscribing) return null;
+    (window as any).__push_subscribing = true;
     const existing = await registration.pushManager.getSubscription();
-    if (existing) await existing.unsubscribe();
+    if (existing) {
+      (window as any).__push_subscribing = false;
+      const json = typeof (existing as any).toJSON === 'function' ? (existing as any).toJSON() : existing;
+      console.log('[Push] Suscripción existente reutilizada:', json);
+      return json;
+    }
 
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey
     });
+    (window as any).__push_subscribing = false;
     console.log('[Push] Suscripción obtenida:', subscription);
     return typeof subscription.toJSON === 'function' ? subscription.toJSON() : subscription;
   } catch (error) {
