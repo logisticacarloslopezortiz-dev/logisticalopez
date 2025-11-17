@@ -51,7 +51,7 @@ async function getPushSubscription() {
       userVisibleOnly: true,
       applicationServerKey
     });
-    (window as any).__push_subscribing = false;
+    window.__push_subscribing = false;
     console.log('[Push] Suscripción obtenida:', subscription);
     return typeof subscription.toJSON === 'function' ? subscription.toJSON() : subscription;
   } catch (error) {
