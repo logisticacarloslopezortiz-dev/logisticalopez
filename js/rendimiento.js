@@ -35,7 +35,7 @@ async function fetchCollaboratorOrders(collabId) {
             .from('orders')
             .select(`*, service:services(name), vehicle:vehicles(name)`) 
             .eq('assigned_to', collabId)
-            .not('status','in',['Completada','Cancelada'])
+            .not('status', 'in', '("Completada","Cancelada")')
             .order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []).map(o => ({
