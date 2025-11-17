@@ -576,11 +576,17 @@ async function changeStatus(orderId, newKey) {
 }
 
 function returnToOrdersView() {
-  state.activeJobId = null;
-  localStorage.removeItem('tlc_collab_active_job');
+  clearActiveJob();
   document.getElementById('activeJobSection').classList.add('hidden');
-  document.getElementById('ordersCardContainer')?.classList.remove('hidden');
-  document.getElementById('pendingSection')?.classList.remove('hidden');
+
+  // Asegurarse de que los contenedores de listas de órdenes sean visibles
+  const ordersContainer = document.getElementById('ordersCardContainer');
+  const pendingContainer = document.getElementById('pendingSection');
+  if (ordersContainer) ordersContainer.classList.remove('hidden');
+  if (pendingContainer) pendingContainer.classList.remove('hidden');
+
+  // Re-renderizar para asegurar que la vista es consistente
+  filterAndRender();
 }
 
 async function handleOrderCompletion(orderId) {
@@ -638,7 +644,7 @@ const state = {
   allOrders: [],
   historialOrders: [],
   selectedOrderIdForAccept: null,
-  activeJobId: Number(localStorage.getItem('tlc_collab_active_job')) || null,
+  activeJobId: null, // Se inicializa en null y se restaura desde el localStorage específico del usuario más adelante
   collabSession: null,
   activeJobMap: null,
   collabNameCache: new Map(),
@@ -685,11 +691,16 @@ function handleCardClick(orderId) {
   const order = state.allOrders.find(o => o.id === Number(orderId));
   if (!order) return;
   
-  // Verificar si hay un trabajo activo guardado
-  const activeJob = loadActiveJob();
+  const collabId = state.collabSession?.user?.id;
 
-  // Si no hay trabajo activo, proceder según el estado de la orden
-  if (!order.assigned_to && order.status === 'Pendiente') {
+  // Si la orden está asignada a mí y no está completada/cancelada, la mostramos
+  if (order.assigned_to === collabId && order.status !== 'Completada' && order.status !== 'Cancelada') {
+    showActiveJob(order);
+    document.getElementById('ordersCardContainer')?.classList.add('hidden');
+    document.getElementById('pendingSection')?.classList.add('hidden');
+  }
+  // Si la orden está pendiente, mostramos el modal para aceptar
+  else if (order.status === 'Pendiente' && !order.assigned_to) {
     openAcceptModal(order);
   }
 }
@@ -1213,7 +1224,7 @@ async function loadInitialOrders() {
           service:services(name),
           vehicle:vehicles(name)
         `)
-        .or(`status.eq.Pendiente,assigned_to.eq.${state.collabSession.user.id}`)
+        .or(`status.eq.Pendiente,and(assigned_to.eq.${state.collabSession.user.id},status.neq.Completada,status.neq.Cancelada)`)
         .order('created_at', { ascending: false });
     };
 
@@ -1360,6 +1371,35 @@ async function updateCollaboratorStats(collaboratorId) {
 }
 
 // --- Lógica de Tiempo Real ---
+async function fetchAndInjectOrder(orderId) {
+  try {
+    const { data: order, error } = await supabaseConfig.client
+      .from('orders')
+      .select('*, service:services(name), vehicle:vehicles(name)')
+      .eq('id', orderId)
+      .single();
+
+    if (error) throw error;
+
+    if (order) {
+      // Normalizar y añadir a la lista si no existe
+      const existingIndex = state.allOrders.findIndex(o => o.id === order.id);
+      if (existingIndex === -1) {
+        const normalized = {
+          ...order,
+          service: order.service?.name || order.service || 'Sin servicio',
+          vehicle: order.vehicle?.name || order.vehicle || 'Sin vehículo'
+        };
+        state.allOrders.unshift(normalized);
+        return true; // Indica que se añadió una orden
+      }
+    }
+  } catch (err) {
+    console.error(`[Realtime] Error al buscar la orden inyectada #${orderId}:`, err);
+  }
+  return false; // No se añadió nada
+}
+
 function handleRealtimeUpdate(payload) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
 
@@ -1376,28 +1416,23 @@ function handleRealtimeUpdate(payload) {
         state.allOrders.unshift(normalized);
       }
       break;
-    case 'UPDATE':
-      // ✅ CORRECCIÓN: Comparar IDs como números para evitar inconsistencias.
+    case 'UPDATE': {
+      const collabId = state.collabSession?.user?.id;
       const index = state.allOrders.findIndex(o => Number(o.id) === Number(newRecord.id));
+
       if (index !== -1) {
+        // La orden ya existe, la actualizamos
         const prev = state.allOrders[index];
-        const merged = { ...prev, ...newRecord };
-        merged.service = prev.service;
-        merged.vehicle = prev.vehicle;
-        merged.origin_coords = parseCoordinates(merged.origin_coords);
-        merged.destination_coords = parseCoordinates(merged.destination_coords);
+        const merged = { ...prev, ...newRecord, service: prev.service, vehicle: prev.vehicle };
         state.allOrders[index] = merged;
-      } else {
-        const normalized = {
-          ...newRecord,
-          service: newRecord.service?.name || newRecord.service || 'Sin servicio',
-          vehicle: newRecord.vehicle?.name || newRecord.vehicle || 'Sin vehículo',
-          origin_coords: parseCoordinates(newRecord.origin_coords),
-          destination_coords: parseCoordinates(newRecord.destination_coords)
-        };
-        state.allOrders.unshift(normalized);
+      } else if (newRecord.assigned_to === collabId) {
+        // La orden no existe, pero ahora está asignada a mí. La buscamos y la inyectamos.
+        fetchAndInjectOrder(newRecord.id).then(injected => {
+          if (injected) filterAndRender(); // Re-renderizar solo si se añadió algo
+        });
       }
       break;
+    }
     case 'DELETE':
       state.allOrders = state.allOrders.filter(o => o.id !== oldRecord.id);
       break;
@@ -1625,10 +1660,9 @@ ui.ordersCardContainer.classList.add('hidden');
 await syncPendingStatusUpdates();
 
 await loadInitialOrders();
+await restoreActiveJob(); // Mover aquí para que se ejecute inmediatamente después de cargar las órdenes
 
 ui.loadingIndicator.classList.add('hidden');
-
-await restoreActiveJob();
 
 // Mover handleStatusUpdate fuera de la inicialización para un scope correcto.
 function handleStatusUpdate(orderId, newStatus) {
