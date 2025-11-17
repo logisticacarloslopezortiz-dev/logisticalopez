@@ -477,8 +477,8 @@ async function initMap() {
     attribution: 'Map tiles by Stadia Maps, Data by OpenMapTiles & OpenStreetMap contributors',
     maxZoom: 20
   });
-  cartoVoyager.addTo(map).on('load', () => loader.style.display = 'none');
-  layersControl = L.control.layers({ 'CARTO Voyager': cartoVoyager, 'Stadia Outdoors': stadiaOutdoors }).addTo(map);
+  stadiaOutdoors.addTo(map).on('load', () => loader.style.display = 'none');
+  layersControl = L.control.layers({ 'Stadia Outdoors': stadiaOutdoors, 'CARTO Voyager': cartoVoyager }).addTo(map);
 
 
   // --- Iconos personalizados para los marcadores ---
