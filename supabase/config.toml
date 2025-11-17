@@ -382,7 +382,7 @@ entrypoint = "./functions/send-notification/index.ts"
 
 [functions.process-outbox]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/process-outbox/deno.json"
 entrypoint = "./functions/process-outbox/index.ts"
 # Ejecutar de forma periódica para baja latencia de entrega

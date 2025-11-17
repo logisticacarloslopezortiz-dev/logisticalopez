@@ -32,6 +32,19 @@ if (!window.supabaseConfig) {
     _publicClient: null, // Se inicializa como null y se crea solo cuando se necesita
     useLocalStorage: false,
     vapidPublicKey: null,
+    async runProcessOutbox(){
+      try {
+        const url = `${this.client.supabaseUrl.replace('.supabase.co','')}.functions.supabase.co/process-outbox`;
+        const r = await fetch(url);
+        return await r.json();
+      } catch(e){ return { success:false, error: String(e?.message||e) }; }
+    },
+    async triggerOutboxTestForContact(contactId){
+      try {
+        const { data, error } = await this.client.rpc('create_outbox_test_for_contact', { c: contactId });
+        return { id: data || null, error };
+      } catch(e){ return { id:null, error: e }; }
+    },
 
   // Asegura que la sesión JWT esté fresca antes de consultas
   ensureFreshSession: async function() {

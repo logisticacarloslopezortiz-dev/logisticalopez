@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
     }
     
     // Crear cliente de Supabase
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE) as unknown as SupabaseClientLike;
     
     // Extraer datos del cuerpo de la solicitud
     const { orderId, email, contact_id } = await req.json();
@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
     
     // Buscar la orden
     const isNumericId = typeof orderId === 'number' || (typeof orderId === 'string' && /^\d+$/.test(orderId));
-    const q = supabase.from('orders').select('*');
+    const q = supabase.from('orders').select('*') as SelectOrdersBuilder;
     const { data: order, error: orderError } = isNumericId
       ? await q.eq('id', Number(orderId)).single()
       : await q.eq('short_id', String(orderId)).single();
@@ -203,3 +203,27 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: message }, 500);
   }
 });
+type SelectOrdersBuilder = {
+  eq: (column: string, value: string | number) => {
+    single: () => Promise<{ data?: OrderDataMinimal; error?: unknown }>;
+    maybeSingle: () => Promise<{ data?: OrderDataMinimal; error?: unknown }>;
+  };
+  single: () => Promise<{ data?: OrderDataMinimal; error?: unknown }>;
+  maybeSingle: () => Promise<{ data?: OrderDataMinimal; error?: unknown }>;
+};
+
+type SupabaseClientLike = {
+  from: (table: 'orders' | 'business' | 'clients' | 'invoices') => {
+    select: (columns: string) => SelectOrdersBuilder | Promise<{ data?: unknown; error?: unknown }>;
+    insert: (values: unknown) => Promise<{ data?: unknown; error?: unknown }>;
+    eq: (column: string, value: string | number) => Promise<{ data?: unknown; error?: unknown }>;
+    single: () => Promise<{ data?: unknown; error?: unknown }>;
+    maybeSingle: () => Promise<{ data?: unknown; error?: unknown }>;
+  };
+  storage: {
+    from: (bucket: string) => {
+      upload: (path: string, data: Uint8Array, opts: { contentType?: string; upsert?: boolean }) => Promise<{ data?: unknown; error?: unknown }>;
+    };
+    createBucket: (name: string, opts: { public?: boolean }) => Promise<unknown>;
+  };
+};

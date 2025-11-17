@@ -15,17 +15,21 @@ type OutboxRow = {
   processed_at: string | null;
 };
 
+type QueryBuilder<T> = {
+  eq: (column: string, value: string | number) => QueryBuilder<T>;
+  in: (column: string, values: string[]) => QueryBuilder<T>;
+  is: (column: string, value: null) => QueryBuilder<T>;
+  order: (column: string, options: { ascending: boolean }) => QueryBuilder<T>;
+  limit: (n: number) => Promise<{ data?: T[]; error?: unknown }>;
+  single: () => Promise<{ data?: T; error?: unknown }>;
+  maybeSingle: () => Promise<{ data?: T; error?: unknown }>;
+};
+
 type SupabaseClientLike = {
   from: (table: string) => {
     insert: (values: unknown) => Promise<{ data?: unknown; error?: unknown }>;
-    select: (columns: string) => {
-      eq: (column: string, value: string) => Promise<{ data?: unknown; error?: unknown }>;
-      in: (column: string, values: string[]) => Promise<{ data?: unknown; error?: unknown }>;
-    };
+    select: (columns: string) => QueryBuilder<unknown>;
     update: (values: unknown) => { eq: (column: string, value: number) => Promise<{ data?: unknown; error?: unknown }> };
-    is: (column: string, value: null) => Promise<{ data?: unknown; error?: unknown }>;
-    order: (column: string, options: { ascending: boolean }) => Promise<{ data?: unknown; error?: unknown }>;
-    limit: (n: number) => Promise<{ data?: unknown; error?: unknown }>;
   };
 };
 
@@ -65,34 +69,66 @@ async function sendPush(subscription: WebPushSubscription, payload: unknown) {
   const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('Faltan claves VAPID');
   webpush.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  return await webpush.default.sendNotification(subscription, JSON.stringify(payload));
+  return await webpush.default.sendNotification(subscription, JSON.stringify(payload), { TTL: 600 });
 }
 
 async function fetchUserSubscriptions(supabase: SupabaseClientLike, userId: string): Promise<WebPushSubscription[]> {
-  const { data, error } = await supabase
+  const results: WebPushSubscription[] = [];
+  const r1 = await supabase
     .from('push_subscriptions')
     .select('endpoint, keys')
     .eq('user_id', userId);
-  if (error) return [];
-  const rows = (data ?? []) as Array<{ endpoint: string; keys: { p256dh: string; auth: string } }>;
-  return rows.map((r) => ({ endpoint: r.endpoint, keys: r.keys }));
+  const rows1 = ((r1 as unknown as { data?: Array<{ endpoint?: string; keys?: { p256dh?: string; auth?: string } | string }> }).data) || [];
+  for (const row of rows1) {
+    let k = row.keys as { p256dh?: string; auth?: string } | string | undefined;
+    if (typeof k === 'string') {
+      try { k = JSON.parse(k) as { p256dh?: string; auth?: string }; } catch { k = undefined; }
+    }
+    if (row.endpoint && k?.p256dh && k?.auth) results.push({ endpoint: row.endpoint, keys: { p256dh: k.p256dh as string, auth: k.auth as string } });
+  }
+  if (results.length > 0) return results;
+  const r2 = await supabase
+    .from('push_subscriptions')
+    .select('endpoint, p256dh, auth')
+    .eq('user_id', userId);
+  const rows2 = ((r2 as unknown as { data?: Array<{ endpoint?: string; p256dh?: string; auth?: string }> }).data) || [];
+  for (const row of rows2) {
+    if (row.endpoint && row.p256dh && row.auth) results.push({ endpoint: row.endpoint, keys: { p256dh: row.p256dh as string, auth: row.auth as string } });
+  }
+  return results;
 }
 
 async function fetchContactSubscriptions(supabase: SupabaseClientLike, contactId: string): Promise<WebPushSubscription[]> {
-  const { data, error } = await supabase
+  const results: WebPushSubscription[] = [];
+  const r1 = await supabase
     .from('push_subscriptions')
     .select('endpoint, keys')
     .eq('client_contact_id', contactId);
-  if (error) return [];
-  const rows = (data ?? []) as Array<{ endpoint: string; keys: { p256dh: string; auth: string } }>;
-  return rows.map((r) => ({ endpoint: r.endpoint, keys: r.keys }));
+  const rows1 = ((r1 as unknown as { data?: Array<{ endpoint?: string; keys?: { p256dh?: string; auth?: string } | string }> }).data) || [];
+  for (const row of rows1) {
+    let k = row.keys as { p256dh?: string; auth?: string } | string | undefined;
+    if (typeof k === 'string') {
+      try { k = JSON.parse(k) as { p256dh?: string; auth?: string }; } catch { k = undefined; }
+    }
+    if (row.endpoint && k?.p256dh && k?.auth) results.push({ endpoint: row.endpoint, keys: { p256dh: k.p256dh as string, auth: k.auth as string } });
+  }
+  if (results.length > 0) return results;
+  const r2 = await supabase
+    .from('push_subscriptions')
+    .select('endpoint, p256dh, auth')
+    .eq('client_contact_id', contactId);
+  const rows2 = ((r2 as unknown as { data?: Array<{ endpoint?: string; p256dh?: string; auth?: string }> }).data) || [];
+  for (const row of rows2) {
+    if (row.endpoint && row.p256dh && row.auth) results.push({ endpoint: row.endpoint, keys: { p256dh: row.p256dh as string, auth: row.auth as string } });
+  }
+  return results;
 }
 
 function buildPayloadFromOutbox(row: OutboxRow): { title: string; body: string; icon: string; data: Record<string, unknown> } {
   const p = (row.payload ?? {}) as Record<string, unknown>;
   const title = String(p['title'] ?? (row.new_status ? `Actualización de orden` : 'Notificación'));
   const body = String(p['body'] ?? (row.new_status ? `La orden #${row.order_id} cambió a ${row.new_status}` : ''));
-  const icon = String(p['icon'] ?? '/img/android-chrome-192x192.png');
+  const icon = String(p['icon'] ?? 'https://logisticalopezortiz.com/img/android-chrome-192x192.png');
   const data = { orderId: row.order_id, newStatus: row.new_status, ...((p['data'] ?? {}) as Record<string, unknown>) };
   return { title, body, icon, data };
 }
@@ -118,14 +154,15 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow) {
       .select('id, role')
       .eq('role', role);
     if (error) throw new Error(`No se pudieron obtener colaboradores para rol ${role}`);
-    const ids = (collabs ?? []).map((c: { id: string }) => String(c.id)).filter(Boolean);
+    const list = Array.isArray(collabs) ? (collabs as Array<{ id?: string }>) : [];
+    const ids = list.map((c) => String(c.id || '')).filter(Boolean);
     if (ids.length === 0) throw new Error(`Sin destinatarios para rol ${role}`);
     const { data: subs, error: subsErr } = await supabase
       .from('push_subscriptions')
       .select('endpoint, keys')
       .in('user_id', ids);
     if (subsErr) throw new Error(`No se pudieron obtener suscripciones: ${errToString(subsErr)}`);
-    subscriptions = (subs ?? []) as WebPushSubscription[];
+    subscriptions = Array.isArray(subs) ? (subs as unknown as WebPushSubscription[]) : [];
   } else {
     const p = (row.payload ?? {}) as Record<string, unknown>;
     const contactId = p['contactId'] ? String(p['contactId']) : null;

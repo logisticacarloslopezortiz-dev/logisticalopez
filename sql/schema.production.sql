@@ -1273,6 +1273,49 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+create or replace function public.create_outbox_test_for_endpoint(ep text)
+returns bigint language plpgsql security definer set search_path = public as $$
+declare sub record; oid bigint; target uuid; role text; order_for_target bigint;
+begin
+  select user_id, client_contact_id into sub from public.push_subscriptions where endpoint = ep limit 1;
+  if not found then return null; end if;
+  target := coalesce(sub.user_id, sub.client_contact_id);
+  role := 'cliente';
+  select id into order_for_target from public.orders where (client_id = sub.user_id) or (client_contact_id = sub.client_contact_id) order by created_at desc limit 1;
+  if order_for_target is null then order_for_target := 0; end if;
+  insert into public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+  values (order_for_target, 'Prueba', role, target, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true)))
+  returning id into oid;
+  return oid;
+end;
+$$;
+
+create or replace function public.create_outbox_test_for_user(u uuid)
+returns bigint language plpgsql security definer set search_path = public as $$
+declare oid bigint; order_for_target bigint;
+begin
+  select id into order_for_target from public.orders where client_id = u order by created_at desc limit 1;
+  if order_for_target is null then order_for_target := 0; end if;
+  insert into public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+  values (order_for_target, 'Prueba', 'cliente', u, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true, 'userId', u::text)))
+  returning id into oid;
+  return oid;
+end;
+$$;
+
+create or replace function public.create_outbox_test_for_contact(c uuid)
+returns bigint language plpgsql security definer set search_path = public as $$
+declare oid bigint; order_for_target bigint;
+begin
+  select id into order_for_target from public.orders where client_contact_id = c order by created_at desc limit 1;
+  if order_for_target is null then order_for_target := 0; end if;
+  insert into public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+  values (order_for_target, 'Prueba', 'cliente', c, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true, 'contactId', c::text)))
+  returning id into oid;
+  return oid;
+end;
+$$;
+
 GRANT EXECUTE ON FUNCTION public.get_order_details_public(text) TO anon, authenticated;
 -- Notificar al colaborador cuando se le asigna una orden
 create or replace function public.notify_assigned_collaborator()
