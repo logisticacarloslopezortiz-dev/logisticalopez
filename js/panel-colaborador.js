@@ -809,7 +809,35 @@ function updateActiveJobView(){
   const badge = document.getElementById('activeJobStatus');
   if (badge) badge.textContent = statusLabel;
 
-  // Se eliminó la lógica de la barra de progreso (jobProgressBar) porque el elemento no existe en el HTML.
+  // --- Restaurar la lógica de visibilidad de botones ---
+  const actionButtonsContainer = document.getElementById('activeJobActionButtons');
+  if (actionButtonsContainer) {
+    // Ocultar todos los botones primero
+    actionButtonsContainer.querySelectorAll('button').forEach(btn => btn.classList.add('hidden'));
+
+    // Lógica para mostrar botones según el estado
+    switch (statusKey) {
+      case 'en_camino_recoger':
+        actionButtonsContainer.querySelector('[data-status="cargando"]')?.classList.remove('hidden');
+        break;
+      case 'cargando':
+        actionButtonsContainer.querySelector('[data-status="en_camino_entregar"]')?.classList.remove('hidden');
+        break;
+      case 'en_camino_entregar':
+        actionButtonsContainer.querySelector('[data-status="retraso_tapon"]')?.classList.remove('hidden');
+        actionButtonsContainer.querySelector('[data-status="entregado"]')?.classList.remove('hidden');
+        break;
+      case 'retraso_tapon':
+        actionButtonsContainer.querySelector('[data-status="entregado"]')?.classList.remove('hidden');
+        break;
+    }
+  }
+
+  // Asegurar que el botón de menú de escritorio se muestre si el sidebar está colapsado
+  if (document.body.classList.contains('sidebar-desktop-closed')) {
+    const desktopBtn = document.getElementById('desktopMenuBtn');
+    if (desktopBtn) desktopBtn.classList.remove('hidden');
+  }
 }
 
 function renderPhotoGallery(photos) {

@@ -1,7 +1,7 @@
 /// <reference path="../globals.d.ts" />
 // Implementación de la función de notificaciones push para TLC
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders as _corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
+import { handleCors, jsonResponse } from '../cors-config.ts';
 
 // Función para registrar logs
 function logDebug(message: string, data?: unknown) {
@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
     
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
       logDebug('Variables de entorno faltantes', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_SERVICE_ROLE: !!SUPABASE_SERVICE_ROLE });
-      return jsonResponse({ error: 'Error de configuración del servidor' }, 500);
+      return jsonResponse({ error: 'Error de configuración del servidor' }, 500, req);
     }
     
     // Crear cliente de Supabase con rol de servicio
@@ -135,7 +135,7 @@ Deno.serve(async (req: Request) => {
     
     if (!orderId && !to_user_id && !contact_id) {
       await logDb(supabase, 'send-push-notification', 'warning', 'Solicitud sin destinatarios', { body: await req.clone().json().catch(() => ({})) });
-      return jsonResponse({ error: 'Faltan destinatarios: orderId, to_user_id o contact_id' }, 400);
+      return jsonResponse({ error: 'Faltan destinatarios: orderId, to_user_id o contact_id' }, 400, req);
     }
     let finalTitle = title;
     let finalBody = body;
@@ -148,7 +148,7 @@ Deno.serve(async (req: Request) => {
     }
     if (!finalBody) {
       await logDb(supabase, 'send-push-notification', 'warning', 'Body faltante en notificación', { orderId, to_user_id, contact_id, newStatus });
-      return jsonResponse({ error: 'Se requiere body o newStatus para la notificación' }, 400);
+      return jsonResponse({ error: 'Se requiere body o newStatus para la notificación' }, 400, req);
     }
     
     let pushSubscriptions: Array<{ endpoint: string; keys: { p256dh: string; auth: string } }> = [];
@@ -163,7 +163,7 @@ Deno.serve(async (req: Request) => {
         .single();
       if (orderError || !order) {
         await logDb(supabase, 'send-push-notification', 'warning', 'Orden no encontrada', { orderId });
-        return jsonResponse({ error: 'No se encontró la orden especificada' }, 404);
+        return jsonResponse({ error: 'No se encontró la orden especificada' }, 404, req);
       }
       const ord = order as unknown as OrderRow;
       if (ord.client_contact_id) {
@@ -194,7 +194,7 @@ Deno.serve(async (req: Request) => {
 
     if (pushSubscriptions.length === 0) {
       await logDb(supabase, 'send-push-notification', 'info', 'Sin suscripciones para destinatario', { orderId, to_user_id, contact_id });
-      return jsonResponse({ success: false, message: 'No hay suscripciones push registradas' }, 200);
+      return jsonResponse({ success: false, message: 'No hay suscripciones push registradas' }, 200, req);
     }
     
     // Enviar notificación a todas las suscripciones del cliente
@@ -276,7 +276,7 @@ Deno.serve(async (req: Request) => {
       success: successCount > 0, 
       message: `Notificación enviada a ${successCount} de ${results.length} suscripciones`,
       results
-    });
+    }, 200, req);
     
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error desconocido';
@@ -289,6 +289,6 @@ Deno.serve(async (req: Request) => {
         await logDb(supabase, 'send-push-notification', 'error', message, {});
       }
     } catch (_) { void 0; }
-    return jsonResponse({ error: message }, 500);
+    return jsonResponse({ error: message }, 500, req);
   }
 });
