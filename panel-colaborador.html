@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Panel — Colaborador</title> 
   
   <!-- PWA Meta Tags -->
@@ -26,160 +26,22 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Comic+Neue:wght@300;400;700&display=swap" rel="stylesheet">
-  
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- Tailwind y Lucide (local) -->
   <link rel="stylesheet" href="css/tailwind.min.css?v=1.2">
+  <link rel="stylesheet" href="css/collab-panel-styles.css?v=1.2">
   <script src="vendor/lucide.min.js?v=1.2" defer></script>
   
   <!-- Mitigación FOUC: ocultar el cuerpo hasta que los estilos estén listos -->
   <style>
-    :root {
-      --color-primario: #1E405A;
-      --color-secundario: #1E8A95;
-      --color-acento: #FBBF24;
-      --sidebar-rail: 3rem;
-    }
     body.preload-hidden { opacity: 0; }
-    /* --- Base Layout --- */
-    body {
-      display: flex;
-      min-height: 100vh;
-      overflow-x: hidden; /* Prevenir scroll horizontal */
-    }
-    #collabSidebar {
-      transition: transform 0.3s ease-in-out;
-      will-change: transform;
-      flex-shrink: 0; /* Evitar que el sidebar se comprima */
-    }
-    #mainContent {
-      flex: 1;
-      min-width: 0; /* Permitir que el contenido se comprima */
-      transition: margin-left 0.3s ease-in-out;
-    }
-    .hidden{display:none!important}
-    .grid{display:grid}
-    .flex{display:flex}
-    .shadow{box-shadow:0 1px 3px rgba(0,0,0,.1)}
-    .rounded-xl{border-radius:0.75rem}
-    .rounded-lg{border-radius:0.5rem}
-    .spinner {
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      border-left-color: #09f;
-      margin: 0 auto;
-      animation: spin 1s ease infinite;
-    }
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-    #sidebarOverlay {
-      position: fixed;
-      inset: 0;
-      background-color: rgba(0, 0, 0, 0.5);
-      z-index: 40;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.3s ease-in-out, visibility 0.3s;
-    }
-
-    /* --- Vista Móvil (< 768px) --- */
-    @media (max-width: 767.98px) {
-      body { flex-direction: column; }
-      #collabSidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100vh;
-        transform: translateX(-100%);
-        z-index: 50;
-        width: 320px !important; /* Ancho fijo para evitar distorsión */
-      }
-      #mainContent {
-        width: 100%;
-        margin-left: 0 !important;
-      }
-
-      /* Estado: sidebar abierto en móvil */
-      body.sidebar-mobile-open #collabSidebar {
-        transform: translateX(0);
-      }
-      body.sidebar-mobile-open #sidebarOverlay {
-        opacity: 1;
-        visibility: visible;
-      }
-      body.sidebar-mobile-open {
-        overflow: hidden;
-      }
-    }
-
-    /* --- Media Queries Adicionales --- */
-    @media (max-width: 380px) {
-      header.md\:hidden span.font-semibold { display: none; }
-    }
-    @media (min-width: 768px) and (max-width: 1024px) {
-      body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
-    }
-
-    /* --- Vista de Escritorio (>= 768px) --- */
-    @media (min-width: 768px) {
-      #collabSidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100vh;
-        width: 18rem; /* Ancho por defecto en escritorio */
-      }
-      #sidebarOverlay {
-        display: none !important; /* El overlay nunca se usa en escritorio */
-      }
-
-      /* Estado: sidebar abierto en escritorio (por defecto) */
-      body.sidebar-desktop-open #mainContent {
-        margin-left: 18rem;
-      }
-      @media (min-width: 768px) and (max-width: 1024px) {
-        #collabSidebar { width: 14rem; }
-        body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
-      }
-      body.sidebar-desktop-open #collabSidebar {
-        transform: translateX(0);
-      }
-
-      /* Estado: sidebar cerrado en escritorio */
-      body.sidebar-desktop-closed #mainContent {
-        margin-left: var(--sidebar-rail);
-      }
-      body.sidebar-desktop-closed #desktopMenuBtn {
-        display: block;
-      }
-      body.sidebar-desktop-closed #collabSidebar {
-        transform: translateX(calc(-100% + var(--sidebar-rail)));
-      }
-      body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.75rem; }
-      body.sidebar-desktop-closed #sidebarLogo { width: 2.25rem; height: 2.25rem; }
-      body.sidebar-desktop-closed #collabSidebar nav a { justify-content: center; padding: 0.75rem; }
-      body.sidebar-desktop-closed #collabSidebar nav i { margin: 0; }
-      body.sidebar-desktop-closed #collabSidebar nav span.font-medium { display: none; }
-      body.sidebar-desktop-closed #collabSidebar .flex-1.min-w-0, body.sidebar-desktop-closed #collabSidebar .w-2.h-2.bg-green-500 { display: none; }
-      body.sidebar-desktop-closed #collabSidebar #pendingRequestsCount { display: none; }
-      body.sidebar-desktop-closed #collabSidebar .rounded-xl.p-4 .text-xs { display: none; }
-    }
-
-    /* Estilo para el enlace activo */
-    #collabSidebar nav a[aria-current="page"] { background-color: #1E8A95; }
   </style>
   <script>
     document.addEventListener('DOMContentLoaded', function(){
       try { document.body.classList.remove('preload-hidden'); } catch(_){}
+      try { if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons(); } catch(_){}
     });
   </script>
 </head>
@@ -232,8 +94,8 @@
             <p class="text-xs" style="color: var(--color-secundario);">Panel de Control</p>
           </div>
         </div>
-          <button id="sidebarCollapseBtn" class="flex items-center justify-center w-9 h-9 rounded-xl bg-white ring-1 ring-black hover:bg-gray-50 hover:ring-black transition-all duration-200 group" aria-expanded="true" aria-controls="collabSidebar" title="Colapsar menú">
-            <i data-lucide="panel-left-close" class="w-4 h-4 text-black transition-transform duration-300 group-hover:rotate-[-15deg] group-hover:scale-90"></i>
+          <button id="sidebarCollapseBtn" class="flex items-center justify-center w-9 h-9 rounded-xl bg-gray-200 ring-1 ring-gray-300 hover:bg-gray-300 hover:ring-gray-400 transition-all duration-200 group" aria-expanded="true" aria-controls="collabSidebar" aria-label="Colapsar menú" title="Colapsar menú">
+            <i data-lucide="panel-left-close" class="w-4 h-4 text-gray-700 transition-transform duration-300 group-hover:rotate-[-15deg] group-hover:scale-90"></i>
           </button>
       </div>
       
@@ -339,7 +201,7 @@
             </h2>
             <div class="flex items-center gap-3">
               <span id="activeJobStatus" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">En camino a recoger</span>
-              <button id="cancelActiveJobBtn" class="p-2 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-full transition-colors" title="Cancelar trabajo activo">
+              <button id="cancelActiveJobBtn" class="p-2 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-full transition-colors" title="Cancelar trabajo activo" aria-label="Cancelar trabajo activo">
                 <i data-lucide="x-circle" class="w-5 h-5"></i>
               </button>
             </div>
@@ -392,6 +254,8 @@
                 </button>
               </div>
             </div>
+            <div id="activeJobMap" class="h-56 rounded-xl border border-gray-200 overflow-hidden"></div>
+            <div id="activeJobMapHint" class="mt-2 text-xs text-gray-500"></div>
             <!-- Evidencia Fotográfica -->
             <div class="border-t border-gray-200 pt-4">
               <h3 class="text-md font-semibold text-gray-800 mb-3">Evidencia Fotográfica</h3>
@@ -426,8 +290,7 @@
 
   <!-- Dependencias locales para evitar Tracking Prevention en desarrollo -->
   <!-- Supabase UMD no es necesario si ya se usa js/supabase-config.js que refiere a window.supabase (inyectado en otra parte); si lo necesitas, copia el UMD a vendor/ y referéncialo -->
-  <script src="vendor/leaflet.js" defer></script>
-
+  
   <!-- Scripts de la aplicación (ordenados y sin duplicados) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
   <script src="js/supabase-config.js?v=1.2" defer></script>

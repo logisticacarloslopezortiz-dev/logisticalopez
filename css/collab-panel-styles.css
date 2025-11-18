@@ -1,141 +1,123 @@
 :root {
-      --color-primario: #1E405A;
-      --color-secundario: #1E8A95;
-      --color-acento: #FBBF24;
-      --sidebar-rail: 3rem;
-    }
-    body.preload-hidden { opacity: 0; }
-    /* --- Base Layout --- */
-    body {
-      display: flex;
-      min-height: 100vh;
-      overflow-x: hidden; /* Prevenir scroll horizontal */
-    }
-    #collabSidebar {
-      transition: transform 0.3s ease-in-out;
-      will-change: transform;
-      flex-shrink: 0; /* Evitar que el sidebar se comprima */
-    }
-    #mainContent {
-      flex: 1;
-      min-width: 0; /* Permitir que el contenido se comprima */
-      transition: margin-left 0.3s ease-in-out;
-    }
-    .hidden{display:none!important}
-    .grid{display:grid}
-    .flex{display:flex}
-    .shadow{box-shadow:0 1px 3px rgba(0,0,0,.1)}
-    .rounded-xl{border-radius:0.75rem}
-    .rounded-lg{border-radius:0.5rem}
-    .spinner {
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      border-left-color: #09f;
-      margin: 0 auto;
-      animation: spin 1s ease infinite;
-    }
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-      100% {
-        transform: rotate(360deg);
-      }
-    }
-    #sidebarOverlay {
-      position: fixed;
-      inset: 0;
-      background-color: rgba(0, 0, 0, 0.5);
-      z-index: 40;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.3s ease-in-out, visibility 0.3s;
-    }
+  --color-primario: #1E405A;
+  --color-secundario: #1E8A95;
+  --color-acento: #FBBF24;
+  --sidebar-rail: 3rem;
+}
 
-    /* --- Vista Móvil (< 768px) --- */
-    @media (max-width: 767.98px) {
-      body { flex-direction: column; }
-      #collabSidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100vh;
-        transform: translateX(-100%);
-        z-index: 50;
-        width: 320px !important; /* Ancho fijo para evitar distorsión */
-      }
-      #mainContent {
-        width: 100%;
-        margin-left: 0 !important;
-      }
+/* FOUC guard */
+body.preload-hidden { opacity: 0; }
 
-      /* Estado: sidebar abierto en móvil */
-      body.sidebar-mobile-open #collabSidebar {
-        transform: translateX(0);
-      }
-      body.sidebar-mobile-open #sidebarOverlay {
-        opacity: 1;
-        visibility: visible;
-      }
-      body.sidebar-mobile-open {
-        overflow: hidden;
-      }
-    }
+/* --- Base Layout --- */
+body {
+  display: flex;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
 
-    /* --- Media Queries Adicionales --- */
-    @media (max-width: 380px) {
-      header.md\:hidden span.font-semibold { display: none; }
-    }
-    @media (min-width: 768px) and (max-width: 1024px) {
-      body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
-    }
+#collabSidebar {
+  transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
+  will-change: transform, width;
+  flex-shrink: 0;
+  background-color: var(--color-primario);
+  color: #fff;
+}
 
-    /* --- Vista de Escritorio (>= 768px) --- */
-    @media (min-width: 768px) {
-      #collabSidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100vh;
-        width: 18rem; /* Ancho por defecto en escritorio */
-      }
-      #sidebarOverlay {
-        display: none !important; /* El overlay nunca se usa en escritorio */
-      }
+#mainContent {
+  flex: 1;
+  min-width: 0;
+  transition: margin-left 0.3s ease-in-out;
+}
 
-      /* Estado: sidebar abierto en escritorio (por defecto) */
-      body.sidebar-desktop-open #mainContent {
-        margin-left: 18rem;
-      }
-      @media (min-width: 768px) and (max-width: 1024px) {
-        #collabSidebar { width: 14rem; }
-        body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
-      }
-      body.sidebar-desktop-open #collabSidebar {
-        transform: translateX(0);
-      }
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border-left-color: #09f;
+  margin: 0 auto;
+  animation: spin 1s linear infinite;
+}
 
-      /* Estado: sidebar cerrado en escritorio */
-      body.sidebar-desktop-closed #mainContent {
-        margin-left: var(--sidebar-rail);
-      }
-      body.sidebar-desktop-closed #desktopMenuBtn {
-        display: block;
-      }
-      body.sidebar-desktop-closed #collabSidebar {
-        transform: translateX(calc(-100% + var(--sidebar-rail)));
-      }
-      body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.75rem; }
-      body.sidebar-desktop-closed #sidebarLogo { width: 2.25rem; height: 2.25rem; }
-      body.sidebar-desktop-closed #collabSidebar nav a { justify-content: center; padding: 0.75rem; }
-      body.sidebar-desktop-closed #collabSidebar nav i { margin: 0; }
-      body.sidebar-desktop-closed #collabSidebar nav span.font-medium { display: none; }
-      body.sidebar-desktop-closed #collabSidebar .flex-1.min-w-0, body.sidebar-desktop-closed #collabSidebar .w-2.h-2.bg-green-500 { display: none; }
-      body.sidebar-desktop-closed #collabSidebar #pendingRequestsCount { display: none; }
-      body.sidebar-desktop-closed #collabSidebar .rounded-xl.p-4 .text-xs { display: none; }
-    }
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 
-    /* Estilo para el enlace activo */
-    #collabSidebar nav a[aria-current="page"] { background-color: #1E8A95; }
+#sidebarOverlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease-in-out, visibility 0.3s;
+}
+
+/* --- Vista Móvil (<768px) --- */
+@media (max-width: 767.98px) {
+  body { flex-direction: column; }
+
+  #collabSidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 320px;
+    transform: translateX(-100%);
+    z-index: 50;
+  }
+
+  #mainContent { width: 100%; margin-left: 0; }
+
+  body.sidebar-mobile-open #collabSidebar { transform: translateX(0); }
+  body.sidebar-mobile-open #sidebarOverlay { opacity: 1; visibility: visible; }
+  body.sidebar-mobile-open { overflow: hidden; }
+}
+
+/* --- Vista Tablet (768px a 1024px) --- */
+@media (min-width: 768px) and (max-width: 1024px) {
+  #collabSidebar { width: 14rem; }
+  body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
+}
+
+/* --- Vista Escritorio (>=768px) --- */
+@media (min-width: 1025px) {
+  #collabSidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 18rem;
+  }
+
+  #sidebarOverlay { display: none !important; }
+
+  body.sidebar-desktop-open #mainContent { margin-left: 18rem; }
+  body.sidebar-desktop-open #collabSidebar { transform: translateX(0); }
+
+  /* Sidebar cerrado */
+  body.sidebar-desktop-closed #collabSidebar {
+    transform: translateX(calc(-100% + var(--sidebar-rail)));
+    width: 18rem; /* Mantener ancho total para animación */
+  }
+
+  body.sidebar-desktop-closed #mainContent { margin-left: var(--sidebar-rail); }
+
+  /* Ajustes internos al colapsar */
+  body.sidebar-desktop-closed #desktopMenuBtn { display: block; }
+  body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.75rem; }
+  body.sidebar-desktop-closed #sidebarLogo { width: 2.25rem; height: 2.25rem; }
+  body.sidebar-desktop-closed #collabSidebar nav a { justify-content: center; padding: 0.75rem; }
+  body.sidebar-desktop-closed #collabSidebar nav i { margin: 0; }
+  body.sidebar-desktop-closed #collabSidebar nav span.font-medium { display: none; }
+
+  /* Mantener visibles iconos y elementos pequeños */
+  body.sidebar-desktop-closed #collabSidebar .flex-1.min-w-0,
+  body.sidebar-desktop-closed #collabSidebar .w-2.h-2.bg-green-500,
+  body.sidebar-desktop-closed #collabSidebar #pendingRequestsCount { display: inline-block; }
+  body.sidebar-desktop-closed #collabSidebar .rounded-xl.p-4 .text-xs { display: none; }
+}
+
+/* Estilo para enlace activo */
+#collabSidebar nav a[aria-current="page"] { background-color: var(--color-secundario); }

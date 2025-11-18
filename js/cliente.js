@@ -66,6 +66,8 @@ let originMarker;
 let destinationMarker;
 let isOriginSet = false; // Controla si el origen ya fue establecido
 
+let awaitingDestination = false; // Estado: esperando marcar destino tras fijar origen
+
 // Elementos del DOM
 let steps, nextBtn, prevBtn, progressBar, helpText;
 
@@ -452,6 +454,49 @@ function locateUserAndSetOrigin() {
   );
 }
 
+// --- Bottom Sheet Helpers (móvil) ---
+function ensureBottomSheet(){
+  if (document.getElementById('mobileBottomSheet')) return;
+  const sheet = document.createElement('div');
+  sheet.id = 'mobileBottomSheet';
+  sheet.className = 'fixed inset-x-0 bottom-0 z-[120] bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 translate-y-full md:static md:translate-y-0 md:rounded-none md:shadow-none md:hidden';
+  sheet.innerHTML = `
+    <div class="w-full flex justify-center pt-2"><div class="w-12 h-1.5 bg-gray-300 rounded-full"></div></div>
+    <div id="mbsContent" class="p-2"></div>
+    <button type="button" id="mbsClose" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600" aria-label="Cerrar hoja">&times;</button>
+  `;
+  document.body.appendChild(sheet);
+  document.getElementById('mbsClose').onclick = () => hideBottomSheet();
+}
+function showBottomSheet(){ const s = document.getElementById('mobileBottomSheet'); if (s) s.classList.remove('translate-y-full'); }
+function hideBottomSheet(){ const s = document.getElementById('mobileBottomSheet'); if (s) s.classList.add('translate-y-full'); }
+function setBottomSheetInstruction(){ ensureBottomSheet(); const c = document.getElementById('mbsContent'); if (c) c.innerHTML = '<div class="p-4 text-sm text-gray-700">Escribe una dirección o toca el mapa para fijar el punto de origen.</div>'; showBottomSheet(); }
+function setBottomSheetForOrigin(address){
+  ensureBottomSheet();
+  const c = document.getElementById('mbsContent');
+  if (c) {
+    c.innerHTML = `
+      <div class="p-4 space-y-3">
+        <label class="text-xs text-gray-500">Dirección de origen</label>
+        <input id="mbsOriginInput" type="text" class="w-full border rounded p-2" value="${address ? String(address).replace(/"/g,'&quot;') : ''}" />
+        <div class="flex justify-end">
+          <button id="mbsContinueBtn" class="px-4 py-2 bg-azulClaro text-white rounded">Continuar con destino</button>
+        </div>
+      </div>`;
+    const btn = document.getElementById('mbsContinueBtn');
+    if (btn){
+      btn.onclick = () => {
+        const val = document.getElementById('mbsOriginInput')?.value;
+        const pickupInput = document.getElementById('pickupAddress');
+        if (pickupInput && val) pickupInput.value = val;
+        awaitingDestination = true;
+        hideBottomSheet();
+      };
+    }
+  }
+  showBottomSheet();
+}
+
 async function initMap() {
   const mapElement = document.getElementById("map");
   if (!mapElement) {
@@ -469,7 +514,7 @@ async function initMap() {
   let layersControl = null;
   let layersHidden = false;
   const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OSM &copy; CARTO',
+    attribution: '&copy; OpenStreetMap & CARTO',
     subdomains: 'abcd',
     maxZoom: 19
   });
@@ -477,8 +522,12 @@ async function initMap() {
     attribution: 'Map tiles by Stadia Maps, Data by OpenMapTiles & OpenStreetMap contributors',
     maxZoom: 20
   });
-  cartoVoyager.addTo(map).on('load', () => loader.style.display = 'none');
-  layersControl = L.control.layers({ 'CARTO Voyager': cartoVoyager, 'Stadia Outdoors': stadiaOutdoors }).addTo(map);
+  // Preferir Stadia Outdoors por defecto y ocultar loader cuando cargue; fallback a CARTO si falla
+  let baseLoaded = false;
+  stadiaOutdoors.addTo(map).on('load', () => { loader.style.display = 'none'; baseLoaded = true; });
+  stadiaOutdoors.on('tileerror', () => { if (!baseLoaded) { cartoVoyager.addTo(map).on('load', () => loader.style.display = 'none'); } });
+  layersControl = L.control.layers({ 'Stadia Outdoors': stadiaOutdoors, 'CARTO Voyager': cartoVoyager }).addTo(map);
+  const providerRD = new GeoSearch.OpenStreetMapProvider({ params: { countrycodes: 'do', "accept-language": 'es', addressdetails: 1 } });
 
 
   // --- Iconos personalizados para los marcadores ---
@@ -549,7 +598,21 @@ async function initMap() {
     expandMapBtn.addEventListener('click', () => {
       mapContainer.classList.add('fixed', 'inset-0', 'z-[100]');
       document.body.classList.add('overflow-hidden');
-      map.invalidateSize();
+      // En modo expandido, ocultar inputs y mostrar solo buscador
+      if (addressInputs) addressInputs.classList.add('hidden');
+      if (!searchAdded) {
+        searchControl = new GeoSearch.GeoSearchControl({
+          provider: providerRD,
+          style: 'bar',
+          showMarker: false,
+          autoClose: false,
+        });
+        map.addControl(searchControl);
+        searchAdded = true;
+      }
+      if (layersControl && !layersHidden) { try { map.removeControl(layersControl); } catch(_){} layersHidden = true; }
+      setBottomSheetInstruction();
+      setTimeout(() => map.invalidateSize(), 50);
     });
   }
   if (confirmMapPointsBtn) {
@@ -655,12 +718,19 @@ async function initMap() {
       if (instructionText) {
         instructionText.innerHTML = "¡Perfecto! Ahora, establece el <strong>punto de destino</strong>.";
       }
+      // Mostrar hoja inferior para confirmar origen y continuar a destino (móvil)
+      setBottomSheetForOrigin(currentInput.value);
     }
 
     calculateAndDisplayDistance();
     fitMapToBounds();
 
     if (originMarker && destinationMarker) {
+      // Al tener los dos puntos, contraer el mapa y mostrar inputs con valores
+      if (mapContainer.classList.contains('fixed')) {
+        mapContainer.classList.remove('fixed', 'inset-0', 'z-[100]');
+        document.body.classList.remove('overflow-hidden');
+      }
       if (addressInputs) addressInputs.classList.remove('hidden');
       if (instructionText) instructionText.classList.add('hidden');
       if (mapEl) {
@@ -668,9 +738,10 @@ async function initMap() {
         mapEl.classList.add('h-80');
         setTimeout(() => map.invalidateSize(), 100);
       }
+      // En modo contraído, mantener buscador opcional (autoClose) para ajustes menores
       if (!searchAdded) {
         searchControl = new GeoSearch.GeoSearchControl({
-          provider: new GeoSearch.OpenStreetMapProvider(),
+          provider: providerRD,
           style: 'bar',
           showMarker: false,
           autoClose: true,
@@ -684,15 +755,13 @@ async function initMap() {
       if (resetMapBtn) resetMapBtn.classList.remove('hidden');
       loadPOIsForBounds();
       if (!map._poiMoveHandlerAttached) {
-        map.on('moveend', () => {
-          loadPOIsForBounds();
-        });
+        map.on('moveend', () => { loadPOIsForBounds(); });
         map._poiMoveHandlerAttached = true;
       }
     }
   }
   // Búsqueda programática desde inputs con debounce para UX móvil
-  const provider = new GeoSearch.OpenStreetMapProvider();
+  const provider = providerRD;
   let debounceTimer = null;
   const debouncedSearch = (inputEl, isOrigin) => {
     clearTimeout(debounceTimer);

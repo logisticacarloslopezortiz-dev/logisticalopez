@@ -9,8 +9,17 @@
 
   function isDesktop(){ return window.innerWidth >= 768; }
 
-  function updateLucide(){
-    try { if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons(); } catch(_){ }
+  // Optimiza la actualización de iconos para evitar sobrecarga
+  let __lucideTimer = null;
+  function updateLucide(root){
+    try {
+      if (!window.lucide || typeof lucide.createIcons !== 'function') return;
+      if (__lucideTimer) clearTimeout(__lucideTimer);
+      __lucideTimer = setTimeout(() => {
+        const target = root || qs('collabSidebar') || document;
+        try { lucide.createIcons(undefined, target); } catch(_) { lucide.createIcons(); }
+      }, 60);
+    } catch(_){}
   }
 
   function setAria(btn, expanded){
@@ -36,6 +45,12 @@
     const collapseBtn = qs(cfg.collapseBtnId);
     const desktopOpenBtn = qs(cfg.desktopOpenBtnId);
     const hoverHandle = qs(cfg.hoverHandleId);
+
+    // Guard: evita re-inicializar sobre el mismo sidebar (previene listeners duplicados)
+    if (sidebar && sidebar.dataset.initialized === 'true') {
+      updateLucide(sidebar);
+      return;
+    }
 
     let lastFocused = null;
 
@@ -159,6 +174,7 @@
     });
 
     initDesktop();
+    if (sidebar) { sidebar.dataset.initialized = 'true'; }
   }
 
   // Auto-init si detecta el sidebar por defecto en la página

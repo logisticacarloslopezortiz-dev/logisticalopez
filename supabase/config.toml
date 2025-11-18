@@ -385,7 +385,6 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/process-outbox/deno.json"
 entrypoint = "./functions/process-outbox/index.ts"
-schedule = "*/1 * * * * *"
 
 [functions.send-invoice]
 enabled = true

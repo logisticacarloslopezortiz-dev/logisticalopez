@@ -169,8 +169,8 @@ Deno.serve(async (req: Request) => {
   const cors = handleCors(req); if (cors) return cors;
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY');
-    if (!SUPABASE_URL || !SUPABASE_KEY) return jsonResponse({ success: false, error: 'Faltan variables de entorno Supabase' }, 500);
+    const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!SUPABASE_URL || !SUPABASE_KEY) return jsonResponse({ success: false, error: 'Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY' }, 500);
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY) as unknown as SupabaseClientLike;
 
     await logDb(supabase, 'process-outbox', 'info', 'invoke_start', { scheduleSpec: '*/1 * * * * *' });
@@ -186,10 +186,14 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: true, logs }, 200);
     }
 
-    const query: any = (supabase as any).from('notification_outbox').select('*').order('created_at', { ascending: true }).limit(100);
-    if (onlyId) query.eq('id', Number(onlyId));
-    else if (input?.orderId) query.eq('order_id', Number(input.orderId)).is('processed_at', null);
-    else query.or('processed_at.is.null,new_status.eq.Pendiente');
+    let query: any = (supabase as any).from('notification_outbox').select('*').order('created_at', { ascending: true }).limit(100);
+    if (onlyId) {
+      query = query.eq('id', Number(onlyId));
+    } else if (input?.orderId) {
+      query = query.eq('order_id', Number(input.orderId)).is('processed_at', null);
+    } else {
+      query = query.is('processed_at', null);
+    }
 
     const { data, error } = await query;
     if (error) return jsonResponse({ success: false, error: errToString(error) }, 200);
@@ -209,8 +213,15 @@ Deno.serve(async (req: Request) => {
         try {
           const idx = chunk.indexOf(row);
           const sum = summaries[idx];
-          const statusOp = sum && sum.successCount > 0 ? 'Procesado' : 'Error';
-          await (supabase as any).from('notification_outbox').update({ processed_at: processedAt, status: statusOp }).eq('id', row.id);
+          if (sum && sum.successCount > 0) {
+            // Marcar como procesado sólo si hubo entregas exitosas
+            await (supabase as any).from('notification_outbox').update({ processed_at: processedAt }).eq('id', row.id);
+          } else {
+            // Mantener pendiente para reintentos; si existen columnas attempts/last_error, incrementarlas.
+            try {
+              await (supabase as any).from('notification_outbox').update({ attempts: ((row as any).attempts ?? 0) + 1, last_error: 'send_failed' }).eq('id', row.id);
+            } catch (_) { /* columnas opcionales no existen */ }
+          }
         } catch (_) { void 0; }
       }));
     }

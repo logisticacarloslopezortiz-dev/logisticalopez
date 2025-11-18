@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Rendimiento - TLC</title>
     <!-- ✅ Favicon -->
     <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
@@ -10,11 +10,14 @@
     <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
     <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>     
     
-    <link rel="stylesheet" href="css/tailwind.min.css?v=1.1">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/tailwind.min.css?v=1.2">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/collab-panel-styles.css?v=1.2">
+    <script src="vendor/lucide.min.js?v=1.2" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        body.preload-hidden { opacity: 0; }
         body { font-family: 'Inter', sans-serif; }
         .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .card-hover { transition: all 0.3s ease; }
@@ -23,69 +26,15 @@
         .chart-container { position: relative; height: 300px; }
         .progress-ring { transform: rotate(-90deg); }
         .progress-ring-circle { transition: stroke-dashoffset 0.35s; transform-origin: 50% 50%; }
-        #collabSidebar { transition: transform 0.3s ease-in-out; will-change: transform; }
-        /* Fallback mínimo si Tailwind CDN falla */
-        .hidden{display:none!important}
-        .animate-fade-in{animation:fadeIn .3s ease-out}
-        @keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
-        .text-white{color:#fff}
-        .bg-white{background:#fff}
-        .shadow{box-shadow:0 1px 3px rgba(0,0,0,.1)}
-    
-        /* --- Base Layout --- */
-        body {
-          display: flex;
-          min-height: 100vh;
-          overflow-x: hidden; /* Prevenir scroll horizontal */
-        }
-        #collabSidebar {
-          transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
-          will-change: transform, width;
-          flex-shrink: 0; /* Evitar que el sidebar se comprima */
-        }
-        main {
-          flex: 1;
-          min-width: 0; /* Permitir que el contenido se comprima */
-          transition: margin-left 0.3s ease-in-out;
-        }
-        #sidebarOverlay {
-          position: fixed;
-          inset: 0;
-          background-color: rgba(0, 0, 0, 0.5);
-          z-index: 40;
-          opacity: 0;
-          visibility: hidden;
-          transition: opacity 0.3s ease-in-out, visibility 0.3s;
-        }
-
-        /* --- Vista Móvil (< 768px) --- */
-        @media (max-width: 767.98px) {
-          body { flex-direction: column; }
-          #collabSidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); z-index: 50; width: 320px !important; }
-          main { margin-left: 0 !important; }
-          body.sidebar-mobile-open #collabSidebar { transform: translateX(0); }
-          body.sidebar-mobile-open #sidebarOverlay { opacity: 1; visibility: visible; display: block; }
-        }
-
-        /* --- Vista de Escritorio (>= 768px) --- */
-        @media (min-width: 768px) {
-          #collabSidebar { position: fixed; top: 0; left: 0; height: 100vh; width: 18rem; }
-          #sidebarOverlay { display: none !important; }
-          body.sidebar-desktop-open main { margin-left: 18rem; }
-          body.sidebar-desktop-open #collabSidebar { transform: translateX(0); }
-          body.sidebar-desktop-closed #collabSidebar { transform: translateX(calc(-100% + 3rem)); width: 18rem; }
-          body.sidebar-desktop-closed main { margin-left: 3rem; }
-          body.sidebar-desktop-closed #desktopMenuBtn { display: block; }
-          body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.75rem; }
-          body.sidebar-desktop-closed #collabSidebar .w-12.h-12 { width: 2.25rem; height: 2.25rem; }
-          body.sidebar-desktop-closed #collabSidebar nav a { justify-content: center; padding: 0.75rem; }
-          body.sidebar-desktop-closed #collabSidebar nav i { margin: 0; }
-          body.sidebar-desktop-closed nav span.font-medium { display: none; }
-          body.sidebar-desktop-closed #collabSidebar .flex-1.min-w-0 { display: none; }
-        }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50 preload-hidden">
+    <script>
+      document.addEventListener('DOMContentLoaded', function(){
+        try { document.body.classList.remove('preload-hidden'); } catch(_){}
+        try { if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons(); } catch(_){}
+      });
+    </script>
     <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
       <div class="flex items-center justify-between px-4 py-3">
         <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/80 backdrop-blur shadow-sm ring-1 ring-gray-200 hover:bg-white hover:shadow transition">
@@ -113,8 +62,8 @@
                         <p class="text-xs" style="color: #1E8A95;">Panel de Colaborador</p>
                     </div>
                 </div>
-                <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[rgba(30,138,149,0.4)] group" style="background-color: rgba(30, 138, 149, 0.2);" aria-expanded="true" aria-controls="collabSidebar">
-                  <i data-lucide="panel-left-close" class="w-4 h-4 text-white transition-transform duration-300 group-hover:scale-90"></i>
+                <button id="sidebarCollapseBtn" class="flex items-center justify-center w-9 h-9 rounded-xl bg-gray-200 ring-1 ring-gray-300 hover:bg-gray-300 hover:ring-gray-400 transition-all duration-200 group" aria-expanded="true" aria-controls="collabSidebar" title="Colapsar menú">
+                  <i data-lucide="panel-left-close" class="w-4 h-4 text-gray-700 transition-transform duration-300 group-hover:rotate-[-15deg] group-hover:scale-90"></i>
                 </button>
             </div>
             
@@ -157,9 +106,9 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 p-8 relative">
-        <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-lg hover:bg-gray-100 transition-colors hidden absolute top-4 left-4 z-40 group">
-          <i data-lucide="menu" class="w-6 h-6 text-gray-600 transition-transform duration-300 group-hover:rotate-90"></i>
+    <main id="mainContent" class="flex-1 p-8 relative">
+        <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-none bg-[#117D8B] ring-1 ring-white text-white hover:bg-[#1499a7] transition-colors hidden absolute top-4 left-4 z-40 group" title="Abrir menú">
+          <i data-lucide="menu" class="w-6 h-6 text-white transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110"></i>
         </button>
         <!-- Métricas Principales -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -286,8 +235,8 @@
                       Historial Reciente
                   </h3>
                   <div class="flex items-center gap-2">
-                    <input id="historySearch" type="text" placeholder="Buscar servicio..." class="text-sm px-2 py-1 border rounded" />
-                    <select id="historyStatusFilter" class="text-sm px-2 py-1 border rounded">
+                    <input id="historySearch" type="text" placeholder="Buscar servicio..." aria-label="Buscar en historial" class="text-sm px-2 py-1 border rounded" />
+                    <select id="historyStatusFilter" aria-label="Filtrar por estado" class="text-sm px-2 py-1 border rounded">
                       <option value="">Todos</option>
                       <option value="Completado">Completados</option>
                       <option value="Activo">Activos</option>
@@ -328,7 +277,7 @@
             <div class="w-full bg-white rounded-xl shadow-2xl p-6 animate-fade-in-up">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-xl font-semibold text-gray-900">Configurar Horario</h3>
-                    <button id="closeScheduleModal" class="text-gray-500 hover:text-gray-700">
+                    <button id="closeScheduleModal" class="text-gray-500 hover:text-gray-700" aria-label="Cerrar">
                         <i data-lucide="x" class="w-6 h-6"></i>
                     </button>
                 </div>
@@ -422,7 +371,7 @@
         }
       })();
     </script>
-    <script src="js/sidebar-collab.js?v=1.1" defer></script>
+    <script src="js/sidebar-collab.js?v=1.2" defer></script>
     <script src="js/rendimiento.js?v=1.1"></script>
 </body>
 </html>
