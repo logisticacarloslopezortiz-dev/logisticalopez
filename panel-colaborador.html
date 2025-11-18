@@ -27,11 +27,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Comic+Neue:wght@300;400;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
+  
   
   <!-- Tailwind y Lucide (local) -->
-  <link rel="stylesheet" href="css/tailwind.min.css">
-  <script src="vendor/lucide.min.js" defer></script>
+  <link rel="stylesheet" href="css/tailwind.min.css?v=1.2">
+  <script src="vendor/lucide.min.js?v=1.2" defer></script>
   
   <!-- Mitigación FOUC: ocultar el cuerpo hasta que los estilos estén listos -->
   <style>
@@ -58,6 +58,12 @@
       min-width: 0; /* Permitir que el contenido se comprima */
       transition: margin-left 0.3s ease-in-out;
     }
+    .hidden{display:none!important}
+    .grid{display:grid}
+    .flex{display:flex}
+    .shadow{box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .rounded-xl{border-radius:0.75rem}
+    .rounded-lg{border-radius:0.5rem}
     .spinner {
       border: 4px solid rgba(0, 0, 0, 0.1);
       width: 36px;
@@ -183,7 +189,7 @@
   <!-- Mobile Header (Estandarizado como en rendimiento.html) -->
   <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
     <div class="flex items-center justify-between px-4 py-3">
-      <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/80 backdrop-blur shadow-sm ring-1 ring-gray-200 hover:bg-white hover:shadow transition">
+      <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/90 backdrop-blur shadow ring-1 ring-[rgba(30,138,149,0.35)] hover:ring-[rgba(30,138,149,0.6)] hover:bg-white transition flex items-center gap-2">
         <i data-lucide="menu" class="w-6 h-6" style="color: var(--color-primario);"></i>
       </button>
       <div class="flex items-center gap-2">
@@ -226,9 +232,9 @@
             <p class="text-xs" style="color: var(--color-secundario);">Panel de Control</p>
           </div>
         </div>
-        <button id="sidebarCollapseBtn" class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[rgba(30,138,149,0.4)] group" style="background-color: rgba(30, 138, 149, 0.2);" aria-expanded="true" aria-controls="collabSidebar" title="Colapsar menú">
-        <i data-lucide="panel-left-close" class="w-4 h-4 text-white transition-transform duration-300 group-hover:scale-90"></i>
-        </button>
+          <button id="sidebarCollapseBtn" class="flex items-center justify-center w-9 h-9 rounded-xl bg-white ring-1 ring-black hover:bg-gray-50 hover:ring-black transition-all duration-200 group" aria-expanded="true" aria-controls="collabSidebar" title="Colapsar menú">
+            <i data-lucide="panel-left-close" class="w-4 h-4 text-black transition-transform duration-300 group-hover:rotate-[-15deg] group-hover:scale-90"></i>
+          </button>
       </div>
       
       <!-- Perfil del Colaborador -->
@@ -276,10 +282,13 @@
 
         <!-- Botón de cambio de tema y cerrar sesión -->
         <div class="pt-4 mt-4" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
-          <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-center gap-2 p-3 mt-2 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
-              <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
-              <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
-              <span class="font-medium text-sm">Modo oscuro</span>
+          <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-between gap-3 p-3 mt-2 rounded-xl text-white bg-[rgba(30,138,149,0.25)] hover:bg-[rgba(30,138,149,0.45)] ring-1 ring-[rgba(255,255,255,0.2)] hover:ring-[rgba(255,255,255,0.35)] transition-all duration-200 group">
+              <div class="flex items-center gap-2">
+                <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
+                <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
+                <span class="font-medium text-sm theme-text">Modo oscuro</span>
+              </div>
+              <span class="text-xs px-2 py-1 rounded-full bg-white/10">Tema</span>
           </button>
           <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
               <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -293,8 +302,8 @@
   <!-- Sidebar and main are siblings for predictable layout and easier CSS control -->
   <main id="mainContent" class="p-4 md:p-8 transition-all duration-300 relative">
       <!-- Botón para abrir el sidebar en escritorio cuando está colapsado -->
-      <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-lg hover:bg-gray-100 transition-colors hidden absolute top-4 left-4 z-40 group" title="Abrir menú">
-        <i data-lucide="menu" class="w-6 h-6 text-gray-600 transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110"></i>
+      <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-none bg-[#117D8B] ring-1 ring-white text-white hover:bg-[#1499a7] transition-colors hidden absolute top-4 left-4 z-40 group" title="Abrir menú">
+        <i data-lucide="menu" class="w-6 h-6 text-white transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110"></i>
       </button>
 
       
@@ -421,16 +430,16 @@
 
   <!-- Scripts de la aplicación (ordenados y sin duplicados) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-  <script src="js/supabase-config.js" defer></script>
-  <script src="js/notifications.js" defer></script>
-  <script src="js/backup.js" defer></script>
-  <script src="js/theme.js" defer></script>
-  <script src="js/rating-system.js" defer></script>
-  <script src="js/order-manager.js" defer></script>
-  <script src="js/push-notifications.js" defer></script>
-  <script src="js/panel-colaborador.js" defer></script>
-  <script src="js/sidebar-collab.js" defer></script>
-  <script src="js/pwa.js" defer></script>
+  <script src="js/supabase-config.js?v=1.2" defer></script>
+  <script src="js/notifications.js?v=1.2" defer></script>
+  <script src="js/backup.js?v=1.2" defer></script>
+  <script src="js/theme.js?v=1.2" defer></script>
+  <script src="js/rating-system.js?v=1.2" defer></script>
+  <script src="js/order-manager.js?v=1.2" defer></script>
+  <script src="js/push-notifications.js?v=1.2" defer></script>
+  <script src="js/panel-colaborador.js?v=1.2" defer></script>
+  <script src="js/sidebar-collab.js?v=1.2" defer></script>
+  <script src="js/pwa.js?v=1.2" defer></script>
   
   <!--
     ================================================================================

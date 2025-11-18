@@ -9,7 +9,8 @@
     <link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
     <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
     <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>     
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="css/tailwind.min.css?v=1.1">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -23,7 +24,14 @@
         .progress-ring { transform: rotate(-90deg); }
         .progress-ring-circle { transition: stroke-dashoffset 0.35s; transform-origin: 50% 50%; }
         #collabSidebar { transition: transform 0.3s ease-in-out; will-change: transform; }
-        
+        /* Fallback mínimo si Tailwind CDN falla */
+        .hidden{display:none!important}
+        .animate-fade-in{animation:fadeIn .3s ease-out}
+        @keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
+        .text-white{color:#fff}
+        .bg-white{background:#fff}
+        .shadow{box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    
         /* --- Base Layout --- */
         body {
           display: flex;
@@ -414,7 +422,7 @@
         }
       })();
     </script>
-    <script src="js/sidebar-collab.js" defer></script>
-    <script src="js/rendimiento.js"></script>
+    <script src="js/sidebar-collab.js?v=1.1" defer></script>
+    <script src="js/rendimiento.js?v=1.1"></script>
 </body>
 </html>

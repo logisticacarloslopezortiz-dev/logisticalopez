@@ -33,6 +33,17 @@
     }
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .text-azulOscuro { color: #0C375D; }
+    .text-azulClaro { color: #117D8B; }
+    .bg-azulClaro { background-color: #117D8B; }
+    .bg-azulOscuro { background-color: #0C375D; }
+    .border-azulClaro { border-color: #117D8B; }
+    .hover\:bg-azulOscuro:hover { background-color: #0C375D; }
+    @keyframes fadeInUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0);} }
+    .animate-fadeInUp { animation: fadeInUp 0.5s ease-out; }
+    .hidden { display: none !important; }
+  </style>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <!-- Leaflet CSS y JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>

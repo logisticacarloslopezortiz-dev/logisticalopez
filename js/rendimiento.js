@@ -35,7 +35,7 @@ async function fetchCollaboratorOrders(collabId) {
             .from('orders')
             .select(`*, service:services(name), vehicle:vehicles(name)`) 
             .eq('assigned_to', collabId)
-            .in('status', ['Pendiente','En proceso'])
+            .in('status', ['Pendiente','En proceso','Completada'])
             .order('created_at', { ascending: false });
         if (error) throw error;
         return (data || []).map(o => ({
