@@ -1233,16 +1233,63 @@ DECLARE
   o RECORD;
   res jsonb;
 BEGIN
-  SELECT o.*, s.name AS service_name, v.name AS vehicle_name
-  INTO o
-  FROM public.orders o
-  LEFT JOIN public.services s ON s.id = o.service_id
-  LEFT JOIN public.vehicles v ON v.id = o.vehicle_id
-  WHERE (identifier ~ '^[0-9]+$' AND o.id = identifier::bigint)
-     OR (o.short_id = identifier)
-  LIMIT 1;
+  o := NULL;
 
-  IF NOT FOUND THEN
+  IF identifier ~ '^[0-9]+$' THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'supabase_seq_id'
+    ) THEN
+      SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
+      FROM public.orders o2
+      LEFT JOIN public.services s ON s.id = o2.service_id
+      LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
+      WHERE o2.supabase_seq_id = identifier::bigint
+      LIMIT 1;
+    END IF;
+    IF o IS NULL THEN
+      SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
+      FROM public.orders o2
+      LEFT JOIN public.services s ON s.id = o2.service_id
+      LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
+      WHERE o2.id = identifier::bigint
+      LIMIT 1;
+    END IF;
+  ELSIF identifier ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
+    FROM public.orders o2
+    LEFT JOIN public.services s ON s.id = o2.service_id
+    LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
+    WHERE o2.id::text = identifier
+    LIMIT 1;
+  ELSE
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'short_id'
+    ) THEN
+      SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
+      FROM public.orders o2
+      LEFT JOIN public.services s ON s.id = o2.service_id
+      LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
+      WHERE o2.short_id = identifier
+      LIMIT 1;
+    END IF;
+    IF o IS NULL AND identifier ~ '^[0-9a-f]{32}$' THEN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'client_tracking_id'
+      ) THEN
+        SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
+        FROM public.orders o2
+        LEFT JOIN public.services s ON s.id = o2.service_id
+        LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
+        WHERE o2.client_tracking_id = identifier
+        LIMIT 1;
+      END IF;
+    END IF;
+  END IF;
+
+  IF o IS NULL THEN
     RETURN NULL;
   END IF;
 

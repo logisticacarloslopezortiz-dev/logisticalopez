@@ -203,27 +203,21 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: message }, 500);
   }
 });
-type SelectOrdersBuilder = {
-  eq: (column: string, value: string | number) => {
-    single: () => Promise<{ data?: OrderDataMinimal; error?: unknown }>;
-    maybeSingle: () => Promise<{ data?: OrderDataMinimal; error?: unknown }>;
-  };
-  single: () => Promise<{ data?: OrderDataMinimal; error?: unknown }>;
-  maybeSingle: () => Promise<{ data?: OrderDataMinimal; error?: unknown }>;
+type QueryBuilder = {
+  eq: (column: string, value: string | number) => QueryBuilder;
+  single: () => Promise<{ data?: any; error?: any }>;
+  maybeSingle: () => Promise<{ data?: any; error?: any }>;
 };
 
 type SupabaseClientLike = {
   from: (table: 'orders' | 'business' | 'clients' | 'invoices') => {
-    select: (columns: string) => SelectOrdersBuilder | Promise<{ data?: unknown; error?: unknown }>;
+    select: (columns: string) => QueryBuilder;
     insert: (values: unknown) => Promise<{ data?: unknown; error?: unknown }>;
-    eq: (column: string, value: string | number) => Promise<{ data?: unknown; error?: unknown }>;
-    single: () => Promise<{ data?: unknown; error?: unknown }>;
-    maybeSingle: () => Promise<{ data?: unknown; error?: unknown }>;
   };
   storage: {
     from: (bucket: string) => {
       upload: (path: string, data: Uint8Array, opts: { contentType?: string; upsert?: boolean }) => Promise<{ data?: unknown; error?: unknown }>;
     };
-    createBucket: (name: string, opts: { public?: boolean }) => Promise<unknown>;
+    createBucket: (name: string, opts: { public?: boolean }) => Promise<{ data?: unknown; error?: unknown }>;
   };
 };

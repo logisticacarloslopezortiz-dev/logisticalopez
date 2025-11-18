@@ -576,8 +576,7 @@ async function changeStatus(orderId, newKey) {
 }
 
 function returnToOrdersView() {
-  state.activeJobId = null;
-  localStorage.removeItem('tlc_collab_active_job');
+  clearActiveJob();
   document.getElementById('activeJobSection').classList.add('hidden');
   document.getElementById('ordersCardContainer')?.classList.remove('hidden');
   document.getElementById('pendingSection')?.classList.remove('hidden');
@@ -638,7 +637,7 @@ const state = {
   allOrders: [],
   historialOrders: [],
   selectedOrderIdForAccept: null,
-  activeJobId: Number(localStorage.getItem('tlc_collab_active_job')) || null,
+  activeJobId: null,
   collabSession: null,
   activeJobMap: null,
   collabNameCache: new Map(),
@@ -691,6 +690,13 @@ function handleCardClick(orderId) {
   // Si no hay trabajo activo, proceder según el estado de la orden
   if (!order.assigned_to && order.status === 'Pendiente') {
     openAcceptModal(order);
+    return;
+  }
+  if (order.assigned_to === state.collabSession.user.id && order.status !== 'Completada' && order.status !== 'Cancelada') {
+    showActiveJob(order);
+    document.getElementById('ordersCardContainer')?.classList.add('hidden');
+    document.getElementById('pendingSection')?.classList.add('hidden');
+    return;
   }
 }
 
@@ -1219,6 +1225,27 @@ async function loadInitialOrders() {
 
     let { data, error } = await doQuery();
 
+    // Fallback: si no se reciben órdenes asignadas por políticas RLS, intentar consulta directa
+    if (!error && Array.isArray(data)) {
+      const collabId = state.collabSession.user.id;
+      const hasAssigned = data.some(o => o && o.assigned_to === collabId);
+      if (!hasAssigned) {
+        try {
+          const { data: assignedOnly, error: assignedErr } = await supabaseConfig.client
+            .from('orders')
+            .select(`*, service:services(name), vehicle:vehicles(name)`) 
+            .eq('assigned_to', collabId)
+            .order('created_at', { ascending: false });
+          if (!assignedErr && Array.isArray(assignedOnly) && assignedOnly.length > 0) {
+            // Unir evitando duplicados por id
+            const map = new Map((data || []).map(o => [o.id, o]));
+            for (const row of assignedOnly) { map.set(row.id, row); }
+            data = Array.from(map.values());
+          }
+        } catch (_) { /* noop */ }
+      }
+    }
+
     // Detectar token expirado y refrescar sesión, luego reintentar
     if (error && (error.code === 'PGRST303' || /JWT expired/i.test(error.message || '') || error.status === 401)) {
       console.warn('JWT expirado. Intentando refrescar sesión y reintentar...');
@@ -1297,12 +1324,12 @@ async function updateCollaboratorStats(collaboratorId) {
     // Obtener estadísticas locales inmediatamente para UI responsiva
     const collaboratorOrders = state.allOrders.filter(order => order.assigned_to === collaboratorId);
     
-    const activeJobs = collaboratorOrders.filter(order => 
+  const activeJobs = collaboratorOrders.filter(order => 
       order.status === 'En proceso' || 
-      (order.assigned_to === collaboratorId && order.status !== 'Completado' && order.status !== 'Cancelado')
+      (order.assigned_to === collaboratorId && order.status !== 'Completada' && order.status !== 'Cancelada')
     ).length;
     
-    const completedJobs = collaboratorOrders.filter(order => order.status === 'Completado').length;
+    const completedJobs = collaboratorOrders.filter(order => order.status === 'Completada').length;
     const pendingRequests = state.allOrders.filter(order => order.status === 'Pendiente' && !order.assigned_to).length;
     
     // Actualizar UI inmediatamente con datos locales
@@ -1329,7 +1356,7 @@ async function updateCollaboratorStats(collaboratorId) {
         
         const realCompletedJobs = realTimeStats.filter(order => 
           order.assigned_to === collaboratorId && 
-          order.status === 'Completado'
+          order.status === 'Completada'
         ).length;
         
         const realPendingRequests = realTimeStats.filter(order => 
