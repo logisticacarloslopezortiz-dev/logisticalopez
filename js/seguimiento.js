@@ -36,6 +36,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Función para buscar la orden en Supabase
     async function findOrder() {
+        // --- 1. Solicitar permiso de notificaciones ---
+        // Se pide al inicio de la interacción del usuario para cumplir con las políticas del navegador.
+        try {
+            if ("Notification" in window && Notification.permission !== "granted") {
+                 await Notification.requestPermission();
+            }
+        } catch (e) {
+            console.warn("No se pudo solicitar el permiso de notificaciones:", e);
+        }
+
         const orderIdValue = orderIdInput.value.trim();
         if (!orderIdValue) {
             showError('Por favor, ingresa un ID de orden.');
@@ -197,12 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Verificar permiso y mostrar notificación
         if (Notification.permission === "granted") {
             new Notification(title, options);
-        } else if (Notification.permission !== "denied") {
-            Notification.requestPermission().then(permission => {
-                if (permission === "granted") {
-                    new Notification(title, options);
-                }
-            });
         }
     }
 
