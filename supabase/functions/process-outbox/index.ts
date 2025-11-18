@@ -10,6 +10,7 @@ type OutboxRow = {
   new_status: string | null;
   target_role: 'administrador' | 'colaborador' | 'cliente' | null;
   target_user_id: string | null; // puede ser user_id o client_contact_id
+  target_contact_id: string | null;
   payload: Record<string, unknown> | null;
   created_at: string;
   processed_at: string | null;
@@ -165,12 +166,17 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow) {
     subscriptions = Array.isArray(subs) ? (subs as unknown as WebPushSubscription[]) : [];
   } else {
     const p = (row.payload ?? {}) as Record<string, unknown>;
-    const contactId = p['contactId'] ? String(p['contactId']) : null;
+    const contactId = p['contactId'] ? String(p['contactId']) : (row.target_contact_id ? String(row.target_contact_id) : null);
     const userId = p['userId'] ? String(p['userId']) : (row.target_user_id ? String(row.target_user_id) : null);
     if (contactId) {
       subscriptions = await fetchContactSubscriptions(supabase, contactId);
     } else if (userId) {
       subscriptions = await fetchUserSubscriptions(supabase, userId);
+      if (subscriptions.length === 0) {
+        const idMaybe = String(userId);
+        const alt = await fetchContactSubscriptions(supabase, idMaybe);
+        if (alt.length > 0) subscriptions = alt;
+      }
     }
   }
 
@@ -221,13 +227,28 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow) {
   const targetUserId = row.target_user_id ?? null;
   if (targetUserId) {
     try {
-      await supabase.from('notifications').insert({
-        user_id: targetUserId,
-        title,
-        body,
-        data: { orderId: row.order_id, newStatus: row.new_status, results },
-        created_at: new Date().toISOString(),
-      });
+      const recentSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { data: existing } = await (supabase as any)
+        .from('notifications')
+        .select('id')
+        .eq('user_id', targetUserId)
+        .eq('title', title)
+        .eq('body', body)
+        .filter('data->>orderId', 'eq', String(row.order_id))
+        .gte('created_at', recentSince)
+        .limit(1);
+      const hasDup = Array.isArray(existing) && existing.length > 0;
+      if (!hasDup) {
+        await supabase.from('notifications').insert({
+          user_id: targetUserId,
+          title,
+          body,
+          data: { orderId: row.order_id, newStatus: row.new_status, results },
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        await logDb(supabase, 'process-outbox', 'info', 'skip_duplicate_notification', { user_id: targetUserId, order_id: row.order_id, title });
+      }
     } catch (_) { void 0; }
   }
 }
@@ -244,18 +265,36 @@ Deno.serve(async (req: Request) => {
     }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE) as unknown as SupabaseClientLike;
 
-    const { data: pending, error } = await supabase
-      .from('notification_outbox')
-      .select('*')
-      .is('processed_at', null)
-      .order('created_at', { ascending: true })
-      .limit(100);
+    let input: any = null;
+    try { input = await req.json(); } catch (_) { input = null; }
+    const onlyId = input?.id ?? input?.outboxId ?? null;
+
+    let pending: OutboxRow[] | undefined;
+    let error: unknown | undefined;
+    if (onlyId) {
+      const r = await (supabase as any)
+        .from('notification_outbox')
+        .select('*')
+        .eq('id', Number(onlyId))
+        .limit(1);
+      pending = (r?.data ?? []) as OutboxRow[];
+      error = r?.error;
+    } else {
+      const r = await supabase
+        .from('notification_outbox')
+        .select('*')
+        .is('processed_at', null)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      pending = (r.data ?? []) as OutboxRow[];
+      error = r.error;
+    }
     if (error) {
       await logDb(supabase, 'process-outbox', 'error', 'Error consultando outbox', { error: errToString(error) });
       return jsonResponse({ success: false, error: 'Error consultando outbox' }, 200);
     }
 
-    const rows = (pending ?? []) as OutboxRow[];
+    const rows = pending ?? [];
     for (const row of rows) {
       try {
         await processRow(supabase, row);

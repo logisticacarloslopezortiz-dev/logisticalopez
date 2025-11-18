@@ -856,36 +856,25 @@ async function subscribeUserToPush(savedOrder) {
     const applicationServerKey = raw;
     console.log("applicationServerKey generada y validada correctamente");
 
-    // Si existe una suscripción previa, intentar desuscribir para evitar InvalidStateError
+    let subscription = null;
     let existing = null;
     try {
       existing = await registration.pushManager.getSubscription();
       if (existing) {
-        console.log('[Push] Existe suscripción previa, intentando desuscribir...');
-        await existing.unsubscribe();
-        console.log('[Push] Suscripción previa desuscrita.');
+        subscription = existing;
+        console.log('[Push] Suscripción existente reutilizada:', subscription);
+      } else {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey
+        });
       }
-    } catch (preErr) {
-      console.warn('[Push] No se pudo desuscribir la suscripción previa:', preErr);
-    }
-
-    let subscription = null;
-    try {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey
-      });
     } catch (subErr) {
-      // Manejar caso de clave VAPID diferente: desuscribir y reintentar
       if (String(subErr?.message || '').includes('applicationServerKey') || String(subErr?.name || '') === 'InvalidStateError') {
         try {
           existing = await registration.pushManager.getSubscription();
-          if (existing) {
-            console.log('[Push] Reintento: desuscribiendo suscripción conflictiva...');
-            await existing.unsubscribe();
-          }
+          if (existing) await existing.unsubscribe();
         } catch (_) {}
-        // Reintentar suscripción con la nueva clave
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey
