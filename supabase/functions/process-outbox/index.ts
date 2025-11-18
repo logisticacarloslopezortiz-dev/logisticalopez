@@ -2,8 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { handleCors, jsonResponse } from '../cors-config.ts';
 
+// Suscripción Web Push: endpoint y claves p256dh/auth
 type WebPushSubscription = { endpoint: string; keys: { p256dh: string; auth: string } };
 
+// Fila de outbox a procesar
 type OutboxRow = {
   id: number;
   order_id: number;
@@ -16,6 +18,7 @@ type OutboxRow = {
   processed_at: string | null;
 };
 
+// Tipado básico para construir consultas
 type QueryBuilder<T> = {
   eq: (column: string, value: string | number) => QueryBuilder<T>;
   in: (column: string, values: string[]) => QueryBuilder<T>;
@@ -26,19 +29,23 @@ type QueryBuilder<T> = {
   maybeSingle: () => Promise<{ data?: T; error?: unknown }>;
 };
 
+// Cliente Supabase minimalista para Deno Edge
 type SupabaseClientLike = {
   from: (table: string) => {
     insert: (values: unknown) => Promise<{ data?: unknown; error?: unknown }>;
     select: (columns: string) => QueryBuilder<unknown>;
     update: (values: unknown) => { eq: (column: string, value: number) => Promise<{ data?: unknown; error?: unknown }> };
+    delete?: () => { eq: (column: string, value: string) => Promise<{ data?: unknown; error?: unknown }> };
   };
 };
 
+// Utilidad: serializar errores
 function errToString(err: unknown): string {
   if (err instanceof Error) return err.message;
   try { return JSON.stringify(err); } catch { return String(err); }
 }
 
+// Clasificación del evento para trazabilidad
 function classifyEvent(row: OutboxRow): string {
   const p = (row.payload ?? {}) as Record<string, unknown>;
   const data = (p['data'] ?? {}) as Record<string, unknown>;
@@ -53,6 +60,7 @@ function classifyEvent(row: OutboxRow): string {
   return 'generic';
 }
 
+// Registro de eventos en tabla function_logs para auditoría
 async function logDb(
   supabase: SupabaseClientLike,
   fn_name: string,
@@ -63,16 +71,20 @@ async function logDb(
   try { await supabase.from('function_logs').insert({ fn_name, level, message, payload }); } catch (_) { void 0; }
 }
 
-async function sendPush(subscription: WebPushSubscription, payload: unknown) {
+// Envío Web Push usando claves VAPID del entorno
+async function sendWebPush(endpoint: string, payload: unknown, keys: { p256dh: string; auth: string }) {
   const webpush = await import('web-push');
   const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
   const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
   const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('Faltan claves VAPID');
   webpush.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  const subscription = { endpoint, keys } as WebPushSubscription;
+  // TTL debe ser no negativo
   return await webpush.default.sendNotification(subscription, JSON.stringify(payload), { TTL: 600 });
 }
 
+// Obtener suscripciones por usuario del sistema
 async function fetchUserSubscriptions(supabase: SupabaseClientLike, userId: string): Promise<WebPushSubscription[]> {
   const results: WebPushSubscription[] = [];
   const r1 = await supabase
@@ -99,6 +111,7 @@ async function fetchUserSubscriptions(supabase: SupabaseClientLike, userId: stri
   return results;
 }
 
+// Obtener suscripciones por contacto/cliente no autenticado
 async function fetchContactSubscriptions(supabase: SupabaseClientLike, contactId: string): Promise<WebPushSubscription[]> {
   const results: WebPushSubscription[] = [];
   const r1 = await supabase
@@ -125,6 +138,7 @@ async function fetchContactSubscriptions(supabase: SupabaseClientLike, contactId
   return results;
 }
 
+// Construye el payload de la notificación desde la fila del outbox
 function buildPayloadFromOutbox(row: OutboxRow): { title: string; body: string; icon: string; data: Record<string, unknown> } {
   const p = (row.payload ?? {}) as Record<string, unknown>;
   const title = String(p['title'] ?? (row.new_status ? `Actualización de orden` : 'Notificación'));
@@ -134,6 +148,7 @@ function buildPayloadFromOutbox(row: OutboxRow): { title: string; body: string; 
   return { title, body, icon, data };
 }
 
+// Procesa una fila de notification_outbox: resuelve destinatarios, envía push y registra
 async function processRow(supabase: SupabaseClientLike, row: OutboxRow) {
   const { title, body, icon, data } = buildPayloadFromOutbox(row);
   const startedAt = Date.now();
@@ -148,20 +163,29 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow) {
   });
   let subscriptions: WebPushSubscription[] = [];
 
-  if (row.target_role === 'administrador' || row.target_role === 'colaborador') {
-    const role = row.target_role;
-    const { data: collabs, error } = await supabase
-      .from('collaborators')
-      .select('id, role')
-      .eq('role', role);
-    if (error) throw new Error(`No se pudieron obtener colaboradores para rol ${role}`);
-    const list = Array.isArray(collabs) ? (collabs as Array<{ id?: string }>) : [];
-    const ids = list.map((c) => String(c.id || '')).filter(Boolean);
-    if (ids.length === 0) throw new Error(`Sin destinatarios para rol ${role}`);
-    const { data: subs, error: subsErr } = await supabase
+  // Roles administradores: usar profiles con role='administrador' si existe; fallback a collaborators
+  if (row.target_role === 'administrador') {
+    let adminIds: string[] = [];
+    try {
+      const { data: admins, error: pErr } = await (supabase as any)
+        .from('profiles')
+        .select('id, role')
+        .eq('role', 'administrador');
+      if (!pErr && Array.isArray(admins)) adminIds = admins.map((a: any) => String(a.id)).filter(Boolean);
+    } catch (_) { /* puede que profiles.role no exista */ }
+    if (adminIds.length === 0) {
+      const { data: collabs, error } = await (supabase as any)
+        .from('collaborators')
+        .select('id')
+        .eq('role', 'administrador');
+      if (error) throw new Error('No se pudieron obtener administradores');
+      adminIds = Array.isArray(collabs) ? collabs.map((c: any) => String(c.id)).filter(Boolean) : [];
+    }
+    if (adminIds.length === 0) throw new Error('Sin destinatarios administradores');
+    const { data: subs, error: subsErr } = await (supabase as any)
       .from('push_subscriptions')
       .select('endpoint, keys')
-      .in('user_id', ids);
+      .in('user_id', adminIds);
     if (subsErr) throw new Error(`No se pudieron obtener suscripciones: ${errToString(subsErr)}`);
     subscriptions = Array.isArray(subs) ? (subs as unknown as WebPushSubscription[]) : [];
   } else {
@@ -203,7 +227,7 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow) {
   const results: Array<{ success: boolean; endpoint: string; error?: string }> = [];
   for (const sub of subscriptions) {
     try {
-      await sendPush(sub, payload);
+      await sendWebPush(sub.endpoint, payload, sub.keys);
       results.push({ success: true, endpoint: sub.endpoint });
     } catch (err) {
       results.push({ success: false, endpoint: sub.endpoint, error: errToString(err) });
@@ -224,32 +248,77 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow) {
     scheduleSpec: '*/1 * * * * *'
   });
 
-  const targetUserId = row.target_user_id ?? null;
+  // Persistencia de notificación en la tabla notifications
+  const p = (row.payload ?? {}) as Record<string, unknown>;
+  const contactId = p['contactId'] ? String(p['contactId']) : (row.target_contact_id ? String(row.target_contact_id) : null);
+  const targetUserId = p['userId'] ? String(p['userId']) : (row.target_user_id ? String(row.target_user_id) : null);
+
+  // Caso usuario del sistema
   if (targetUserId) {
     try {
+      const { data: userExists } = await (supabase as any)
+        .from('profiles')
+        .select('id')
+        .eq('id', targetUserId)
+        .limit(1);
+      const isValidUser = Array.isArray(userExists) && userExists.length > 0;
+      if (!isValidUser) {
+        await logDb(supabase, 'process-outbox', 'warning', 'skip_notifications_non_user', { targetUserId, outboxId: row.id });
+      } else {
+        const recentSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const { data: existing } = await (supabase as any)
+          .from('notifications')
+          .select('id')
+          .eq('user_id', targetUserId)
+          .eq('title', title)
+          .eq('body', body)
+          .filter('data->>orderId', 'eq', String(row.order_id))
+          .gte('created_at', recentSince)
+          .limit(1);
+        const hasDup = Array.isArray(existing) && existing.length > 0;
+        if (!hasDup) {
+          await supabase.from('notifications').insert({
+            user_id: targetUserId,
+            title,
+            body,
+            data: { orderId: row.order_id, newStatus: row.new_status, results },
+            created_at: new Date().toISOString(),
+          });
+        } else {
+          await logDb(supabase, 'process-outbox', 'info', 'skip_duplicate_notification', { user_id: targetUserId, order_id: row.order_id, title });
+        }
+      }
+    } catch (_) { /* evitar romper flujo */ }
+  }
+
+  // Caso contacto/cliente no autenticado: insertar usando contact_id
+  if (!targetUserId && contactId) {
+    try {
       const recentSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      const { data: existing } = await (supabase as any)
+      const { data: existingC } = await (supabase as any)
         .from('notifications')
         .select('id')
-        .eq('user_id', targetUserId)
+        .eq('contact_id', contactId)
         .eq('title', title)
         .eq('body', body)
         .filter('data->>orderId', 'eq', String(row.order_id))
         .gte('created_at', recentSince)
         .limit(1);
-      const hasDup = Array.isArray(existing) && existing.length > 0;
-      if (!hasDup) {
+      const hasDupC = Array.isArray(existingC) && existingC.length > 0;
+      if (!hasDupC) {
         await supabase.from('notifications').insert({
-          user_id: targetUserId,
+          contact_id: contactId,
           title,
           body,
           data: { orderId: row.order_id, newStatus: row.new_status, results },
           created_at: new Date().toISOString(),
         });
       } else {
-        await logDb(supabase, 'process-outbox', 'info', 'skip_duplicate_notification', { user_id: targetUserId, order_id: row.order_id, title });
+        await logDb(supabase, 'process-outbox', 'info', 'skip_duplicate_notification_contact', { contact_id: contactId, order_id: row.order_id, title });
       }
-    } catch (_) { void 0; }
+    } catch (e) {
+      await logDb(supabase, 'process-outbox', 'warning', 'contact_notification_insert_fail', { error: errToString(e), contact_id: contactId, outboxId: row.id });
+    }
   }
 }
 
@@ -298,12 +367,16 @@ Deno.serve(async (req: Request) => {
     for (const row of rows) {
       try {
         await processRow(supabase, row);
-        await supabase
-          .from('notification_outbox')
-          .update({ processed_at: new Date().toISOString() })
-          .eq('id', row.id);
       } catch (err) {
         await logDb(supabase, 'process-outbox', 'error', 'Error procesando outbox row', { outboxId: row.id, error: errToString(err) });
+      } finally {
+        // Marcar processed_at incluso si hubo error, para evitar bloqueos
+        try {
+          await supabase
+            .from('notification_outbox')
+            .update({ processed_at: new Date().toISOString() })
+            .eq('id', row.id);
+        } catch (_) { /* evitar romper el bucle */ }
       }
     }
 

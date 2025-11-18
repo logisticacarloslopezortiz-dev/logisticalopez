@@ -372,6 +372,10 @@ create index if not exists idx_notifications_user on public.notifications(user_i
 create index if not exists idx_notifications_created_at on public.notifications(created_at);
 create index if not exists idx_notifications_unread on public.notifications((read_at is null)) where read_at is null;
 
+-- Extensión para notificaciones de clientes/contactos no autenticados
+alter table public.notifications add column if not exists contact_id uuid references public.clients(id) on delete cascade;
+create index if not exists idx_notifications_contact on public.notifications(contact_id);
+
 -- Push subscriptions
 create table if not exists public.push_subscriptions (
   id bigserial primary key,
@@ -1121,6 +1125,17 @@ BEGIN
   ) THEN
     CREATE UNIQUE INDEX notifications_dedup_idx ON public.notifications (
       user_id, title, body, ((data->>'orderId'))
+    );
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'notifications_dedup_contact_idx'
+  ) THEN
+    CREATE UNIQUE INDEX notifications_dedup_contact_idx ON public.notifications (
+      contact_id, title, body, ((data->>'orderId'))
     );
   END IF;
 END $$;
