@@ -1,7 +1,7 @@
 /// <reference path="../globals.d.ts" />
 import { createClient } from '@supabase/supabase-js';
 import { handleCors, jsonResponse } from '../cors-config.ts';
-import { setTimeout as delay } from "node:timers/promises";
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 type WebPushSubscription = { endpoint: string; keys: { p256dh: string; auth: string } };
 
@@ -60,9 +60,9 @@ function buildPayloadFromOutbox(row: OutboxRow) {
 }
 
 async function fetchSubscriptions(supabase: SupabaseClientLike, userId?: string, contactId?: string): Promise<WebPushSubscription[]> {
-  const results: WebPushSubscription[] = [];
-  const queries = [];
-
+  const out: WebPushSubscription[] = [];
+  const seen = new Set<string>();
+  const queries = [] as Array<{ column: string; id: string }>;
   if (userId) queries.push({ column: 'user_id', id: userId });
   if (contactId) queries.push({ column: 'client_contact_id', id: contactId });
 
@@ -71,16 +71,17 @@ async function fetchSubscriptions(supabase: SupabaseClientLike, userId?: string,
     const rows = r.data ?? [];
     for (const row of rows) {
       let keys: { p256dh?: string; auth?: string } | undefined;
-      if (row.keys && typeof row.keys === 'string') {
-        try { keys = JSON.parse(row.keys); } catch { keys = undefined; }
-      } else if (row.keys && typeof row.keys === 'object') keys = row.keys;
+      if (row.keys && typeof row.keys === 'string') { try { keys = JSON.parse(row.keys); } catch { keys = undefined; } }
+      else if (row.keys && typeof row.keys === 'object') keys = row.keys;
       if (!keys?.p256dh) keys = { p256dh: row.p256dh, auth: row.auth };
-      if (row.endpoint && keys?.p256dh && keys?.auth) results.push({ endpoint: row.endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } });
+      const endpoint = row.endpoint;
+      if (endpoint && keys?.p256dh && keys?.auth && !seen.has(endpoint)) {
+        seen.add(endpoint);
+        out.push({ endpoint, keys: { p256dh: keys.p256dh!, auth: keys.auth! } });
+      }
     }
-    if (results.length > 0) break; // si encontramos algo, no seguimos con la otra query
   }
-
-  return results;
+  return out;
 }
 
 async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise<{ successCount: number; failCount: number }> {
@@ -90,31 +91,53 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise
 
   try {
     if (row.target_role === 'administrador') {
-      let adminIds: string[] = [];
+      const adminIds = new Set<string>();
       try {
-        const { data: admins } = await (supabase as any).from('profiles').select('id, role').eq('role', 'administrador');
-        adminIds = Array.isArray(admins) ? admins.map((a: any) => String(a.id)).filter(Boolean) : [];
+        const { data: admins } = await (supabase as any).from('profiles').select('id').eq('role', 'administrador');
+        (admins ?? []).forEach((a: any) => { if (a?.id) adminIds.add(String(a.id)); });
       } catch (_) { /* perfiles sin role */ }
-      if (adminIds.length === 0) {
+      try {
         const { data: collabs } = await (supabase as any).from('collaborators').select('id').eq('role', 'administrador');
-        adminIds = Array.isArray(collabs) ? collabs.map((c: any) => String(c.id)).filter(Boolean) : [];
-      }
-      if (adminIds.length > 0) {
-        const r = await (supabase as any).from('push_subscriptions').select('endpoint, keys, p256dh, auth').in('user_id', adminIds);
+        (collabs ?? []).forEach((c: any) => { if (c?.id) adminIds.add(String(c.id)); });
+      } catch (_) { /* tabla opcional */ }
+      if (adminIds.size > 0) {
+        const r = await (supabase as any).from('push_subscriptions').select('endpoint, keys, p256dh, auth').in('user_id', Array.from(adminIds));
         const rows = r.data ?? [];
+        const seen = new Set<string>();
         for (const rowS of rows) {
           let keys: { p256dh?: string; auth?: string } | undefined;
           if (rowS.keys && typeof rowS.keys === 'string') { try { keys = JSON.parse(rowS.keys); } catch { keys = undefined; } }
           else if (rowS.keys && typeof rowS.keys === 'object') keys = rowS.keys;
           if (!keys?.p256dh) keys = { p256dh: rowS.p256dh, auth: rowS.auth };
-          if (rowS.endpoint && keys?.p256dh && keys?.auth) subscriptions.push({ endpoint: rowS.endpoint, keys: { p256dh: keys.p256dh!, auth: keys.auth! } });
+          const endpoint = rowS.endpoint;
+          if (endpoint && keys?.p256dh && keys?.auth && !seen.has(endpoint)) {
+            seen.add(endpoint);
+            subscriptions.push({ endpoint, keys: { p256dh: keys.p256dh!, auth: keys.auth! } });
+          }
         }
       }
     } else {
       const p = row.payload ?? {};
-      const contactId = p['contactId'] ?? row.target_contact_id;
-      const targetUserId = p['userId'] ?? row.target_user_id;
-      subscriptions = await fetchSubscriptions(supabase, targetUserId as string, contactId as string);
+      let contactId = (p['contactId'] ?? row.target_contact_id) as string | undefined;
+      let targetUserId = (p['userId'] ?? row.target_user_id) as string | undefined;
+
+      if (!contactId && !targetUserId) {
+        try {
+          const { data: ord } = await (supabase as any).from('orders').select('client_id, client_contact_id, assigned_to').eq('id', row.order_id).limit(1);
+          const first = Array.isArray(ord) ? ord[0] : ord;
+          if (row.target_role === 'cliente') {
+            targetUserId = first?.client_id ?? undefined;
+            contactId = first?.client_contact_id ?? undefined;
+          } else if (row.target_role === 'colaborador') {
+            targetUserId = first?.assigned_to ?? undefined;
+          } else {
+            targetUserId = targetUserId ?? first?.client_id ?? first?.assigned_to ?? undefined;
+            contactId = contactId ?? first?.client_contact_id ?? undefined;
+          }
+        } catch (_) { /* fallback no disponible */ }
+      }
+
+      subscriptions = await fetchSubscriptions(supabase, targetUserId, contactId);
     }
   } catch (err) {
     await logDb(supabase, 'process-outbox', 'error', 'fetch_subscriptions_fail', { outboxId: row.id, error: errToString(err) });
@@ -219,7 +242,11 @@ Deno.serve(async (req: Request) => {
           } else {
             // Mantener pendiente para reintentos; si existen columnas attempts/last_error, incrementarlas.
             try {
-              await (supabase as any).from('notification_outbox').update({ attempts: ((row as any).attempts ?? 0) + 1, last_error: 'send_failed' }).eq('id', row.id);
+              const nextAttempts = ((row as any).attempts ?? 0) + 1;
+              await (supabase as any).from('notification_outbox').update({ attempts: nextAttempts, last_error: 'send_failed' }).eq('id', row.id);
+              if (nextAttempts >= 3) {
+                await (supabase as any).from('notification_outbox').update({ processed_at: processedAt, last_error: 'max_attempts' }).eq('id', row.id);
+              }
             } catch (_) { /* columnas opcionales no existen */ }
           }
         } catch (_) { void 0; }

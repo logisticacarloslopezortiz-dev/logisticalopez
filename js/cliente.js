@@ -783,8 +783,12 @@ async function initMap() {
     }, 350);
   };
 
-  pickupInput.addEventListener('input', () => debouncedSearch(pickupInput, true));
-  deliveryInput.addEventListener('input', () => debouncedSearch(deliveryInput, false));
+  if (pickupInput) {
+    pickupInput.addEventListener('input', () => debouncedSearch(pickupInput, true));
+  }
+  if (deliveryInput) {
+    deliveryInput.addEventListener('input', () => debouncedSearch(deliveryInput, false));
+  }
 }
 
 function fitMapToBounds() {

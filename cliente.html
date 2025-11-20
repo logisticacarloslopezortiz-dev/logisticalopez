@@ -9,42 +9,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Logística López Ortiz - Solicitud de Servicio</title>
-  <script>
-    window.tailwind = window.tailwind || {};
-    window.tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            azulOscuro: '#0C375D',
-            azulClaro: '#117D8B',
-            acento: '#FBBF24'
-          },
-          keyframes: {
-            fadeInUp: {
-              '0%': { opacity: '0', transform: 'translateY(20px)' },
-              '100%': { opacity: '1', transform: 'translateY(0)' }
-            }
-          },
-          animation: {
-            fadeInUp: 'fadeInUp 0.5s ease-out'
-          }
-        }
-      }
-    }
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    .text-azulOscuro { color: #0C375D; }
-    .text-azulClaro { color: #117D8B; }
-    .bg-azulClaro { background-color: #117D8B; }
-    .bg-azulOscuro { background-color: #0C375D; }
-    .border-azulClaro { border-color: #117D8B; }
-    .hover\:bg-azulOscuro:hover { background-color: #0C375D; }
-    @keyframes fadeInUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0);} }
-    .animate-fadeInUp { animation: fadeInUp 0.5s ease-out; }
-    .hidden { display: none !important; }
-  </style>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="css/tailwind.min.css" rel="stylesheet">
+  <link href="css/custom-styles.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"> <!-- Iconos -->
   <!-- Leaflet CSS y JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@3.11.0/dist/geosearch.css" />
@@ -59,7 +26,7 @@
       <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fadeInUp">
         <h3 class="text-3xl font-bold text-azulOscuro mb-6 text-center">Solicitud de Servicio</h3>
         <p class="text-gray-600 mb-8 text-center">Completa los 6 pasos para solicitar tu servicio de manera rápida y segura.</p>
-        <div class="text-center text-xs text-gray-500 mb-4" id="notifLatencyIndicatorCliente">Notificaciones ~1s</div>
+        
 
         <!-- Progress -->
         <div class="flex items-center justify-between mb-6">
@@ -80,9 +47,9 @@
           <!-- Paso 1: Datos Personales -->
           <div class="step p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="1">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 1: Datos Personales</h4>
-            <input type="text" placeholder="Nombre completo" class="w-full border p-2 rounded mb-4">
-            <input type="tel" placeholder="Teléfono" class="w-full border p-2 rounded mb-4">
-            <input type="email" placeholder="Correo" class="w-full border p-2 rounded mb-4">
+            <input type="text" id="clientName" name="clientName" placeholder="Nombre completo" class="w-full border p-2 rounded mb-4" required aria-label="Nombre completo">
+            <input type="tel" id="clientPhone" name="clientPhone" placeholder="Teléfono" class="w-full border p-2 rounded mb-4" required aria-label="Teléfono">
+            <input type="email" id="clientEmail" name="clientEmail" placeholder="Correo electrónico" class="w-full border p-2 rounded mb-4" aria-label="Correo electrónico">
 
             <!-- Campo RNC opcional -->
             <div class="mb-4">
@@ -94,8 +61,8 @@
 
             <!-- Campos RNC (ocultos por defecto) -->
             <div id="rncFields" class="hidden space-y-4">
-              <input type="text" name="rnc" placeholder="Número de RNC" class="w-full border p-2 rounded">
-              <input type="text" name="empresa" placeholder="Nombre de la empresa" class="w-full border p-2 rounded">
+              <input type="text" id="clientRNC" name="rnc" placeholder="Número de RNC" class="w-full border p-2 rounded" pattern="\d{9,11}" title="El RNC debe tener 9 u 11 dígitos.">
+              <input type="text" id="clientCompany" name="empresa" placeholder="Nombre de la empresa" class="w-full border p-2 rounded">
               <!-- Mensaje de ITBIS -->
               <div id="itbisMessage" class="hidden p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
                 <i class="fas fa-info-circle mr-2"></i>
@@ -208,49 +175,56 @@
 
           <!-- Paso 4: Ubicación -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="4">
-            <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 4: Dirección de Origen y Destino</h4>
-            <div id="address-inputs" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 hidden">
-              <div class="relative">
-                <div class="flex justify-between items-center mb-1">
-                  <label for="pickupAddress" class="block text-sm font-medium text-gray-700">📍 Dirección de Origen</label>
+            <h4 class="text-xl font-semibold text-azulOscuro mb-2 text-center">Paso 4: Origen y Destino</h4>
+            <p id="map-instruction-text" class="text-center text-gray-600 mb-4">Busca una dirección o haz clic en el mapa para establecer el origen y el destino.</p>
+
+            <!-- NUEVO: Contenedor de Búsqueda y Confirmación -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <!-- Columna de Búsqueda y Origen -->
+              <div id="origin-container" class="space-y-2">
+                <div class="relative">
+                  <input type="text" id="address-search-input" placeholder="Buscar dirección de origen..." class="w-full border p-2 rounded-lg pl-10 focus:ring-2 focus:ring-azulClaro">
+                  <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                 </div>
-                <input type="text" id="pickupAddress" placeholder="Escribe o selecciona en el mapa" class="w-full border p-2 rounded focus:ring-2 focus:ring-azulClaro">
+                <input type="text" id="pickupAddress" class="w-full border p-2 rounded-lg hidden" aria-label="Dirección de origen">
+                <button type="button" id="use-current-location-btn" class="w-full text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                  <i class="fas fa-location-arrow"></i>
+                  Usar mi ubicación actual
+                </button>
+                <!-- Tarjeta de Confirmación de Origen -->
+                <div id="origin-card" class="hidden p-3 border border-green-300 bg-green-50 rounded-lg">
+                  <p class="font-bold text-green-800">📍 Origen Confirmado:</p>
+                  <p id="origin-address-display" class="text-sm text-gray-700"></p>
+                </div>
               </div>
-              <div class="relative">
-                <label for="deliveryAddress" class="block text-sm font-medium text-gray-700 mb-1">🏁 Dirección de Destino</label>
-                <input type="text" id="deliveryAddress" placeholder="Primero selecciona el origen" class="w-full border p-2 rounded focus:ring-2 focus:ring-azulClaro disabled:bg-gray-100 disabled:cursor-not-allowed" disabled>
+
+              <!-- Columna de Destino -->
+              <div id="destination-container" class="space-y-2">
+                 <input type="text" id="deliveryAddress" class="w-full border p-2 rounded-lg hidden" aria-label="Dirección de destino">
+                 <!-- Tarjeta de Confirmación de Destino -->
+                 <div id="destination-card" class="hidden p-3 border border-green-300 bg-green-50 rounded-lg">
+                  <p class="font-bold text-green-800">🏁 Destino Confirmado:</p>
+                  <p id="destination-address-display" class="text-sm text-gray-700"></p>
+                </div>
+                <p id="destination-placeholder" class="text-center text-gray-500 p-4 border-2 border-dashed rounded-lg">Selecciona el punto de destino en el mapa.</p>
               </div>
             </div>
-            <div class="flex justify-end -mt-2 mb-2">
-              <button type="button" id="reset-map-btn" class="hidden bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded hover:bg-gray-50">Cambiar direcciones</button>
-            </div>
+
             <!-- Contenedor del mapa mejorado para móvil -->
             <div id="map-container" class="relative transition-all duration-300">
-              <div id="map-instruction-text" class="absolute top-2 left-2 z-20 bg-white/90 text-gray-800 text-xs md:text-sm px-3 py-2 rounded">Marque primero el punto de origen y luego el de destino</div>
-              <div id="map" class="w-full h-[65vh] rounded-lg border border-gray-200 shadow relative bg-white">
+              <div id="map" class="w-full h-[50vh] md:h-[60vh] rounded-lg border border-gray-200 shadow relative bg-white">
                 <div id="map-loader" class="text-center p-8 text-gray-500 flex flex-col items-center gap-2 z-10">
                   <i class="fas fa-spinner fa-spin text-2xl text-azulClaro"></i>
                   <span id="map-loader-text">Cargando mapa...</span>
                 </div>
               </div>
-              <!-- Botón para expandir mapa en móvil -->
-              <button type="button" id="expand-map-btn" class="md:hidden absolute top-2 right-2 z-20 bg-white p-2 rounded-full shadow-lg text-azulOscuro">
-                <i class="fas fa-expand"></i>
-              </button>
-              <button type="button" id="reset-map-chip" class="hidden absolute top-2 right-14 z-20 bg-white px-3 py-2 rounded-full shadow text-gray-700 border border-gray-300">Cambiar</button>
-              <!-- Botón para confirmar puntos en vista expandida -->
-              <button type="button" id="confirm-map-points-btn" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-[110] bg-azulClaro text-white px-6 py-3 rounded-full shadow-lg font-semibold">
-                Confirmar Puntos
+              <button type="button" id="reset-map-btn" class="absolute top-3 right-3 z-[1000] bg-white px-3 py-2 rounded-lg shadow-lg text-gray-700 hover:bg-gray-100 transition">
+                <i class="fas fa-undo mr-1"></i> Reiniciar
               </button>
             </div>
             <div id="distance-container" class="hidden mt-3 text-center bg-gray-100 p-2 rounded-lg">
               <p class="text-gray-800 font-medium">Distancia estimada: <span id="distance-value" class="font-bold text-azulOscuro">--</span> km</p>
             </div>
-
-            <style>
-              #map-container.fixed #confirm-map-points-btn { display: block; }
-              #map-container.fixed #map { height: 100% !important; border-radius: 0; }
-            </style>
 
             <div class="mt-6 border-t pt-4 text-center space-y-2">
               <p class="text-gray-600">© 2025 Logística López Ortiz</p>
@@ -260,8 +234,8 @@
           <!-- Paso 5: Fecha y Hora -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="5">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 5: Fecha y Hora</h4>
-            <input type="date" class="w-full border p-2 rounded mb-4">
-            <input type="time" class="w-full border p-2 rounded mb-4">
+            <input type="date" id="orderDate" name="orderDate" class="w-full border p-2 rounded mb-4" required aria-label="Fecha del servicio">
+            <input type="time" id="orderTime" name="orderTime" class="w-full border p-2 rounded mb-4" required aria-label="Hora del servicio">
             <p id="time-message" class="hidden text-sm text-gray-500 text-center mt-2">
               <i class="fas fa-info-circle mr-1"></i>
               Haremos todo lo posible para cumplir con la hora solicitada. Nos pondremos en contacto para confirmar.
@@ -905,17 +879,5 @@
   <script src="js/pwa.js"></script>
   <script src="js/cliente.js?v=1.3"></script>
 </body>
-<script>
-  (function(){
-    try{
-      var el = document.getElementById('notifLatencyIndicatorCliente');
-      if(!el) return;
-      var v = localStorage.getItem('tlc_outbox_latency_ms');
-      if(v){
-        var ms = parseInt(v,10);
-        if(!isNaN(ms)) el.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
-      }
-    }catch(_){}
-  })();
-</script>
+ 
 </html>

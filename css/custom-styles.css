@@ -12,3 +12,27 @@
   background-color: #1E8A95; /* Turquesa */
   color: #FFFFFF; /* Blanco */
 }
+
+/* Paleta Tailwind personalizada (alias de utilidades)
+   Permite usar clases como bg-azulOscuro, text-azulClaro, bg-acento
+   sin depender de la compilación dinámica de Tailwind. */
+:root {
+  --azul-oscuro: #1E405A;
+  --azul-claro: #1E8A95;
+  --acento: #FBBF24;
+}
+
+.bg-azulOscuro { background-color: var(--azul-oscuro) !important; }
+.text-azulOscuro { color: var(--azul-oscuro) !important; }
+.border-azulOscuro { border-color: var(--azul-oscuro) !important; }
+
+.bg-azulClaro { background-color: var(--azul-claro) !important; }
+.text-azulClaro { color: var(--azul-claro) !important; }
+.border-azulClaro { border-color: var(--azul-claro) !important; }
+
+.bg-acento { background-color: var(--acento) !important; }
+.text-acento { color: var(--acento) !important; }
+.border-acento { border-color: var(--acento) !important; }
+
+/* Estados hover comunes usados en HTML */
+.hover\:bg-azulOscuro\/90:hover { background-color: var(--azul-oscuro) !important; opacity: 0.9; }

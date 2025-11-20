@@ -23,7 +23,8 @@
   <meta property="og:locale" content="es_DO" />
 
   <!-- ✅ Favicons y PWA -->
-  <link rel="preload" href="img/1vertical.png" as="image">
+  <!-- Pre-cargar la imagen más importante (Largest Contentful Paint) para mejorar la velocidad de carga percibida -->
+  <link rel="preload" href="img/cargo.jpg" as="image">
   <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
   <link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
   <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
@@ -40,85 +41,10 @@
   <!-- Leaflet CSS para mapas -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 
-  <!-- Reemplazado CDN por versión local para producción -->
   <link href="css/tailwind.min.css" rel="stylesheet">
-  <!-- Fallback CDN: si el archivo local está vacío o faltante, cargamos una versión CDN para
-    asegurar que las utilidades de Tailwind estén disponibles y la página no aparezca en blanco. -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
-  <!-- Custom animations -->
-  <link href="css/animations.css" rel="stylesheet">
-  
-  <script>
-    // Configuración de Tailwind ahora está en tailwind.config.js
-    // Los colores personalizados están definidos en el archivo CSS compilado
-    const tailwindTheme = {
-      colors: {
-        azulOscuro: '#0C375D',   /* Azul oscuro del logo */
-        azulClaro: '#117D8B',    /* Azul turquesa del logo */
-        acento: '#FBBF24'        /* Amarillo cálido para acentos */
-      },
-      keyframes: {
-        fadeInUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },            
-        // --- INICIO: Keyframes para la animación del camión en bucle ---
-        truckLoop: {
-          '0%, 100%': { transform: 'translateX(-150%)', opacity: '0' },
-          '10%, 60%': { transform: 'translateX(0)', opacity: '1' },
-          '70%, 90%': { transform: 'translateX(150%)', opacity: '0' }
-        },
-        packageLoop: {
-          '0%, 15%, 100%': { transform: 'translateX(0)', opacity: '0' },
-          '25%, 55%': { transform: 'translateX(100%)', opacity: '1' },
-          '65%, 90%': { transform: 'translateX(200%)', opacity: '0' }
-        },
-        buttonLoop: {
-          '0%, 30%, 100%': { opacity: '0', transform: 'scale(0.8)' },
-          '40%, 90%': { opacity: '1', transform: 'scale(1)' }
-        }
-        // --- FIN: Keyframes para la animación del camión en b
-        // ucle ---
-      },
-      animation: {
-        fadeInUp: 'fadeInUp 0.6s ease-out forwards',
-        // --- INICIO: Animaciones personalizadas en bucle ---
-        'truck-loop': 'truckLoop 8s ease-in-out infinite',
-        'package-loop-1': 'packageLoop 8s ease-in-out infinite',
-        'package-loop-2': 'packageLoop 8s ease-in-out infinite 0.2s', // Pequeño retraso
-        'button-loop': 'buttonLoop 8s ease-in-out infinite'
-        // --- FIN: Animaciones personalizadas en bucle ---
-      }
-    };
-  </script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <style>
-    .header-hidden {
-      transform: translateY(-100%) !important;
-    }
-    body.is-pwa .pwa-hide {
-      display: none !important;
-    }
-    /* Fallback CSS para clases personalizadas usadas en plantillas Tailwind */
-    :root{
-      --azul-oscuro: #0C375D;
-      --azul-claro: #117D8B;
-      --acento: #FBBF24;
-    }
-    .text-azulOscuro{ color:var(--azul-oscuro) !important; }
-    .text-azulClaro{ color:var(--azul-claro) !important; }
-    .text-acento{ color:var(--acento) !important; }
-    .bg-azulOscuro{ background-color:var(--azul-oscuro) !important; color:#fff; }
-    .bg-azulClaro{ background-color:var(--azul-claro) !important; color:#fff; }
-    .bg-acento{ background-color:var(--acento) !important; color:#0f172a; }
-    .bg-acento:hover{ filter:brightness(.95); }
-    /* Asegurar botones legibles si Tailwind no carga el tema personalizado */
-    .btn-acento{ background-color:var(--acento); color:var(--azul-oscuro); }
-    
-    /* Estilos para mapas */
-    .map-container {
-      height: 300px;
-      width: 100%;
-      z-index: 1;
-    }
-  </style>
+  <link href="css/custom-styles.css" rel="stylesheet">
+  <link href="css/animations.css" rel="stylesheet"> <!-- Animaciones personalizadas -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"> <!-- Iconos -->
 
   <!-- ✅ Schema.org Markup (JSON-LD) para Google -->
   <script type="application/ld+json">
@@ -192,8 +118,7 @@
             <span>Solicitar Ahora</span>
           </a>
           <button type="button" 
-            onclick="document.getElementById('install-app-btn')?.click()" 
-            title="Descarga nuestra app para realizar tu solicitud y seguimiento" 
+            id="install-app-header-btn" title="Descarga nuestra app para realizar tu solicitud y seguimiento" 
             aria-label="Descarga nuestra app para realizar tu solicitud y seguimiento" 
             class="inline-flex items-center justify-center gap-2 bg-acento hover:bg-yellow-500 text-azulOscuro px-4 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 shadow-md">
             <i class="fas fa-download text-xs"></i>
@@ -241,8 +166,7 @@
             <span>Solicitar Ahora</span>
           </a>
           <button type="button" 
-            onclick="document.getElementById('install-app-btn')?.click()" 
-            class="flex items-center justify-center gap-2 bg-acento hover:bg-yellow-500 text-azulOscuro p-3 rounded-lg font-semibold transition-all shadow-md">
+            id="install-app-mobile-btn" class="flex items-center justify-center gap-2 bg-acento hover:bg-yellow-500 text-azulOscuro p-3 rounded-lg font-semibold transition-all shadow-md">
             <i class="fas fa-download"></i>
             <span>Instalar App</span>
           </button>
@@ -360,7 +284,7 @@
           <a href="cliente.html" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-acento hover:bg-yellow-500 text-azulOscuro px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105" aria-label="Comenzar solicitud">
             🚚 Comenzar Solicitud
           </a>
-          <button type="button" onclick="document.getElementById('install-app-btn')?.click()" title="Descarga nuestra app para realizar tu solicitud y seguimiento" aria-label="Descarga nuestra app para realizar tu solicitud y seguimiento" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105">
+          <button type="button" id="install-app-animation-btn" title="Descarga nuestra app para realizar tu solicitud y seguimiento" aria-label="Descarga nuestra app para realizar tu solicitud y seguimiento" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105">
             <i class="fas fa-download"></i>
             Instalar App
           </button>
@@ -462,6 +386,7 @@
     <div class="max-w-7xl mx-auto px-6">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="space-y-3">
+
           <div class="flex items-center gap-3">
             <img src="img/1vertical.png" alt="Logo de Logística López Ortiz en el pie de página" class="h-8 w-8">
             <span class="text-lg font-semibold">Logística López Ortiz</span>
@@ -477,7 +402,7 @@
           <h4 class="text-lg font-semibold">Visítanos</h4>
           <p class="text-white/80 text-sm">San Cristobal, República Dominicana. Lun–Sáb 8:00am–6:00pm.</p>
           <div class="rounded-lg overflow-hidden shadow">
-            <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3785.5038338180843!2d-70.1138345!3d18.4154194!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8ea55fef226a8a05%3A0xb77b6f03eacff4f1!2sLog%C3%ADstica%20L%C3%B3pez%20Ortiz!5e0!3m2!1ses-419!2sdo!4v1620000000000!5m2!1ses-419!2sdo" width="100%" height="220" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3785.5038338180843!2d-70.1138345!3d18.4154194!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8ea55fef226a8a05%3A0xb77b6f03eacff4f1!2sLog%C3%ADstica%20L%C3%B3pez%20Ortiz!5e0!3m2!1ses-419!2sdo!4v1620000000000!5m2!1ses-419!2sdo" width="100%" height="220" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
           </div>
         </div>
         <div class="space-y-3">

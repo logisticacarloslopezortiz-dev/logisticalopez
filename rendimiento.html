@@ -250,15 +250,15 @@
                 </div>
             </div>
             <div class="p-6">
-                <div class="overflow-x-auto -mx-4 sm:mx-0">
-                    <table class="w-full">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full w-full">
                         <thead>
                             <tr class="text-left text-sm text-gray-600 border-b">
-                                <th class="pb-3 px-2 md:px-3">Fecha</th>
-                                <th id="thService" class="pb-3 px-2 md:px-3 hidden sm:table-cell">Servicio</th>
-                                <th id="thVehicle" class="pb-3 px-2 md:px-3 hidden md:table-cell">Vehículo</th>
-                                <th class="pb-3 px-2 md:px-3">Estado</th>
-                                <th id="thTime" class="pb-3 px-2 md:px-3 hidden sm:table-cell">Tiempo</th>
+                                <th class="pb-3 px-4 whitespace-nowrap">Fecha</th>
+                                <th id="thService" class="pb-3 px-4 whitespace-nowrap hidden sm:table-cell">Servicio</th>
+                                <th id="thVehicle" class="pb-3 px-4 whitespace-nowrap hidden md:table-cell">Vehículo</th>
+                                <th class="pb-3 px-4 whitespace-nowrap">Estado</th>
+                                <th id="thTime" class="pb-3 px-4 whitespace-nowrap hidden sm:table-cell">Tiempo</th>
                             </tr>
                         </thead>
                         <tbody id="recentHistory" class="text-sm">
@@ -343,8 +343,7 @@
         </div>
     </div>
 
-    <script src="js/notifications.js"></script>
-    <script src="js/backup.js"></script>
+    
     <script src="js/theme.js"></script>
     <!-- Supabase client and config -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>

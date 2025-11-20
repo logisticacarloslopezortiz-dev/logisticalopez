@@ -162,6 +162,16 @@ Deno.serve(async (req: Request) => {
         if (contactRow2?.email) recipientEmail = contactRow2.email;
       } catch (err) { logDebug('No se pudo obtener email por contact_id', err); }
     }
+    if (!recipientEmail && order.client_id) {
+      try {
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', order.client_id)
+          .maybeSingle();
+        if (profileRow?.email) recipientEmail = profileRow.email;
+      } catch (err) { logDebug('No se pudo obtener email de perfil', err); }
+    }
     const senderEmail = business?.email || undefined;
     
     if (recipientEmail) {
@@ -176,6 +186,7 @@ Deno.serve(async (req: Request) => {
       file_url: publicUrl,
       total: order.monto_cobrado ?? 0,
       status: 'generada',
+      recipient_email: recipientEmail ?? null,
       data: {
         invoice_number: invoiceData.invoiceNumber,
         email_sent: !!emailResult?.success,
@@ -210,7 +221,7 @@ type QueryBuilder = {
 };
 
 type SupabaseClientLike = {
-  from: (table: 'orders' | 'business' | 'clients' | 'invoices') => {
+  from: (table: 'orders' | 'business' | 'clients' | 'invoices' | 'profiles') => {
     select: (columns: string) => QueryBuilder;
     insert: (values: unknown) => Promise<{ data?: unknown; error?: unknown }>;
   };
