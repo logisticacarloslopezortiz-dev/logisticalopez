@@ -67,9 +67,13 @@ let destinationMarker;
 let isOriginSet = false; // Controla si el origen ya fue establecido
 
 let awaitingDestination = false; // Estado: esperando marcar destino tras fijar origen
+let mapInitialized = false; // ✅ NUEVO: Control para evitar inicializaciones múltiples del mapa.
 
 // Elementos del DOM
 let steps, nextBtn, prevBtn, progressBar, helpText;
+
+const formSection = document.getElementById('form-section');
+const mapContainer = document.getElementById('map-container');
 
 function showStep(step) {
   steps.forEach(s => s.classList.add('hidden'));
@@ -77,15 +81,34 @@ function showStep(step) {
   prevBtn.classList.toggle('hidden', step === 1);
   const isLastStep = step === steps.length;
   nextBtn.classList.toggle('hidden', isLastStep);
+
+  // Lógica para mostrar/ocultar el mapa a pantalla completa
+  if (step === 4) {
+    if (formSection) { formSection.classList.add('z-50'); }
+  } else {
+    if (formSection) { formSection.classList.remove('z-50'); }
+  }
+
   // Si es el último paso, mostrar el resumen
   if (isLastStep) {
     displayOrderSummary();
   }
-  // Si volvemos al paso 4, invalidar el mapa para que se redibuje correctamente
-  if (step === 4 && map) {
-    setTimeout(() => map.invalidateSize(), 100);
+
+  // ✅ SOLUCIÓN MEJORADA: Inicializar el mapa solo cuando el paso 4 es visible por primera vez.
+  if (step === 4 && !mapInitialized) { // Si estamos en el paso 4 y el mapa NO ha sido inicializado
+    mapInitialized = true; // Marcar como inicializado para no volver a ejecutar
+    initMap();
+  } else if (step === 4 && map) { // Si ya existe, solo refresca su tamaño
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
   }
-  progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%';
+  const dateEl = document.getElementById('orderDate');
+  const timeEl = document.getElementById('orderTime');
+  const isStep5 = step === 5;
+  if (dateEl) { dateEl.required = isStep5; }
+  if (timeEl) { timeEl.required = isStep5; }
+  if (progressBar) { progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%'; }
   updateHelpText(step);
 }
 
@@ -224,10 +247,16 @@ async function loadVehicles() {
 // Función para validar paso actual
 function validateCurrentStep() {
   if (currentStep === 1) {
-    const nombreInput = document.querySelector('input[placeholder="Nombre completo"]');
-    const telefonoInput = document.querySelector('input[placeholder="Teléfono"]');
-    const emailInput = document.querySelector('input[placeholder="Correo"]');
+    const nombreInput = document.getElementById('clientName');
+    const telefonoInput = document.getElementById('clientPhone');
+    const emailInput = document.getElementById('clientEmail');
     
+    // Guarda de seguridad: si los elementos no existen, la validación falla.
+    if (!nombreInput || !telefonoInput || !emailInput) {
+      console.error("Error de validación: Uno o más campos del paso 1 no se encontraron en el DOM.");
+      return false;
+    }
+
     // Validación mejorada para el nombre
     const isNombreValid = /^[a-zA-Z\s\u00C0-\u024F]+$/.test(nombreInput.value) && nombreInput.value.trim().length > 2;
     // Validación mejorada para el teléfono (formato dominicano)
@@ -288,8 +317,10 @@ function validateCurrentStep() {
   }
   
   if (currentStep === 5) {
-    const fecha = document.querySelector('input[type="date"]').value;
-    const hora = document.querySelector('input[type="time"]').value;
+    const fechaEl = document.getElementById('orderDate');
+    const horaEl = document.getElementById('orderTime');
+    const fecha = fechaEl ? fechaEl.value : '';
+    const hora = horaEl ? horaEl.value : '';
     
     if (!fecha || !hora) {
       notifications.warning('Debes seleccionar una fecha y hora para el servicio.', { title: 'Paso Incompleto' });
@@ -306,27 +337,36 @@ function displayOrderSummary() {
   if (!summaryContainer) return;
 
   // Recolectar todos los datos
-  const name = document.querySelector('input[placeholder="Nombre completo"]').value;
-  const phone = document.querySelector('input[placeholder="Teléfono"]').value;
-  const email = document.querySelector('input[placeholder="Correo"]').value;
-  const rnc = document.querySelector('input[name="rnc"]').value;
-  const empresa = document.querySelector('input[name="empresa"]').value;
+  const nameEl = document.getElementById('clientName');
+  const phoneEl = document.getElementById('clientPhone');
+  const emailEl = document.getElementById('clientEmail');
+  const rncEl = document.querySelector('input[name="rnc"]');
+  const empresaEl = document.querySelector('input[name="empresa"]');
+  const name = nameEl ? nameEl.value : '';
+  const phone = phoneEl ? phoneEl.value : '';
+  const email = emailEl ? emailEl.value : '';
+  const rnc = rncEl ? rncEl.value : '';
+  const empresa = empresaEl ? empresaEl.value : '';
 
   const service = selectedService ? selectedService.name : 'No seleccionado';
   
   const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
   const vehicle = selectedVehicleCard ? selectedVehicleCard.dataset.vehicleName : 'No seleccionado';
 
-  const pickup = document.getElementById('pickupAddress').value;
-  const delivery = document.getElementById('deliveryAddress').value;
+  const pickupEl = document.getElementById('pickupAddress');
+  const deliveryEl = document.getElementById('deliveryAddress');
+  const pickup = pickupEl ? pickupEl.value : '';
+  const delivery = deliveryEl ? deliveryEl.value : '';
 
   // Obtener datos del mapa en el momento de mostrar el resumen
   const distance = document.getElementById('distance-value').textContent;
   const originCoords = originMarker ? originMarker.getLatLng() : null;
   const destinationCoords = destinationMarker ? destinationMarker.getLatLng() : null;
 
-  const date = document.querySelector('input[type="date"]').value;
-  const time = document.querySelector('input[type="time"]').value;
+  const dateEl = document.getElementById('orderDate');
+  const timeEl = document.getElementById('orderTime');
+  const date = dateEl ? dateEl.value : '';
+  const time = timeEl ? timeEl.value : '';
 
   // Construir el HTML del resumen
   let summaryHTML = `
@@ -420,39 +460,6 @@ function toggleRNCField() {
 }
 
 // --- Funciones del Mapa (Leaflet) ---
-
-/**
- * Obtiene la ubicación actual del usuario y la establece como origen.
- */
-function locateUserAndSetOrigin() {
-  const loader = document.getElementById('map-loader');
-  const loaderText = document.getElementById('map-loader-text');
-  if (!navigator.geolocation) {
-    alert('La geolocalización no es soportada por tu navegador.');
-    return;
-  }
-
-  // Mostrar spinner de geolocalización
-  loader.style.display = 'flex';
-  loaderText.textContent = 'Obteniendo ubicación...';
-
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const { latitude, longitude } = position.coords;
-      // Activar el input de origen antes de llamar a la función de actualización
-      document.getElementById('pickupAddress').focus();
-      // Llamar a la función que actualiza el marcador y la dirección
-      updateMarkerAndAddress({ lat: latitude, lng: longitude });
-      // Centrar el mapa en la nueva ubicación
-      map.setView([latitude, longitude], 15);
-      loader.style.display = 'none'; // Ocultar spinner al encontrar
-    },
-    () => {
-      alert('No se pudo obtener tu ubicación. Asegúrate de haber concedido los permisos.');
-      loader.style.display = 'none'; // Ocultar spinner si hay error
-    }
-  );
-}
 
 // --- Bottom Sheet Helpers (móvil) ---
 function ensureBottomSheet(){
@@ -552,6 +559,16 @@ async function initMap() {
   // --- Búsqueda de direcciones ---
   let searchControl = null;
   let searchAdded = false;
+  if (!searchAdded) {
+    searchControl = new GeoSearch.GeoSearchControl({
+      provider: providerRD,
+      style: 'bar',
+      showMarker: false,
+      autoClose: false,
+    });
+    map.addControl(searchControl);
+    searchAdded = true;
+  }
 
   map.on('geosearch/showlocation', (result) => {
     updateMarkerAndAddress({ lat: result.location.y, lng: result.location.x }, result.location.label);
@@ -560,98 +577,30 @@ async function initMap() {
   // --- Inputs y listeners ---
   const pickupInput = document.getElementById('pickupAddress');
   const deliveryInput = document.getElementById('deliveryAddress');
-  const useCurrentLocationBtn = document.getElementById('use-current-location-btn');
+  const pickupLabel = document.getElementById('pickup-label');
+  const deliveryLabel = document.getElementById('delivery-label');
+  const routeInputs = document.getElementById('route-inputs');
   const instructionText = document.getElementById('map-instruction-text');
-  const addressInputs = document.getElementById('address-inputs');
   const mapContainer = document.getElementById('map-container');
   const mapEl = document.getElementById('map');
-  const resetMapBtn = document.getElementById('reset-map-btn');
-  const resetMapChip = document.getElementById('reset-map-chip');
+  const searchInput = document.getElementById('address-search-input');
+
   // --- INICIO: Mejoras para mapa en móvil ---
   const expandMapBtn = document.getElementById('expand-map-btn');
-  const confirmMapPointsBtn = document.getElementById('confirm-map-points-btn');
+  function expandMap() {
+    if (mapEl) {
+      mapEl.classList.remove('h-[40vh]');
+      mapEl.classList.add('h-screen');
+      setTimeout(() => map.invalidateSize(), 50);
+    }
+  }
+  if (expandMapBtn) { expandMapBtn.addEventListener('click', () => { expandMap(); }); }
+  if (pickupInput) { pickupInput.addEventListener('focus', () => { expandMap(); }); }
+  if (deliveryInput) { deliveryInput.addEventListener('focus', () => { expandMap(); }); }
 
   map.on('click', (e) => { updateMarkerAndAddress(e.latlng); });
 
-  if (pickupInput) {
-    pickupInput.addEventListener('focus', () => {
-      if (instructionText) {
-        instructionText.innerHTML = "Busca o haz clic en el mapa para establecer el <strong>punto de origen</strong>.";
-      }
-    });
-  }
-  if (deliveryInput) {
-    deliveryInput.addEventListener('focus', () => {
-      if (instructionText) {
-        instructionText.innerHTML = "Ahora, busca o haz clic para establecer el <strong>punto de destino</strong>.";
-      }
-    });
-  }
-
-  // [CORRECCIÓN] Verificar si el botón existe antes de añadir el listener
-  // para evitar errores en páginas donde fue eliminado.
-  if (useCurrentLocationBtn) {
-    useCurrentLocationBtn.addEventListener('click', locateUserAndSetOrigin);
-  }
-
-  if (expandMapBtn) {
-    expandMapBtn.addEventListener('click', () => {
-      mapContainer.classList.add('fixed', 'inset-0', 'z-[100]');
-      document.body.classList.add('overflow-hidden');
-      // En modo expandido, ocultar inputs y mostrar solo buscador
-      if (addressInputs) addressInputs.classList.add('hidden');
-      if (!searchAdded) {
-        searchControl = new GeoSearch.GeoSearchControl({
-          provider: providerRD,
-          style: 'bar',
-          showMarker: false,
-          autoClose: false,
-        });
-        map.addControl(searchControl);
-        searchAdded = true;
-      }
-      if (layersControl && !layersHidden) { try { map.removeControl(layersControl); } catch(_){} layersHidden = true; }
-      setBottomSheetInstruction();
-      setTimeout(() => map.invalidateSize(), 50);
-    });
-  }
-  if (confirmMapPointsBtn) {
-    confirmMapPointsBtn.addEventListener('click', () => {
-      mapContainer.classList.remove('fixed', 'inset-0', 'z-[100]');
-      document.body.classList.remove('overflow-hidden');
-      map.invalidateSize();
-    });
-  }
-
-  function resetMap() {
-      if (addressInputs) addressInputs.classList.add('hidden');
-      if (instructionText) instructionText.classList.remove('hidden');
-      isOriginSet = false;
-      if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
-      if (destinationMarker) { map.removeLayer(destinationMarker); destinationMarker = null; }
-      if (pickupInput) pickupInput.value = '';
-      if (deliveryInput) {
-        deliveryInput.value = '';
-        deliveryInput.disabled = true;
-        deliveryInput.placeholder = 'Primero selecciona el origen';
-      }
-      if (mapEl) {
-        mapEl.classList.add('h-[65vh]');
-        mapEl.classList.remove('h-80');
-        setTimeout(() => map.invalidateSize(), 100);
-      }
-      if (searchAdded && searchControl) {
-        try { map.removeControl(searchControl); } catch (_) {}
-        searchAdded = false;
-        searchControl = null;
-      }
-      if (resetMapBtn) resetMapBtn.classList.add('hidden');
-      if (resetMapChip) resetMapChip.classList.add('hidden');
-      if (layersControl && layersHidden) { layersControl.addTo(map); layersHidden = false; }
-      if (expandMapBtn) expandMapBtn.classList.remove('hidden');
-    }
-  if (resetMapBtn) { resetMapBtn.addEventListener('click', resetMap); }
-  if (resetMapChip) { resetMapChip.addEventListener('click', resetMap); }
+  
 
   // Lógica principal para actualizar marcadores
   async function updateMarkerAndAddress(latlng, label = null) {
@@ -717,6 +666,11 @@ async function initMap() {
       }
       if (instructionText) {
         instructionText.innerHTML = "¡Perfecto! Ahora, establece el <strong>punto de destino</strong>.";
+        // Cambiar el placeholder del buscador para el destino
+        const searchInputEl = document.getElementById('address-search-input');
+        if (searchInputEl) {
+          searchInputEl.placeholder = "Buscar dirección de destino...";
+        }
       }
       // Mostrar hoja inferior para confirmar origen y continuar a destino (móvil)
       setBottomSheetForOrigin(currentInput.value);
@@ -725,34 +679,12 @@ async function initMap() {
     calculateAndDisplayDistance();
     fitMapToBounds();
 
-    if (originMarker && destinationMarker) {
-      // Al tener los dos puntos, contraer el mapa y mostrar inputs con valores
-      if (mapContainer.classList.contains('fixed')) {
-        mapContainer.classList.remove('fixed', 'inset-0', 'z-[100]');
-        document.body.classList.remove('overflow-hidden');
-      }
-      if (addressInputs) addressInputs.classList.remove('hidden');
-      if (instructionText) instructionText.classList.add('hidden');
-      if (mapEl) {
-        mapEl.classList.remove('h-[65vh]');
-        mapEl.classList.add('h-80');
-        setTimeout(() => map.invalidateSize(), 100);
-      }
-      // En modo contraído, mantener buscador opcional (autoClose) para ajustes menores
-      if (!searchAdded) {
-        searchControl = new GeoSearch.GeoSearchControl({
-          provider: providerRD,
-          style: 'bar',
-          showMarker: false,
-          autoClose: true,
-        });
-        map.addControl(searchControl);
-        searchAdded = true;
-      }
-      if (layersControl && !layersHidden) { try { map.removeControl(layersControl); } catch(_){} layersHidden = true; }
-      if (expandMapBtn) expandMapBtn.classList.add('hidden');
-      if (resetMapChip) resetMapChip.classList.remove('hidden');
-      if (resetMapBtn) resetMapBtn.classList.remove('hidden');
+  if (originMarker && destinationMarker) {
+      if (routeInputs) routeInputs.classList.remove('hidden');
+      if (pickupLabel) pickupLabel.classList.remove('hidden');
+      if (deliveryLabel) deliveryLabel.classList.remove('hidden');
+      if (pickupInput) pickupInput.classList.remove('hidden');
+      if (deliveryInput) deliveryInput.classList.remove('hidden');
       loadPOIsForBounds();
       if (!map._poiMoveHandlerAttached) {
         map.on('moveend', () => { loadPOIsForBounds(); });
@@ -762,58 +694,21 @@ async function initMap() {
   }
   // Búsqueda programática desde inputs con debounce para UX móvil
   const provider = providerRD;
-  let debounceTimer = null;
-  const debouncedSearch = (inputEl, isOrigin) => {
+  let debounceTimer;
+  const debouncedSearch = (inputEl) => {
+    if (!provider) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
       const q = inputEl.value.trim();
-      if (!q) return;
+      if (q.length < 3) return;
       try {
-        const results = await provider.search({ query: q });
-        if (results && results[0]) {
-          const r = results[0];
-          if (!isOriginSet && isOrigin) {
-            updateMarkerAndAddress({ lat: r.y, lng: r.x }, r.label);
-          } else if (isOriginSet && !isOrigin) {
-            updateMarkerAndAddress({ lat: r.y, lng: r.x }, r.label);
-          }
-          map.setView([r.y, r.x], Math.min(16, map.getZoom() || 15));
+        const results = await provider.search({ query: q, countrycodes: 'do' });
+        if (results && results.length > 0) {
+          updateMarkerAndAddress({ lat: results[0].y, lng: results[0].x }, results[0].label);
         }
       } catch(e) { /* no-op */ }
     }, 350);
   };
-
-  if (pickupInput) {
-    pickupInput.addEventListener('input', () => debouncedSearch(pickupInput, true));
-  }
-  if (deliveryInput) {
-    deliveryInput.addEventListener('input', () => debouncedSearch(deliveryInput, false));
-  }
-}
-
-function fitMapToBounds() {
-  const bounds = L.latLngBounds();
-  let markerCount = 0;
-  if (originMarker) {
-    bounds.extend(originMarker.getLatLng());
-    markerCount++;
-  }
-  if (destinationMarker) {
-    bounds.extend(destinationMarker.getLatLng());
-    markerCount++;
-  }
-  if (markerCount > 0) {
-    // Padding responsive según tamaño de pantalla y limitar zoom para evitar acercamiento excesivo
-    const width = window.innerWidth || document.documentElement.clientWidth;
-    const padding = width < 480
-      ? [24, 24]
-      : width < 768
-        ? [32, 32]
-        : width < 1024
-          ? [48, 48]
-          : [64, 64];
-    map.fitBounds(bounds, { padding, maxZoom: 16 });
-  }
 }
 
 function calculateAndDisplayDistance() {
@@ -830,6 +725,16 @@ function calculateAndDisplayDistance() {
   }
 }
 
+function fitMapToBounds() {
+  const pts = [];
+  if (originMarker) pts.push(originMarker.getLatLng());
+  if (destinationMarker) pts.push(destinationMarker.getLatLng());
+  if (pts.length === 1) { map.setView(pts[0], Math.max(map.getZoom() || 14, 15)); return; }
+  if (pts.length === 2) {
+    const b = L.latLngBounds(pts[0], pts[1]);
+    map.fitBounds(b, { padding: [40, 40], maxZoom: 16 });
+  }
+}
 let poiLayer = null;
 function loadPOIsForBounds() {
   const b = map.getBounds();
@@ -1077,7 +982,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Cargar datos dinámicos
   loadServices();
   loadVehicles();
-  initMap();
 
   // Manejar checkbox de RNC
   const rncCheckbox = document.getElementById('hasRNC');
@@ -1106,7 +1010,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Añadir validación en tiempo real para el paso 1
   const nombreInput = document.querySelector('input[placeholder="Nombre completo"]');
   const telefonoInput = document.querySelector('input[placeholder="Teléfono"]');
-  const emailInput = document.querySelector('input[placeholder="Correo"]');
+  const emailInput = document.querySelector('input[placeholder="Correo electrónico"]');
 
   nombreInput?.addEventListener('input', (e) => {
     const isValid = /^[a-zA-Z\s\u00C0-\u024F]*$/.test(e.target.value);
@@ -1147,7 +1051,8 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       
       // Guardar respuestas del servicio
-      const formData = new FormData(this);
+      const formEl = e.currentTarget;
+      const formData = new FormData(formEl);
       serviceQuestions = {}; // Reiniciar por si el usuario cambia de opinión
       
       for (let [key, value] of formData.entries()) {
@@ -1284,9 +1189,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const destinationCoords = destinationMarker ? destinationMarker.getLatLng() : null;
         const orderData = {
           // Datos del cliente (Paso 1)
-          name: document.querySelector('input[placeholder="Nombre completo"]').value,
-          phone: document.querySelector('input[placeholder="Teléfono"]').value,
-          email: document.querySelector('input[placeholder="Correo"]').value,
+          name: (document.getElementById('clientName') || { value: '' }).value,
+          phone: (document.getElementById('clientPhone') || { value: '' }).value,
+          email: (document.getElementById('clientEmail') || { value: '' }).value,
           rnc: document.querySelector('input[name="rnc"]')?.value || null,
           empresa: document.querySelector('input[name="empresa"]')?.value || null,
           // Detalles del servicio (Pasos 2 y 3)
@@ -1294,13 +1199,13 @@ document.addEventListener('DOMContentLoaded', function() {
           vehicle_id: selectedVehicleCard ? parseInt(selectedVehicleCard.dataset.vehicleId, 10) : null,
           service_questions: serviceQuestions,
           // Detalles de la ruta (Paso 4)
-          pickup: document.getElementById('pickupAddress').value,
-          delivery: document.getElementById('deliveryAddress').value,
+          pickup: (document.getElementById('pickupAddress') || { value: '' }).value,
+          delivery: (document.getElementById('deliveryAddress') || { value: '' }).value,
           origin_coords: originCoords ? { lat: originCoords.lat, lng: originCoords.lng } : null,
           destination_coords: destinationCoords ? { lat: destinationCoords.lat, lng: destinationCoords.lng } : null,
           // Fecha y Hora (Paso 5)
-          "date": document.querySelector('input[type="date"]').value,
-          "time": document.querySelector('input[type="time"]').value,
+          "date": (document.getElementById('orderDate') || { value: '' }).value,
+          "time": (document.getElementById('orderTime') || { value: '' }).value,
           // Estado y precio inicial
           status: 'Pendiente',
           estimated_price: 'Por confirmar',

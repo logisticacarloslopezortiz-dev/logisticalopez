@@ -19,10 +19,10 @@
 </head>
 <body class="bg-gray-100">
 
-  <!-- Hero / Solicitud -->
-  <section class="pt-16 pb-16 flex justify-center items-start min-h-screen">
-    <div class="w-full max-w-5xl px-4">
-
+  <!-- Contenedor principal para el formulario -->
+  <section id="form-section" class="pt-16 pb-16 flex justify-center items-start min-h-screen">
+    <div class="w-full max-w-5xl px-4 relative z-50">
+      <!-- Card del Formulario -->
       <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fadeInUp">
         <h3 class="text-3xl font-bold text-azulOscuro mb-6 text-center">Solicitud de Servicio</h3>
         <p class="text-gray-600 mb-8 text-center">Completa los 6 pasos para solicitar tu servicio de manera rápida y segura.</p>
@@ -178,52 +178,43 @@
             <h4 class="text-xl font-semibold text-azulOscuro mb-2 text-center">Paso 4: Origen y Destino</h4>
             <p id="map-instruction-text" class="text-center text-gray-600 mb-4">Busca una dirección o haz clic en el mapa para establecer el origen y el destino.</p>
 
-            <!-- NUEVO: Contenedor de Búsqueda y Confirmación -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <!-- Columna de Búsqueda y Origen -->
-              <div id="origin-container" class="space-y-2">
-                <div class="relative">
-                  <input type="text" id="address-search-input" placeholder="Buscar dirección de origen..." class="w-full border p-2 rounded-lg pl-10 focus:ring-2 focus:ring-azulClaro">
-                  <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <!-- Contenedor de Búsqueda y Confirmación (Ahora encima del mapa) -->
+            <div class="space-y-4 mb-4">
+              <div class="grid grid-cols-2 gap-4 items-start hidden" id="route-inputs">
+                <div>
+                  <label id="pickup-label" class="block text-sm font-semibold text-azulOscuro mb-1">Ruta de Origen</label>
+                  <input type="text" id="pickupAddress" class="w-full border p-2 rounded-lg hidden" aria-label="Dirección de origen">
                 </div>
-                <input type="text" id="pickupAddress" class="w-full border p-2 rounded-lg hidden" aria-label="Dirección de origen">
-                <button type="button" id="use-current-location-btn" class="w-full text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                  <i class="fas fa-location-arrow"></i>
-                  Usar mi ubicación actual
-                </button>
-                <!-- Tarjeta de Confirmación de Origen -->
-                <div id="origin-card" class="hidden p-3 border border-green-300 bg-green-50 rounded-lg">
-                  <p class="font-bold text-green-800">📍 Origen Confirmado:</p>
-                  <p id="origin-address-display" class="text-sm text-gray-700"></p>
+                <div>
+                  <label id="delivery-label" class="block text-sm font-semibold text-azulOscuro mb-1">Ruta de Destino</label>
+                  <input type="text" id="deliveryAddress" class="w-full border p-2 rounded-lg hidden" aria-label="Dirección de destino">
                 </div>
               </div>
-
-              <!-- Columna de Destino -->
-              <div id="destination-container" class="space-y-2">
-                 <input type="text" id="deliveryAddress" class="w-full border p-2 rounded-lg hidden" aria-label="Dirección de destino">
-                 <!-- Tarjeta de Confirmación de Destino -->
-                 <div id="destination-card" class="hidden p-3 border border-green-300 bg-green-50 rounded-lg">
-                  <p class="font-bold text-green-800">🏁 Destino Confirmado:</p>
-                  <p id="destination-address-display" class="text-sm text-gray-700"></p>
-                </div>
-                <p id="destination-placeholder" class="text-center text-gray-500 p-4 border-2 border-dashed rounded-lg">Selecciona el punto de destino en el mapa.</p>
+              
+              <!-- Tarjetas de Confirmación -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- Tarjeta de Origen -->
+                  <div id="origin-card" class="hidden p-3 border border-green-300 bg-green-50 rounded-lg">
+                      <p class="font-bold text-green-800">📍 Origen Confirmado:</p>
+                      <p id="origin-address-display" class="text-sm text-gray-700"></p>
+                  </div>
+                  <!-- Tarjeta de Destino -->
+                  <div id="destination-card" class="hidden p-3 border border-red-300 bg-red-50 rounded-lg">
+                      <p class="font-bold text-red-800">🏁 Destino Confirmado:</p>
+                      <p id="destination-address-display" class="text-sm text-gray-700"></p>
+                  </div>
               </div>
+              <p id="destination-placeholder" class="hidden text-center text-gray-500 p-4 border-2 border-dashed rounded-lg">Selecciona el punto de destino en el mapa.</p>
             </div>
-
-            <!-- Contenedor del mapa mejorado para móvil -->
-            <div id="map-container" class="relative transition-all duration-300">
-              <div id="map" class="w-full h-[50vh] md:h-[60vh] rounded-lg border border-gray-200 shadow relative bg-white">
-                <div id="map-loader" class="text-center p-8 text-gray-500 flex flex-col items-center gap-2 z-10">
-                  <i class="fas fa-spinner fa-spin text-2xl text-azulClaro"></i>
-                  <span id="map-loader-text">Cargando mapa...</span>
-                </div>
+            <div id="map" class="w-full h-screen rounded-lg border border-gray-200 shadow relative bg-white mt-4">
+              <div id="map-loader" class="text-center p-8 text-gray-500 flex flex-col items-center gap-2 z-10">
+                <i class="fas fa-spinner fa-spin text-2xl text-azulClaro"></i>
+                <span id="map-loader-text">Cargando mapa...</span>
               </div>
-              <button type="button" id="reset-map-btn" class="absolute top-3 right-3 z-[1000] bg-white px-3 py-2 rounded-lg shadow-lg text-gray-700 hover:bg-gray-100 transition">
-                <i class="fas fa-undo mr-1"></i> Reiniciar
-              </button>
-            </div>
-            <div id="distance-container" class="hidden mt-3 text-center bg-gray-100 p-2 rounded-lg">
-              <p class="text-gray-800 font-medium">Distancia estimada: <span id="distance-value" class="font-bold text-azulOscuro">--</span> km</p>
+              <button type="button" id="expand-map-btn" class="absolute top-3 right-3 z-[1000] bg-white px-3 py-2 rounded-lg shadow-lg text-gray-700 hover:bg-gray-100 transition hidden">Expandir mapa</button>
+              <div id="distance-container" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white p-2 px-4 rounded-full shadow-lg">
+                <p class="text-gray-800 font-medium">Distancia: <span id="distance-value" class="font-bold text-azulOscuro">--</span> km</p>
+              </div>
             </div>
 
             <div class="mt-6 border-t pt-4 text-center space-y-2">
@@ -234,8 +225,8 @@
           <!-- Paso 5: Fecha y Hora -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="5">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 5: Fecha y Hora</h4>
-            <input type="date" id="orderDate" name="orderDate" class="w-full border p-2 rounded mb-4" required aria-label="Fecha del servicio">
-            <input type="time" id="orderTime" name="orderTime" class="w-full border p-2 rounded mb-4" required aria-label="Hora del servicio">
+            <input type="date" id="orderDate" name="orderDate" class="w-full border p-2 rounded mb-4" aria-label="Fecha del servicio">
+            <input type="time" id="orderTime" name="orderTime" class="w-full border p-2 rounded mb-4" aria-label="Hora del servicio">
             <p id="time-message" class="hidden text-sm text-gray-500 text-center mt-2">
               <i class="fas fa-info-circle mr-1"></i>
               Haremos todo lo posible para cumplir con la hora solicitada. Nos pondremos en contacto para confirmar.
@@ -273,6 +264,9 @@
       </div>
     </div>
   </section>
+
+  
+
 
   <!-- Modales para preguntas específicas de cada servicio -->
   
@@ -531,107 +525,107 @@
               <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-bed text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Camas</label>
+                  <label for="item_camas_qty" class="font-medium text-sm text-gray-800">Camas</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_camas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir camas">-</button>
+                    <input type="number" min="0" id="item_camas_qty" name="item_camas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de camas">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar camas">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-couch text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Sofás</label>
+                  <label for="item_sofas_qty" class="font-medium text-sm text-gray-800">Sofás</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_sofas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir sofás">-</button>
+                    <input type="number" min="0" id="item_sofas_qty" name="item_sofas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de sofás">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar sofás">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-box-open text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Cajas</label>
+                  <label for="item_cajas_qty" class="font-medium text-sm text-gray-800">Cajas</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_cajas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir cajas">-</button>
+                    <input type="number" min="0" id="item_cajas_qty" name="item_cajas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de cajas">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar cajas">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-chair text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Sillas</label>
+                  <label for="item_sillas_qty" class="font-medium text-sm text-gray-800">Sillas</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_sillas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir sillas">-</button>
+                    <input type="number" min="0" id="item_sillas_qty" name="item_sillas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de sillas">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar sillas">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-desktop text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Escritorios</label>
+                  <label for="item_escritorios_qty" class="font-medium text-sm text-gray-800">Escritorios</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_escritorios_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir escritorios">-</button>
+                    <input type="number" min="0" id="item_escritorios_qty" name="item_escritorios_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de escritorios">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar escritorios">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-table text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Mesas</label>
+                  <label for="item_mesas_qty" class="font-medium text-sm text-gray-800">Mesas</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_mesas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir mesas">-</button>
+                    <input type="number" min="0" id="item_mesas_qty" name="item_mesas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de mesas">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar mesas">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-archive text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Armarios</label>
+                  <label for="item_armarios_qty" class="font-medium text-sm text-gray-800">Armarios</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_armarios_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir armarios">-</button>
+                    <input type="number" min="0" id="item_armarios_qty" name="item_armarios_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de armarios">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar armarios">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-fire text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Estufas</label>
+                  <label for="item_estufas_qty" class="font-medium text-sm text-gray-800">Estufas</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_estufas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir estufas">-</button>
+                    <input type="number" min="0" id="item_estufas_qty" name="item_estufas_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de estufas">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar estufas">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-tv text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">TV</label>
+                  <label for="item_tv_qty" class="font-medium text-sm text-gray-800">TV</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_tv_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir TV">-</button>
+                    <input type="number" min="0" id="item_tv_qty" name="item_tv_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de TV">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar TV">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-snowflake text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Neveras</label>
+                  <label for="item_neveras_qty" class="font-medium text-sm text-gray-800">Neveras</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_neveras_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir neveras">-</button>
+                    <input type="number" min="0" id="item_neveras_qty" name="item_neveras_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de neveras">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar neveras">+</button>
                   </div>
                 </div>
                 <div class="item-control flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                   <i class="fas fa-ellipsis-h text-2xl text-azulClaro mb-2"></i>
-                  <label class="font-medium text-sm text-gray-800">Otros</label>
+                  <label for="item_otros_qty" class="font-medium text-sm text-gray-800">Otros</label>
                   <div class="flex items-center mt-2">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300">-</button>
-                    <input type="number" min="0" name="item_otros_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro">
-                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300">+</button>
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-l-md text-lg font-bold hover:bg-gray-300" aria-label="Disminuir otros">-</button>
+                    <input type="number" min="0" id="item_otros_qty" name="item_otros_qty" value="0" class="w-12 h-8 text-center border-t border-b focus:outline-none focus:ring-1 focus:ring-azulClaro" aria-label="Cantidad de otros objetos">
+                    <button type="button" class="qty-btn h-8 w-8 bg-gray-200 rounded-r-md text-lg font-bold hover:bg-gray-300" aria-label="Aumentar otros">+</button>
                   </div>
                 </div>
               </div>
               <div class="col-span-2 sm:col-span-3 mt-2">
-                <label class="block text-sm font-medium mb-1">Describa otros objetos (si aplica)</label>
-                <input type="text" name="otros_objetos_desc" placeholder="Ej: 1 escritorio, 2 armarios, etc." class="w-full border p-2 rounded">
+                <label for="otros_objetos_desc" class="block text-sm font-medium mb-1">Describa otros objetos (si aplica)</label>
+                <input type="text" id="otros_objetos_desc" name="otros_objetos_desc" placeholder="Ej: 1 escritorio, 2 armarios, etc." class="w-full border p-2 rounded">
               </div>
             </fieldset>
 
@@ -639,15 +633,15 @@
             <fieldset>
               <legend class="text-lg font-semibold text-azulOscuro mb-3">2. Objetos Especiales</legend>
               <div>
-                <label class="block text-sm font-medium mb-1">¿Hay objetos frágiles o de valor?</label>
-                <select id="tiene_fragiles" name="tiene_fragiles" class="w-full border p-2 rounded" required>
+                <label for="tiene_fragiles" class="block text-sm font-medium mb-1">¿Hay objetos frágiles o de valor?</label>
+                <select id="tiene_fragiles" name="tiene_fragiles" class="w-full border p-2 rounded" required aria-label="¿Hay objetos frágiles o de valor?">
                   <option value="no">No</option>
                   <option value="si">Sí</option>
                 </select>
               </div>
               <div id="descripcion_fragiles_container" class="hidden mt-2">
-                <label class="block text-sm font-medium mb-1">Describa los objetos frágiles</label>
-                <textarea name="objetos_fragiles_desc" placeholder="Ej: Espejos grandes, cuadros, TV de 75 pulgadas" class="w-full border p-2 rounded h-20"></textarea>
+                <label for="objetos_fragiles_desc" class="block text-sm font-medium mb-1">Describa los objetos frágiles</label>
+                <textarea id="objetos_fragiles_desc" name="objetos_fragiles_desc" placeholder="Ej: Espejos grandes, cuadros, TV de 75 pulgadas" class="w-full border p-2 rounded h-20"></textarea>
               </div>
             </fieldset>
 
@@ -658,8 +652,8 @@
                 <!-- Origen -->
                 <div class="space-y-2">
                   <h5 class="font-semibold text-gray-700">Punto de Origen</h5>
-                  <label class="block text-sm font-medium">Tipo de vivienda</label>
-                  <select name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
+                  <label for="tipo_vivienda_origen" class="block text-sm font-medium">Tipo de vivienda</label>
+                  <select id="tipo_vivienda_origen" name="tipo_vivienda_origen" class="w-full border p-2 rounded" required aria-label="Tipo de vivienda de origen">
                     <option value="">Seleccione...</option>
                     <option value="casa">Casa</option>
                     <option value="apartamento">Apartamento</option>
@@ -667,10 +661,10 @@
                     <option value="local_comercial">Local comercial</option>
                     <option value="otro">Otro</option>
                   </select>
-                  <label class="block text-sm font-medium">Piso y Acceso</label>
+                  <label for="piso_origen" class="block text-sm font-medium">Piso y Acceso</label>
                   <div class="flex gap-2">
-                    <input type="text" name="piso_origen" placeholder="Piso" class="w-1/2 border p-2 rounded" required>
-                    <select name="acceso_origen" class="w-1/2 border p-2 rounded" required>
+                    <input type="text" id="piso_origen" name="piso_origen" placeholder="Piso" class="w-1/2 border p-2 rounded" required>
+                    <select id="acceso_origen" name="acceso_origen" class="w-1/2 border p-2 rounded" required aria-label="Acceso en origen">
                       <option value="">Acceso</option>
                       <option value="ascensor">Ascensor</option>
                       <option value="escaleras">Escaleras</option>
@@ -681,8 +675,8 @@
                 <!-- Destino -->
                 <div class="space-y-2">
                   <h5 class="font-semibold text-gray-700">Punto de Destino</h5>
-                  <label class="block text-sm font-medium">Tipo de vivienda</label>
-                  <select name="tipo_vivienda_destino" class="w-full border p-2 rounded" required>
+                  <label for="tipo_vivienda_destino" class="block text-sm font-medium">Tipo de vivienda</label>
+                  <select id="tipo_vivienda_destino" name="tipo_vivienda_destino" class="w-full border p-2 rounded" required aria-label="Tipo de vivienda de destino">
                     <option value="">Seleccione...</option>
                     <option value="casa">Casa</option>
                     <option value="apartamento">Apartamento</option>
@@ -690,10 +684,10 @@
                     <option value="local_comercial">Local comercial</option>
                     <option value="otro">Otro</option>
                   </select>
-                  <label class="block text-sm font-medium">Piso y Acceso</label>
+                  <label for="piso_destino" class="block text-sm font-medium">Piso y Acceso</label>
                   <div class="flex gap-2">
-                    <input type="text" name="piso_destino" placeholder="Piso" class="w-1/2 border p-2 rounded" required>
-                    <select name="acceso_destino" class="w-1/2 border p-2 rounded" required>
+                    <input type="text" id="piso_destino" name="piso_destino" placeholder="Piso" class="w-1/2 border p-2 rounded" required>
+                    <select id="acceso_destino" name="acceso_destino" class="w-1/2 border p-2 rounded" required aria-label="Acceso en destino">
                       <option value="">Acceso</option>
                       <option value="ascensor">Ascensor</option>
                       <option value="escaleras">Escaleras</option>
