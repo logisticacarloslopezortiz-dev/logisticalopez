@@ -518,25 +518,22 @@ async function initMap() {
 
   map = L.map(mapElement).setView([18.4273, -70.0976], 13);
 
+  let layersControl = null;
+  let layersHidden = false;
   const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    attribution: '&copy; OpenStreetMap & CARTO',
     subdomains: 'abcd',
+    maxZoom: 19
+  });
+  const stadiaOutdoors = L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', {
+    attribution: 'Map tiles by Stadia Maps, Data by OpenMapTiles & OpenStreetMap contributors',
     maxZoom: 20
-  }).addTo(map);
-
-  cartoVoyager.on('load', () => {
-    loader.style.display = 'none';
   });
-
-  cartoVoyager.on('tileerror', () => {
-    // En caso de que CARTO falle, intentar con un proveedor de OpenStreetMap como último recurso.
-    console.warn("CARTO tile provider failed. Falling back to OpenStreetMap.");
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map).on('load', () => {
-      loader.style.display = 'none';
-    });
-  });
+  // Preferir Stadia Outdoors por defecto y ocultar loader cuando cargue; fallback a CARTO si falla
+  let baseLoaded = false;
+  stadiaOutdoors.addTo(map).on('load', () => { loader.style.display = 'none'; baseLoaded = true; });
+  stadiaOutdoors.on('tileerror', () => { if (!baseLoaded) { cartoVoyager.addTo(map).on('load', () => loader.style.display = 'none'); } });
+  layersControl = L.control.layers({ 'Stadia Outdoors': stadiaOutdoors, 'CARTO Voyager': cartoVoyager }).addTo(map);
   const providerRD = new GeoSearch.OpenStreetMapProvider({ params: { countrycodes: 'do', "accept-language": 'es', addressdetails: 1 } });
 
 
