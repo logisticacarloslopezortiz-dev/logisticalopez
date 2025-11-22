@@ -140,21 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         showStatusNotification(payload.new.status);
                     }
 
-                    try {
-                        var upd = payload.new.updated_at || payload.new.timestamp || payload.new.date || null;
-                        if (upd) {
-                            var ms = Date.now() - Date.parse(upd);
-                            if (!isNaN(ms) && ms >= 0 && ms < 600000) {
-                                localStorage.setItem('tlc_outbox_latency_ms', String(ms));
-                                var a = document.getElementById('notifLatencyIndicator');
-                                if (a) a.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
-                                var b = document.getElementById('notifLatencyIndicatorCliente');
-                                if (b) b.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
-                                var c = document.getElementById('notifLatencyIndicatorCollab');
-                                if (c) c.textContent = 'Notificaciones ~1s • última latencia ' + ms + ' ms';
-                            }
-                        }
-                    } catch (_) {}
+                    // The latency indicator was removed from the UI, so this code is no longer needed.
                 }
 
                 // En DELETE, mostrar mensaje y volver al login/inicio
@@ -244,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div>
                 <p class="text-sm text-gray-500">Fecha Programada</p>
-                <p class="font-semibold text-gray-800">${order.date} a las ${order.time}</p>
+                <p class="font-semibold text-gray-800">${order.date && order.time ? `${order.date} a las ${order.time}` : 'Por confirmar'}</p>
             </div>
             <div class="md:col-span-2">
                 <p class="text-sm text-gray-500">Ruta</p>
