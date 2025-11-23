@@ -46,10 +46,42 @@
     <div class="mt-6 text-center text-sm hidden">
       <a href="login.html" class="hover:underline" style="color: #1E8A95;">¿Eres el dueño? Inicia sesión aquí</a>
     </div>
+
+    <!-- Botón de Instalación PWA -->
+    <div class="mt-6 text-center">
+      <button type="button" id="install-app-btn" class="hidden inline-flex items-center justify-center gap-2 bg-acento hover:bg-yellow-500 text-azulOscuro px-4 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 shadow-md">
+        <i data-lucide="download" class="w-4 h-4"></i>
+        <span>Instalar App</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal de Instalación para iOS -->
+  <div id="ios-install-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full text-center p-6 animate-fadeInUp">
+      <img src="img/1vertical.png" alt="Logo de Logística López Ortiz" class="h-20 w-20 mx-auto mb-4">
+      <h3 class="text-xl font-bold text-azulOscuro mb-2">Instala la App de Colaborador</h3>
+      <p class="text-gray-600 mb-6">Accede más rápido al panel añadiendo la app a tu pantalla de inicio.</p>
+      <div class="text-left space-y-3 text-gray-700">
+        <p>1. Pulsa el botón de <strong>Compartir</strong> en Safari.</p>
+        <div class="text-center">
+          <i class="fas fa-share-square text-2xl text-blue-600"></i>
+        </div>
+        <p>2. Busca y selecciona <strong>"Agregar a la pantalla de inicio"</strong>.</p>
+        <div class="text-center">
+          <i class="fas fa-plus-square text-2xl text-blue-600"></i>
+        </div>
+      </div>
+      <button id="close-ios-modal" class="mt-8 w-full bg-gray-200 text-gray-800 py-2 rounded-lg font-semibold hover:bg-gray-300">
+        Entendido
+      </button>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/login-colaborador.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script> <!-- Para iconos del modal de iOS -->
 </body>
 </html>
