@@ -27,11 +27,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- Tailwind y Lucide (local) -->
   <link rel="stylesheet" href="css/tailwind.min.css?v=1.2">
   <link rel="stylesheet" href="css/collab-panel-styles.css?v=1.2">
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="vendor/lucide.min.js?v=1.2" defer></script>
   
   <!-- Mitigación FOUC: ocultar el cuerpo hasta que los estilos estén listos -->
@@ -242,8 +242,8 @@
                 </button>
               </div>
             </div>
-            <div id="activeJobMap" class="h-56 rounded-xl border border-gray-200 overflow-hidden"></div>
-            <div id="activeJobMapHint" class="mt-2 text-xs text-gray-500"></div>
+            <div id="activeJobMap" class="h-56 rounded-xl border border-gray-200 overflow-hidden hidden"></div>
+            <div id="activeJobMapHint" class="mt-2 text-xs text-gray-500 hidden"></div>
             <!-- Evidencia Fotográfica -->
             <div class="border-t border-gray-200 pt-4">
               <h3 class="text-md font-semibold text-gray-800 mb-3">Evidencia Fotográfica</h3>

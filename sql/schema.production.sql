@@ -41,11 +41,26 @@ begin
       'process_outbox_every_minute',
       '* * * * *',
       $cron$
+      with cfg as (
+        select
+          coalesce(current_setting('app.settings.process_outbox_url', true), 'https://fkprllkxyjtosjhtikxy.functions.supabase.co/process-outbox') as url,
+          coalesce(current_setting('app.settings.service_role_token', true), '') as token
+      ),
+      hdrs as (
+        select case when cfg.token <> '' then
+          jsonb_build_array(
+            jsonb_build_object('name','Content-Type','value','application/json'),
+            jsonb_build_object('name','Authorization','value','Bearer ' || cfg.token)
+          )
+        else
+          jsonb_build_array(
+            jsonb_build_object('name','Content-Type','value','application/json')
+          ) end as headers
+        from cfg
+      )
       select net.http_post(
-        url := 'https://fkprllkxyjtosjhtikxy.functions.supabase.co/process-outbox',
-        headers := jsonb_build_array(
-          jsonb_build_object('name','Content-Type','value','application/json')
-        ),
+        url := (select url from cfg),
+        headers := (select headers from hdrs),
         body := jsonb_build_object('health',0)
       );
       $cron$
@@ -1469,14 +1484,14 @@ create or replace function public.invoke_process_outbox()
 returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public as $$
 declare resp jsonb;
+declare v_url text := coalesce(current_setting('app.settings.process_outbox_url', true), 'https://fkprllkxyjtosjhtikxy.functions.supabase.co/process-outbox');
+declare v_token text := coalesce(current_setting('app.settings.service_role_token', true), '');
+declare v_headers jsonb := case when v_token <> '' then jsonb_build_object('Content-Type','application/json','Authorization','Bearer ' || v_token) else jsonb_build_object('Content-Type','application/json') end;
 begin
   begin
     select net.http_post(
-      url := coalesce(current_setting('app.settings.process_outbox_url', true), ''),
-      headers := jsonb_build_object(
-        'Content-Type','application/json',
-        'Authorization', 'Bearer ' || coalesce(current_setting('app.settings.service_role_token', true), '')
-      ),
+      url := v_url,
+      headers := v_headers,
       body := '{}'::jsonb
     ) into resp;
   exception when others then

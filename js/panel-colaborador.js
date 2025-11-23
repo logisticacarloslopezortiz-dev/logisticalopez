@@ -961,6 +961,19 @@ function filterAndRender(){
   // Búsqueda y filtrado deshabilitados en este panel para evitar problemas de layout.
   const term = '';
   const statusFilter = '';
+  try {
+    const c = navigator.connection;
+    const slow = c && (c.saveData || String(c.effectiveType).includes('2g'));
+    const container = document.getElementById('ordersCardContainer');
+    if (container) {
+      if (slow) {
+        container.classList.remove('sm:grid-cols-2','lg:grid-cols-3','xl:grid-cols-4');
+        container.classList.add('grid-cols-1');
+      } else {
+        container.classList.add('sm:grid-cols-2','lg:grid-cols-3','xl:grid-cols-4');
+      }
+    }
+  } catch(_) {}
   
   // Verificar si hay un trabajo activo guardado
   const activeJob = loadActiveJob();
@@ -1203,6 +1216,20 @@ async function loadInitialOrders() {
   let timeout = null;
 
   try {
+    try {
+      const collabId = state.collabSession?.user?.id;
+      const cacheKey = collabId ? `tlc_orders_cache_${collabId}` : null;
+      if (cacheKey) {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            state.allOrders = parsed;
+            filterAndRender();
+          }
+        }
+      }
+    } catch (_) { /* cache inválido */ }
     // Iniciar temporizador de carga
     timeout = setTimeout(() => {
       if (loadingIndicator && !loadingIndicator.classList.contains('hidden')) {
@@ -1287,6 +1314,11 @@ async function loadInitialOrders() {
     destination_coords: parseCoordinates(order.destination_coords),
       last_collab_status: order.last_collab_status || deriveLastStatus(order)
     }));
+    try {
+      const collabId = state.collabSession?.user?.id;
+      const cacheKey = collabId ? `tlc_orders_cache_${collabId}` : null;
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(state.allOrders));
+    } catch(_) { /* no-op */ }
     await preloadCollaboratorNames(state.allOrders);
     
     try {
