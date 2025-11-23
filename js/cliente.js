@@ -156,12 +156,17 @@ async function loadServices() {
   serviceListContainer.innerHTML = services.map(service => `
     <div class="service-item group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white text-center shadow-md transition-all duration-300 ease-in-out hover:shadow-xl hover:border-azulClaro hover:-translate-y-1" 
          data-service-id="${service.id}" 
-         data-service-name="${service.name}">
+         data-service-name="${service.name}"
+         data-service-description="${service.description || ''}">
       <div class="relative mb-2 h-32 w-full rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
           <img src="${service.image_url || 'img/1vertical.png'}" alt="${service.name}" class="h-28 w-auto object-contain transition-transform duration-300 group-hover:scale-110" onerror="this.src='img/1vertical.png'">
       </div>
-      <div class="p-2">
+      <div class="p-2 text-left">
         <span class="block truncate font-semibold text-gray-700 group-hover:text-azulOscuro">${service.name}</span>
+        <!-- ✅ NUEVO: Contenedor para la descripción con animación -->
+        <div class="marquee-container text-xs text-gray-500 mt-1">
+          <p class="marquee-text">${service.description || ''}</p>
+        </div>
       </div>
       <div class="check-indicator absolute top-2 right-2 hidden h-6 w-6 items-center justify-center rounded-full bg-azulClaro text-white transition-transform duration-300 scale-0">
         <i class="fas fa-check text-xs"></i> 
@@ -169,6 +174,9 @@ async function loadServices() {
     </div>
   `).join('');
   
+  // ✅ NUEVO: Comprobar y aplicar animación a las descripciones que lo necesiten
+  checkAndAnimateDescriptions();
+
   // Asignar listeners a los nuevos elementos
   document.querySelectorAll('.service-item').forEach(card => {
     card.addEventListener('click', function() {
@@ -197,6 +205,26 @@ async function loadServices() {
         modal.classList.remove('hidden');
       }
     });
+  });
+}
+
+/**
+ * ✅ NUEVO: Revisa las descripciones de los servicios y aplica una clase de animación
+ * solo a aquellas cuyo texto es más largo que el contenedor.
+ */
+function checkAndAnimateDescriptions() {
+  const serviceItems = document.querySelectorAll('.service-item');
+  serviceItems.forEach(item => {
+    const container = item.querySelector('.marquee-container');
+    const text = item.querySelector('.marquee-text');
+    if (container && text) {
+      // Comprueba si el ancho del contenido del texto es mayor que el ancho visible del contenedor
+      if (text.scrollWidth > container.clientWidth) {
+        container.classList.add('needs-animation');
+      } else {
+        container.classList.remove('needs-animation');
+      }
+    }
   });
 }
 
@@ -444,17 +472,21 @@ function toggleRNCField() {
   const rncCheckbox = document.getElementById('hasRNC');
   const rncFields = document.getElementById('rncFields');
   const itbisMessage = document.getElementById('itbisMessage');
+  const rncInput = document.getElementById('clientRNC');
+  const empresaInput = document.getElementById('clientCompany');
   
   if (rncCheckbox && rncFields) {
     if (rncCheckbox.checked) {
       rncFields.classList.remove('hidden');
       itbisMessage.classList.remove('hidden');
+      if (rncInput) rncInput.required = true;
+      if (empresaInput) empresaInput.required = true;
     } else {
       rncFields.classList.add('hidden');
       itbisMessage.classList.add('hidden');
       // Limpiar campos cuando se ocultan
-      document.querySelector('input[name="rnc"]').value = '';
-      document.querySelector('input[name="empresa"]').value = '';
+      if (rncInput) { rncInput.value = ''; rncInput.required = false; }
+      if (empresaInput) { empresaInput.value = ''; empresaInput.required = false; }
     }
   }
 }
@@ -1051,7 +1083,15 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       
       // Guardar respuestas del servicio
-      const formEl = e.currentTarget;
+      const formEl = e.currentTarget && e.currentTarget.nodeName === 'FORM'
+        ? e.currentTarget
+        : (e.target && typeof e.target.closest === 'function' ? e.target.closest('form') : null);
+
+      if (!formEl || formEl.nodeName !== 'FORM') {
+        console.warn('Submit listener invocado sin un formulario válido');
+        return;
+      }
+
       const formData = new FormData(formEl);
       serviceQuestions = {}; // Reiniciar por si el usuario cambia de opinión
       
@@ -1087,7 +1127,8 @@ document.addEventListener('DOMContentLoaded', function() {
       showSuccess('Información del servicio guardada.'); // Notificación opcional
 
       // Solo cerrar el modal, no avanzar de paso
-      this.closest('.fixed').classList.add('hidden');
+      const overlay = formEl.closest('.fixed');
+      if (overlay) overlay.classList.add('hidden');
     });
   });
 

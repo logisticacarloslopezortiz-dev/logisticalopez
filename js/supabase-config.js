@@ -96,26 +96,15 @@ if (!window.supabaseConfig) {
         return JSON.parse(localStorage.getItem('tlc_services') || '[]');
       } catch { return []; }
     }
-    await this.ensureFreshSession();
-    let { data, error } = await this.client.from('services')
-      .select('*')
-      .order('display_order', { ascending: true, nullsFirst: false });
-
-    // Manejar JWT expirado: intentar consulta con cliente público (anon)
-    if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
-      console.warn('JWT expirado o no autorizado para obtener services. Reintentando con cliente anon...');
-      try {
-        const publicClient = this.getPublicClient();
-        const resp = await publicClient.from('services').select('*').order('display_order', { ascending: true, nullsFirst: false });
-        if (resp.error) console.error('Error fetching services (anon):', resp.error);
-        return resp.data || [];
-      } catch (e) {
-        console.error('Error fetching services with anon client:', e);
-      }
+    try {
+      const publicClient = this.getPublicClient();
+      const resp = await publicClient.from('services').select('*').order('display_order', { ascending: true, nullsFirst: false });
+      if (resp.error) console.error('Error fetching services (anon):', resp.error);
+      return resp.data || [];
+    } catch (e) {
+      console.error('Error fetching services with anon client:', e);
+      return [];
     }
-
-    if (error) console.error('Error fetching services:', error);
-    return data || [];
   },
 
   /**
@@ -128,23 +117,15 @@ if (!window.supabaseConfig) {
         return JSON.parse(localStorage.getItem('tlc_vehicles') || '[]');
       } catch { return []; }
     }
-    await this.ensureFreshSession();
-    let { data, error } = await this.client.from('vehicles').select('*');
-
-    if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
-      console.warn('JWT expirado o no autorizado para obtener vehicles. Reintentando con cliente anon...');
-      try {
-        const publicClient = this.getPublicClient();
-        const resp = await publicClient.from('vehicles').select('*');
-        if (resp.error) console.error('Error fetching vehicles (anon):', resp.error);
-        return resp.data || [];
-      } catch (e) {
-        console.error('Error fetching vehicles with anon client:', e);
-      }
+    try {
+      const publicClient = this.getPublicClient();
+      const resp = await publicClient.from('vehicles').select('*');
+      if (resp.error) console.error('Error fetching vehicles (anon):', resp.error);
+      return resp.data || [];
+    } catch (e) {
+      console.error('Error fetching vehicles with anon client:', e);
+      return [];
     }
-
-    if (error) console.error('Error fetching vehicles:', error);
-    return data || [];
   },
 
   /**

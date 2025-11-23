@@ -597,114 +597,61 @@ async function deleteSelectedOrder(){
 
 // Función para generar y enviar factura
 async function generateAndSendInvoice(orderId) {
-  notifications.info('Generando Factura...', 'Por favor, espera un momento.');
-  const order = allOrders.find(o => o.id === orderId); // ✅ CORREGIDO: El ID ahora es UUID (texto), no se convierte a número.
+  const order = allOrders.find(o => o.id === Number(orderId));
   if (!order) {
     notifications.error('Orden no encontrada.');
     return;
   }
 
-  const totalForInvoice = (order.monto_cobrado ?? order.estimated_price ?? null);
-  if (!totalForInvoice || totalForInvoice === 'Por confirmar') {
-    notifications.warning('Debes establecer un monto cobrado o precio estimado antes de generar la factura.');
+  // Validar que el cliente tenga un email
+  const clientEmail = order.client_email || order.email;
+  if (!clientEmail) {
+    notifications.error('Cliente sin email', 'Esta orden no tiene un correo electrónico de cliente registrado para enviar la factura.');
     return;
   }
 
+  notifications.info('Generando factura y abriendo Gmail...', 'Espera un momento.');
+
   try {
-    const businessSettings = await supabaseConfig.getBusinessSettings();
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    // --- Contenido del PDF ---
-    // Logo (si existe)
-    if (businessSettings.logo_url) {
-      try {
-        // Necesitamos una imagen que no tenga restricciones de CORS
-        // Por ahora, lo dejamos como texto. Para usar una imagen, debe estar en un bucket público.
-        // const imgData = businessSettings.logo_url; 
-        // doc.addImage(imgData, 'PNG', 15, 15, 40, 40);
-      } catch (e) { console.error("No se pudo cargar el logo en el PDF:", e); }
-    }
-
-    // Encabezado de la factura
-    doc.setFontSize(20);
-    doc.text(businessSettings.business_name || 'Logística López Ortiz', 105, 20, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(businessSettings.address || 'Dirección de la empresa', 105, 27, { align: 'center' });
-    doc.text(`Tel: ${businessSettings.phone || 'N/A'} | Email: ${businessSettings.email || 'N/A'}`, 105, 32, { align: 'center' });
-
-    doc.setFontSize(16);
-    doc.text(`Factura #${order.id}`, 15, 50);
-    doc.setFontSize(10);
-    doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 15, 56);
-
-    // Datos del cliente
-    doc.setFontSize(12);
-    doc.text('Facturar a:', 15, 70);
-    doc.setFontSize(10);
-    doc.text(order.name, 15, 76);
-    doc.text(order.phone, 15, 81);
-    doc.text(order.email, 15, 86);
-    if (order.rnc) {
-      doc.text(`RNC: ${order.rnc} (${order.empresa})`, 15, 91);
-    }
-
-    // Tabla con detalles del servicio
-    doc.autoTable({
-      startY: 100,
-      head: [['Descripción', 'Detalle']],
-      body: [
-        ['Servicio', order.service?.name || 'N/A'],
-        ['Vehículo', order.vehicle?.name || 'N/A'],
-        ['Fecha Programada', `${order.date} a las ${order.time}`],
-        ['Origen', order.pickup],
-        ['Destino', order.delivery],
-      ],
-      theme: 'striped'
-    });
-
-    // Total
-    const finalY = doc.lastAutoTable.finalY;
-    doc.setFontSize(14);
-    doc.text('Total:', 140, finalY + 15);
-    doc.setFont(undefined, 'bold');
-    const totalText = typeof totalForInvoice === 'number' 
-      ? `$${Number(totalForInvoice).toLocaleString('es-DO')}`
-      : String(totalForInvoice);
-    doc.text(totalText, 170, finalY + 15);
-
-    // La subida a Storage y el registro en la tabla invoices
-    // ahora los realiza la Edge Function `send-invoice` con clave de servicio.
-    // Esto evita errores de CORS y asegura consistencia con el esquema del servidor.
-    // Si se requiere vista previa local, podemos seguir generando el PDF en memoria.
-    const arrayBuffer = doc.output('arraybuffer');
-    const pdfBlob = new Blob([arrayBuffer], { type: 'application/pdf' });
-
-    // --- Envío por Correo ---
-    const pdfBase64 = doc.output('datauristring').split(',')[1];
-
-    showNotification('Enviando Correo...', 'La factura se está enviando al cliente.', 'info');
-
-    // Invocar la Edge Function con el contrato esperado: { orderId, email }
-    const { data: fnResp, error: functionError } = await supabaseConfig.client.functions.invoke('send-invoice', {
+    // 1. Invocar una Edge Function para generar el PDF y obtener su URL
+    const { data: pdfData, error: pdfError } = await supabaseConfig.client.functions.invoke('generate-invoice-pdf', {
       body: {
-        orderId: String(order.id),
-        email: order.email
+        orderId: order.id
       }
     });
 
-    if (functionError) throw functionError;
+    if (pdfError || !pdfData?.pdfUrl) {
+      throw new Error(pdfError?.message || 'La función del servidor no pudo generar el PDF.');
+    }
 
-    const recipientInfo = fnResp?.data?.recipientEmail ? ` a ${fnResp.data.recipientEmail}` : '';
-    if (fnResp?.success) {
-      notifications.success('Factura Enviada', `La factura para la orden #${order.id} ha sido enviada${recipientInfo}.`);
+    const pdfUrl = pdfData.pdfUrl;
+
+    const { data: emailResp } = await supabaseConfig.client.functions.invoke('send-invoice', {
+      body: { orderId: order.id, email: clientEmail }
+    });
+    const emailSent = !!(emailResp && emailResp.success && emailResp.data && emailResp.data.emailSent);
+
+    // 2. Preparar el contenido para el enlace mailto de Gmail
+    const subject = `Factura de su orden #${order.short_id || order.id} con Logística López Ortiz`;
+    const body = `¡Hola, ${order.client_name || order.name}!\n\nAdjunto le enviamos los detalles y la factura correspondiente a su orden de servicio con nosotros.\n\n- Servicio: ${order.service?.name || 'N/A'}\n- Ruta: ${order.pickup} → ${order.delivery}\n- Fecha: ${order.date}\n\nPuede ver y descargar su factura desde el siguiente enlace seguro:\n${pdfUrl}\n\nSi tiene alguna pregunta, no dude en contactarnos.\n\n¡Gracias por confiar en Logística López Ortiz!`;
+
+    // 3. Crear y abrir el enlace de Gmail
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(clientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    window.open(gmailUrl, '_blank');
+
+    if (emailSent) {
+      notifications.success('Correo enviado', 'Se envió la factura al cliente y se abrió Gmail como respaldo.');
     } else {
-      notifications.success('Factura Generada', `La factura para la orden #${order.id} fue generada correctamente.`);
+      notifications.success('Gmail Abierto', 'Se abrió Gmail con el borrador para enviar la factura.');
     }
 
   } catch (error) {
-    console.error('Error al generar o enviar la factura:', error);
-    notifications.error('Error de Factura', 'No se pudo generar o enviar el PDF. Revisa la consola.');
+    console.error('Error al procesar la factura:', error);
+    notifications.error(
+      'Error al procesar factura',
+      error.message || 'No se pudo generar el enlace de la factura. Revisa la consola y la Edge Function `generate-invoice-pdf`.'
+    );
   }
 }
 

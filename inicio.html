@@ -308,6 +308,32 @@
     </div>
   </div>
 
+  <!-- ✅ NUEVO: Modal para Editar Fecha y Hora -->
+  <div id="dateModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white w-full max-w-md rounded-lg p-6 shadow-xl animate-fadeInUp">
+      <div class="flex items-center gap-2 mb-4">
+        <i data-lucide="calendar-clock" class="w-5 h-5 text-blue-600"></i>
+        <h3 class="text-lg font-semibold">Editar Fecha y Hora de la Orden</h3>
+      </div>
+      <input type="hidden" id="dateModalOrderId">
+      <div class="space-y-4">
+        <div>
+          <label for="modalDate" class="block text-sm font-medium text-gray-700 mb-1">Nueva Fecha</label>
+          <input type="date" id="modalDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="modalTime" class="block text-sm font-medium text-gray-700 mb-1">Nueva Hora</label>
+          <input type="time" id="modalTime" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6">
+        <button id="dateCancelBtn" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Cancelar</button>
+        <button id="dateSaveBtn" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Guardar Cambios</button>
+      </div>
+      <div id="dateModalMsg" class="text-sm mt-3 text-center"></div>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
 
