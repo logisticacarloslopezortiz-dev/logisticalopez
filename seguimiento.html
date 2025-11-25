@@ -60,11 +60,11 @@
       font-weight: 500;
     }
 
-    .status-Pendiente { background-color: #fef3c7; color: #92400e; }
-    .status-Confirmado { background-color: #dbeafe; color: #1e40af; }
-    .status-En.proceso { background-color: #e9d5ff; color: #6b21a8; }
-    .status-Completado { background-color: #dcfce7; color: #166534; }
-    .status-Cancelado { background-color: #fee2e2; color: #991b1b; }
+    .status-Pendiente { background-color: #fef3c7; color: #92400e; } /* yellow */
+    .status-Aceptada, .status-En-proceso { background-color: #dbeafe; color: #1e40af; } /* blue */
+    .status-En-camino-a-recoger, .status-En-origen, .status-En-curso, .status-En-destino { background-color: #e9d5ff; color: #6b21a8; } /* purple */
+    .status-Completada { background-color: #dcfce7; color: #166534; } /* green */
+    .status-Cancelada { background-color: #fee2e2; color: #991b1b; } /* red */
 
     .timeline-item {
       position: relative;
@@ -120,7 +120,7 @@
       <div class="space-y-6">
         <div class="relative">
           <i data-lucide="hash" class="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
-          <input type="text" id="orderIdInput" class="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-turquoise focus:border-transparent transition-shadow" placeholder="ID de seguimiento (32 hex), ID secuencial o UUID" maxlength="40">
+          <input type="text" id="orderIdInput" class="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow" placeholder="ID de seguimiento o UUID" maxlength="40">
         </div>
         
         <button id="trackButton" class="w-full py-4 rounded-xl font-semibold text-white transition-transform transform hover:scale-105" style="background-color: var(--color-primario-turquesa);">
@@ -141,7 +141,7 @@
   </div>
 
   <!-- Pantalla de Seguimiento -->
-  <div id="trackingScreen" class="hidden min-h-screen" style="background-color: var(--color-fondo-secundario);">
+  <div id="trackingScreen" class="hidden min-h-screen bg-gray-50">
 
     <!-- Header -->
     <header class="sticky top-0 z-40" style="background-color: var(--color-primario-oscuro);">
@@ -173,7 +173,7 @@
                 <h1 class="text-2xl font-bold" id="orderTitle" style="color: var(--color-primario-oscuro);">Orden #TLC01</h1>
                 <p class="text-gray-500 text-sm mt-1" id="orderDate">Creada el 15 de enero, 2024</p>
               </div>
-              <div id="orderStatus" class="status-badge status-pending mt-3 sm:mt-0">
+              <div id="orderStatus" class="status-badge status-Pendiente mt-3 sm:mt-0">
                 Pendiente
               </div>
             </div>
@@ -187,7 +187,7 @@
             <div id="scheduledTimeSection" class="hidden border-t border-gray-200 pt-6 mt-6">
                 <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
                     <i data-lucide="calendar-clock" class="w-5 h-5 text-turquoise"></i>
-                    <span>Fecha Programada</span>
+                    <span style="color: var(--color-primario-turquesa);">Fecha Programada</span>
                 </h3>
                 <p id="scheduledTime" class="text-gray-600"></p>
             </div>
@@ -195,7 +195,7 @@
 
           <!-- Timeline de Estados -->
           <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-            <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-6">
+            <h2 class="text-xl font-bold flex items-center gap-3 mb-6" style="color: var(--color-primario-turquesa);">
               <span class="bg-yellow-400 p-2 rounded-lg">
                 <i data-lucide="route" class="w-5 h-5 text-white"></i>
               </span>
@@ -209,7 +209,7 @@
 
         <!-- Columna Derecha: Mapa -->
         <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6 space-y-4">
-          <h2 class="text-xl font-bold text-turquoise flex items-center gap-3">
+          <h2 class="text-xl font-bold flex items-center gap-3" style="color: var(--color-primario-turquesa);">
             <span class="bg-yellow-400 p-2 rounded-lg">
               <i data-lucide="map-pin" class="w-5 h-5 text-white"></i>
             </span>
@@ -224,7 +224,7 @@
 
       <!-- Galería de Fotos -->
       <div id="photoSection" class="hidden bg-white rounded-xl shadow-lg border border-gray-200 p-6 mt-8">
-        <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+        <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color: var(--color-primario-turquesa);">
           <span class="bg-yellow-400 p-2 rounded-lg">
             <i data-lucide="camera" class="w-5 h-5 text-white"></i>
           </span>
@@ -262,7 +262,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
-  <script src="js/seguimiento.js"></script>
+  <script src="js/seguimiento.js?v=1.0"></script>
   <script>
     (function(){
       try{

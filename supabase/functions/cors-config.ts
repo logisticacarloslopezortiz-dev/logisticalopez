@@ -3,6 +3,7 @@
 
 const allowedOrigins = new Set([
   'https://logisticalopezortiz.com',
+  'https://www.logisticalopezortiz.com',
   'http://127.0.0.1:5502',
   'http://localhost:5502',
   'http://localhost:5173',
@@ -10,14 +11,15 @@ const allowedOrigins = new Set([
 ]);
 
 export function corsHeadersForOrigin(origin: string | null): Record<string, string> {
-  const allowOrigin = origin && allowedOrigins.has(origin) ? origin : '*';
-  return {
-    'Access-Control-Allow-Origin': allowOrigin,
+  const isAllowed = !!origin && allowedOrigins.has(origin);
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Origin': isAllowed ? origin! : '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, Authorization, X-Client-Info, Apikey, Content-Type',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Max-Age': '10',
-    'Access-Control-Allow-Credentials': 'true'
+    'Access-Control-Max-Age': '10'
   };
+  if (isAllowed) headers['Access-Control-Allow-Credentials'] = 'true';
+  return headers;
 }
 
 // Back-compat default headers (used when origin is not available)

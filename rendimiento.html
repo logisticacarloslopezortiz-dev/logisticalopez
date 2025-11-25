@@ -229,24 +229,21 @@
         <!-- Historial Reciente -->
         <div class="bg-white rounded-xl shadow-lg card-hover">
             <div class="p-6 border-b border-gray-200">
-                <div class="flex items-center justify-between">
-                  <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                      <i data-lucide="history" class="w-5 h-5 mr-2 text-gray-600"></i>
-                      Historial Reciente
-                  </h3>
-                  <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <input id="historySearch" type="text" placeholder="Buscar servicio..." aria-label="Buscar en historial" class="w-full sm:w-64 text-sm px-3 py-2 border rounded" />
-                    <select id="historyStatusFilter" aria-label="Filtrar por estado" class="text-sm px-2 py-1 border rounded">
-                      <option value="">Todos</option>
-                      <option value="Completado">Completados</option>
-                      <option value="Activo">Activos</option>
-                    </select>
-                    <div class="hidden sm:flex items-center gap-2">
-                      <label class="text-xs text-gray-600 flex items-center gap-1"><input id="toggleService" type="checkbox" checked> Servicio</label>
-                      <label class="text-xs text-gray-600 flex items-center gap-1"><input id="toggleVehicle" type="checkbox" checked> Vehículo</label>
-                      <label class="text-xs text-gray-600 flex items-center gap-1"><input id="toggleTime" type="checkbox" checked> Tiempo</label>
+                <!-- ✅ CORRECCIÓN: Estructura HTML reparada y responsiva -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                        <i data-lucide="history" class="w-5 h-5 mr-2 text-gray-600"></i>
+                        Historial Reciente
+                    </h3>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+                        <input id="historySearch" type="text" placeholder="Buscar servicio..." aria-label="Buscar en historial" class="w-full sm:w-64 text-sm px-3 py-2 border rounded" />
+                        <select id="historyStatusFilter" aria-label="Filtrar por estado" class="text-sm px-3 py-2 border rounded">
+                            <option value="">Todos</option>
+                            <option value="Completada">Completados</option>
+                            <option value="Activo">Activos</option>
+                            <option value="Cancelada">Cancelados</option>
+                        </select>
                     </div>
-                  </div>
                 </div>
             </div>
             <div class="p-6">

@@ -177,80 +177,67 @@
       </div>
     
     
-    <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada -->
-    <div id="activeJobSection" class="mt-8 hidden animate-fade-in">
-      <div class="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
+    <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada y funcional -->
+    <div id="activeJobSection" class="mt-8 hidden animate-fade-in" role="region" aria-labelledby="active-job-heading">
+      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
         <!-- Header de la tarjeta de trabajo activo -->
         <div class="p-5 bg-gray-50/70 border-b border-gray-200/80">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-3">
+            <h2 id="active-job-heading" class="text-xl font-bold text-gray-800 flex items-center gap-3">
               <i data-lucide="briefcase" class="w-6 h-6 text-blue-600"></i>
               <span>Trabajo Activo</span>
             </h2>
             <div class="flex items-center gap-3">
               <span id="activeJobStatus" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">En camino a recoger</span>
-              <button id="cancelActiveJobBtn" class="p-2 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-full transition-colors" title="Cancelar trabajo activo" aria-label="Cancelar trabajo activo">
+              <button id="cancelActiveJobBtn" type="button" class="p-2 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-full transition-colors" title="Cancelar trabajo activo" aria-label="Cancelar trabajo activo">
                 <i data-lucide="x-circle" class="w-5 h-5"></i>
               </button>
             </div>
           </div>
           <!-- Botones de acción para el trabajo activo -->
           <div id="activeJobActionButtons" class="mt-4 flex flex-wrap gap-2">
-              <button data-status="en_camino_recoger" type="button" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-                <i data-lucide="map-pin" class="w-4 h-4"></i>
-                <span>Recoger pedido</span>
-              </button>
-              <button data-status="cargando" type="button" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-                <i data-lucide="check-circle" class="w-4 h-4"></i>
-                <span>Confirmar Llegada</span>
-              </button>
-              <button data-status="en_camino_entregar" type="button" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
-                <i data-lucide="truck" class="w-4 h-4"></i>
-                <span>En Camino a Entregar</span>
-              </button>
-              <button data-status="retraso_tapon" type="button" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2">
-                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                <span>Reportar Retraso</span>
-              </button>
-              <button data-status="entregado" type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2">
-                <i data-lucide="check-square" class="w-4 h-4"></i>
-                <span>Finalizar</span>
-              </button>
+            <!-- Los botones se generan dinámicamente desde JS para un mejor control -->
           </div>
         </div>
 
         <!-- Contenido principal de la tarjeta -->
         <div class="p-5 grid grid-cols-1 lg:grid-cols-5 gap-6">
           <!-- Columna de Información (ocupa 3/5) -->
-          <div id="activeJobInfo" class="lg:col-span-3"></div>
+          <div id="activeJobInfo" class="lg:col-span-3 space-y-4">
+            <!-- La información detallada del trabajo se inyectará aquí -->
+          </div>
 
           <!-- Columna derecha compacta: Acciones de mapa y fotos -->
           <div class="lg:col-span-2 space-y-6">
-            <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow">
+            <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
               <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
                 Acciones de Mapa
               </h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button id="viewLocationBtn" class="flex items-center justify-center gap-3 px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition">
+                <button id="viewOriginBtn" type="button" class="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition">
                   <i data-lucide="map-pin" class="w-5 h-5"></i>
-                  Ver Origen
+                  <span>Origen</span>
                 </button>
-                <button id="viewRouteBtn" class="flex items-center justify-center gap-3 px-4 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition">
+                <button id="viewDestinationBtn" type="button" class="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition">
+                  <i data-lucide="flag" class="w-5 h-5"></i>
+                  <span>Destino</span>
+                </button>
+                <button id="viewRouteBtn" type="button" class="sm:col-span-2 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition">
                   <i data-lucide="route" class="w-5 h-5"></i>
-                  Ver Ruta
+                  <span>Ver Ruta Completa</span>
                 </button>
               </div>
             </div>
-            <div id="activeJobMap" class="h-56 rounded-xl border border-gray-200 overflow-hidden hidden"></div>
-            <div id="activeJobMapHint" class="mt-2 text-xs text-gray-500 hidden"></div>
+            <div id="activeJobMap" class="h-56 rounded-xl border border-gray-200 overflow-hidden shadow-inner"></div>
+            <div id="activeJobMapHint" class="mt-2 text-xs text-gray-500 text-center"></div>
             <!-- Evidencia Fotográfica -->
             <div class="border-t border-gray-200 pt-4">
               <h3 class="text-md font-semibold text-gray-800 mb-3">Evidencia Fotográfica</h3>
               <div class="grid grid-cols-3 gap-3" id="photoGallery">
                 <!-- Las fotos se cargarán dinámicamente -->
               </div>
-              <label for="photoUpload" class="mt-3 w-full text-center cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg border border-dashed border-gray-400 flex items-center justify-center gap-2 transition-colors">
+              <label for="photoUpload" class="mt-3 w-full text-center cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 flex items-center justify-center gap-2 transition-colors">
                 <i data-lucide="camera" class="w-5 h-5"></i><span>Añadir Foto</span>
               </label>
               <input type="file" id="photoUpload" class="hidden" accept="image/*" capture="environment">

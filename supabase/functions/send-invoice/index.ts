@@ -2,7 +2,7 @@
 // Función para generar y enviar facturas por email
 import { createClient } from '@supabase/supabase-js';
 import { handleCors, jsonResponse } from '../cors-config.ts';
-import { PDFDocument, rgb, StandardFonts } from 'https://cdn.skypack.dev/pdf-lib@^1.17.1';
+import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 
 // Función para registrar logs
 function logDebug(message: string, data?: unknown) {
