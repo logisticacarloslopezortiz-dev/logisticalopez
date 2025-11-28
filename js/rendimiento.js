@@ -28,87 +28,59 @@ async function getSupabaseSession() {
     }
 }
 
-// Consulta a Supabase de órdenes del colaborador
-async function fetchCollaboratorOrders(collabId) {
+// ✅ OPTIMIZADO: Llama a la función RPC para obtener todas las métricas del servidor
+async function fetchPerformanceMetrics(collabId) {
     try {
-        const { data, error } = await supabaseConfig.client
-            .from('orders')
-            .select(`*, service:services(name), vehicle:vehicles(name)`) 
-            .eq('assigned_to', collabId)
-            .in('status', ['Pendiente','En proceso','Completada'])
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        return (data || []).map(o => ({
-            ...o,
-            service_name: o.service?.name || o.service || 'N/A',
-            vehicle_name: o.vehicle?.name || o.vehicle || 'N/A'
-        }));
+        const { data, error } = await supabaseConfig.client.rpc('get_collaborator_performance', {
+            p_collaborator_id: collabId
+        });
+
+        if (error) {
+            // Si la función RPC no existe, mostrar un error claro.
+            if (error.code === '42883') {
+                console.error("Error: La función 'get_collaborator_performance' no existe en la base de datos. Por favor, ejecuta el script en `sql/rpc_functions.sql`.");
+                throw new Error("Función de métricas no encontrada en el servidor.");
+            }
+            throw error;
+        }
+
+        return data;
     } catch (e) {
-        console.error('Error cargando órdenes de Supabase:', e);
-        return [];
+        console.error('Error cargando métricas de rendimiento desde RPC:', e);
+        // Devuelve un objeto con valores por defecto para evitar que la UI se rompa
+        return {
+            completed_orders: 0,
+            active_orders: 0,
+            success_rate: 0,
+            avg_completion_minutes: 0,
+            weekly_performance: [],
+            services_distribution: {},
+            vehicles_distribution: {},
+            recent_history: []
+        };
     }
 }
 
 // Función para formatear nombre del colaborador
-function collabDisplayName(email) {
-    const parts = email.split('@')[0].split(/[._-]/);
-    return parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+function collabDisplayName(email = '') {
+    try {
+        const base = email.split('@')[0];
+        return base.replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    } catch {
+        return 'Colaborador';
+    }
 }
 
-// Función para calcular métricas principales
-function calculateMainMetrics(orders, collabId) {
-    const mine = orders.filter(o => o.assigned_to === collabId);
-    const completed = mine.filter(o => o.status === 'Completada' || o.last_collab_status === 'entregado');
-    const active = mine.filter(o => ['en_camino_recoger','cargando','en_camino_entregar'].includes(o.last_collab_status) || o.status === 'En proceso');
-    const successRate = mine.length > 0 ? Math.round((completed.length / mine.length) * 100) : 0;
-    const avgTimeMin = Math.round(completed.reduce((sum, o) => {
-        const start = new Date(o.created_at).getTime();
-        const end = new Date(o.completed_at || o.updated_at || o.created_at).getTime();
-        return sum + Math.max(0, (end - start) / 60000);
-    }, 0) / Math.max(1, completed.length));
-    return {
-        completed: completed.length,
-        active: active.length,
-        successRate,
-        avgTime: Math.round(avgTimeMin / 60)
-    };
-}
-
-// Función para obtener datos semanales
-function getWeeklyData(orders, collabId) {
-    const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-    const weekData = new Array(7).fill(0);
-    
-    const now = new Date();
-    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 1));
-    const mine = orders.filter(o => o.assigned_to === collabId);
-    mine.forEach(order => {
-        if (order.completed_at) {
-            const orderDate = new Date(order.completed_at);
-            const daysDiff = Math.floor((orderDate - startOfWeek) / (1000 * 60 * 60 * 24));
-            if (daysDiff >= 0 && daysDiff < 7) {
-                weekData[daysDiff]++;
-            }
-        }
-    });
-    
-    return { labels: days, data: weekData };
-}
-
-// Función para obtener distribución de servicios
-function getServicesDistribution(orders, collabId) {
-    const mine = orders.filter(o => o.assigned_to === collabId);
-    const map = {};
-    mine.forEach(o => { map[o.service_name] = (map[o.service_name] || 0) + 1; });
-    return { labels: Object.keys(map), data: Object.values(map) };
-}
-
-// Función para obtener estadísticas por vehículo
-function getVehicleStats(orders, collabId) {
-    const mine = orders.filter(o => o.assigned_to === collabId && (o.status === 'Completada' || o.last_collab_status === 'entregado'));
-    const vehicles = {};
-    mine.forEach(o => { vehicles[o.vehicle_name] = (vehicles[o.vehicle_name] || 0) + 1; });
-    return vehicles;
+// ✅ OPTIMIZADO: Actualiza el sidebar con los datos de la RPC
+function updateSidebarStats(metrics) {
+    try {
+        document.getElementById('collabActiveJobs').textContent = metrics.active_orders || 0;
+        document.getElementById('collabCompletedJobs').textContent = metrics.completed_orders || 0;
+        // El conteo de pendientes se podría añadir a la RPC si fuera necesario,
+        // pero por ahora lo mantenemos simple.
+    } catch (err) {
+        console.warn('[Stats] Error al actualizar estadísticas del sidebar:', err);
+    }
 }
 
 // Función para obtener estadísticas de horarios
@@ -339,96 +311,106 @@ function renderTimeStats(timeStats) {
     });
 }
 
-// Función para renderizar historial reciente
-function renderRecentHistory(orders, collabId) {
+// ✅ OPTIMIZADO: Renderiza el historial reciente desde los datos de la RPC
+function renderRecentHistory(history) {
     const container = document.getElementById('recentHistory');
-    const recentOrders = orders
-        .filter(order => order.assigned_to === collabId && (order.status === 'Completada' || order.last_collab_status === 'entregado'))
-        .sort((a, b) => new Date(b.completed_at || b.updated_at || b.created_at || 0) - new Date(a.completed_at || a.updated_at || a.created_at || 0))
-        .slice(0, 10);
     
-    container.innerHTML = '';
-    
-    if (recentOrders.length === 0) {
+    if (!history || history.length === 0) {
         container.innerHTML = `
             <tr>
                 <td colspan="5" class="py-8 text-center text-gray-500">
-                    No hay historial disponible
+                    No hay historial reciente disponible.
                 </td>
             </tr>
         `;
         return;
     }
     
-    recentOrders.forEach(order => {
-        const date = new Date(order.completed_at || order.updated_at || order.created_at || Date.now());
-        const formattedDate = date.toLocaleDateString('es-ES', { 
-            day: '2-digit', 
-            month: '2-digit' 
-        });
-        
-        const duration = Math.round(1 + Math.random() * 4); // Simulado
-        
-        const row = document.createElement('tr');
-        row.className = 'border-b border-gray-100 hover:bg-gray-50';
-        row.innerHTML = `
-            <td class="py-3">${formattedDate}</td>
-            <td class="py-3">${order.service_name || 'N/A'}</td>
-            <td class="py-3">${order.vehicle_name || 'N/A'}</td>
-            <td class="py-3">
-                <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                    Completado
-                </span>
-            </td>
-            <td class="py-3">${duration}h</td>
+    container.innerHTML = history.map(order => {
+        const date = new Date(order.completed_at);
+        const formattedDate = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+        const durationHours = Math.round((order.completion_time_minutes || 0) / 60);
+
+        return `
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="p-3">${formattedDate}</td>
+                <td class="p-3 hidden sm:table-cell">${order.service_name || 'N/A'}</td>
+                <td class="p-3 hidden md:table-cell">${order.vehicle_name || 'N/A'}</td>
+                <td class="p-3">
+                    <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                        Completado
+                    </span>
+                </td>
+                <td class="p-3 hidden sm:table-cell">${durationHours}h</td>
+            </tr>
         `;
-        container.appendChild(row);
-    });
+    }).join('');
 }
 
 // Función para actualizar perfil del colaborador
 function updateCollaboratorProfile(session) {
-    const name = collabDisplayName(session.email);
+    const user = session.user;
+    const name = user.user_metadata?.full_name || collabDisplayName(user.email);
     const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     
     document.getElementById('collabName').textContent = name;
-    document.getElementById('collabEmail').textContent = session.email;
+    document.getElementById('collabEmail').textContent = user.email;
     document.getElementById('collabAvatar').textContent = initials;
 }
 
-// Función principal para cargar datos
+// ✅ OPTIMIZADO: Función principal que carga y renderiza los datos desde la RPC
 async function loadPerformanceData(collabId) {
+    // Cargar Chart.js si no está disponible
     if (!window.Chart) {
         try {
             await new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-                s.async = true;
-                s.onload = () => resolve(true);
-                s.onerror = () => reject(new Error('No se pudo cargar Chart.js'));
-                document.head.appendChild(s);
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+                script.async = true;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
             });
         } catch (e) {
-            console.warn('Carga de Chart.js falló:', e?.message || e);
+            console.error('No se pudo cargar Chart.js. Los gráficos no estarán disponibles.');
+            return;
         }
     }
-    const orders = await fetchCollaboratorOrders(collabId);
-    const mainMetrics = calculateMainMetrics(orders, collabId);
-    document.getElementById('completedCount').textContent = mainMetrics.completed;
-    document.getElementById('activeCount').textContent = mainMetrics.active;
-    document.getElementById('successRate').textContent = mainMetrics.successRate + '%';
-    document.getElementById('avgTime').textContent = mainMetrics.avgTime + 'h';
-    const weeklyData = getWeeklyData(orders, collabId);
+
+    // 1. Obtener todas las métricas del servidor en una sola llamada
+    const metrics = await fetchPerformanceMetrics(collabId);
+
+    // 2. Renderizar las métricas principales
+    document.getElementById('completedCount').textContent = metrics.completed_orders;
+    document.getElementById('activeCount').textContent = metrics.active_orders;
+    document.getElementById('successRate').textContent = `${metrics.success_rate}%`;
+    document.getElementById('avgTime').textContent = `${Math.round(metrics.avg_completion_minutes / 60)}h`;
+
+    // 3. Renderizar gráficos
+    const weeklyData = {
+        labels: metrics.weekly_performance.map(d => d.day),
+        data: metrics.weekly_performance.map(d => d.count)
+    };
     createWeeklyChart(weeklyData);
-    const servicesData = getServicesDistribution(orders, collabId);
+
+    const servicesData = {
+        labels: Object.keys(metrics.services_distribution),
+        data: Object.values(metrics.services_distribution)
+    };
     createServicesChart(servicesData);
-    const monthlyGoal = 50;
-    updateProgressCircle(mainMetrics.completed, monthlyGoal);
-    const vehicleStats = getVehicleStats(orders, collabId);
-    renderVehicleStats(vehicleStats);
-    const schedule = getTimeStats({ }, currentCollabEmail);
+
+    // 4. Renderizar otros componentes
+    const monthlyGoal = 50; // La meta puede ser dinámica en el futuro
+    updateProgressCircle(metrics.completed_orders, monthlyGoal);
+    renderVehicleStats(metrics.vehicles_distribution);
+    renderRecentHistory(metrics.recent_history);
+
+    // 5. Actualizar estadísticas del sidebar
+    updateSidebarStats(metrics);
+
+    // 6. Cargar y renderizar el horario desde localStorage (esto se mantiene local)
+    const schedule = getTimeStats(null, currentCollabEmail);
     renderSchedule(schedule);
-    renderRecentHistory(orders, collabId);
 }
 
 // Inicialización

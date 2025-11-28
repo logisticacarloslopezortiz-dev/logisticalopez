@@ -1863,3 +1863,153 @@ function showServiceDetailsCollab(orderId){
   });
 }
 })();
+
+
+// --- Lógica del Mapa ---
+
+// Carga dinámica de Google Maps para evitar InvalidKeyMapError.
+(function(){
+  const keyFromConfig = window.tlcMapsKey || (window.tlcConfig && window.tlcConfig.googleMapsKey);
+  const keyFromStorage = localStorage.getItem('tlc_google_maps_key');
+  const apiKey = keyFromConfig || keyFromStorage;
+  if (apiKey) {
+    const s = document.createElement('script');
+    s.async = true;
+    s.defer = true;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMaps`;
+    document.head.appendChild(s);
+  } else {
+    console.warn('Google Maps no se cargó: falta API key. Se usará Leaflet como alternativa.');
+    window.googleMapsReady = false;
+    // Cargar Leaflet CSS/JS como fallback sin clave
+    const lcss = document.createElement('link');
+    lcss.rel = 'stylesheet';
+    lcss.href = 'vendor/leaflet.css';
+    document.head.appendChild(lcss);
+    const ljs = document.createElement('script');
+    ljs.src = 'vendor/leaflet.js';
+    ljs.onload = () => { window.leafletReady = true; try { initActiveJobMap(); } catch(_){ } };
+    document.head.appendChild(ljs);
+    try {
+      const hint = document.getElementById('activeJobMapHint');
+      if (hint) hint.textContent = 'Mapa básico activado sin clave (Leaflet).';
+    } catch(_){}
+  }
+})();
+
+// initGoogleMaps is the callback used by the Google Maps script.
+function initGoogleMaps(){
+  // mark as ready so other scripts can safely call initActiveJobMap/updateActiveJobMap
+  window.googleMapsReady = true;
+  // create map if activeJobSection is visible
+  try { if (typeof initActiveJobMap === 'function') initActiveJobMap(); } catch(e) { console.warn('initActiveJobMap error', e); }
+}
+
+// Inicializa el mapa de trabajo activo (Google Maps o Leaflet como fallback)
+function initActiveJobMap(){
+  const mapContainer = document.getElementById('activeJobMap');
+  if (!mapContainer) return;
+  try {
+    if (window.googleMapsReady) {
+      if (window.activeJobGMap) return;
+      const center = { lat: 19.432608, lng: -99.133209 };
+      window.activeJobGMap = new google.maps.Map(mapContainer, {
+        center,
+        zoom: 12,
+        disableDefaultUI: true,
+      });
+      window.activeJobGMarkers = [];
+      window.activeJobGPolyline = null;
+    } else if (window.leafletReady) {
+      if (window.activeJobLMap) return;
+      window.activeJobLMap = L.map(mapContainer).setView([19.432608, -99.133209], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(window.activeJobLMap);
+      window.activeJobLMarkers = [];
+      window.activeJobLPolyline = null;
+    }
+  } catch (err) {
+    console.error('Error initializing map:', err);
+  }
+}
+
+// Actualiza el mapa con origen/destino o solo un punto objetivo (Google o Leaflet)
+function updateActiveJobMap(origin, destination, targetLatLng){
+  if (window.googleMapsReady) {
+    initActiveJobMap();
+    const map = window.activeJobGMap;
+    if (!map) return;
+
+    // Limpiar elementos previos
+    if (window.activeJobGMarkers) {
+      window.activeJobGMarkers.forEach(m => m.setMap(null));
+      window.activeJobGMarkers = [];
+    }
+    if (window.activeJobGPolyline) {
+      window.activeJobGPolyline.setMap(null);
+      window.activeJobGPolyline = null;
+    }
+
+    try {
+      const bounds = new google.maps.LatLngBounds();
+      if (origin && destination) {
+        const o = new google.maps.LatLng(origin.lat, origin.lng);
+        const d = new google.maps.LatLng(destination.lat, destination.lng);
+        const markerO = new google.maps.Marker({ position: o, map, title: 'Origen' });
+        const markerD = new google.maps.Marker({ position: d, map, title: 'Destino' });
+        window.activeJobGMarkers.push(markerO, markerD);
+        window.activeJobGPolyline = new google.maps.Polyline({ path: [o, d], geodesic: true, strokeColor: '#2563eb', strokeWeight: 4 });
+        window.activeJobGPolyline.setMap(map);
+        bounds.extend(o);
+        bounds.extend(d);
+        map.fitBounds(bounds, 40);
+      } else if (targetLatLng) {
+        const t = new google.maps.LatLng(targetLatLng.lat, targetLatLng.lng);
+        const markerT = new google.maps.Marker({ position: t, map });
+        window.activeJobGMarkers.push(markerT);
+        map.setCenter(t);
+        map.setZoom(15);
+      }
+    } catch (err) {
+      console.error('Error updating Google Active Job Map:', err);
+    }
+  } else if (window.leafletReady) {
+    initActiveJobMap();
+    const map = window.activeJobLMap;
+    if (!map) return;
+
+    // Limpiar elementos previos
+    if (window.activeJobLMarkers) {
+      window.activeJobLMarkers.forEach(m => map.removeLayer(m));
+      window.activeJobLMarkers = [];
+    }
+    if (window.activeJobLPolyline) {
+      map.removeLayer(window.activeJobLPolyline);
+      window.activeJobLPolyline = null;
+    }
+
+    try {
+      if (origin && destination) {
+        const o = [origin.lat, origin.lng];
+        const d = [destination.lat, destination.lng];
+        const markerO = L.marker(o).addTo(map);
+        const markerD = L.marker(d).addTo(map);
+        window.activeJobLMarkers.push(markerO, markerD);
+        window.activeJobLPolyline = L.polyline([o, d], { color: '#2563eb', weight: 4 }).addTo(map);
+        const bounds = L.latLngBounds([o, d]);
+        map.fitBounds(bounds, { padding: [40, 40] });
+      } else if (targetLatLng) {
+        const t = [targetLatLng.lat, targetLatLng.lng];
+        const markerT = L.marker(t).addTo(map);
+        window.activeJobLMarkers.push(markerT);
+        map.setView(t, 15);
+      }
+    } catch (err) {
+      console.error('Error updating Leaflet Active Job Map:', err);
+    }
+  } else {
+    // Aún no listo
+    return;
+  }
+}

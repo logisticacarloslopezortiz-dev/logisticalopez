@@ -37,77 +37,103 @@
     </script>
     <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
       <div class="flex items-center justify-between px-4 py-3">
-        <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/80 backdrop-blur shadow-sm ring-1 ring-gray-200 hover:bg-white hover:shadow transition">
-          <i data-lucide="menu" class="w-6 h-6" style="color: #1E405A;"></i>
+        <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/90 backdrop-blur shadow ring-1 ring-[rgba(30,138,149,0.35)] hover:ring-[rgba(30,138,149,0.6)] hover:bg-white transition flex items-center gap-2">
+          <i data-lucide="menu" class="w-6 h-6" style="color: var(--color-primario);"></i>
         </button>
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">LLO</div>
-          <span class="font-semibold text-gray-800">Rendimiento</span>
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm" style="background-color: var(--color-secundario);">
+            LLO
+          </div>
+          <span class="font-semibold text-gray-800">Panel Colaborador</span>
         </div>
-        <div class="w-10"></div>
+        <div class="w-10"></div> <!-- Spacer for centering -->
       </div>
     </header>
-    <!-- Sidebar -->
+
     <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
-    <aside id="collabSidebar" class="shadow-2xl min-h-screen flex flex-col z-50" style="background-color: #1E405A;">
-        <!-- Header del Sidebar -->
-        <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: #1E8A95;">
-                        LLO
-                    </div>
-                    <div>
-                        <h2 class="text-lg font-bold text-white">Rendimiento</h2>
-                        <p class="text-xs" style="color: #1E8A95;">Panel de Colaborador</p>
-                    </div>
-                </div>
-                <button id="sidebarCollapseBtn" class="flex items-center justify-center w-9 h-9 rounded-xl bg-[#117D8B] text-white shadow hover:bg-[#1499a7] transition-all duration-200 group" aria-expanded="true" aria-controls="collabSidebar" title="Colapsar menú">
-                  <i data-lucide="panel-left-close" class="w-4 h-4 text-gray-700 transition-transform duration-300 group-hover:rotate-[-15deg] group-hover:scale-90"></i>
-                </button>
+    <aside id="collabSidebar" class="shadow-2xl h-screen flex flex-col z-50" style="background-color: var(--color-primario);" role="navigation" aria-label="Menú del colaborador">
+      <!-- Header del Sidebar -->
+      <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div id="sidebarLogo" class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: var(--color-secundario);">
+              LLO
             </div>
-            
-            <!-- Perfil del Colaborador -->
-            <div class="rounded-xl p-4" style="background-color: rgba(30, 138, 149, 0.1); border: 1px solid rgba(30, 138, 149, 0.3);">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar" style="background-color: #1E8A95;">
-                        C
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-white font-semibold text-sm truncate" id="collabName">Cargando...</h3>
-                        <p class="text-xs truncate" id="collabEmail" style="color: #1E8A95;">-</p>
-                    </div>
-                </div>
+            <div>
+              <h2 class="text-lg font-bold text-white">Colaborador</h2>
+              <p class="text-xs" style="color: var(--color-secundario);">Panel de Control</p>
             </div>
-        </div>
-        
-        <!-- Navegación -->
-        <nav class="flex-1 p-6">
-            <div class="space-y-2">
-                <a href="panel-colaborador.html" class="flex items-center gap-3 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
-                    <i data-lucide="list" class="w-5 h-5 text-white"></i>
-                    <span class="font-medium">Solicitudes</span>
-                </a>
-                
-                <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-white transition-all duration-200 group" style="background-color: #1E8A95;">
-                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
-                    <span class="font-medium">Rendimiento</span>
-                </a>
-            </div>
-        </nav>
-        
-        <!-- Footer del Sidebar -->
-        <div class="p-6" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
-            <button id="logoutBtn" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[#117D8B] text-white shadow hover:bg-[#1499a7] transition-all duration-200 group">
-                <i data-lucide="log-out" class="w-4 h-4"></i>
-                <span class="font-medium">Cerrar Sesión</span>
+          </div>
+            <button id="sidebarCollapseBtn" class="flex items-center justify-center w-9 h-9 rounded-xl bg-gray-200 ring-1 ring-gray-300 hover:bg-gray-300 hover:ring-gray-400 transition-all duration-200 group" aria-expanded="true" aria-controls="collabSidebar" aria-label="Colapsar menú" title="Colapsar menú">
+              <i data-lucide="panel-left-close" class="w-4 h-4 text-gray-700 transition-transform duration-300 group-hover:rotate-[-15deg] group-hover:scale-90"></i>
             </button>
         </div>
+        
+        <!-- Perfil del Colaborador -->
+        <div class="rounded-xl p-4" style="background-color: rgba(30, 138, 149, 0.1); border: 1px solid rgba(30, 138, 149, 0.3);" id="profile-card">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar" style="background-color: #1E8A95;">
+              C
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-white font-semibold text-sm truncate" id="collabName">Colaborador</h3>
+              <p class="text-xs truncate" id="collabEmail" style="color: #1E8A95;"></p>
+            </div>
+            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="En línea"></div>
+          </div>
+
+          <!-- Estadísticas rápidas -->
+          <div class="mt-3 pt-3" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
+            <div class="grid grid-cols-2 gap-3 text-center">
+              <div>
+                <div class="text-lg font-bold text-white" id="collabActiveJobs">0</div>
+                <div class="text-xs" style="color: #1E8A95;">Activos</div>
+              </div>
+              <div>
+                <div class="text-lg font-bold" id="collabCompletedJobs" style="color: #1E8A95;">0</div>
+                <div class="text-xs" style="color: #1E8A95;">Completados</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navegación -->
+      <nav class="flex-1 p-6" role="navigation" aria-label="Navegación principal">
+        <div class="space-y-2">
+          <a href="panel-colaborador.html" class="flex items-center gap-3 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
+            <i data-lucide="list" class="w-5 h-5 text-white"></i>
+            <span class="font-medium">Trabajos Activos</span>
+            <span class="ml-auto text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount" style="background-color: #1E405A;">0</span>
+          </a>
+
+          <a href="rendimiento.html" aria-current="page" class="flex items-center gap-3 p-3 rounded-xl text-white transition-all duration-200 group" style="background-color: #1E8A95;">
+            <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
+            <span class="font-medium">Rendimiento</span>
+          </a>
+
+          <!-- Botón de cambio de tema y cerrar sesión -->
+          <div class="pt-4 mt-4" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
+            <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-between gap-3 p-3 mt-2 rounded-xl text-white bg-[rgba(30,138,149,0.25)] hover:bg-[rgba(30,138,149,0.45)] ring-1 ring-[rgba(255,255,255,0.2)] hover:ring-[rgba(255,255,255,0.35)] transition-all duration-200 group">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
+                  <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
+                  <span class="font-medium text-sm theme-text">Modo oscuro</span>
+                </div>
+                <span class="text-xs px-2 py-1 rounded-full bg-white/10">Tema</span>
+            </button>
+            <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
+                <i data-lucide="log-out" class="w-4 h-4"></i>
+                <span class="font-medium text-sm">Cerrar Sesión</span>
+            </button>
+          </div>
+        </div>
+      </nav>
     </aside>
 
     <!-- Main Content -->
-    <main id="mainContent" class="flex-1 p-8 relative">
-        <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="px-3 py-2 rounded-xl bg-[#117D8B] text-white shadow ring-1 ring-white/50 hover:bg-[#1499a7] transition-colors hidden absolute top-4 left-4 z-40 group" title="Abrir menú">
+    <main id="mainContent" class="p-4 md:p-8 transition-all duration-300 relative">
+        <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-none bg-[#117D8B] ring-1 ring-white text-white hover:bg-[#1499a7] transition-colors hidden absolute top-4 left-4 z-40 group" title="Abrir menú">
           <i data-lucide="menu" class="w-6 h-6 text-white transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110"></i>
         </button>
         <!-- Métricas Principales -->

@@ -75,48 +75,46 @@ body {
   body.sidebar-mobile-open { overflow: hidden; }
 }
 
-/* --- Vista Tablet (768px a 1024px) --- */
-@media (min-width: 768px) and (max-width: 1024px) {
-  #collabSidebar { width: 14rem; }
-  body.sidebar-desktop-open #mainContent { margin-left: 14rem; }
-}
-
-/* --- Vista Escritorio (>=768px) --- */
-@media (min-width: 1025px) {
+/* --- Vista Tablet y Escritorio (>=768px) --- */
+@media (min-width: 768px) {
   #collabSidebar {
     position: fixed;
     top: 0;
     left: 0;
     height: 100vh;
-    width: 18rem;
+    /* Ancho estandarizado para tablet y desktop */
+    width: 17rem;
   }
 
   #sidebarOverlay { display: none !important; }
 
-  body.sidebar-desktop-open #mainContent { margin-left: 18rem; }
+  /* Contenido principal se ajusta al sidebar abierto */
+  body.sidebar-desktop-open #mainContent { margin-left: 17rem; }
   body.sidebar-desktop-open #collabSidebar { transform: translateX(0); }
 
-  /* Sidebar cerrado */
+  /* Sidebar cerrado / colapsado */
   body.sidebar-desktop-closed #collabSidebar {
-    transform: translateX(calc(-100% + var(--sidebar-rail)));
-    width: 18rem; /* Mantener ancho total para animación */
+    transform: translateX(calc(-100% + var(--sidebar-rail) + 1rem));
   }
 
-  body.sidebar-desktop-closed #mainContent { margin-left: var(--sidebar-rail); }
+  /* Contenido principal se ajusta al sidebar cerrado */
+  body.sidebar-desktop-closed #mainContent { margin-left: calc(var(--sidebar-rail) + 1rem); }
 
-  /* Ajustes internos al colapsar */
-  body.sidebar-desktop-closed #desktopMenuBtn { display: block; }
-  body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.75rem; }
-  body.sidebar-desktop-closed #sidebarLogo { width: 2.25rem; height: 2.25rem; }
-  body.sidebar-desktop-closed #collabSidebar nav a { justify-content: center; padding: 0.75rem; }
-  body.sidebar-desktop-closed #collabSidebar nav i { margin: 0; }
-  body.sidebar-desktop-closed #collabSidebar nav span.font-medium { display: none; }
-
-  /* Mantener visibles iconos y elementos pequeños */
+  /* Ajustes de UI para elementos dentro del sidebar colapsado */
+  body.sidebar-desktop-closed #desktopMenuBtn { display: flex; }
+  body.sidebar-desktop-closed #sidebarCollapseBtn { display: none; }
+  body.sidebar-desktop-closed #collabSidebar .p-6 { padding: 0.5rem; }
+  body.sidebar-desktop-closed #sidebarLogo,
   body.sidebar-desktop-closed #collabSidebar .flex-1.min-w-0,
-  body.sidebar-desktop-closed #collabSidebar .w-2.h-2.bg-green-500,
-  body.sidebar-desktop-closed #collabSidebar #pendingRequestsCount { display: inline-block; }
-  body.sidebar-desktop-closed #collabSidebar .rounded-xl.p-4 .text-xs { display: none; }
+  body.sidebar-desktop-closed #collabSidebar .w-2.h-2,
+  body.sidebar-desktop-closed #collabSidebar p.text-xs,
+  body.sidebar-desktop-closed #collabSidebar nav span:not(.ml-auto),
+  body.sidebar-desktop-closed #collabSidebar #profile-card .grid {
+    display: none;
+  }
+  body.sidebar-desktop-closed #collabSidebar nav a {
+    justify-content: center;
+  }
 }
 
 /* Estilo para enlace activo */
