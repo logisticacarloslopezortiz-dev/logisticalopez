@@ -128,268 +128,176 @@ document.addEventListener('DOMContentLoaded', async () => {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       
-      // Configuración del documento
+      // --- CONFIGURACIÓN Y HELPERS ---
       const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 20;
+      const margin = 15;
+      const contentWidth = pageWidth - (margin * 2);
       let yPosition = 20;
+      const lineHeight = 6; // Altura de línea base para texto normal
+      const sectionGap = 12; // Espacio entre secciones
+
+      // Helper para renderizar una fila con etiqueta y valor (maneja texto largo)
+      const printRow = (label, value, y, options = {}) => {
+          const labelWidth = options.labelWidth || 40;
+          const valueX = margin + labelWidth;
+          const valueWidth = contentWidth - labelWidth;
+
+          doc.setFont(undefined, 'bold');
+          doc.text(label, margin, y);
+          doc.setFont(undefined, 'normal');
+
+          const lines = doc.splitTextToSize(String(value || 'N/A'), valueWidth);
+          doc.text(lines, valueX, y);
+
+          // Retorna la nueva posición Y después de este bloque, añadiendo un pequeño espacio
+          return y + (lines.length * lineHeight) + 2;
+      };
+
+      // Helper para añadir un salto de página si es necesario
+      const checkPageBreak = (y) => {
+        if (y > doc.internal.pageSize.getHeight() - 20) {
+          doc.addPage();
+          return 20; // Reset Y a la posición inicial
+        }
+        return y;
+      };
+
+      // --- PÁGINA 1: RESUMEN DE LA ORDEN ---
       
-      // === PRIMERA PÁGINA: INFORMACIÓN DE LA EMPRESA Y RESUMEN DEL SERVICIO ===
-      
-      // Información de la empresa - Encabezado
-      doc.setFontSize(18);
+      // Encabezado
+      doc.setFontSize(20);
       doc.setFont(undefined, 'bold');
       doc.text('LOGISTICA LOPEZ ORTIZ', pageWidth / 2, yPosition, { align: 'center' });
-      
       yPosition += 8;
+
       doc.setFontSize(10);
       doc.setFont(undefined, 'normal');
       doc.text('RNC: 133139413', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 6;
-      doc.text('San Cristóbal, Plaza Vionicio, Calle Sánchez, Esquina Padre Ayala', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 6;
+      yPosition += 5;
       doc.text('Tel: 829-729-3822 | Email: transporteylogisticalopezortiz@gmail.com', pageWidth / 2, yPosition, { align: 'center' });
-      
+      yPosition += 5;
+
+      const addressLines = doc.splitTextToSize('San Cristóbal, Plaza Vionicio, Calle Sánchez, Esquina Padre Ayala', contentWidth);
+      doc.text(addressLines, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += (addressLines.length * 4) + sectionGap;
+
       // Línea separadora
-      yPosition += 10;
-      doc.setDrawColor(0, 0, 0);
+      doc.setDrawColor(200, 200, 200);
       doc.line(margin, yPosition, pageWidth - margin, yPosition);
-      
-      // Título del reporte
-      yPosition += 15;
+      yPosition += sectionGap;
+
+      // Título
       doc.setFontSize(16);
       doc.setFont(undefined, 'bold');
-      doc.text('REPORTE DE ORDEN DE SERVICIO', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 10;
+      doc.text('Reporte de Orden de Servicio', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 8;
       doc.setFontSize(12);
       doc.setFont(undefined, 'normal');
-      doc.text(`Número de Orden: #${order.id}`, pageWidth / 2, yPosition, { align: 'center' });
-      
-      // Datos del cliente
-      yPosition += 20;
-      doc.setFontSize(14);
-      doc.setFont(undefined, 'bold');
-      doc.text('DATOS DEL CLIENTE', margin, yPosition);
-      
-      yPosition += 12;
+      doc.text(`#${order.id}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += sectionGap * 1.5;
+
+      // Secciones
       doc.setFontSize(11);
-      doc.setFont(undefined, 'normal');
       
-      const clientDetails = [
-        ['Nombre:', order.name || 'N/A'],
-        ['Teléfono:', order.phone || 'N/A'],
-        ['Email:', order.email || 'N/A'],
-        ['Empresa:', order.empresa || 'N/A'],
-        ['RNC:', order.rnc || 'N/A']
+      const sections = [
+        { title: 'DATOS DEL CLIENTE', details: [
+          ['Nombre:', order.name],
+          ['Teléfono:', order.phone],
+          ['Email:', order.email],
+          order.empresa ? ['Empresa:', order.empresa] : null,
+          order.rnc ? ['RNC:', order.rnc] : null
+        ]},
+        { title: 'RESUMEN DEL SERVICIO', details: [
+          ['Servicio:', order.service?.name || order.service_name],
+          ['Vehículo:', order.vehicle?.name || order.vehicle_name],
+          ['Solicitud:', formatDate(order.created_at)],
+          ['Programado:', `${order.date || ''} ${order.time || ''}`.trim()],
+          ['Estado:', order.status],
+          ['Monto:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'N/A']
+        ]},
+        { title: 'RUTA', details: [
+          ['Recogida:', order.pickup],
+          ['Entrega:', order.delivery]
+        ]}
       ];
-      
-      clientDetails.forEach(([label, value]) => {
-        if (value !== 'N/A') {
-          doc.setFont(undefined, 'bold');
-          doc.text(label, margin, yPosition);
-          doc.setFont(undefined, 'normal');
-          doc.text(value, margin + 35, yPosition);
-          yPosition += 8;
-        }
-      });
-      
-      // Resumen del servicio
-      yPosition += 15;
-      doc.setFontSize(14);
-      doc.setFont(undefined, 'bold');
-      doc.text('RESUMEN DEL SERVICIO', margin, yPosition);
-      
-      yPosition += 12;
-      doc.setFontSize(11);
-      doc.setFont(undefined, 'normal');
-      
-      const serviceDetails = [
-        ['Servicio:', order.service?.name || order.service_name || 'N/A'],
-        ['Vehículo:', order.vehicle?.name || order.vehicle_name || 'N/A'],
-        ['Fecha de solicitud:', formatDate(order.created_at)],
-        ['Fecha de servicio:', `${order.date || 'N/A'} ${order.time || ''}`],
-        ['Estado:', order.status || 'N/A'],
-        ['Monto cobrado:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'Por confirmar']
-      ];
-      
-      serviceDetails.forEach(([label, value]) => {
+
+      sections.forEach(section => {
+        yPosition = checkPageBreak(yPosition);
+        doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
-        doc.text(label, margin, yPosition);
-        doc.setFont(undefined, 'normal');
-        doc.text(value, margin + 35, yPosition);
+        doc.text(section.title, margin, yPosition);
         yPosition += 8;
+        doc.setFontSize(11);
+        section.details.filter(Boolean).forEach(([label, value]) => {
+          yPosition = checkPageBreak(yPosition);
+          yPosition = printRow(label, value, yPosition);
+        });
+        yPosition += sectionGap / 2;
       });
-      
-      // Ruta del servicio
-      if (order.pickup || order.delivery) {
-        yPosition += 12;
-        doc.setFont(undefined, 'bold');
-        doc.text('RUTA:', margin, yPosition);
-        yPosition += 8;
-        doc.setFont(undefined, 'normal');
-        
-        if (order.pickup) {
-          doc.text(`Recogida: ${order.pickup}`, margin + 10, yPosition);
-          yPosition += 8;
-        }
-        if (order.delivery) {
-          doc.text(`Entrega: ${order.delivery}`, margin + 10, yPosition);
-          yPosition += 8;
-        }
-      }
-      
-      // Preguntas del servicio
+
+      // Detalles adicionales (preguntas)
       if (order.service_questions && Object.keys(order.service_questions).length > 0) {
-        yPosition += 12;
+        yPosition = checkPageBreak(yPosition);
         doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
         doc.text('DETALLES ADICIONALES', margin, yPosition);
-        
-        yPosition += 10;
+        yPosition += 8;
         doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
         
-        try {
-          const questions = typeof order.service_questions === 'string' 
+        const questions = typeof order.service_questions === 'string'
             ? JSON.parse(order.service_questions) 
             : order.service_questions;
             
-          Object.entries(questions).forEach(([key, value]) => {
-            if (yPosition > 250) { // Nueva página si no hay espacio
-              doc.addPage();
-              yPosition = 20;
-            }
-            doc.setFont(undefined, 'bold');
-            doc.text(`${key}:`, margin, yPosition);
-            doc.setFont(undefined, 'normal');
-            
-            // Manejar valores largos
-            const text = String(value || '');
-            if (text.length > 60) {
-              const lines = doc.splitTextToSize(text, pageWidth - 2 * margin - 10);
-              doc.text(lines, margin + 10, yPosition + 5);
-              yPosition += lines.length * 4 + 5;
-            } else {
-              doc.text(text, margin + 10, yPosition + 5);
-              yPosition += 12;
-            }
-          });
-        } catch (e) {
-          console.warn('Error al procesar service_questions:', e);
+        for (const [key, value] of Object.entries(questions)) {
+            yPosition = checkPageBreak(yPosition);
+            const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) + ':';
+            yPosition = printRow(formattedKey, value, yPosition, { labelWidth: 55, lineHeight: 4.5 });
         }
       }
-      
-      // Evidencia
-      if (order.evidence_photos && order.evidence_photos.length > 0) {
-        yPosition += 10;
-        doc.setFontSize(11);
-        doc.setFont(undefined, 'bold');
-        doc.text(`Evidencia fotográfica: ${order.evidence_photos.length} foto(s) adjunta(s)`, margin, yPosition);
-        yPosition += 5;
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'italic');
-        doc.text('(Las fotos están disponibles en el sistema)', margin, yPosition);
-      }
-      
-      // === SEGUNDA PÁGINA: DATOS DEL COLABORADOR ===
-      
+
+      // --- PÁGINA 2: INFORMACIÓN DE FINALIZACIÓN ---
       doc.addPage();
-      yPosition = 30;
-      
-      // Repetir encabezado de empresa en segunda página
-      doc.setFontSize(12);
-      doc.setFont(undefined, 'bold');
-      doc.text('LOGISTICA LOPEZ ORTIZ - RNC: 133139413', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 15;
+      yPosition = 20;
+
       doc.setFontSize(16);
-      doc.text('INFORMACIÓN DE FINALIZACIÓN', pageWidth / 2, yPosition, { align: 'center' });
+      doc.setFont(undefined, 'bold');
+      doc.text('Información de Finalización', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += sectionGap * 1.5;
       
-      yPosition += 20;
       doc.setFontSize(12);
-      doc.setFont(undefined, 'normal');
-      
       const collaboratorName = order.profiles?.full_name || order.completed_by_name || 'No asignado';
-      const completedDate = formatDate(order.completed_at);
       
-      const completionDetails = [
-        ['ID de Orden:', order.id.toString()],
-        ['Completado por:', collaboratorName],
-        ['Fecha de finalización:', completedDate],
-        ['Método de pago:', order.metodo_pago || 'No especificado'],
-        ['Monto final:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'No cobrado']
-      ];
-      
-      completionDetails.forEach(([label, value]) => {
-        doc.setFont(undefined, 'bold');
-        doc.text(label, margin, yPosition);
-        doc.setFont(undefined, 'normal');
-        doc.text(value, margin + 45, yPosition);
-        yPosition += 12;
-      });
-      
-      // Información adicional del colaborador
-      if (order.assigned_to || order.accepted_by) {
-        yPosition += 15;
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text('HISTORIAL DE ASIGNACIONES', margin, yPosition);
-        
-        yPosition += 12;
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
-        
-        if (order.assigned_at) {
-          doc.setFont(undefined, 'bold');
-          doc.text('Asignado el:', margin, yPosition);
-          doc.setFont(undefined, 'normal');
-          doc.text(formatDate(order.assigned_at), margin + 30, yPosition);
-          yPosition += 8;
-        }
-        
-        if (order.accepted_at) {
-          doc.setFont(undefined, 'bold');
-          doc.text('Aceptado el:', margin, yPosition);
-          doc.setFont(undefined, 'normal');
-          doc.text(formatDate(order.accepted_at), margin + 30, yPosition);
-          yPosition += 8;
-        }
+      yPosition = printRow('ID de Orden:', order.id.toString(), yPosition, { labelWidth: 50, lineHeight: 6, gap: 4 });
+      yPosition = printRow('Completado por:', collaboratorName, yPosition, { labelWidth: 50, lineHeight: 6, gap: 4 });
+      yPosition = printRow('Fecha de finalización:', formatDate(order.completed_at), yPosition, { labelWidth: 50, lineHeight: 6, gap: 4 });
+      yPosition = printRow('Método de pago:', order.metodo_pago, yPosition, { labelWidth: 50, lineHeight: 6, gap: 4 });
+      yPosition = printRow('Monto final:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'No cobrado', yPosition, { labelWidth: 50, lineHeight: 6, gap: 4 });
+
+      if (order.evidence_photos && order.evidence_photos.length > 0) {
+        yPosition = checkPageBreak(yPosition);
+        yPosition = printRow('Evidencia:', `${order.evidence_photos.length} foto(s) disponible(s) en el sistema.`, yPosition, { labelWidth: 50, lineHeight: 6, gap: 4 });
       }
-      
-      // Notas y observaciones
-      yPosition += 20;
+
+      yPosition += sectionGap;
+      yPosition = checkPageBreak(yPosition);
       doc.setFontSize(11);
       doc.setFont(undefined, 'italic');
-      doc.text('Este documento es un reporte oficial de la orden de servicio.', margin, yPosition);
-      
-      yPosition += 6;
-      doc.text('Para consultas, contactar a Logistica Lopez Ortiz.', margin, yPosition);
-      
-      // Pie de página en ambas páginas
-      const addFooter = () => {
-        const footerY = doc.internal.pageSize.getHeight() - 20;
+      doc.text('Este documento es un reporte oficial del servicio prestado.', margin, yPosition);
+
+      // Pie de página en todas las páginas
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        const footerY = doc.internal.pageSize.getHeight() - 15;
         doc.setFontSize(9);
         doc.setFont(undefined, 'normal');
-        doc.text(`Generado el: ${new Date().toLocaleDateString('es-ES', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })}`, margin, footerY);
-        doc.text('Sistema de Gestión - Logistica Lopez Ortiz', pageWidth - margin, footerY, { align: 'right' });
-      };
+        doc.setTextColor(100);
+        doc.text(`Generado el: ${new Date().toLocaleString('es-ES')}`, margin, footerY);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - margin, footerY, { align: 'right' });
+      }
       
-      // Agregar pie de página a ambas páginas
-      addFooter();
-      
-      // Descargar el PDF
-      const fileName = `orden_${order.id}_${order.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'cliente'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `reporte_orden_${order.id}_${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(fileName);
-      
-      console.log(`[Historial] PDF generado exitosamente para la orden #${order.id}`);
       
     } catch (error) {
       console.error('[Historial] Error al generar PDF:', error);
