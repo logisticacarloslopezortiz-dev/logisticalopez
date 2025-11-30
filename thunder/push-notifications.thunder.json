@@ -1,0 +1,96 @@
+{
+  "client": "Thunder Client",
+  "collectionName": "TLC Push & Supabase",
+  "version": "1.0",
+  "folders": [],
+  "requests": [
+    {
+      "name": "Web Push — por orderId",
+      "method": "POST",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"orderId\": 123,\n  \"title\": \"Actualización de Orden\",\n  \"body\": \"Tu orden fue actualizada\",\n  \"data\": { \"orderId\": 123 }\n}"
+      }
+    },
+    {
+      "name": "FCM — envío directo por token",
+      "method": "POST",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"to\": \"<FCM_DEVICE_TOKEN>\",\n  \"title\": \"Nueva Orden\",\n  \"body\": \"Tienes una nueva orden\",\n  \"data\": { \"orderId\": 456 }\n}"
+      }
+    },
+    {
+      "name": "Expo — envío directo por token",
+      "method": "POST",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"to\": \"ExpoPushToken[XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX]\",\n  \"title\": \"Recordatorio\",\n  \"body\": \"Tu servicio empieza pronto\",\n  \"data\": { \"orderId\": 789 }\n}"
+      }
+    },
+    {
+      "name": "WNS — envío por Channel URI",
+      "method": "POST",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"to\": \"https://db5.notify.windows.com/...CHANNEL_URI...\",\n  \"title\": \"Aviso\",\n  \"body\": \"Orden #321 lista\",\n  \"data\": { \"orderId\": 321 }\n}"
+      }
+    },
+    {
+      "name": "Token inválido — validación estricta",
+      "method": "POST",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"to\": \"   \",\n  \"title\": \"Prueba\",\n  \"body\": \"Mensaje\",\n  \"data\": { \"orderId\": 999 }\n}"
+      }
+    },
+    {
+      "name": "REST — listar push_subscriptions por user_id",
+      "method": "GET",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/rest/v1/push_subscriptions?select=user_id,endpoint,keys&p=eq.placeholder",
+      "headers": [
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ]
+    },
+    {
+      "name": "REST — listar notifications por user_id",
+      "method": "GET",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/rest/v1/notifications?user_id=eq.<USER_UUID>&select=*",
+      "headers": [
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ]
+    }
+  ]
+}

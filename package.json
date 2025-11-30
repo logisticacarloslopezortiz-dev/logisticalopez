@@ -20,7 +20,10 @@
   },
   "homepage": "https://github.com/logisticacarloslopezortiz-dev/logisticalopez#readme",
   "dependencies": {
+    "@supabase/supabase-js": "^2.86.0",
     "autoprefixer": "^10.4.21",
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.14"
   },

@@ -89,6 +89,7 @@ async function loadMetrics(collabId) {
   renderServiceDistribution(mine);
   renderVehicleDistribution(mine);
   renderRecentTable(completed);
+  await renderMyEarnings(collabId, completed);
 }
 
 function formatAvgTime(completed) {
@@ -219,6 +220,44 @@ function renderRecentTable(completed) {
     return `<tr class="bg-white"><td class="px-4 py-2">${id}</td><td class="px-4 py-2">${cliente}</td><td class="px-4 py-2">${serv}</td><td class="px-4 py-2">${fecha}</td><td class="px-4 py-2">${status}</td></tr>`;
   }).join('');
   body.innerHTML = rows || '<tr><td class="px-4 py-3 text-gray-500" colspan="5">Sin registros recientes.</td></tr>';
+}
+
+async function renderMyEarnings(collabId, completed) {
+  const pctEl = document.getElementById('myCommissionPct');
+  const monthEl = document.getElementById('myMonthEarnings');
+  const totalEl = document.getElementById('myTotalEarnings');
+  const tableEl = document.getElementById('myEarningsTable');
+  if (!pctEl || !monthEl || !totalEl || !tableEl) return;
+
+  let pct = 0;
+  try {
+    const { data, error } = await supabaseConfig.client.from('collaborators').select('commission_percent').eq('id', collabId).maybeSingle();
+    if (!error && data && typeof data.commission_percent !== 'undefined') {
+      pct = typeof data.commission_percent === 'number' ? data.commission_percent : (parseFloat(data.commission_percent) || 0);
+    }
+  } catch (_) {}
+  pct = Math.max(0, Math.min(100, pct));
+  pctEl.textContent = `${pct}%`;
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  let monthSum = 0;
+  let totalSum = 0;
+  const rows = [];
+  for (const o of (completed || [])) {
+    const amount = parseFloat(o.monto_cobrado) || 0;
+    const colShare = amount * (pct / 100);
+    totalSum += colShare;
+    const d = o.completed_at ? new Date(o.completed_at) : (o.date ? new Date(o.date) : null);
+    if (d && d >= monthStart) monthSum += colShare;
+    const serv = (o.service && o.service.name) ? o.service.name : (o.service || '—');
+    const id = o.id ? `#${o.id}` : (o.short_id ? String(o.short_id) : 'Orden');
+    const dateStr = d ? d.toLocaleString('es-DO') : '—';
+    rows.push(`<tr class="bg-white"><td class="px-4 py-2">${id}</td><td class="px-4 py-2">${serv}</td><td class="px-4 py-2">${formatCurrency(amount)}</td><td class="px-4 py-2">${pct}%</td><td class="px-4 py-2">${formatCurrency(colShare)}</td><td class="px-4 py-2">${dateStr}</td></tr>`);
+  }
+  monthEl.textContent = formatCurrency(monthSum);
+  totalEl.textContent = formatCurrency(totalSum);
+  tableEl.innerHTML = rows.slice(-20).reverse().join('') || '<tr><td class="px-4 py-3 text-gray-500" colspan="6">Sin datos de ganancias.</td></tr>';
 }
 
 function setupAutoRefresh(collabId) {

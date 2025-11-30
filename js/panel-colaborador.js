@@ -936,7 +936,7 @@ async function uploadEvidenceForOrder(orderId, files) {
     const progressText = document.getElementById('evidenceProgressText');
     const total = files.length;
     let done = 0;
-    const bucket = 'evidence';
+    const bucket = supabaseConfig.getEvidenceBucket ? supabaseConfig.getEvidenceBucket() : ((supabaseConfig.buckets && supabaseConfig.buckets.evidence) ? supabaseConfig.buckets.evidence : 'evidence');
     const uploaded = [];
 
     // Compress and upload sequentially to keep memory usage reasonable
@@ -968,22 +968,38 @@ async function uploadEvidenceForOrder(orderId, files) {
       const path = `orders/${orderId}/${ts}_${i}.${ext}`;
 
       try {
-        const { data, error } = await supabaseConfig.client.storage.from(bucket).upload(path, toUpload, { contentType: toUpload.type || 'image/jpeg', upsert: false });
+        const { data, error } = await supabaseConfig.client.storage.from(bucket).upload(path, toUpload, { contentType: toUpload.type || 'image/jpeg', upsert: true });
         if (error) {
-          console.error('Upload error:', error);
-          // If upload fails (likely network), queue remaining files including current one
-          const remaining = files.slice(i);
-          await queueEvidenceForOrder(orderId, remaining);
-          showWarning('Sin conexión. Las evidencias se guardaron localmente y se subirán cuando vuelva la red.');
-          break;
+          const msg = String(error.message || '');
+          const fb = (supabaseConfig.buckets && supabaseConfig.buckets.fallbackEvidence) ? supabaseConfig.buckets.fallbackEvidence : null;
+          if (fb && /bucket not found/i.test(msg)) {
+            const alt = await supabaseConfig.client.storage.from(fb).upload(path, toUpload, { contentType: toUpload.type || 'image/jpeg', upsert: true });
+            if (alt.error) {
+              const remaining = files.slice(i);
+              await queueEvidenceForOrder(orderId, [toUpload, ...remaining]);
+              showWarning('No se encontró el bucket de evidencias. Se guardó en cola offline.');
+              break;
+            } else {
+              const pub = supabaseConfig.client.storage.from(fb).getPublicUrl(path);
+              const url = pub?.data?.publicUrl || null;
+              uploaded.push({ bucket: fb, path, url, uploaded_at: new Date().toISOString() });
+            }
+          } else {
+            const remaining = files.slice(i);
+            await queueEvidenceForOrder(orderId, [toUpload, ...remaining]);
+            showWarning('Sin conexión. Las evidencias se guardaron localmente y se subirán cuando vuelva la red.');
+            break;
+          }
         }
-        const pub = supabaseConfig.client.storage.from(bucket).getPublicUrl(path);
-        const url = pub?.data?.publicUrl || null;
-        uploaded.push({ path, url, uploaded_at: new Date().toISOString() });
+        if (!error) {
+          const pub = supabaseConfig.client.storage.from(bucket).getPublicUrl(path);
+          const url = pub?.data?.publicUrl || null;
+          uploaded.push({ bucket, path, url, uploaded_at: new Date().toISOString() });
+        }
       } catch (err) {
         console.warn('Upload exception, queueing for offline upload', err);
         const remaining = files.slice(i);
-        await queueEvidenceForOrder(orderId, remaining);
+        await queueEvidenceForOrder(orderId, [toUpload, ...remaining]);
         showWarning('Sin conexión. Las evidencias se guardaron localmente y se subirán cuando vuelva la red.');
         break;
       }
@@ -1102,7 +1118,7 @@ async function processOfflineEvidenceQueue() {
   try {
     const entries = await getAllOfflineEvidenceEntries();
     if (!entries || entries.length === 0) return;
-    const bucket = 'evidence';
+    const bucket = supabaseConfig.getEvidenceBucket ? supabaseConfig.getEvidenceBucket() : ((supabaseConfig.buckets && supabaseConfig.buckets.evidence) ? supabaseConfig.buckets.evidence : 'evidence');
     for (const entry of entries) {
       try {
         // attempt compression before upload
@@ -1118,16 +1134,34 @@ async function processOfflineEvidenceQueue() {
         const ext = (entry.fileName.split('.').pop() || 'jpg').toLowerCase();
         const path = `orders/${entry.orderId}/${ts}_${entry.id || Math.floor(Math.random()*10000)}.${ext}`;
         const fileForUpload = new File([blobToUpload], entry.fileName || `${ts}.${ext}`, { type: entry.fileType || 'image/jpeg' });
-        const { data, error } = await supabaseConfig.client.storage.from(bucket).upload(path, fileForUpload, { contentType: fileForUpload.type || 'image/jpeg', upsert: false });
+        const { data, error } = await supabaseConfig.client.storage.from(bucket).upload(path, fileForUpload, { contentType: fileForUpload.type || 'image/jpeg', upsert: true });
         if (error) {
-          console.warn('Offline upload failed for entry', entry.id, error);
-          // increment attempts and skip for now
-          entry.attempts = (entry.attempts || 0) + 1;
-          if (entry.attempts > 5) {
-            // give up and remove
+          const msg = String(error.message || '');
+          const fb = (supabaseConfig.buckets && supabaseConfig.buckets.fallbackEvidence) ? supabaseConfig.buckets.fallbackEvidence : null;
+          if (fb && /bucket not found/i.test(msg)) {
+            const alt = await supabaseConfig.client.storage.from(fb).upload(path, fileForUpload, { contentType: fileForUpload.type || 'image/jpeg', upsert: true });
+            if (alt.error) {
+              entry.attempts = (entry.attempts || 0) + 1;
+              if (entry.attempts > 5) { await deleteOfflineEvidenceEntry(entry.id); }
+              continue;
+            }
+            const pubAlt = supabaseConfig.client.storage.from(fb).getPublicUrl(path);
+            const urlAlt = pubAlt?.data?.publicUrl || null;
+            try {
+              const orders = await supabaseConfig.getOrders();
+              const order = (orders || []).find(o => String(o.id) === String(entry.orderId));
+              const existing = Array.isArray(order?.evidence_photos) ? order.evidence_photos : [];
+              const nextArr = [...existing, { bucket: fb, path, url: urlAlt, uploaded_at: new Date().toISOString() }];
+              await supabaseConfig.updateOrder(entry.orderId, { evidence_photos: nextArr });
+            } catch (_) {}
             await deleteOfflineEvidenceEntry(entry.id);
+            showInfo('Evidencia sincronizada.');
+            continue;
+          } else {
+            entry.attempts = (entry.attempts || 0) + 1;
+            if (entry.attempts > 5) { await deleteOfflineEvidenceEntry(entry.id); }
+            continue;
           }
-          continue;
         }
         const pub = supabaseConfig.client.storage.from(bucket).getPublicUrl(path);
         const url = pub?.data?.publicUrl || null;
@@ -1136,7 +1170,7 @@ async function processOfflineEvidenceQueue() {
           const orders = await supabaseConfig.getOrders();
           const order = (orders || []).find(o => String(o.id) === String(entry.orderId));
           const existing = Array.isArray(order?.evidence_photos) ? order.evidence_photos : [];
-          const nextArr = [...existing, { path, url, uploaded_at: new Date().toISOString() }];
+          const nextArr = [...existing, { bucket, path, url, uploaded_at: new Date().toISOString() }];
           await supabaseConfig.updateOrder(entry.orderId, { evidence_photos: nextArr });
         } catch (err) {
           console.warn('Could not attach evidence metadata to order yet', err);

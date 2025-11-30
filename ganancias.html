@@ -13,9 +13,10 @@
 
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="css/admin-panel-styles.css">
 </head>
 <body class="bg-gray-100">
@@ -132,6 +133,10 @@
             <i data-lucide="download" class="w-4 h-4"></i>
             Exportar Excel
           </button>
+          <button id="exportFinancePdf" class="px-4 py-2 rounded-lg flex items-center gap-2 border border-gray-300">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            Exportar PDF
+          </button>
         </div>
       </div>
       <div class="h-96">
@@ -148,6 +153,102 @@
         </div>
       </div>
     </div>
+
+    <!-- Finanzas y Pagos: Cálculo de Comisiones de colaborador y Socios -->
+    <section class="card p-6" id="financeSection">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-turquoise flex items-center gap-3">
+          <span class="bg-yellow-400 p-2 rounded-lg">
+            <i data-lucide="calculator" class="w-5 h-5 text-white"></i>
+          </span>
+          Finanzas y Pagos — Cálculo de Comisiones de colaborador y Socios
+        </h2>
+        <div class="text-sm text-gray-600 hidden" id="financeRoleWarning">Solo visible para Administradores</div>
+      </div>
+
+      <!-- Resumen General -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-turquesa);">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium opacity-80">Total Pagos a Colaboradores (Mes)</p>
+              <p class="text-3xl font-bold" id="sumCollabMonth">$0.00</p>
+            </div>
+            <i data-lucide="users" class="w-8 h-8 opacity-50"></i>
+          </div>
+        </div>
+        <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium opacity-80">Total Empresa (Mes)</p>
+              <p class="text-3xl font-bold" id="sumCompanyMonth">$0.00</p>
+            </div>
+            <i data-lucide="building" class="w-8 h-8 opacity-50"></i>
+          </div>
+        </div>
+        <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium opacity-80">5% Mensual Acumulado</p>
+              <p class="text-3xl font-bold" id="sumFivePercent">$0.00</p>
+            </div>
+            <i data-lucide="percent" class="w-8 h-8 opacity-50"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla de colaboradores con porcentaje configurable -->
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-semibold text-gray-800">Porcentajes de Colaboradores</h3>
+          <span class="text-sm text-gray-500">Edita el % individual y guarda en tiempo real</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead>
+              <tr>
+                <th class="table-header">Colaborador</th>
+                <th class="table-header">% Comisión</th>
+                <th class="table-header">Total Mes</th>
+                <th class="table-header">Total Acumulado</th>
+              </tr>
+            </thead>
+            <tbody id="collabFinanceTable" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Vista detallada por colaborador -->
+      <div class="mb-6">
+        <div class="flex items-center gap-2 mb-3">
+          <label class="text-sm font-medium text-gray-700">Ver detalle de:</label>
+          <select id="detailCollabSelect" class="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors"></select>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead>
+              <tr>
+                <th class="table-header">Orden</th>
+                <th class="table-header">Servicio</th>
+                <th class="table-header">Monto</th>
+                <th class="table-header">% Colab</th>
+                <th class="table-header">Gana Colab</th>
+                <th class="table-header">Gana Empresa</th>
+                <th class="table-header">5% Mensual</th>
+                <th class="table-header">Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="collabDetailTable" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Historial de pagos (placeholder funcional) -->
+      <div>
+        <h3 class="text-lg font-semibold text-gray-800 mb-3">Historial de Pagos</h3>
+        <div id="paymentHistory" class="space-y-2 text-sm text-gray-700"></div>
+      </div>
+    </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>

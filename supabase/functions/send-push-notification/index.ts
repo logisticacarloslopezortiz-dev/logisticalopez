@@ -68,6 +68,127 @@ async function sendPushNotification(subscription: WebPushSubscription, payload: 
   }
 }
 
+// --- Envío por proveedores basados en token (FCM / Expo / WNS) ---
+type TokenProvider = 'fcm' | 'expo' | 'wns';
+type TokenSendInput = { token: string; provider?: TokenProvider; title: string; body: string; data?: Record<string, unknown> };
+type TokenSendResult = { success: boolean; provider: TokenProvider; token: string; statusCode?: number; error?: string };
+
+function sanitizeToken(token: unknown): string | null {
+  if (typeof token !== 'string') return null;
+  const t = token.trim();
+  if (!t) return null;
+  if (t.toLowerCase() === 'undefined' || t.toLowerCase() === 'null') return null;
+  return t;
+}
+
+function detectProvider(token: string, explicit?: TokenProvider): TokenProvider {
+  if (explicit) return explicit;
+  if (/^ExpoPushToken\[.+\]$/.test(token)) return 'expo';
+  if (/^https?:\/\//i.test(token)) return 'wns';
+  return 'fcm';
+}
+
+async function sendViaFCM(input: TokenSendInput): Promise<TokenSendResult> {
+  const serverKey = Deno.env.get('FCM_SERVER_KEY') || Deno.env.get('FIREBASE_SERVER_KEY');
+  if (!serverKey) return { success: false, provider: 'fcm', token: input.token, statusCode: 500, error: 'FCM_SERVER_KEY no configurado' };
+  const payload = {
+    to: input.token,
+    notification: { title: input.title, body: input.body },
+    data: { ...(input.data || {}) }
+  };
+  try {
+    const resp = await fetch('https://fcm.googleapis.com/fcm/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `key=${serverKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+    const ok = resp.ok;
+    return { success: ok, provider: 'fcm', token: input.token, statusCode: resp.status, error: ok ? undefined : (await resp.text()).slice(0, 200) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { success: false, provider: 'fcm', token: input.token, statusCode: 500, error: msg };
+  }
+}
+
+async function sendViaExpo(input: TokenSendInput): Promise<TokenSendResult> {
+  const body = {
+    to: input.token,
+    title: input.title,
+    body: input.body,
+    data: { ...(input.data || {}) }
+  };
+  try {
+    const resp = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const ok = resp.ok;
+    return { success: ok, provider: 'expo', token: input.token, statusCode: resp.status, error: ok ? undefined : (await resp.text()).slice(0, 200) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { success: false, provider: 'expo', token: input.token, statusCode: 500, error: msg };
+  }
+}
+
+async function getWnsAccessToken(): Promise<string | null> {
+  const sid = Deno.env.get('WNS_SID');
+  const secret = Deno.env.get('WNS_SECRET');
+  if (!sid || !secret) return null;
+  try {
+    const resp = await fetch('https://login.live.com/accesstoken.srf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: sid,
+        client_secret: secret,
+        scope: 'notify.windows.com'
+      }).toString()
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json().catch(() => ({} as any));
+    return typeof json.access_token === 'string' ? json.access_token : null;
+  } catch (_) { return null; }
+}
+
+async function sendViaWNS(input: TokenSendInput): Promise<TokenSendResult> {
+  // En WNS el "token" suele ser la channel URI completa
+  const accessToken = await getWnsAccessToken();
+  if (!accessToken) return { success: false, provider: 'wns', token: input.token, statusCode: 500, error: 'WNS no configurado' };
+  // Notificación tipo toast en XML
+  const xml = `<?xml version="1.0" encoding="utf-8"?>\n<toast><visual><binding template="ToastGeneric"><text>${input.title}</text><text>${input.body}</text></binding></visual></toast>`;
+  try {
+    const resp = await fetch(input.token, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml',
+        'X-WNS-Type': 'wns/toast',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: xml
+    });
+    const ok = resp.ok;
+    return { success: ok, provider: 'wns', token: input.token, statusCode: resp.status, error: ok ? undefined : (await resp.text()).slice(0, 200) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { success: false, provider: 'wns', token: input.token, statusCode: 500, error: msg };
+  }
+}
+
+async function sendTokenNotification(input: TokenSendInput): Promise<TokenSendResult> {
+  const token = sanitizeToken(input.token);
+  if (!token) return { success: false, provider: detectProvider('', input.provider), token: String(input.token || ''), statusCode: 400, error: 'Token inválido' };
+  const provider = detectProvider(token, input.provider);
+  const payloadData = input.data || {};
+  if (provider === 'fcm') return sendViaFCM({ ...input, token, provider, data: payloadData });
+  if (provider === 'expo') return sendViaExpo({ ...input, token, provider, data: payloadData });
+  return sendViaWNS({ ...input, token, provider, data: payloadData });
+}
+
 type PushSubKeys = { p256dh: string; auth: string };
 type PushSubRow = { endpoint?: string; keys?: PushSubKeys; p256dh?: string; auth?: string };
 type OrderRow = { id: number; client_id: string | null; client_contact_id: string | null };
@@ -122,20 +243,26 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     
     // Extraer datos del cuerpo de la solicitud
+    const bodyJson = await req.json();
     const { 
       orderId, 
       to_user_id,
       contact_id,
       newStatus,
       title,
-      body, 
+      body,
       icon = '/img/android-chrome-192x192.png',
-      data = {}
-    } = await req.json();
+      data = {},
+      // Tokens directos (FCM/Expo/WNS)
+      to,
+      token,
+      tokens,
+      provider
+    } = bodyJson;
     
-    if (!orderId && !to_user_id && !contact_id) {
+    if (!orderId && !to_user_id && !contact_id && !to && !token && !Array.isArray(tokens)) {
       await logDb(supabase, 'send-push-notification', 'warning', 'Solicitud sin destinatarios', { body: await req.clone().json().catch(() => ({})) });
-      return jsonResponse({ error: 'Faltan destinatarios: orderId, to_user_id o contact_id' }, 400, req);
+      return jsonResponse({ error: 'Faltan destinatarios: orderId, to_user_id, contact_id, token(s) o to' }, 400, req);
     }
     let finalTitle = title;
     let finalBody = body;
@@ -152,10 +279,20 @@ Deno.serve(async (req: Request) => {
     }
     
     let pushSubscriptions: Array<{ endpoint: string; keys: { p256dh: string; auth: string } }> = [];
+    const directTokens: string[] = [];
 
-    
+    // RUTA 1: Envío directo por tokens (FCM / Expo / WNS)
+    if (to || token || Array.isArray(tokens)) {
+      const arr = ([] as string[]).concat(
+        typeof to === 'string' ? [to] : [],
+        typeof token === 'string' ? [token] : [],
+        Array.isArray(tokens) ? tokens.filter((t: unknown) => typeof t === 'string') : []
+      );
+      for (const t of arr) { const s = sanitizeToken(t); if (s) directTokens.push(s); }
+    }
 
-    if (orderId) {
+    // RUTA 2: Web Push tradicional (subscriptions) si no hay tokens directos
+    if (directTokens.length === 0 && orderId) {
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .select('id, client_id, client_contact_id')
@@ -179,10 +316,10 @@ Deno.serve(async (req: Request) => {
         const subs = await fetchUserSubscriptions(supabase, ord.client_id);
         pushSubscriptions = subs;
       }
-    } else if (to_user_id) {
+    } else if (directTokens.length === 0 && to_user_id) {
       const subs = await fetchUserSubscriptions(supabase, String(to_user_id));
       pushSubscriptions = subs;
-    } else if (contact_id) {
+    } else if (directTokens.length === 0 && contact_id) {
       const { data: subsByContact } = await supabase
         .from('push_subscriptions')
         .select('endpoint, keys')
@@ -192,6 +329,18 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Si hay tokens directos, enviar por proveedor correspondiente
+    if (directTokens.length > 0) {
+      const results: TokenSendResult[] = [];
+      for (const t of directTokens) {
+        const r = await sendTokenNotification({ token: t, provider, title: finalTitle, body: finalBody, data: { orderId, ...(data || {}) } });
+        results.push(r);
+      }
+      const successCount = results.filter(r => r.success).length;
+      return jsonResponse({ success: successCount > 0, results }, 200, req);
+    }
+
+    // Si no hay suscripciones para web push
     if (pushSubscriptions.length === 0) {
       await logDb(supabase, 'send-push-notification', 'info', 'Sin suscripciones para destinatario', { orderId, to_user_id, contact_id });
       return jsonResponse({ success: false, message: 'No hay suscripciones push registradas' }, 200, req);

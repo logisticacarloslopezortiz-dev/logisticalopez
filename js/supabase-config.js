@@ -32,6 +32,8 @@ if (!window.supabaseConfig) {
     _publicClient: null, // Se inicializa como null y se crea solo cuando se necesita
     useLocalStorage: false,
     vapidPublicKey: null,
+    buckets: { evidence: 'order-evidence', fallbackEvidence: 'public' },
+    getEvidenceBucket() { return (this.buckets && this.buckets.evidence) ? this.buckets.evidence : 'evidence'; },
     async runProcessOutbox(){
       try {
         const url = `${this.client.supabaseUrl.replace('.supabase.co','')}.functions.supabase.co/process-outbox`;

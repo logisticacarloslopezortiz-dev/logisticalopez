@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rendimiento del Colaborador</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <link rel="stylesheet" href="css/admin-panel-styles.css">
   <style>
     body{background:linear-gradient(180deg,#f3f6f8 0%,#eef2f5 100%)}
@@ -119,6 +119,57 @@
             </tr>
           </thead>
           <tbody id="recentTable" class="divide-y divide-gray-100"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card p-6">
+      <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--turquesa)">
+        <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="dollar-sign" class="w-5 h-5 text-blue-600"></i></span>
+        Mis Ganancias por Servicio
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--turquesa)">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium opacity-80">Este Mes</p>
+              <p class="text-3xl font-bold" id="myMonthEarnings">$0.00</p>
+            </div>
+            <i data-lucide="calendar" class="w-8 h-8 opacity-60"></i>
+          </div>
+        </div>
+        <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--azul)">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium opacity-80">Total Acumulado</p>
+              <p class="text-3xl font-bold" id="myTotalEarnings">$0.00</p>
+            </div>
+            <i data-lucide="wallet" class="w-8 h-8 opacity-60"></i>
+          </div>
+        </div>
+        <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--azul-claro)">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium opacity-80">Mi % Comisión</p>
+              <p class="text-3xl font-bold" id="myCommissionPct">0%</p>
+            </div>
+            <i data-lucide="percent" class="w-8 h-8 opacity-60"></i>
+          </div>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full">
+          <thead>
+            <tr>
+              <th class="table-header">Orden</th>
+              <th class="table-header">Servicio</th>
+              <th class="table-header">Monto</th>
+              <th class="table-header">Mi %</th>
+              <th class="table-header">Mi Ganancia</th>
+              <th class="table-header">Fecha</th>
+            </tr>
+          </thead>
+          <tbody id="myEarningsTable" class="divide-y divide-gray-100"></tbody>
         </table>
       </div>
     </section>

@@ -157,13 +157,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (evidenceArr.length > 0) {
       photoGallery.innerHTML = '';
       evidenceArr.forEach(item => {
-        const u = item.url || '';
-        if (!u) return;
+        let url = '';
+        if (typeof item === 'string') {
+          url = item;
+        } else if (item && (item.url || item.public_url)) {
+          url = item.url || item.public_url;
+        } else if (item && item.path) {
+          const b = item.bucket || (supabaseConfig.getEvidenceBucket ? supabaseConfig.getEvidenceBucket() : (supabaseConfig.buckets && supabaseConfig.buckets.evidence) ? supabaseConfig.buckets.evidence : 'order-evidence');
+          try {
+            const pub = supabaseConfig.client.storage.from(b).getPublicUrl(item.path);
+            url = pub?.data?.publicUrl || '';
+          } catch (_) { url = ''; }
+        }
+        if (!url) return;
         const a = document.createElement('a');
-        a.href = u;
+        a.href = url;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
-        a.innerHTML = `<img src="${u}" alt="Evidencia del servicio" class="w-full h-32 object-cover rounded-lg shadow-md hover:shadow-xl transition-shadow">`;
+        a.innerHTML = `<img src="${url}" alt="Evidencia del servicio" class="w-full h-32 object-cover rounded-lg shadow-md hover:shadow-xl transition-shadow">`;
         photoGallery.appendChild(a);
       });
       photoSection.classList.remove('hidden');
