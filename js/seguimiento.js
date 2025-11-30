@@ -48,15 +48,14 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       // Determinar si el ID es secuencial (número) o UUID
       const isNumericId = /^\d+$/.test(id);
-      const columnName = isNumericId ? 'id' : 'uuid';
+      const columnName = isNumericId ? 'id' : 'short_id';
 
       const { data: order, error } = await supabaseConfig.client
         .from('orders')
         .select(`
           *,
           service:services(name),
-          vehicle:vehicles(name),
-          collaborator:collaborators(name)
+          vehicle:vehicles(name)
         `)
         .eq(columnName, id)
         .maybeSingle();
@@ -70,7 +69,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Si la búsqueda es exitosa, renderiza la información
+      let collaboratorName = '';
+      try {
+        if (order.assigned_to) {
+          const { data: collab } = await supabaseConfig.client
+            .from('collaborators')
+            .select('name')
+            .eq('id', order.assigned_to)
+            .maybeSingle();
+          collaboratorName = collab?.name || '';
+        }
+      } catch (_) {}
+      order.collaborator_name = collaboratorName;
+      
       renderTrackingInfo(order);
       loginScreen.classList.add('hidden');
       trackingScreen.classList.remove('hidden');
@@ -80,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } catch (error) {
       console.error('Error al buscar la orden:', error);
-      showLoginError('Ocurrió un error al conectar con el servidor. Por favor, intenta más tarde.');
+      showLoginError('Ocurrió un error al conectar con el servidor. Intenta más tarde.');
     } finally {
       trackButton.disabled = false;
       trackButton.textContent = 'Buscar Solicitud';
@@ -117,10 +128,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <p class="font-semibold text-gray-500">Destino</p>
         <p class="text-gray-800 truncate" title="${order.delivery}">${order.delivery || 'No especificado'}</p>
       </div>
-      ${order.collaborator ? `
+      ${order.collaborator_name ? `
       <div class="detail-item">
         <p class="font-semibold text-gray-500">Asignado a</p>
-        <p class="text-gray-800">${order.collaborator.name}</p>
+        <p class="text-gray-800">${order.collaborator_name}</p>
       </div>` : ''}
       ${order.vehicle ? `
       <div class="detail-item">
@@ -138,18 +149,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 4. Renderizar Timeline ---
-    renderTimeline(order.status_history, order.status);
+    const history = Array.isArray(order.tracking_data) ? order.tracking_data : [];
+    renderTimeline(history, order.status);
 
     // --- 5. Renderizar Galería de Fotos ---
-    if (order.photo_urls && order.photo_urls.length > 0) {
-      photoGallery.innerHTML = ''; // Limpiar galería
-      order.photo_urls.forEach(url => {
-        const photoItem = document.createElement('a');
-        photoItem.href = url;
-        photoItem.target = '_blank';
-        photoItem.rel = 'noopener noreferrer';
-        photoItem.innerHTML = `<img src="${url}" alt="Evidencia del servicio" class="w-full h-32 object-cover rounded-lg shadow-md hover:shadow-xl transition-shadow">`;
-        photoGallery.appendChild(photoItem);
+    const evidenceArr = Array.isArray(order.evidence_photos) ? order.evidence_photos : [];
+    if (evidenceArr.length > 0) {
+      photoGallery.innerHTML = '';
+      evidenceArr.forEach(item => {
+        const u = item.url || '';
+        if (!u) return;
+        const a = document.createElement('a');
+        a.href = u;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.innerHTML = `<img src="${u}" alt="Evidencia del servicio" class="w-full h-32 object-cover rounded-lg shadow-md hover:shadow-xl transition-shadow">`;
+        photoGallery.appendChild(a);
       });
       photoSection.classList.remove('hidden');
     } else {
@@ -165,28 +180,34 @@ document.addEventListener('DOMContentLoaded', () => {
   // Función para renderizar el historial de estados (Timeline)
   function renderTimeline(history, currentStatus) {
     timeline.innerHTML = ''; // Limpiar timeline
-    const statusOrder = ['Pendiente', 'Aceptada', 'En camino a recoger', 'En origen', 'En curso', 'En destino', 'Completada'];
+    const statusOrder = ['Pendiente', 'Aceptada', 'En camino a recoger', 'Cargando', 'En curso', 'En camino a entregar', 'En origen', 'En destino', 'Retraso por tapón', 'Completada'];
     const statusLabels = {
       'Pendiente': 'Orden Recibida',
       'Aceptada': 'Orden Aceptada',
       'En camino a recoger': 'En Camino al Origen',
-      'En origen': 'Llegada al Origen',
+      'Cargando': 'Cargando en Origen',
       'En curso': 'Servicio en Progreso',
+      'En camino a entregar': 'En Camino al Destino',
+      'En origen': 'Llegada al Origen',
       'En destino': 'Llegada al Destino',
+      'Retraso por tapón': 'Retraso por Tráfico',
       'Completada': 'Servicio Completado'
     };
 
     if (!history || history.length === 0) {
       // Si no hay historial, mostrar solo el estado actual
-      history = [{ status: currentStatus, timestamp: new Date().toISOString() }];
+      history = [{ status: currentStatus, at: new Date().toISOString() }];
     }
 
-    // Asegurarse de que el historial esté ordenado por fecha
-    history.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    // Normalizar y ordenar por fecha (soporta claves 'at' y 'date')
+    const normalized = history.map(h => ({
+      status: h.status || h.new_status || h.label || 'Pendiente',
+      notes: h.notes || h.comment || null,
+      timestamp: h.at || h.date || h.timestamp || h.time || new Date().toISOString()
+    })).filter(h => !!h.status);
+    normalized.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    const processedStatuses = new Set();
-    history.forEach(event => {
-      if (processedStatuses.has(event.status)) return; // Evitar duplicados
+    normalized.forEach(event => {
 
       const time = new Date(event.timestamp);
       const formattedTime = time.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -208,8 +229,28 @@ document.addEventListener('DOMContentLoaded', () => {
         ${event.notes ? `<p class="text-xs text-gray-600 mt-1 pl-2 border-l-2 border-gray-200">${event.notes}</p>` : ''}
       `;
       timeline.appendChild(item);
-      processedStatuses.add(event.status);
     });
+
+    // Actualizar el indicador de "última actualización" cada vez que se renderiza el timeline
+    try { updateTimelineRealtimeIndicator(); } catch(_) {}
+  }
+
+  // Actualiza el indicador visual y la hora de la última actualización
+  function updateTimelineRealtimeIndicator(timestamp) {
+    try {
+      const container = document.getElementById('timelineRealtimeIndicator');
+      const lastEl = document.getElementById('timelineLastUpdated');
+      const dot = container ? container.querySelector('.realtime-dot') : null;
+      if (!container || !lastEl) return;
+      const t = timestamp ? new Date(timestamp) : new Date();
+      // Formato: HH:MM:SS (local) — se puede ajustar
+      lastEl.textContent = 'Actualizado: ' + t.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (dot) {
+        dot.classList.remove('offline');
+        dot.classList.add('pulse-flash');
+        setTimeout(() => { try { dot.classList.remove('pulse-flash'); } catch(_){} }, 1200);
+      }
+    } catch (_) {}
   }
 
   // --- LÓGICA DEL MAPA ---
@@ -295,13 +336,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- INICIALIZACIÓN ---
 
+  // Suscripción en tiempo real para actualizaciones de la orden
+  let orderSubscription = null;
+  async function subscribeToOrderUpdates(orderId) {
+    try {
+      if (orderSubscription) {
+        try { supabaseConfig.client.removeChannel(orderSubscription); } catch(_) {}
+      }
+      orderSubscription = supabaseConfig.client
+        .channel('public:orders_tracking_' + orderId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: 'id=eq.' + orderId }, async () => {
+          try {
+            const { data: order } = await supabaseConfig.client
+              .from('orders')
+              .select('*, service:services(name), vehicle:vehicles(name)')
+              .eq('id', orderId)
+              .maybeSingle();
+            if (order) {
+              renderTrackingInfo(order);
+              initializeMap(order);
+            }
+          } catch (e) { console.warn('Realtime update failed', e); }
+        })
+        .subscribe();
+    } catch (e) { console.warn('Realtime subscribe fail', e); }
+  }
+
   // Función para verificar si hay un ID en la URL al cargar la página
   function checkUrlForOrderId() {
     const params = new URLSearchParams(window.location.search);
     const orderId = params.get('id');
     if (orderId) {
       orderIdInput.value = orderId;
-      trackOrder();
+      trackOrder().then(() => {
+        const isNumericId = /^\d+$/.test(orderId);
+        const idForSub = isNumericId ? Number(orderId) : null;
+        if (idForSub) subscribeToOrderUpdates(idForSub);
+      });
     }
   }
 
@@ -312,4 +383,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Comprobar si hay un ID en la URL al cargar
   checkUrlForOrderId();
+
+  // Indicador online/offline: cambia el punto a naranja si está offline
+  function setRealtimeDotOnline(online) {
+    try {
+      const dot = document.querySelector('#timelineRealtimeIndicator .realtime-dot');
+      if (!dot) return;
+      if (online) dot.classList.remove('offline'); else dot.classList.add('offline');
+    } catch(_) {}
+  }
+
+  window.addEventListener('online', () => { setRealtimeDotOnline(true); try { updateTimelineRealtimeIndicator(); } catch(_){} });
+  window.addEventListener('offline', () => { setRealtimeDotOnline(false); try { updateTimelineRealtimeIndicator(); } catch(_){} });
+  // Estado inicial
+  setRealtimeDotOnline(navigator.onLine);
 });

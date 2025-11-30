@@ -40,12 +40,45 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
 
   let y = height - 50
 
+  const wrapText = (text: string, maxWidth: number, fontRef: any, size: number): string[] => {
+    const words = String(text || '').split(' ')
+    const lines: string[] = []
+    let current = ''
+    for (const w of words) {
+      const test = current ? current + ' ' + w : w
+      const tw = fontRef.widthOfTextAtSize(test, size)
+      if (tw > maxWidth) {
+        if (current) lines.push(current)
+        current = w
+      } else {
+        current = test
+      }
+    }
+    if (current) lines.push(current)
+    return lines
+  }
+
+  const truncateText = (text: string, maxWidth: number, fontRef: any, size: number): string => {
+    let t = String(text || '')
+    if (fontRef.widthOfTextAtSize(t, size) <= maxWidth) return t
+    const ellipsis = '…'
+    while (t.length > 0 && fontRef.widthOfTextAtSize(t + ellipsis, size) > maxWidth) {
+      t = t.slice(0, -1)
+    }
+    return t + ellipsis
+  }
+
   page.drawText(business.business_name || 'Logística López Ortiz', { x: 50, y, font: boldFont, size: 20, color: rgb(0.11, 0.25, 0.35) })
   y -= 25
   page.drawText(`RNC: ${business.rnc || 'N/A'}`, { x: 50, y, font, size: 10 })
   y -= 15
-  page.drawText(`${business.address || ''} | ${business.phone || ''}`, { x: 50, y, font, size: 10 })
-  y -= 30
+  const addrLine = `${business.address || ''} ${business.phone ? '| ' + business.phone : ''}`
+  const addrLines = wrapText(addrLine, width - 100, font, 10)
+  for (const line of addrLines) {
+    page.drawText(line, { x: 50, y, font, size: 10 })
+    y -= 12
+  }
+  y -= 18
 
   page.drawText(`Factura Orden #${order.short_id || order.id}`, { x: 50, y, font: boldFont, size: 16 })
   y -= 20
@@ -61,8 +94,9 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
 
   const table = { x: 50, y, width: width - 100, rowHeight: 20, col1: 150 }
   const drawRow = (label: string, value: string, isHeader = false) => {
+    const v = truncateText(value, table.width - table.col1 - 15, isHeader ? boldFont : font, 10)
     page.drawText(label, { x: table.x + 5, y: table.y - table.rowHeight / 1.5, font: isHeader ? boldFont : font, size: 10 })
-    page.drawText(value, { x: table.x + table.col1 + 5, y: table.y - table.rowHeight / 1.5, font: isHeader ? boldFont : font, size: 10 })
+    page.drawText(v, { x: table.x + table.col1 + 5, y: table.y - table.rowHeight / 1.5, font: isHeader ? boldFont : font, size: 10 })
     page.drawRectangle({ x: table.x, y: table.y - table.rowHeight, width: table.width, height: table.rowHeight, borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
     table.y -= table.rowHeight
   }

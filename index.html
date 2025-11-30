@@ -44,7 +44,7 @@
   <link href="css/tailwind.min.css" rel="stylesheet">
   <link href="css/custom-styles.css" rel="stylesheet">
   <link href="css/animations.css" rel="stylesheet"> <!-- Animaciones personalizadas -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"> <!-- Iconos -->
+  
 
   <!-- ✅ Schema.org Markup (JSON-LD) para Google -->
   <script type="application/ld+json">
@@ -420,8 +420,8 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="js/supabase-config.js" defer></script>
   <script src="js/index.js"></script>
   <script>
     // --- INICIO: Lógica para activar animación con Intersection Observer ---
@@ -432,33 +432,38 @@
       const package2 = document.getElementById('package-animation-2');
       const actionButtons = document.getElementById('action-buttons');
 
-      // Inicialmente ocultar los elementos
-      truck.style.opacity = '0';
-      package1.style.opacity = '0';
-      package2.style.opacity = '0';
-      actionButtons.style.opacity = '0';
+      const elementsToAnimate = [
+        { el: truck, animClass: 'animate-truck-loop' },
+        { el: package1, animClass: 'animate-package-loop-1' },
+        { el: package2, animClass: 'animate-package-loop-2' },
+        { el: actionButtons, animClass: 'animate-button-loop' }
+      ];
 
-      const observer = new IntersectionObserver((entries) => {
+      // Ocultar elementos inicialmente para evitar FOUC
+      elementsToAnimate.forEach(({ el }) => el && (el.style.opacity = '0'));
+
+      const observerCallback = (entries, observer) => {
         entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            // Añadir clases de animación cuando la sección es visible
-            truck.style.opacity = '';
-            package1.style.opacity = '';
-            package2.style.opacity = '';
-            actionButtons.style.opacity = '';
+          if (!entry.isIntersecting) return;
 
-            truck.classList.add('animate-truck-loop');
-            package1.classList.add('animate-package-loop-1');
-            package2.classList.add('animate-package-loop-2');
-            actionButtons.classList.add('animate-button-loop');
-            
-            // Opcional: Dejar de observar después de la primera vez para que no se repita al hacer scroll de nuevo
-            observer.unobserve(entry.target);
-          }
+          // Animar elementos cuando la sección es visible
+          elementsToAnimate.forEach(({ el, animClass }) => {
+            if (el) {
+              el.style.opacity = '1';
+              el.classList.add(animClass);
+            }
+          });
+
+          // Dejar de observar para que la animación no se repita
+          observer.unobserve(entry.target);
         });
-      }, { threshold: 0.5 }); // Se activa cuando el 50% de la sección es visible
+      };
 
-      if (animationSection) observer.observe(animationSection);
+      const observer = new IntersectionObserver(observerCallback, { threshold: 0.5 });
+
+      if (animationSection) {
+        observer.observe(animationSection);
+      }
     });
     // --- FIN: Lógica para activar animación ---
   </script>
@@ -466,12 +471,20 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const form = document.getElementById('colaborador-form');
+      if (!form) return;
+
       form.addEventListener('submit', function(event) {
         event.preventDefault();
 
         const nombre = document.getElementById('nombre').value;
         const telefono = document.getElementById('telefono').value;
         const mensaje = document.getElementById('mensaje').value;
+
+        // Validación simple
+        if (!nombre.trim() || !telefono.trim()) {
+          alert('Por favor, completa tu nombre y teléfono.');
+          return;
+        }
 
         const numeroEmpresa = '18297293822';
         let textoWhatsApp = `¡Hola! Quisiera colaborar con ustedes.\n\n*Nombre:* ${nombre}\n*Teléfono:* ${telefono}`;

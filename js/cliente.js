@@ -14,7 +14,22 @@ function getClientId() {
   return clientId;
 }
 
-// Función para obtener suscripción push
+// Utilidad: escapar texto para evitar inyección HTML al insertar en innerHTML
+function escapeHtml(input) {
+  if (input === null || input === undefined) return '';
+  const str = String(input);
+  return str.replace(/[&<>"']/g, function(s) {
+    const entityMap = {
+      "&": "&",
+      "<": "<",
+      ">": ">",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+    return entityMap[s];
+  });
+}
+
 async function getPushSubscription() {
   try {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -64,7 +79,10 @@ async function getPushSubscription() {
 let map;
 let originMarker;
 let destinationMarker;
+let pickupInput;
+let deliveryInput;
 let isOriginSet = false; // Controla si el origen ya fue establecido
+let mapStep = 'awaiting_origin'; // awaiting_origin | awaiting_destination | complete
 
 let awaitingDestination = false; // Estado: esperando marcar destino tras fijar origen
 let mapInitialized = false; // ✅ NUEVO: Control para evitar inicializaciones múltiples del mapa.
@@ -95,6 +113,9 @@ function showStep(step) {
   }
 
   // ✅ SOLUCIÓN MEJORADA: Inicializar el mapa solo cuando el paso 4 es visible por primera vez.
+  if (step === 4) {
+    resetRouteSelection();
+  }
   if (step === 4 && !mapInitialized) { // Si estamos en el paso 4 y el mapa NO ha sido inicializado
     mapInitialized = true; // Marcar como inicializado para no volver a ejecutar
     initMap();
@@ -110,6 +131,62 @@ function showStep(step) {
   if (timeEl) { timeEl.required = isStep5; }
   if (progressBar) { progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%'; }
   updateHelpText(step);
+}
+
+function resetRouteSelection(){
+  try {
+    if (originMarker && map) { map.removeLayer(originMarker); }
+    if (destinationMarker && map) { map.removeLayer(destinationMarker); }
+  } catch(_) {}
+  originMarker = null;
+  destinationMarker = null;
+  isOriginSet = false;
+  mapStep = 'awaiting_origin';
+  const originCard = document.getElementById('origin-card');
+  const originDisp = document.getElementById('origin-address-display');
+  const destCard = document.getElementById('destination-card');
+  const destDisp = document.getElementById('destination-address-display');
+  const distanceContainer = document.getElementById('distance-container');
+  const pickupLabel = document.getElementById('pickup-label');
+  const deliveryLabel = document.getElementById('delivery-label');
+  const routeInputs = document.getElementById('route-inputs');
+  if (originCard) originCard.classList.add('hidden');
+  if (destCard) destCard.classList.add('hidden');
+  if (distanceContainer) distanceContainer.classList.add('hidden');
+  if (pickupLabel) pickupLabel.classList.remove('hidden');
+  if (deliveryLabel) deliveryLabel.classList.remove('hidden');
+  if (routeInputs) routeInputs.classList.add('hidden');
+  if (pickupInput) { pickupInput.disabled = false; }
+  if (deliveryInput) { deliveryInput.disabled = true; deliveryInput.value = ''; }
+  const instr = document.getElementById('map-instruction-text');
+  if (instr) instr.textContent = 'Primero, define tu punto de recogida.';
+}
+
+function resetOriginOnly(){
+  try { if (originMarker && map) map.removeLayer(originMarker); } catch(_){}
+  originMarker = null;
+  isOriginSet = false;
+  mapStep = 'awaiting_origin';
+  const originCard = document.getElementById('origin-card');
+  const distanceContainer = document.getElementById('distance-container');
+  if (originCard) originCard.classList.add('hidden');
+  if (distanceContainer) distanceContainer.classList.add('hidden');
+  if (deliveryInput) deliveryInput.disabled = true;
+  const instr = document.getElementById('map-instruction-text');
+  if (instr) instr.textContent = 'Primero, define tu punto de recogida.';
+}
+
+function resetDestinationOnly(){
+  try { if (destinationMarker && map) map.removeLayer(destinationMarker); } catch(_){}
+  destinationMarker = null;
+  mapStep = isOriginSet ? 'awaiting_destination' : 'awaiting_origin';
+  const destCard = document.getElementById('destination-card');
+  const distanceContainer = document.getElementById('distance-container');
+  if (destCard) destCard.classList.add('hidden');
+  if (distanceContainer) distanceContainer.classList.add('hidden');
+  if (deliveryInput) { deliveryInput.disabled = false; deliveryInput.value = ''; }
+  const instr = document.getElementById('map-instruction-text');
+  if (instr) instr.textContent = 'Ahora, define tu punto de entrega.';
 }
 
 function updateHelpText(step) {
@@ -335,9 +412,11 @@ function validateCurrentStep() {
   }
   
   if (currentStep === 4) {
-    const origen = document.getElementById('pickupAddress').value.trim();
-    const destino = document.getElementById('deliveryAddress').value.trim();
-    
+    const pickupEl = document.getElementById('pickupAddress');
+    const deliveryEl = document.getElementById('deliveryAddress');
+    const origen = pickupEl && pickupEl.value ? String(pickupEl.value).trim() : '';
+    const destino = deliveryEl && deliveryEl.value ? String(deliveryEl.value).trim() : '';
+
     if (!origen || !destino) {
       notifications.warning('Debes establecer una dirección de origen y una de destino en el mapa.', { title: 'Paso Incompleto' });
       return false;
@@ -396,21 +475,34 @@ function displayOrderSummary() {
   const date = dateEl ? dateEl.value : '';
   const time = timeEl ? timeEl.value : '';
 
-  // Construir el HTML del resumen
+  // Construir el HTML del resumen (sanitizando entradas de usuario)
+  const esc = escapeHtml;
+  const escName = esc(name);
+  const escPhone = esc(phone);
+  const escEmail = esc(email);
+  const escRnc = rnc ? esc(rnc) : '';
+  const escEmpresa = empresa ? esc(empresa) : '';
+  const escService = esc(service);
+  const escVehicle = esc(vehicle);
+  const escPickup = esc(pickup);
+  const escDelivery = esc(delivery);
+  const escDate = esc(date);
+  const escTime = esc(time);
+
   let summaryHTML = `
     <div class="summary-section">
       <h5 class="font-bold text-azulOscuro mb-2 border-b pb-1">Datos del Cliente</h5>
-      <p><strong>Nombre:</strong> ${name}</p>
-      <p><strong>Teléfono:</strong> ${phone}</p>
-      <p><strong>Correo:</strong> ${email}</p>
-      ${rnc ? `<p><strong>RNC:</strong> ${rnc}</p>` : ''}
-      ${empresa ? `<p><strong>Empresa:</strong> ${empresa}</p>` : ''}
+      <p><strong>Nombre:</strong> ${escName}</p>
+      <p><strong>Teléfono:</strong> ${escPhone}</p>
+      <p><strong>Correo:</strong> ${escEmail}</p>
+      ${escRnc ? `<p><strong>RNC:</strong> ${escRnc}</p>` : ''}
+      ${escEmpresa ? `<p><strong>Empresa:</strong> ${escEmpresa}</p>` : ''}
     </div>
 
     <div class="summary-section">
       <h5 class="font-bold text-azulOscuro mt-4 mb-2 border-b pb-1">Detalles del Servicio</h5>
-      <p><strong>Servicio:</strong> ${service}</p>
-      <p><strong>Vehículo:</strong> ${vehicle}</p>`;
+      <p><strong>Servicio:</strong> ${escService}</p>
+      <p><strong>Vehículo:</strong> ${escVehicle}</p>`;
 
   // Añadir preguntas del modal si existen, con formato especial para Mudanza
   if (Object.keys(serviceQuestions).length > 0) {
@@ -434,7 +526,7 @@ function displayOrderSummary() {
         item_armarios_qty: 'Armarios/Roperos'
       };
       const itemsText = mudanzaItems
-        .map(([k, v]) => `${labelMap[k] || k}: ${v}`)
+        .map(([k, v]) => `${labelMap[k] || k}: ${escapeHtml(String(v))}`)
         .join(', ');
       summaryHTML += `<p><strong>Objetos y cantidades:</strong> ${itemsText}</p>`;
     }
@@ -442,8 +534,8 @@ function displayOrderSummary() {
     // Mostrar el resto de entries excluyendo los items de mudanza ya resumidos
     for (const [key, value] of entries) {
       if (/^item_.+_qty$/.test(key)) continue;
-      const questionText = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      summaryHTML += `<p><strong>${questionText}:</strong> ${value}</p>`;
+      const questionText = escapeHtml(key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()));
+      summaryHTML += `<p><strong>${questionText}:</strong> ${escapeHtml(String(value))}</p>`;
     }
 
     summaryHTML += `</div>`;
@@ -453,13 +545,13 @@ function displayOrderSummary() {
   summaryHTML += `
     <div class="summary-section">
       <h5 class="font-bold text-azulOscuro mt-4 mb-2 border-b pb-1">Ruta y Horario</h5>
-      <p><strong>Origen:</strong> ${pickup}</p>
-      <p><strong>Destino:</strong> ${delivery}</p>
-      ${distance !== '--' ? `<p><strong>Distancia:</strong> ${distance} km</p>` : ''}
-      ${originCoords ? `<p class="text-xs text-gray-500">Coords. Origen: ${originCoords.lat.toFixed(4)}, ${originCoords.lng.toFixed(4)}</p>` : ''}
-      ${destinationCoords ? `<p class="text-xs text-gray-500">Coords. Destino: ${destinationCoords.lat.toFixed(4)}, ${destinationCoords.lng.toFixed(4)}</p>` : ''}
-      <p><strong>Fecha:</strong> ${date}</p>
-      <p><strong>Hora:</strong> ${time}</p>
+      <p><strong>Origen:</strong> ${escPickup}</p>
+      <p><strong>Destino:</strong> ${escDelivery}</p>
+      ${distance !== '--' ? `<p><strong>Distancia:</strong> ${escapeHtml(String(distance))} km</p>` : ''}
+      ${originCoords ? `<p class="text-xs text-gray-500">Coords. Origen: ${escapeHtml(String(originCoords.lat.toFixed(4)))}, ${escapeHtml(String(originCoords.lng.toFixed(4)))}</p>` : ''}
+      ${destinationCoords ? `<p class="text-xs text-gray-500">Coords. Destino: ${escapeHtml(String(destinationCoords.lat.toFixed(4)))}, ${escapeHtml(String(destinationCoords.lng.toFixed(4)))}</p>` : ''}
+      <p><strong>Fecha:</strong> ${escDate}</p>
+      <p><strong>Hora:</strong> ${escTime}</p>
     </div>
   `;
 
@@ -549,6 +641,23 @@ async function initMap() {
   loader.style.display = 'flex';
 
   map = L.map(mapElement).setView([18.4273, -70.0976], 13);
+  if (map && typeof map.invalidateSize === 'function') { setTimeout(() => map.invalidateSize(), 100); }
+  mapElement.style.background = '#eef2ff';
+  mapElement.style.position = 'relative';
+  function ensureResponsiveMapHeight(){
+    const h = Math.max(360, Math.floor(window.innerHeight * 0.75));
+    mapElement.style.height = h + 'px';
+    if (map && typeof map.invalidateSize === 'function') { setTimeout(() => map.invalidateSize(), 50); }
+  }
+  ensureResponsiveMapHeight();
+  window.addEventListener('resize', ensureResponsiveMapHeight);
+  window.addEventListener('orientationchange', ensureResponsiveMapHeight);
+  // pickupInput already declared earlier; reuse it here
+  // deliveryInput ya declarado más arriba; se reutiliza aquí
+
+  if (pickupInput) { pickupInput.classList.remove('hidden'); pickupInput.disabled = false; pickupInput.placeholder = 'Escribe o selecciona en el mapa'; }
+  if (deliveryInput) { deliveryInput.classList.remove('hidden'); deliveryInput.disabled = true; deliveryInput.placeholder = 'Escribe o selecciona en el mapa'; }
+  let lastLatLng = { lat: 18.4273, lng: -70.0976 };
 
   let layersControl = null;
   let layersHidden = false;
@@ -561,12 +670,57 @@ async function initMap() {
     attribution: 'Map tiles by Stadia Maps, Data by OpenMapTiles & OpenStreetMap contributors',
     maxZoom: 20
   });
+  const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  });
   // Preferir Stadia Outdoors por defecto y ocultar loader cuando cargue; fallback a CARTO si falla
   let baseLoaded = false;
-  stadiaOutdoors.addTo(map).on('load', () => { loader.style.display = 'none'; baseLoaded = true; });
-  stadiaOutdoors.on('tileerror', () => { if (!baseLoaded) { cartoVoyager.addTo(map).on('load', () => loader.style.display = 'none'); } });
-  layersControl = L.control.layers({ 'Stadia Outdoors': stadiaOutdoors, 'CARTO Voyager': cartoVoyager }).addTo(map);
-  const providerRD = new GeoSearch.OpenStreetMapProvider({ params: { countrycodes: 'do', "accept-language": 'es', addressdetails: 1 } });
+  const baseLayer = stadiaOutdoors.addTo(map);
+  if (baseLayer && typeof baseLayer.on === 'function') {
+    baseLayer.on('load', () => { loader.style.display = 'none'; mapElement.style.background = ''; baseLoaded = true; });
+    baseLayer.on('tileerror', () => {
+      if (!baseLoaded) {
+        const cartoLayer = cartoVoyager.addTo(map);
+        if (cartoLayer && typeof cartoLayer.on === 'function') {
+          cartoLayer.on('load', () => { loader.style.display = 'none'; mapElement.style.background = ''; });
+        } else {
+          const osmLayer = osmStandard.addTo(map);
+          if (osmLayer && typeof osmLayer.on === 'function') {
+            osmLayer.on('load', () => { loader.style.display = 'none'; mapElement.style.background = ''; });
+          } else {
+            loader.style.display = 'none'; mapElement.style.background = '';
+          }
+        }
+      }
+    });
+  } else {
+    // Fallback cuando Leaflet local es un stub sin eventos
+    loader.style.display = 'none';
+  }
+  if (L.control && typeof L.control.layers === 'function') {
+    layersControl = L.control.layers({ 'Stadia Outdoors': stadiaOutdoors, 'CARTO Voyager': cartoVoyager, 'OSM Standard': osmStandard }).addTo(map);
+  }
+  let providerRD = null;
+  if (window.GeoSearch && GeoSearch.OpenStreetMapProvider) {
+    providerRD = new GeoSearch.OpenStreetMapProvider({ params: { countrycodes: 'do', "accept-language": 'es', addressdetails: 1 } });
+  }
+
+  async function forwardGeocode(q){
+    try{
+      const { data, error } = await supabaseConfig.client.functions.invoke('forward-geocode', { body: { q, countrycodes: 'do', lang: 'es', addressdetails: 1 } });
+      if (error) return null;
+      const res = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
+      if (Array.isArray(res) && res.length > 0){
+        const r = res[0];
+        const lat = parseFloat(r.lat ?? r.y);
+        const lon = parseFloat(r.lon ?? r.x);
+        const label = r.display_name ?? r.label ?? r.name ?? q;
+        if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lng: lon, label };
+      }
+      return null;
+    } catch(_) { return null; }
+  }
 
 
   // --- Iconos personalizados para los marcadores ---
@@ -591,24 +745,102 @@ async function initMap() {
   // --- Búsqueda de direcciones ---
   let searchControl = null;
   let searchAdded = false;
-  if (!searchAdded) {
-    searchControl = new GeoSearch.GeoSearchControl({
-      provider: providerRD,
-      style: 'bar',
-      showMarker: false,
-      autoClose: false,
-    });
+  if (providerRD && window.GeoSearch && GeoSearch.GeoSearchControl && map && typeof map.addControl === 'function') {
+    searchControl = new GeoSearch.GeoSearchControl({ provider: providerRD, style: 'bar', showMarker: false, autoClose: false });
     map.addControl(searchControl);
+    searchAdded = true;
+  } else {
+    // Fallback sin dependencia de L.Control
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.top = '10px';
+    container.style.right = '10px';
+    container.style.zIndex = '1000';
+    container.style.background = '#fff';
+    container.style.padding = '6px';
+    container.style.borderRadius = '8px';
+    container.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'address-search-input';
+    input.placeholder = 'Buscar dirección';
+    input.style.width = '180px';
+    input.style.border = '1px solid #e5e7eb';
+    input.style.borderRadius = '6px';
+    input.style.padding = '6px 8px';
+    container.appendChild(input);
+    container.style.pointerEvents = 'auto';
+    mapElement.appendChild(container);
+    if (window.L && L.DomEvent && typeof L.DomEvent.disableClickPropagation === 'function') {
+      L.DomEvent.disableClickPropagation(container);
+      L.DomEvent.disableScrollPropagation(container);
+    }
+    ['click','mousedown','touchstart','pointerdown'].forEach(evt => {
+      container.addEventListener(evt, (e) => { e.stopPropagation(); });
+      input.addEventListener(evt, (e) => { e.stopPropagation(); });
+    });
+    input.addEventListener('input', () => {
+      const mode = (mapStep === 'awaiting_origin') ? 'origin' : 'destination';
+      debouncedSearch(input, mode);
+    });
+    input.addEventListener('keydown', async function(e){
+      if (e.key !== 'Enter') return;
+      const q = input.value.trim();
+      if (!q) return;
+      try {
+        let placed = false;
+        const fg = await forwardGeocode(q);
+        if (fg) {
+          map.setView([fg.lat, fg.lng], 15);
+          lastLatLng = { lat: fg.lat, lng: fg.lng };
+          updateMarkerAndAddress({ lat: fg.lat, lng: fg.lng }, fg.label);
+          placed = true;
+        }
+        if (!placed) {
+          const photonUrl = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&lang=es';
+          try {
+            const pr = await fetch(photonUrl, { headers: { 'Accept': 'application/json' } });
+            const pj = await pr.json();
+            const f = Array.isArray(pj.features) ? pj.features[0] : null;
+            if (f && f.geometry && Array.isArray(f.geometry.coordinates)) {
+              const lat = f.geometry.coordinates[1];
+              const lon = f.geometry.coordinates[0];
+              const label = f.properties && (f.properties.label || f.properties.name || '') || q;
+              map.setView([lat, lon], 15);
+              lastLatLng = { lat, lng: lon };
+              updateMarkerAndAddress({ lat, lng: lon }, label);
+              placed = true;
+            }
+          } catch(_) { }
+        }
+        if (!placed) {
+          const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=do&q=' + encodeURIComponent(q);
+          const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+          const results = await r.json();
+          if (Array.isArray(results) && results.length > 0) {
+            const best = results[0];
+            const lat = parseFloat(best.lat);
+            const lon = parseFloat(best.lon);
+            map.setView([lat, lon], 15);
+            lastLatLng = { lat, lng: lon };
+            updateMarkerAndAddress({ lat, lng: lon }, best.display_name);
+          }
+        }
+      } catch(_){ }
+    });
     searchAdded = true;
   }
 
-  map.on('geosearch/showlocation', (result) => {
-    updateMarkerAndAddress({ lat: result.location.y, lng: result.location.x }, result.location.label);
-  });
+  if (window.GeoSearch) {
+    map.on('geosearch/showlocation', (result) => {
+      lastLatLng = { lat: result.location.y, lng: result.location.x };
+      updateMarkerAndAddress({ lat: result.location.y, lng: result.location.x }, result.location.label);
+    });
+  }
 
   // --- Inputs y listeners ---
-  const pickupInput = document.getElementById('pickupAddress');
-  const deliveryInput = document.getElementById('deliveryAddress');
+  pickupInput = document.getElementById('pickupAddress');
+  deliveryInput = document.getElementById('deliveryAddress');
   const pickupLabel = document.getElementById('pickup-label');
   const deliveryLabel = document.getElementById('delivery-label');
   const routeInputs = document.getElementById('route-inputs');
@@ -621,24 +853,104 @@ async function initMap() {
   const expandMapBtn = document.getElementById('expand-map-btn');
   function expandMap() {
     if (mapEl) {
-      mapEl.classList.remove('h-[40vh]');
-      mapEl.classList.add('h-screen');
+      mapEl.style.height = window.innerHeight + 'px';
       setTimeout(() => map.invalidateSize(), 50);
     }
   }
   if (expandMapBtn) { expandMapBtn.addEventListener('click', () => { expandMap(); }); }
+  window.addEventListener('resize', () => { setTimeout(() => map.invalidateSize(), 50); });
+  window.addEventListener('orientationchange', () => { setTimeout(() => map.invalidateSize(), 50); });
   if (pickupInput) { pickupInput.addEventListener('focus', () => { expandMap(); }); }
   if (deliveryInput) { deliveryInput.addEventListener('focus', () => { expandMap(); }); }
 
-  map.on('click', (e) => { updateMarkerAndAddress(e.latlng); });
+  // Vincular búsquedas por texto con debounce
+  const provider = providerRD;
+  let debounceTimer;
+  const debouncedSearch = async (inputEl, mode) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      const q = (inputEl && inputEl.value ? inputEl.value : '').trim();
+      if (q.length < 3) return;
+      try {
+        let latlng = null, label = null;
+        if (provider && provider.search) {
+          const results = await provider.search({ query: q, countrycodes: 'do' });
+          if (results && results.length > 0) {
+            latlng = { lat: results[0].y, lng: results[0].x };
+            label = results[0].label;
+          }
+        }
+        if (!latlng) {
+          const fg = await forwardGeocode(q);
+          if (fg) { latlng = { lat: fg.lat, lng: fg.lng }; label = fg.label; }
+        }
+        if (!latlng) {
+          const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=do&q=' + encodeURIComponent(q);
+          const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+          const results = await r.json();
+          if (Array.isArray(results) && results.length > 0) {
+            latlng = { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+            label = results[0].display_name;
+          }
+        }
+        if (!latlng) {
+          const photonUrl = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&lang=es';
+          try {
+            const pr = await fetch(photonUrl, { headers: { 'Accept': 'application/json' } });
+            const pj = await pr.json();
+            const f = Array.isArray(pj.features) ? pj.features[0] : null;
+            if (f && f.geometry && Array.isArray(f.geometry.coordinates)) {
+              latlng = { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+              label = f.properties && (f.properties.label || f.properties.name || '') || q;
+            }
+          } catch(_) { /* noop */ }
+        }
+        if (latlng) {
+          map.setView([latlng.lat, latlng.lng], 16);
+          if (mode === 'origin' && mapStep === 'awaiting_origin') {
+            updateMarkerAndAddress(latlng, label);
+          } else if (mode === 'destination' && mapStep !== 'awaiting_origin') {
+            updateMarkerAndAddress(latlng, label);
+          }
+        }
+      } catch(_){ }
+    }, 350);
+  };
+  if (pickupInput) pickupInput.addEventListener('input', () => debouncedSearch(pickupInput, 'origin'));
+  if (deliveryInput) deliveryInput.addEventListener('input', () => debouncedSearch(deliveryInput, 'destination'));
+
+  // Botón usar ubicación actual
+  const useLocBtn = document.getElementById('use-current-location');
+  if (useLocBtn) {
+    useLocBtn.classList.remove('hidden');
+    useLocBtn.addEventListener('click', () => {
+      if (navigator.geolocation && mapStep === 'awaiting_origin') {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            updateMarkerAndAddress(latlng);
+          },
+          () => { /* silencioso */ }
+        );
+      }
+    });
+  }
+
+  if (map && typeof map.on === 'function') {
+    function handleMapClick(latlng) { updateMarkerAndAddress(latlng); }
+    map.on('click', (e) => { handleMapClick(e.latlng); });
+  } else if (mapElement) {
+    function handleMapClick(latlng) { updateMarkerAndAddress(latlng); }
+    mapElement.addEventListener('click', () => { handleMapClick(lastLatLng); });
+  }
 
   
 
   // Lógica principal para actualizar marcadores
-  async function updateMarkerAndAddress(latlng, label = null) {
-    let currentMarker, currentInput, currentIcon;
+async function updateMarkerAndAddress(latlng, label = null) {
+  let currentMarker, currentInput, currentIcon;
 
-    if (!isOriginSet) {
+  if (!isOriginSet) {
       // Estableciendo el ORIGEN
       currentMarker = originMarker;
       currentInput = pickupInput;
@@ -650,7 +962,30 @@ async function initMap() {
       } else {
         originMarker.setLatLng(latlng);
       }
-    } else {
+      isOriginSet = true;
+      mapStep = 'awaiting_destination';
+      if (deliveryInput) { deliveryInput.disabled = false; deliveryInput.placeholder = 'Escribe o selecciona en el mapa'; }
+      const originCard = document.getElementById('origin-card');
+      const originDisp = document.getElementById('origin-address-display');
+      if (originCard) originCard.classList.remove('hidden');
+      if (originDisp) originDisp.textContent = label || currentInput.value || `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+      const instr = document.getElementById('map-instruction-text');
+    if (instr) instr.textContent = 'Ahora, define tu punto de entrega.';
+    if (originCard && !document.getElementById('origin-edit-btn')) {
+      const btn = document.createElement('button');
+      btn.id = 'origin-edit-btn';
+      btn.type = 'button';
+      btn.className = 'ml-2 text-xs text-azulClaro underline';
+      btn.textContent = 'Editar origen';
+      btn.addEventListener('click', () => { resetOriginOnly(); });
+      originCard.appendChild(btn);
+    }
+    if (destinationMarker) {
+      mapStep = 'complete';
+      calculateAndDisplayDistance();
+      fitMapToBounds();
+    }
+  } else {
       // Estableciendo el DESTINO
       currentMarker = destinationMarker;
       currentInput = deliveryInput;
@@ -662,7 +997,25 @@ async function initMap() {
       } else {
         destinationMarker.setLatLng(latlng);
       }
+      mapStep = 'complete';
+      const destCard = document.getElementById('destination-card');
+      const destDisp = document.getElementById('destination-address-display');
+      if (destCard) destCard.classList.remove('hidden');
+      if (destDisp) destDisp.textContent = label || currentInput.value || `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+      calculateAndDisplayDistance();
+      fitMapToBounds();
+      const instr = document.getElementById('map-instruction-text');
+    if (instr) instr.textContent = 'Origen y destino definidos. Puedes continuar.';
+    if (destCard && !document.getElementById('destination-edit-btn')) {
+      const btn = document.createElement('button');
+      btn.id = 'destination-edit-btn';
+      btn.type = 'button';
+      btn.className = 'ml-2 text-xs text-azulClaro underline';
+      btn.textContent = 'Editar destino';
+      btn.addEventListener('click', () => { resetDestinationOnly(); });
+      destCard.appendChild(btn);
     }
+  }
 
     // Obtener dirección (Geocodificación inversa)
     if (label) {
@@ -724,23 +1077,6 @@ async function initMap() {
       }
     }
   }
-  // Búsqueda programática desde inputs con debounce para UX móvil
-  const provider = providerRD;
-  let debounceTimer;
-  const debouncedSearch = (inputEl) => {
-    if (!provider) return;
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(async () => {
-      const q = inputEl.value.trim();
-      if (q.length < 3) return;
-      try {
-        const results = await provider.search({ query: q, countrycodes: 'do' });
-        if (results && results.length > 0) {
-          updateMarkerAndAddress({ lat: results[0].y, lng: results[0].x }, results[0].label);
-        }
-      } catch(e) { /* no-op */ }
-    }, 350);
-  };
 }
 
 function calculateAndDisplayDistance() {
@@ -768,22 +1104,37 @@ function fitMapToBounds() {
   }
 }
 let poiLayer = null;
+let lastPoiFetchAt = 0;
+let poiFetchInFlight = false;
 function loadPOIsForBounds() {
+  const now = Date.now();
+  if (poiFetchInFlight) return;
+  if (now - lastPoiFetchAt < 25000) return;
+  lastPoiFetchAt = now;
+  poiFetchInFlight = true;
+  if (!map || typeof map.getBounds !== 'function') { poiFetchInFlight = false; return; }
   const b = map.getBounds();
-  const s = b.getSouth();
-  const w = b.getWest();
-  const n = b.getNorth();
-  const e = b.getEast();
+  const s = Number(b.getSouth());
+  const w = Number(b.getWest());
+  const n = Number(b.getNorth());
+  const e = Number(b.getEast());
+  const areValid = [s,w,n,e].every(v => Number.isFinite(v));
+  if (!areValid) { poiFetchInFlight = false; return; }
   const query = `[
     out:json][timeout:25];(
     node["amenity"~"school|hospital|clinic|university|police|fire_station"](${s},${w},${n},${e});
     node["shop"~"mall|supermarket"](${s},${w},${n},${e});
     node["leisure"~"park"](${s},${w},${n},${e});
   );out center;`;
+  const payload = String(query || '').trim();
+  if (!payload) { poiFetchInFlight = false; return; }
   fetch('https://overpass-api.de/api/interpreter', {
     method: 'POST',
-    body: query
-  }).then(r => r.json()).then(json => {
+    body: payload
+  }).then(r => {
+    if (!r.ok) throw new Error(String(r.status));
+    return r.json();
+  }).then(json => {
     if (!poiLayer) { poiLayer = L.layerGroup().addTo(map); } else { poiLayer.clearLayers(); }
     const iconFor = (tags) => {
       if (tags.amenity === 'hospital' || tags.amenity === 'clinic') return L.divIcon({ html: '<i class="fas fa-hospital text-red-600"></i>', className: 'poi-icon' });
@@ -804,7 +1155,7 @@ function loadPOIsForBounds() {
       const marker = L.marker([lat, lon], { icon: iconFor(tags) }).bindTooltip(name, { permanent: false });
       poiLayer.addLayer(marker);
     });
-  }).catch(() => {});
+  }).catch(() => {}).finally(() => { poiFetchInFlight = false; });
 }
 
 // --- Lógica de Notificaciones Push ---
@@ -895,10 +1246,13 @@ async function subscribeUserToPush(savedOrder) {
     }
     
     // Guardar suscripción en Supabase
-    // Preferir tabla push_subscriptions por usuario; si no hay usuario, guardar en la orden como fallback
+    // Preferir tabla push_subscriptions por usuario; si no hay usuario, guardar para contacto anónimo
     try {
-      const { data: userData } = await supabaseConfig.client.auth.getUser();
-      const userId = userData?.user?.id || null;
+      let userId = null;
+      if (supabaseConfig && supabaseConfig.client && supabaseConfig.client.auth && typeof supabaseConfig.client.auth.getSession === 'function') {
+        const { data: sessionData } = await supabaseConfig.client.auth.getSession();
+        userId = sessionData?.session?.user?.id || null;
+      }
 
       if (userId) {
         // Inserta o actualiza en push_subscriptions usando formato de keys JSON { p256dh, auth }
@@ -919,6 +1273,24 @@ async function subscribeUserToPush(savedOrder) {
           await supabaseConfig.client.from('push_subscriptions').insert(payload);
         }
         console.log('Suscripción guardada en push_subscriptions para usuario:', userId);
+      } else if (savedOrder && savedOrder.client_contact_id) {
+        const payloadAnon = {
+          client_contact_id: savedOrder.client_contact_id,
+          endpoint: subscription?.endpoint,
+          keys: {
+            p256dh: subscription?.keys?.p256dh || (subscription?.toJSON?.().keys?.p256dh),
+            auth: subscription?.keys?.auth || (subscription?.toJSON?.().keys?.auth)
+          }
+        };
+        const { error: upsertAnonErr } = await supabaseConfig.client
+          .from('push_subscriptions')
+          .upsert(payloadAnon, { onConflict: 'client_contact_id,endpoint' });
+        if (upsertAnonErr) {
+          console.warn('Fallo upsert en push_subscriptions (anon), probando insert:', upsertAnonErr?.message || upsertAnonErr);
+          await supabaseConfig.client.from('push_subscriptions').insert(payloadAnon);
+        }
+        try { localStorage.setItem('tlc_client_contact_id', String(savedOrder.client_contact_id)); } catch(_){ }
+        console.log('Suscripción guardada en push_subscriptions para contacto:', savedOrder.client_contact_id);
       }
     } catch (saveErr) {
       console.error('Error guardando suscripción en Supabase:', saveErr);
@@ -1287,12 +1659,12 @@ document.addEventListener('DOMContentLoaded', function() {
           baseOrder.push_subscription = pushSubscription;
         }
 
-        const { data: { user } } = await supabaseConfig.client.auth.getUser();
-        if (user && user.id) {
-          baseOrder.client_id = user.id;
-        } else {
-          baseOrder.client_id = null;
+        let userId = null;
+        if (supabaseConfig && supabaseConfig.client && supabaseConfig.client.auth && typeof supabaseConfig.client.auth.getSession === 'function') {
+          const { data: sessionData } = await supabaseConfig.client.auth.getSession();
+          userId = sessionData?.session?.user?.id || null;
         }
+        baseOrder.client_id = userId || null;
 
         // Fallback de suscripción se guarda post-creación en orders.push_subscription
 
@@ -1361,6 +1733,7 @@ document.addEventListener('DOMContentLoaded', function() {
           // La función RPC `create_order_with_contact` ya se encarga de esto de forma segura en el backend.
           // Esto resuelve el error 401 Unauthorized.
           askForNotificationPermission(savedOrder);
+          try { await supabaseConfig.runProcessOutbox(); } catch(_){ }
         }
 
       } catch (error) {

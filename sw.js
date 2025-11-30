@@ -1,7 +1,7 @@
 // sw.js
 
 // COMENTARIO: Se añade versionado de caché para forzar la actualización de archivos.
-const CACHE_NAME = 'tlc-cache-v4';
+const CACHE_NAME = 'tlc-cache-v5';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -26,6 +26,15 @@ const urlsToCache = [
   '/js/supabase-config.js',
   '/js/notifications.js',
   '/js/pwa.js',
+  '/vendor/leaflet.js',
+  '/vendor/leaflet.css',
+  '/vendor/lucide.min.js',
+  '/vendor/supabase.umd.js',
+  '/vendor/images/marker-icon.png',
+  '/vendor/images/marker-icon-2x.png',
+  '/vendor/images/marker-shadow.png',
+  '/vendor/images/layers.png',
+  '/vendor/images/layers-2x.png',
   '/img/1vertical.png',
   '/img/favicon.ico',
   '/img/android-chrome-192x192.png',
@@ -76,7 +85,7 @@ self.addEventListener('fetch', (event) => {
   const dest = event.request.destination; // 'document', 'script', 'style', 'image', 'font', ''
 
   event.respondWith((async () => {
-    const cached = await caches.match(event.request);
+    const cached = await caches.match(event.request, { ignoreSearch: true });
     try {
       const networkResponse = await fetch(event.request);
       // Cachea en segundo plano algunos recursos estáticos para mejor experiencia offline

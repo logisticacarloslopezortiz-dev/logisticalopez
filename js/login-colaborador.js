@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   // Continuar si el cliente ya está vinculado localmente; el admin puede revisar luego
                 }
 
+                try { localStorage.setItem('userRole','colaborador'); } catch(_){ }
                 window.location.href = 'panel-colaborador.html';
             }
         } catch (error) {

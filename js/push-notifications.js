@@ -40,7 +40,8 @@ class PushNotificationManager {
             
             if (error) throw error;
             
-            this.vapidPublicKey = data.publicKey;
+            this.vapidPublicKey = data?.vapidPublicKey || data?.publicKey || null;
+            if (!this.vapidPublicKey) throw new Error('Clave VAPID no disponible en respuesta');
             console.log('VAPID key obtenida desde Supabase Functions');
         } catch (error) {
             console.error('Error loading VAPID key:', error);
@@ -154,21 +155,22 @@ class PushNotificationManager {
         try {
             const { data: { user } } = await supabaseConfig.client.auth.getUser();
             
-            if (!user) {
-                throw new Error('User not authenticated');
+            const contactId = (() => { try { return localStorage.getItem('tlc_client_contact_id'); } catch(_) { return null; } })();
+            if (!user && !contactId) {
+                throw new Error('User not authenticated and no contact id');
             }
 
             const raw = typeof subscription.toJSON === 'function' ? subscription.toJSON() : null;
             const keys = (raw && raw.keys) ? raw.keys : (subscription.keys || {});
 
-            const subscriptionData = {
+            const subscriptionData = user ? {
                 user_id: user.id,
                 endpoint: subscription.endpoint,
-                // Según esquema: JSONB `keys` obligatorio con p256dh y auth
-                keys: {
-                    p256dh: keys.p256dh,
-                    auth: keys.auth
-                }
+                keys: { p256dh: keys.p256dh, auth: keys.auth }
+            } : {
+                client_contact_id: contactId,
+                endpoint: subscription.endpoint,
+                keys: { p256dh: keys.p256dh, auth: keys.auth }
             };
 
             const client = supabaseConfig?.client;
@@ -176,9 +178,10 @@ class PushNotificationManager {
                 throw new Error('Supabase client no inicializado o inválido en saveSubscriptionToServer');
             }
 
+            const conflictCols = user ? 'user_id,endpoint' : 'client_contact_id,endpoint';
             const r = await client
                 .from('push_subscriptions')
-                .upsert(subscriptionData, { onConflict: 'user_id,endpoint' });
+                .upsert(subscriptionData, { onConflict: conflictCols });
 
             if (r.error) {
                 throw r.error;

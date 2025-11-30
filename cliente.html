@@ -11,10 +11,25 @@
   <title>Logística López Ortiz - Solicitud de Servicio</title>
   <link href="css/tailwind.min.css" rel="stylesheet">
   <link href="css/custom-styles.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"> <!-- Iconos -->
+  <script src="vendor/lucide.min.js"></script>
+  
+
+  <style>
+    :root{
+      --color-primario: #1E405A; /* azul oscuro */
+      --color-secundario: #1E8A95; /* turquesa */
+      --color-acento: #FBBF24; /* amarillo/naranja */
+    }
+    .text-azulOscuro{ color: var(--color-primario) !important; }
+    .bg-azulClaro{ background: linear-gradient(90deg,var(--color-secundario), #06b6d4) !important; }
+    .hover\:bg-azulOscuro:hover{ background-color: var(--color-primario) !important; }
+    .text-turquesa{ color: var(--color-secundario) !important; }
+    .text-acento{ color: var(--color-acento) !important; }
+    .btn-primary-custom{ background: linear-gradient(90deg,var(--color-primario), #2D5A7B); color: #fff; }
+    .btn-acento{ background: var(--color-acento); color: #0C375D; }
+  </style>
   <!-- Leaflet CSS y JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@3.11.0/dist/geosearch.css" />
+  <link rel="stylesheet" href="vendor/leaflet.css" />
 
 </head>
 <body class="bg-gray-100">
@@ -36,10 +51,10 @@
         </div>
 
         <!-- Contenedor de Ayuda Dinámica -->
-        <div class="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-lg text-sm text-center mb-6 flex items-center justify-center gap-2">
-          <i class="fas fa-info-circle"></i>
+          <div class="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-lg text-sm text-center mb-6 flex items-center justify-center gap-2">
+          <i data-lucide="info" class="w-4 h-4"></i>
           <span id="help-text">Ingresa tus datos de contacto. Nos comunicaremos contigo a través de estos medios.</span>
-        </div>
+          </div>
 
         <!-- Formulario pasos -->
         <form id="serviceForm" class="space-y-6">
@@ -65,7 +80,7 @@
               <input type="text" id="clientCompany" name="empresa" placeholder="Nombre de la empresa" class="w-full border p-2 rounded">
               <!-- Mensaje de ITBIS -->
               <div id="itbisMessage" class="hidden p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-                <i class="fas fa-info-circle mr-2"></i>
+                <i data-lucide="info" class="w-4 h-4 mr-2"></i>
                 Al solicitar una factura con valor de comprobante fiscal (RNC), se aplicará un cargo adicional del 18% correspondiente al ITBIS.
               </div>
             </div>
@@ -91,7 +106,7 @@
               </div>
               <span class="block truncate font-semibold text-gray-700 group-hover:text-azulOscuro">[Nombre del Servicio]</span>
               <div class="check-indicator absolute top-2 right-2 hidden h-6 w-6 items-center justify-center rounded-full bg-azulClaro text-white">
-                <i class="fas fa-check text-xs"></i> 
+                <i data-lucide="check" class="w-3 h-3"></i> 
               </div>
             </div>
             -->
@@ -176,18 +191,23 @@
           <!-- Paso 4: Ubicación -->
           <div class="step hidden p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="4">
             <h4 class="text-xl font-semibold text-azulOscuro mb-2 text-center">Paso 4: Origen y Destino</h4>
-            <p id="map-instruction-text" class="text-center text-gray-600 mb-4">Busca una dirección o haz clic en el mapa para establecer el origen y el destino.</p>
+            <p id="map-instruction-text" class="text-center text-gray-600 mb-4">Primero, define tu punto de recogida.</p>
+            <div class="flex justify-center mb-4">
+              <button id="use-current-location" type="button" class="px-4 py-2 bg-azulClaro text-white rounded-lg text-sm hover:bg-azulOscuro transition hidden">
+                Usar mi ubicación actual
+              </button>
+            </div>
 
             <!-- Contenedor de Búsqueda y Confirmación (Ahora encima del mapa) -->
             <div class="space-y-4 mb-4">
               <div class="grid grid-cols-2 gap-4 items-start hidden" id="route-inputs">
                 <div>
                   <label id="pickup-label" class="block text-sm font-semibold text-azulOscuro mb-1">Ruta de Origen</label>
-                  <input type="text" id="pickupAddress" class="w-full border p-2 rounded-lg hidden" aria-label="Dirección de origen">
+                  <input type="text" id="pickupAddress" class="w-full border p-2 rounded-lg" aria-label="Dirección de origen" placeholder="Escribe o selecciona en el mapa">
                 </div>
                 <div>
                   <label id="delivery-label" class="block text-sm font-semibold text-azulOscuro mb-1">Ruta de Destino</label>
-                  <input type="text" id="deliveryAddress" class="w-full border p-2 rounded-lg hidden" aria-label="Dirección de destino">
+                  <input type="text" id="deliveryAddress" class="w-full border p-2 rounded-lg" aria-label="Dirección de destino" placeholder="Escribe o selecciona en el mapa">
                 </div>
               </div>
               
@@ -206,12 +226,12 @@
               </div>
               <p id="destination-placeholder" class="hidden text-center text-gray-500 p-4 border-2 border-dashed rounded-lg">Selecciona el punto de destino en el mapa.</p>
             </div>
-            <div id="map" class="w-full h-screen rounded-lg border border-gray-200 shadow relative bg-white mt-4">
+            <div id="map" class="w-full h-[70vh] rounded-lg border border-gray-200 shadow relative bg-white mt-4">
               <div id="map-loader" class="text-center p-8 text-gray-500 flex flex-col items-center gap-2 z-10">
-                <i class="fas fa-spinner fa-spin text-2xl text-azulClaro"></i>
+                <div class="h-6 w-6 rounded-full border-2 border-azulClaro border-t-transparent animate-spin"></div>
                 <span id="map-loader-text">Cargando mapa...</span>
               </div>
-              <button type="button" id="expand-map-btn" class="absolute top-3 right-3 z-[1000] bg-white px-3 py-2 rounded-lg shadow-lg text-gray-700 hover:bg-gray-100 transition hidden">Expandir mapa</button>
+              <button type="button" id="expand-map-btn" class="absolute top-3 right-3 z-[1000] bg-white px-3 py-2 rounded-lg shadow-lg text-gray-700 hover:bg-gray-100 transition">Expandir mapa</button>
               <div id="distance-container" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white p-2 px-4 rounded-full shadow-lg">
                 <p class="text-gray-800 font-medium">Distancia: <span id="distance-value" class="font-bold text-azulOscuro">--</span> km</p>
               </div>
@@ -863,15 +883,15 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="vendor/supabase.umd.js"></script>
   <script src="js/supabase-config.js"></script>
   <!-- Leaflet JS y GeoSearch -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="https://unpkg.com/leaflet-geosearch@3.11.0/dist/geosearch.umd.js"></script>
+  <script src="vendor/leaflet.js"></script>
 
   <script src="js/notifications.js"></script>
   <script src="js/pwa.js"></script>
-  <script src="js/cliente.js?v=1.3"></script>
+  <script src="js/cliente.js"></script>
+  <script>if(window.lucide){lucide.createIcons();}</script>
 </body>
  
 </html>

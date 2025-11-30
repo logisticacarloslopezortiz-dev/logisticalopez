@@ -3,442 +3,330 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Panel — Colaborador</title> 
-  
-  <!-- PWA Meta Tags -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#1e3a8a">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="TLC Colaborador">
-  <meta name="description" content="Panel de colaborador para gestión de servicios TLC">
-  
-  <!-- Icons (use canonical asset names present in project) -->
-  <link rel="icon" type="image/png" sizes="192x192" href="img/android-chrome-192x192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="img/android-chrome-512x512.png">
-  <link rel="apple-touch-icon" href="img/android-chrome-192x192.png">
-  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
-  <link rel="icon" type="image/x-icon" href="img/favicon-16x16.png" sizes="16x16" />
-  <link rel="icon" type="image/x-icon" href="img/favicon-32x32.png" sizes="32x32" />
-  <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
-  
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  
-  <!-- Tailwind y Lucide (local) -->
-  <link rel="stylesheet" href="css/tailwind.min.css?v=1.2">
-  <link rel="stylesheet" href="css/collab-panel-styles.css?v=1.2">
+  <title>Panel del Colaborador</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="vendor/lucide.min.js?v=1.2" defer></script>
+  <script src="vendor/lucide.min.js"></script>
+  <link rel="stylesheet" href="vendor/leaflet.css" />
+  <link rel="stylesheet" href="css/admin-panel-styles.css">
+
+  <!-- ✅ Favicon -->
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
+  <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
+  <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
   
-  <!-- Mitigación FOUC: ocultar el cuerpo hasta que los estilos estén listos -->
+  
+
+
   <style>
-    body.preload-hidden { opacity: 0; }
+    body{background:linear-gradient(180deg,#f3f6f8 0%,#eef2f5 100%)}
+    :root{--azul:#1E405A;--turquesa:#1E8A95;--azul-claro:#3B82F6;--blanco:#ffffff;--accent:#FBBF24}
+    :root{--action-pickup: linear-gradient(90deg,var(--turquesa),#06b6d4); --action-loading: linear-gradient(90deg,#f97316,#fb923c); --action-deliver: linear-gradient(90deg,#10b981,#34d399); --action-finish: linear-gradient(90deg,#7c3aed,#8b5cf6);} 
+    .stat-card{color:#fff}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:0.75rem}
+    .table-header{padding:0.75rem 1rem;text-align:left;font-weight:600;color:#374151;background:#f9fafb}
+    /* Action buttons */
+    .btn-action{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border-radius:.75rem;color:#fff;font-weight:600;border:none;cursor:pointer;box-shadow:0 6px 18px rgba(2,6,23,0.08);transition:transform .08s ease,opacity .12s ease}
+    .btn-action:active{transform:translateY(1px)}
+    .btn-pickup{background:linear-gradient(90deg,#1E405A,#2D5A7B);color:#fff}
+    .btn-loading{background:linear-gradient(90deg,#FBBF24,#FCD34D);color:#1E405A;font-weight:700}
+    .btn-deliver{background:linear-gradient(90deg,#7C3AED,#A78BFA);color:#fff}
+    .btn-finish{background:linear-gradient(90deg,#10B981,#34D399);color:#fff}
+    .btn-retraso{background:linear-gradient(90deg,#F97316,#FB923C);color:#fff}
+    /* Map buttons vivid */
+    .map-btn-vivid{padding:.5rem .75rem;border-radius:.5rem;font-weight:600;color:#fff;box-shadow:0 6px 14px rgba(2,6,23,0.06)}
+    .map-btn-origin{background:linear-gradient(90deg,#06b6d4,#0ea5a6)}
+    .map-btn-dest{background:linear-gradient(90deg,#ef4444,#fb7185)}
+    .map-btn-route{background:linear-gradient(90deg,#3b82f6,#06b6d4);color:#fff}
+    /* Active job card polish */
+    #activeJobSection .bg-white{background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%)}
+    /* Palette accent adjustments */
+    .accent-text { color: var(--accent); }
+    .header-gradient { background: linear-gradient(90deg,var(--azul),var(--turquesa)); }
+    #activeJobInfo h4{color:var(--azul)}
+      .underline-accent { text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.6); } 50% { box-shadow: 0 0 30px rgba(251, 191, 36, 0.9); } }
+    /* Sidebar refinements */
+    aside#sidebar { box-shadow: 0 8px 24px rgba(2,6,23,0.06); border-right: 1px solid rgba(15,23,42,0.04); }
+    aside#sidebar .sidebar-header { align-items: center; gap: 0.75rem; }
+    aside#sidebar{background:var(--azul)}
+    aside#sidebar .sidebar-header{background:var(--azul) !important}
+    aside#sidebar nav{background:var(--azul)}
+    aside#sidebar nav a.active, aside#sidebar nav a[aria-current="page"] { background: #facc15; color: #0C375D; box-shadow: inset 4px 0 0 rgba(255,255,255,0.06); }
+    aside#sidebar nav a { transition: all 0.15s ease; border-radius: 0.5rem; color:#fff }
+    aside#sidebar nav a:hover { transform: translateX(4px); background: #facc15; color:#0C375D }
+    .sidebar-logo { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }
+    /* Modal styles */
+    #orderModal .card { box-shadow: none; border: 0; }
+    #orderModal { opacity: 0; transform: scale(.98); transition: opacity .25s ease, transform .25s ease; }
+    #orderModal.open { opacity: 1; transform: scale(1); }
   </style>
-  <script>
-    document.addEventListener('DOMContentLoaded', function(){
-      try { document.body.classList.remove('preload-hidden'); } catch(_){}
-      try { if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons(); } catch(_){}
-    });
-  </script>
 </head>
-<body class="bg-gray-50 preload-hidden">
-  <!-- Skip link for keyboard users -->
-  <a href="#mainContent" class="sr-only">Saltar al contenido</a>
-  <!-- Mobile Header (Estandarizado como en rendimiento.html) -->
-  <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
-    <div class="flex items-center justify-between px-4 py-3">
-      <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/90 backdrop-blur shadow ring-1 ring-[rgba(30,138,149,0.35)] hover:ring-[rgba(30,138,149,0.6)] hover:bg-white transition flex items-center gap-2">
-        <i data-lucide="menu" class="w-6 h-6" style="color: var(--color-primario);"></i>
-      </button>
-      <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm" style="background-color: var(--color-secundario);">
-          LLO
-        </div>
-        <span class="font-semibold text-gray-800">Panel Colaborador</span>
-      </div>
-      <div class="w-10"></div> <!-- Spacer for centering -->
-    </div>
-    
-  </header>
-  
+<body class="bg-gray-100">
 
-  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
-  <div id="sidebarHoverHandle" class="sidebar-hover-handle"></div>
+  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden">
+    <i data-lucide="menu" class="w-6 h-6 text-gray-800"></i>
+  </button>
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden md:hidden"></div>
 
-  <aside id="collabSidebar" class="shadow-2xl h-screen flex flex-col z-50" style="background-color: var(--color-primario);" role="navigation" aria-label="Menú del colaborador">
-    <!-- Header del Sidebar -->
-    <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-3">
-          <div id="sidebarLogo" class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: var(--color-secundario);">
-            LLO
-          </div>
-          <div>
-            <h2 class="text-lg font-bold text-white">Colaborador</h2>
-            <p class="text-xs" style="color: var(--color-secundario);">Panel de Control</p>
-          </div>
-        </div>
-          <button id="sidebarCollapseBtn" class="flex items-center justify-center w-9 h-9 rounded-xl bg-gray-200 ring-1 ring-gray-300 hover:bg-gray-300 hover:ring-gray-400 transition-all duration-200 group" aria-expanded="true" aria-controls="collabSidebar" aria-label="Colapsar menú" title="Colapsar menú">
-            <i data-lucide="panel-left-close" class="w-4 h-4 text-gray-700 transition-transform duration-300 group-hover:rotate-[-15deg] group-hover:scale-90"></i>
-          </button>
-      </div>
-      
-      <!-- Perfil del Colaborador -->
-      <div class="rounded-xl p-4" style="background-color: rgba(30, 138, 149, 0.1); border: 1px solid rgba(30, 138, 149, 0.3);" id="profile-card">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar" style="background-color: #1E8A95;">
-            C
-          </div>
-          <div class="flex-1 min-w-0">
-            <h3 class="text-white font-semibold text-sm truncate" id="collabName">Colaborador</h3>
-            <p class="text-xs truncate" id="collabEmail" style="color: #1E8A95;"></p>
-          </div>
-          <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="En línea"></div>
-        </div>
-        
-        <!-- Estadísticas rápidas -->
-        <div class="mt-3 pt-3" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
-          <div class="grid grid-cols-2 gap-3 text-center">
-            <div>
-              <div class="text-lg font-bold text-white" id="collabActiveJobs">0</div>
-              <div class="text-xs" style="color: #1E8A95;">Activos</div>
-            </div>
-            <div>
-              <div class="text-lg font-bold" id="collabCompletedJobs" style="color: #1E8A95;">0</div>
-              <div class="text-xs" style="color: #1E8A95;">Completados</div>
-            </div>
-          </div>
+  <aside id="sidebar" class="fixed top-0 left-0 h-screen w-64 z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
+    <div class="sidebar-header flex items-center justify-center py-6 px-4" style="background:var(--azul)">
+      <div class="sidebar-logo w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background:var(--turquesa)">LLO</div>
+      <div class="ml-3">
+        <h2 class="text-xl font-bold text-white sidebar-text">Colaborador</h2>
+        <div id="collabInfo" class="mt-1">
+          <div id="collabName" class="accent-text font-semibold text-sm">Usuario</div>
+          <div id="collabEmail" class="text-white text-xs opacity-80">email@ejemplo.com</div>
         </div>
       </div>
     </div>
-    
-    <!-- Navegación -->
-    <nav class="flex-1 p-6" role="navigation" aria-label="Navegación principal">
-      <div class="space-y-2">
-        <a href="#" id="sidebar-activos-btn" aria-current="page" class="flex items-center gap-3 p-3 rounded-xl text-white transition-all duration-200 group" style="background-color: #1E8A95;">
-          <i data-lucide="list" class="w-5 h-5 text-white"></i>
-          <span class="font-medium">Trabajos Activos</span>
-          <span class="ml-auto text-white text-xs px-2 py-1 rounded-full" id="pendingRequestsCount" style="background-color: #1E405A;">0</span>
-        </a>
-        
-        <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
-          <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
-          <span class="font-medium">Rendimiento</span>
-        </a>
 
-        <!-- Botón de cambio de tema y cerrar sesión -->
-        <div class="pt-4 mt-4" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
-          <button id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar tema" class="w-full flex items-center justify-between gap-3 p-3 mt-2 rounded-xl text-white bg-[rgba(30,138,149,0.25)] hover:bg-[rgba(30,138,149,0.45)] ring-1 ring-[rgba(255,255,255,0.2)] hover:ring-[rgba(255,255,255,0.35)] transition-all duration-200 group">
-              <div class="flex items-center gap-2">
-                <i data-lucide="sun" class="w-4 h-4 dark-icon"></i>
-                <i data-lucide="moon" class="w-4 h-4 light-icon hidden"></i>
-                <span class="font-medium text-sm theme-text">Modo oscuro</span>
-              </div>
-              <span class="text-xs px-2 py-1 rounded-full bg-white/10">Tema</span>
-          </button>
-          <button id="logoutBtn" type="button" aria-label="Cerrar sesión" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
-              <i data-lucide="log-out" class="w-4 h-4"></i>
-              <span class="font-medium text-sm">Cerrar Sesión</span>
-          </button>
+    <div id="roleWarning" class="mb-4 hidden">
+      <div class="p-4 rounded-lg bg-yellow-100 text-yellow-800 border border-yellow-200">
+        <div class="flex items-center gap-2">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          <span>Tu rol no es colaborador. Acceso limitado.</span>
         </div>
       </div>
+    </div>
+    <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
+      <a href="panel-colaborador.html" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50 active"><i data-lucide="user" class="w-5 h-5"></i> <span class="sidebar-text">Mi Panel</span></a>
+      <a href="rendimiento.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="bar-chart-3" class="w-5 h-5"></i> <span class="sidebar-text">Rendimiento</span></a>
     </nav>
+    <div class="sidebar-footer p-4" style="background:var(--azul)">
+      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm border">
+        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
+        <span class="sidebar-text font-medium">Colapsar</span>
+      </button>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm border">
+        <i data-lucide="log-out" class="w-5 h-5"></i>
+        <span class="sidebar-text font-medium">Cerrar Sesión</span>
+      </button>
+    </div>
   </aside>
 
-  <!-- Sidebar and main are siblings for predictable layout and easier CSS control -->
-  <main id="mainContent" class="p-4 md:p-8 transition-all duration-300 relative">
-      <!-- Botón para abrir el sidebar en escritorio cuando está colapsado -->
-      <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="p-2 rounded-none bg-[#117D8B] ring-1 ring-white text-white hover:bg-[#1499a7] transition-colors hidden absolute top-4 left-4 z-40 group" title="Abrir menú">
-        <i data-lucide="menu" class="w-6 h-6 text-white transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110"></i>
-      </button>
+  <main id="main-content" class="main-content p-8 space-y-8 md:ml-64">
 
-      
+    <section class="card p-6">
+      <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--turquesa)">
+        <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="inbox" class="w-5 h-5 text-blue-600"></i></span>
+        Solicitudes Pendientes
+      </h2>
+      <div id="pendingOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </section>
 
-      <!-- Paneles de Contenido -->
-      <div>
-        <!-- Panel de Trabajos Activos (Visible por defecto) -->
-        <div id="panel-activos" role="tabpanel" aria-labelledby="tab-activos">
-          <!-- Indicador de Carga -->
-          <div id="loadingIndicator" class="text-center py-10">
-            <div class="spinner"></div>
-            <p class="text-gray-500 mt-2">Buscando trabajos activos y pendientes...</p>
-          </div>
-          <!-- Contenedor de tarjetas: grid responsive para mostrar varias tarjetas por fila -->
-          <div id="ordersCardContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden"></div>
-          <div id="pendingSection" class="mt-8">
-            <h2 class="text-lg font-semibold text-gray-800 mb-3">Solicitudes pendientes</h2>
-            <div id="pendingCardContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
-          </div>
-        </div>
-      </div>
-    
-    
-    <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada y funcional -->
-    <div id="activeJobSection" class="mt-8 hidden animate-fade-in" role="region" aria-labelledby="active-job-heading">
-      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-        <!-- Header de la tarjeta de trabajo activo -->
-        <div class="p-5 bg-gray-50/70 border-b border-gray-200/80">
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <h2 id="active-job-heading" class="text-xl font-bold text-gray-800 flex items-center gap-3">
-              <i data-lucide="briefcase" class="w-6 h-6 text-blue-600"></i>
-              <span>Trabajo Activo</span>
-            </h2>
-            <div class="flex items-center gap-3">
-              <span id="activeJobStatus" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">En camino a recoger</span>
-              <button id="cancelActiveJobBtn" type="button" class="p-2 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-full transition-colors" title="Cancelar trabajo activo" aria-label="Cancelar trabajo activo">
-                <i data-lucide="x-circle" class="w-5 h-5"></i>
-              </button>
+    <section class="card p-6">
+      <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--azul)">
+        <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="list-check" class="w-5 h-5 text-blue-600"></i></span>
+        Trabajo Activo
+      </h2>
+            <div id="assignedOrdersWrapper">
+              <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             </div>
-          </div>
-          <!-- Botones de acción para el trabajo activo -->
-          <div id="activeJobActionButtons" class="mt-4 flex flex-wrap gap-2">
-            <!-- Los botones se generan dinámicamente desde JS para un mejor control -->
-          </div>
-        </div>
-
-        <!-- Contenido principal de la tarjeta -->
-        <div class="p-5 grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <!-- Columna de Información (ocupa 3/5) -->
-          <div id="activeJobInfo" class="lg:col-span-3 space-y-4">
-            <!-- La información detallada del trabajo se inyectará aquí -->
-          </div>
-
-          <!-- Columna derecha compacta: Acciones de mapa y fotos -->
-          <div class="lg:col-span-2 space-y-6">
-            <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-              <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <i data-lucide="map-pin" class="w-5 h-5 text-blue-600"></i>
-                Acciones de Mapa
-              </h3>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button id="viewOriginBtn" type="button" class="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition">
-                  <i data-lucide="map-pin" class="w-5 h-5"></i>
-                  <span>Origen</span>
-                </button>
-                <button id="viewDestinationBtn" type="button" class="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition">
-                  <i data-lucide="flag" class="w-5 h-5"></i>
-                  <span>Destino</span>
-                </button>
-                <button id="viewRouteBtn" type="button" class="sm:col-span-2 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition">
-                  <i data-lucide="route" class="w-5 h-5"></i>
-                  <span>Ver Ruta Completa</span>
+      <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada y funcional CON COLORES VIBRANTES -->
+      <div id="activeJobSection" class="mt-8 hidden" role="region" aria-labelledby="active-job-heading">
+        <div class="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+          <!-- Header con degradado y estado -->
+          <div class="p-6 header-gradient border-b-4" style="border-color: rgba(30,64,90,0.9)">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div class="flex items-center gap-3">
+                <div class="p-3 rounded-xl" style="background: rgba(251, 191, 36, 0.2); box-shadow: 0 0 20px rgba(251, 191, 36, 0.6); animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;">
+                  <i data-lucide="briefcase" class="w-7 h-7" style="color: #FBBF24; filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.8)); animation: pulse 2s ease-in-out infinite;"></i>
+                </div>
+                <div>
+                  <h2 id="active-job-heading" class="text-2xl font-bold text-white">Trabajo Activo</h2>
+                  <p class="text-blue-100 text-sm">Monitorea tu progreso en tiempo real</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span id="activeJobStatus" class="px-4 py-2 text-xs font-bold rounded-full bg-white text-blue-700 shadow-lg">—</span>
+                <button id="cancelActiveJobBtn" type="button" class="p-2 text-white hover:bg-red-500 bg-red-400 rounded-full transition-all transform hover:scale-110 active:scale-95" title="Cancelar trabajo activo" aria-label="Cancelar trabajo activo">
+                  <i data-lucide="x-circle" class="w-5 h-5"></i>
                 </button>
               </div>
             </div>
-            <div id="activeJobMap" class="h-56 rounded-xl border border-gray-200 overflow-hidden shadow-inner"></div>
-            <div id="activeJobMapHint" class="mt-2 text-xs text-gray-500 text-center"></div>
-            <!-- Evidencia Fotográfica -->
-            <div class="border-t border-gray-200 pt-4">
-              <h3 class="text-md font-semibold text-gray-800 mb-3">Evidencia Fotográfica</h3>
-              <div class="grid grid-cols-3 gap-3" id="photoGallery">
-                <!-- Las fotos se cargarán dinámicamente -->
-              </div>
-              <label for="photoUpload" class="mt-3 w-full text-center cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 px-4 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 flex items-center justify-center gap-2 transition-colors">
-                <i data-lucide="camera" class="w-5 h-5"></i><span>Añadir Foto</span>
-              </label>
-              <input type="file" id="photoUpload" class="hidden" accept="image/*" capture="environment">
+          </div>
+
+          <!-- Botones de Acción con Colores Vibrantes -->
+          <div class="p-6 bg-gradient-to-b from-gray-50 to-white border-b border-gray-200">
+            <div id="activeJobActionButtons" class="flex flex-wrap gap-3 justify-center sm:justify-start">
+              <!-- Los botones se generan dinámicamente en JS -->
             </div>
+          </div>
+
+          <!-- Contenido Principal: Info + Mapa + Evidencia -->
+          <div class="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- COLUMNA 1: Información de la Orden (2 columnas en desktop) -->
+            <div id="activeJobInfo" class="lg:col-span-2 space-y-6">
+              
+              <!-- Tarjeta: Detalles del Cliente y Colaborador -->
+              <div class="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-5 border border-gray-200 shadow-sm">
+                <h3 class="text-sm font-bold text-gray-600 uppercase mb-4 flex items-center gap-2">
+                  <i data-lucide="user-check" class="w-4 h-4 text-blue-600"></i>
+                  Información General
+                </h3>
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between pb-3 border-b border-gray-300">
+                    <span class="text-gray-700 font-semibold">ID Orden:</span>
+                    <span id="activeJobOrderId" class="text-lg font-bold text-blue-700 underline underline-accent">#—</span>
+                  </div>
+                  <div class="flex items-center justify-between pb-3 border-b border-gray-300">
+                    <span class="text-gray-700 font-semibold">Colaborador:</span>
+                    <span id="activeJobCollab" class="text-lg font-bold accent-text underline underline-accent">—</span>
+                  </div>
+                  <div class="flex items-center justify-between pb-3 border-b border-gray-300">
+                    <span class="text-gray-700 font-semibold">Cliente:</span>
+                    <span id="activeJobClient" class="text-gray-900 font-semibold">—</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-gray-700 font-semibold">Teléfono:</span>
+                    <span id="activeJobPhone" class="text-gray-900 font-mono text-sm">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tarjeta: Detalles de la Ruta y Servicio -->
+              <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border border-green-200 shadow-sm">
+                <h3 class="text-sm font-bold text-green-700 uppercase mb-4 flex items-center gap-2">
+                  <i data-lucide="map-pin" class="w-4 h-4 text-green-600"></i>
+                  Ruta y Servicio
+                </h3>
+                <div class="space-y-3">
+                  <div>
+                    <p class="text-xs text-green-700 font-semibold mb-1">ORIGEN:</p>
+                    <p id="activeJobPickup" class="text-gray-900 font-semibold text-sm">—</p>
+                  </div>
+                  <div class="flex justify-center py-2">
+                    <div class="flex flex-col items-center gap-1">
+                      <div class="w-1 h-8 bg-gradient-to-b from-green-500 to-blue-500"></div>
+                      <i data-lucide="arrow-down" class="w-5 h-5 text-blue-500"></i>
+                      <div class="w-1 h-8 bg-gradient-to-b from-blue-500 to-red-500"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-xs text-red-700 font-semibold mb-1">DESTINO:</p>
+                    <p id="activeJobDelivery" class="text-gray-900 font-semibold text-sm">—</p>
+                  </div>
+                  <div class="pt-3 border-t border-green-200">
+                    <p class="text-xs text-gray-600 font-semibold mb-1">SERVICIO:</p>
+                    <p id="activeJobService" class="text-gray-900 font-semibold">—</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-600 font-semibold mb-1">VEHÍCULO:</p>
+                    <p id="activeJobVehicle" class="text-gray-900 font-semibold text-sm">—</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tarjeta: Notas y Observaciones -->
+              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-5 border border-amber-200 shadow-sm">
+                <h3 class="text-sm font-bold text-amber-700 uppercase mb-3 flex items-center gap-2">
+                  <i data-lucide="sticky-note" class="w-4 h-4 text-amber-600"></i>
+                  Notas y Observaciones
+                </h3>
+                <p id="activeJobNotes" class="text-gray-800 text-sm leading-relaxed">—</p>
+              </div>
+
+            </div>
+
+            <!-- COLUMNA 2: Mapa y Evidencia (1 columna en desktop) -->
+            <div class="lg:col-span-1 space-y-6">
+              
+              <!-- Tarjeta: Mapa Interactivo -->
+              <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div id="activeJobMap" class="h-64 w-full bg-gradient-to-br from-gray-300 to-gray-400"></div>
+                <div class="p-4 space-y-3">
+                  <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <i data-lucide="navigation" class="w-4 h-4 text-blue-600"></i>
+                    Navegación GPS
+                  </h3>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button id="viewOriginBtn" type="button" class="map-btn-vivid map-btn-origin flex items-center justify-center gap-1.5 text-xs font-bold py-2 rounded-lg hover:shadow-lg transform hover:scale-105 active:scale-95 transition-all">
+                      <i data-lucide="map-pin" class="w-4 h-4"></i>
+                      <span>Origen</span>
+                    </button>
+                    <button id="viewDestinationBtn" type="button" class="map-btn-vivid map-btn-dest flex items-center justify-center gap-1.5 text-xs font-bold py-2 rounded-lg hover:shadow-lg transform hover:scale-105 active:scale-95 transition-all">
+                      <i data-lucide="flag" class="w-4 h-4"></i>
+                      <span>Destino</span>
+                    </button>
+                    <button id="viewRouteBtn" type="button" class="col-span-2 map-btn-vivid map-btn-route flex items-center justify-center gap-1.5 text-xs font-bold py-2 rounded-lg hover:shadow-lg transform hover:scale-105 active:scale-95 transition-all">
+                      <i data-lucide="route" class="w-4 h-4"></i>
+                      <span>Ver Ruta Completa</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tarjeta: Evidencia Fotográfica -->
+              <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple-200">
+                  <h3 class="text-sm font-bold text-purple-800 flex items-center gap-2">
+                    <i data-lucide="camera" class="w-4 h-4 text-purple-600"></i>
+                    Evidencia Fotográfica
+                  </h3>
+                </div>
+                <div class="p-4 space-y-3">
+                  <div class="grid grid-cols-3 gap-2" id="photoGallery"></div>
+                  <label for="photoUpload" class="w-full text-center cursor-pointer bg-gradient-to-r from-purple-100 to-pink-100 hover:from-purple-200 hover:to-pink-200 text-purple-800 font-semibold py-3 px-4 rounded-lg border-2 border-dashed border-purple-300 hover:border-purple-400 flex items-center justify-center gap-2 transition-all transform hover:scale-105 active:scale-95">
+                    <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                    <span>Añadir Foto</span>
+                  </label>
+                  <input type="file" id="photoUpload" class="hidden" accept="image/*" capture="environment" multiple>
+                  <div id="uploadProgress" class="hidden space-y-2">
+                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                      <div id="evidenceProgressBar" class="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p id="evidenceProgressText" class="text-xs text-center text-gray-600 font-semibold">0%</p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
           </div>
         </div>
       </div>
-    </div>
+    </section>
+  </main>
 
-    <div id="acceptModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
-      <!-- ... (modal sin cambios) ... -->
-      <div class="bg-white w-full max-w-md rounded-lg p-6 shadow-xl">
-        <div class="flex items-center gap-2 mb-4">
-          <i data-lucide="help-circle" class="w-5 h-5 text-blue-600"></i>
-          <h3 class="text-lg font-semibold">¿Deseas trabajar esta solicitud?</h3>
-        </div>
-        <div id="acceptModalBody" class="text-gray-600 text-sm mb-6"></div>
-        <div class="flex justify-end gap-3">
-          <button id="cancelAcceptBtn" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300">Cancelar</button>
-          <button id="confirmAcceptBtn" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Aceptar</button>
-        </div>
+  <!-- Order Details Modal -->
+  <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl w-full max-w-2xl overflow-hidden">
+      <div class="flex items-center justify-between p-4 border-b">
+        <h3 id="orderModalTitle" class="font-bold text-lg">Detalle de la Orden</h3>
+        <button id="orderModalClose" class="p-2 rounded hover:bg-gray-100"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="orderModalBody" class="p-4 text-sm text-gray-700"></div>
+      <div class="p-4 border-t flex justify-end gap-2">
+        <button id="orderModalAssign" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm">Asignar a mí</button>
+        <button id="orderModalStart" class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm">Iniciar</button>
       </div>
     </div>
-    </main>
+  </div>
 
-  <!-- Dependencias locales para evitar Tracking Prevention en desarrollo -->
-  <!-- Supabase UMD no es necesario si ya se usa js/supabase-config.js que refiere a window.supabase (inyectado en otra parte); si lo necesitas, copia el UMD a vendor/ y referéncialo -->
-  
-  <!-- Scripts de la aplicación (ordenados y sin duplicados) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-  <script src="js/supabase-config.js?v=1.2" defer></script>
-  <script src="js/notifications.js?v=1.2" defer></script>
-  
-  <script src="js/theme.js?v=1.2" defer></script>
-  
-  <script src="js/order-manager.js?v=1.2" defer></script>
-  <script src="js/push-notifications.js?v=1.2" defer></script>
-  <script src="js/panel-colaborador.js?v=1.2" defer></script>
-  <script src="js/sidebar-collab.js?v=1.2" defer></script>
-  <script src="js/pwa.js?v=1.2" defer></script>
-  
-  <!--
-    ================================================================================
-    IMPORTANTE: Pega tu clave de API de Google Maps aquí.
-    Reemplaza "TU_API_KEY_AQUI" con tu clave real para que el mapa funcione.
-    ================================================================================
-  -->
-  <script>
-    // Carga dinámica de Google Maps para evitar InvalidKeyMapError.
-    (function(){
-      const keyFromConfig = window.tlcMapsKey || (window.tlcConfig && window.tlcConfig.googleMapsKey);
-      const keyFromStorage = localStorage.getItem('tlc_google_maps_key');
-      const apiKey = keyFromConfig || keyFromStorage;
-      if (apiKey) {
-        const s = document.createElement('script');
-        s.async = true;
-        s.defer = true;
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMaps`;
-        document.head.appendChild(s);
-      } else {
-        console.warn('Google Maps no se cargó: falta API key. Se usará Leaflet como alternativa.');
-        window.googleMapsReady = false;
-        // Cargar Leaflet CSS/JS como fallback sin clave
-        const lcss = document.createElement('link');
-        lcss.rel = 'stylesheet';
-        lcss.href = 'vendor/leaflet.css';
-        document.head.appendChild(lcss);
-        const ljs = document.createElement('script');
-        ljs.src = 'vendor/leaflet.js';
-        ljs.onload = () => { window.leafletReady = true; try { initActiveJobMap(); } catch(_){ } };
-        document.head.appendChild(ljs);
-        try {
-          const hint = document.getElementById('activeJobMapHint');
-          if (hint) hint.textContent = 'Mapa básico activado sin clave (Leaflet).';
-        } catch(_){}
-      }
-    })();
-  </script>
+  <div id="acceptModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl w-full max-w-xl overflow-hidden">
+      <div class="flex items-center justify-between p-4 border-b">
+        <h3 class="font-bold text-lg">Confirmar aceptación</h3>
+        <button id="acceptModalClose" class="p-2 rounded hover:bg-gray-100"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="acceptModalBody" class="p-4 text-sm text-gray-700"></div>
+      <div class="p-4 border-t flex justify-end gap-2">
+        <button id="acceptCancelBtn" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm">Cancelar</button>
+        <button id="acceptConfirmBtn" class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm">Aceptar</button>
+      </div>
+    </div>
+  </div>
 
-  <script>
-    // initGoogleMaps is the callback used by the Google Maps script.
-    function initGoogleMaps(){
-      // mark as ready so other scripts can safely call initActiveJobMap/updateActiveJobMap
-      window.googleMapsReady = true;
-      // create map if activeJobSection is visible
-      try { if (typeof initActiveJobMap === 'function') initActiveJobMap(); } catch(e) { console.warn('initActiveJobMap error', e); }
-    }
-
-    // Inicializa el mapa de trabajo activo (Google Maps o Leaflet como fallback)
-    function initActiveJobMap(){
-      const mapContainer = document.getElementById('activeJobMap');
-      if (!mapContainer) return;
-      try {
-        if (window.googleMapsReady) {
-          if (window.activeJobGMap) return;
-          const center = { lat: 19.432608, lng: -99.133209 };
-          window.activeJobGMap = new google.maps.Map(mapContainer, {
-            center,
-            zoom: 12,
-            disableDefaultUI: true,
-          });
-          window.activeJobGMarkers = [];
-          window.activeJobGPolyline = null;
-        } else if (window.leafletReady) {
-          if (window.activeJobLMap) return;
-          window.activeJobLMap = L.map(mapContainer).setView([19.432608, -99.133209], 12);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-          }).addTo(window.activeJobLMap);
-          window.activeJobLMarkers = [];
-          window.activeJobLPolyline = null;
-        }
-      } catch (err) {
-        console.error('Error initializing map:', err);
-      }
-    }
-
-    // Actualiza el mapa con origen/destino o solo un punto objetivo (Google o Leaflet)
-    function updateActiveJobMap(origin, destination, targetLatLng){
-      if (window.googleMapsReady) {
-        initActiveJobMap();
-        const map = window.activeJobGMap;
-        if (!map) return;
-
-        // Limpiar elementos previos
-        if (window.activeJobGMarkers) {
-          window.activeJobGMarkers.forEach(m => m.setMap(null));
-          window.activeJobGMarkers = [];
-        }
-        if (window.activeJobGPolyline) {
-          window.activeJobGPolyline.setMap(null);
-          window.activeJobGPolyline = null;
-        }
-
-        try {
-          const bounds = new google.maps.LatLngBounds();
-          if (origin && destination) {
-            const o = new google.maps.LatLng(origin.lat, origin.lng);
-            const d = new google.maps.LatLng(destination.lat, destination.lng);
-            const markerO = new google.maps.Marker({ position: o, map, title: 'Origen' });
-            const markerD = new google.maps.Marker({ position: d, map, title: 'Destino' });
-            window.activeJobGMarkers.push(markerO, markerD);
-            window.activeJobGPolyline = new google.maps.Polyline({ path: [o, d], geodesic: true, strokeColor: '#2563eb', strokeWeight: 4 });
-            window.activeJobGPolyline.setMap(map);
-            bounds.extend(o);
-            bounds.extend(d);
-            map.fitBounds(bounds, 40);
-          } else if (targetLatLng) {
-            const t = new google.maps.LatLng(targetLatLng.lat, targetLatLng.lng);
-            const markerT = new google.maps.Marker({ position: t, map });
-            window.activeJobGMarkers.push(markerT);
-            map.setCenter(t);
-            map.setZoom(15);
-          }
-        } catch (err) {
-          console.error('Error updating Google Active Job Map:', err);
-        }
-      } else if (window.leafletReady) {
-        initActiveJobMap();
-        const map = window.activeJobLMap;
-        if (!map) return;
-
-        // Limpiar elementos previos
-        if (window.activeJobLMarkers) {
-          window.activeJobLMarkers.forEach(m => map.removeLayer(m));
-          window.activeJobLMarkers = [];
-        }
-        if (window.activeJobLPolyline) {
-          map.removeLayer(window.activeJobLPolyline);
-          window.activeJobLPolyline = null;
-        }
-
-        try {
-          if (origin && destination) {
-            const o = [origin.lat, origin.lng];
-            const d = [destination.lat, destination.lng];
-            const markerO = L.marker(o).addTo(map);
-            const markerD = L.marker(d).addTo(map);
-            window.activeJobLMarkers.push(markerO, markerD);
-            window.activeJobLPolyline = L.polyline([o, d], { color: '#2563eb', weight: 4 }).addTo(map);
-            const bounds = L.latLngBounds([o, d]);
-            map.fitBounds(bounds, { padding: [40, 40] });
-          } else if (targetLatLng) {
-            const t = [targetLatLng.lat, targetLatLng.lng];
-            const markerT = L.marker(t).addTo(map);
-            window.activeJobLMarkers.push(markerT);
-            map.setView(t, 15);
-          }
-        } catch (err) {
-          console.error('Error updating Leaflet Active Job Map:', err);
-        }
-      } else {
-        // Aún no listo
-        return;
-      }
-    }
-
-    // Los botones de ruta se gestionan desde panel-colaborador.js, donde se consulta Supabase
-    // para obtener las coordenadas y direcciones del trabajo activo.
-
-  </script>
-
+  <script src="vendor/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/order-manager.js"></script>
+  <script src="js/panel-colaborador.js"></script>
+  <script>if(window.lucide&&lucide.createIcons){lucide.createIcons();}</script>
 </body>
 </html>

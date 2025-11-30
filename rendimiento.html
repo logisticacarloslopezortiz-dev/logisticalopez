@@ -1,373 +1,133 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Rendimiento - TLC</title>
-    <!-- ✅ Favicon -->
-    <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
-    <link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
-    <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
-    <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>     
-    
-    <link rel="stylesheet" href="css/tailwind.min.css?v=1.2">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="css/collab-panel-styles.css?v=1.2">
-    <script src="vendor/lucide.min.js?v=1.2" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body.preload-hidden { opacity: 0; }
-        body { font-family: 'Inter', sans-serif; }
-        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .card-hover { transition: all 0.3s ease; }
-        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        .metric-card { background-color: #1E405A; }
-        .chart-container { position: relative; height: 300px; }
-        .progress-ring { transform: rotate(-90deg); }
-        .progress-ring-circle { transition: stroke-dashoffset 0.35s; transform-origin: 50% 50%; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rendimiento del Colaborador</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="css/admin-panel-styles.css">
+  <style>
+    body{background:linear-gradient(180deg,#f3f6f8 0%,#eef2f5 100%)}
+    :root{--azul:#0C375D;--turquesa:#117D8B;--azul-claro:#3B82F6;--blanco:#ffffff}
+    .stat-card{color:#fff}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:0.75rem}
+    aside#sidebar{background:var(--azul)}
+    aside#sidebar .sidebar-header{background:var(--azul) !important}
+    aside#sidebar nav{background:var(--azul)}
+    aside#sidebar nav a{color:#fff}
+    aside#sidebar nav a:hover{background:#facc15;color:#0C375D}
+    aside#sidebar nav a.active{background:#facc15;color:#0C375D}
+    .sidebar-footer{background:var(--azul) !important}
+    .sidebar-footer button{background:#0C375D;color:#fff}
+    .sidebar-footer button:hover{background:#facc15;color:#0C375D}
+  </style>
 </head>
-<body class="bg-gray-50 preload-hidden">
-    <script>
-      document.addEventListener('DOMContentLoaded', function(){
-        try { document.body.classList.remove('preload-hidden'); } catch(_){}
-        try { if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons(); } catch(_){}
-      });
-    </script>
-    <header class="md:hidden bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
-      <div class="flex items-center justify-between px-4 py-3">
-        <button id="mobileMenuBtn" type="button" aria-label="Abrir menú" aria-controls="collabSidebar" aria-expanded="false" class="p-2 rounded-xl bg-white/80 backdrop-blur shadow-sm ring-1 ring-gray-200 hover:bg-white hover:shadow transition">
-          <i data-lucide="menu" class="w-6 h-6" style="color: #1E405A;"></i>
-        </button>
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">LLO</div>
-          <span class="font-semibold text-gray-800">Rendimiento</span>
-        </div>
-        <div class="w-10"></div>
+<body class="bg-gray-100">
+
+  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden">
+    <i data-lucide="menu" class="w-6 h-6 text-gray-800"></i>
+  </button>
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden md:hidden"></div>
+
+  <aside id="sidebar" class="fixed top-0 left-0 h-screen w-64 z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
+    <div class="sidebar-header flex items-center justify-center py-6 px-4" style="background:var(--azul)">
+      <div class="sidebar-logo w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background:var(--turquesa)">LLO</div>
+      <h2 class="text-xl font-bold text-white ml-3 sidebar-text">Rendimiento</h2>
+    </div>
+    <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
+      <a href="panel-colaborador.html" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50"><i data-lucide="user" class="w-5 h-5"></i> <span class="sidebar-text">Mi Panel</span></a>
+      <a href="rendimiento.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="bar-chart-3" class="w-5 h-5"></i> <span class="sidebar-text">Rendimiento</span></a>
+    </nav>
+    <div class="sidebar-footer p-4">
+      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm border">
+        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
+        <span class="sidebar-text font-medium">Colapsar</span>
+      </button>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm border">
+        <i data-lucide="log-out" class="w-5 h-5"></i>
+        <span class="sidebar-text font-medium">Cerrar Sesión</span>
+      </button>
+    </div>
+  </aside>
+
+  <main id="main-content" class="main-content p-8 space-y-8 md:ml-64">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 mb-1">Rendimiento</h1>
+        <p class="text-gray-600">Tus métricas de trabajo y progreso.</p>
       </div>
-    </header>
-    <!-- Sidebar -->
-    <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300"></div>
-    <aside id="collabSidebar" class="shadow-2xl min-h-screen flex flex-col z-50" style="background-color: #1E405A;">
-        <!-- Header del Sidebar -->
-        <div class="p-6 border-b" style="border-color: rgba(30, 138, 149, 0.3);">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style="background-color: #1E8A95;">
-                        LLO
-                    </div>
-                    <div>
-                        <h2 class="text-lg font-bold text-white">Rendimiento</h2>
-                        <p class="text-xs" style="color: #1E8A95;">Panel de Colaborador</p>
-                    </div>
-                </div>
-                <button id="sidebarCollapseBtn" class="flex items-center justify-center w-9 h-9 rounded-xl bg-[#117D8B] text-white shadow hover:bg-[#1499a7] transition-all duration-200 group" aria-expanded="true" aria-controls="collabSidebar" title="Colapsar menú">
-                  <i data-lucide="panel-left-close" class="w-4 h-4 text-gray-700 transition-transform duration-300 group-hover:rotate-[-15deg] group-hover:scale-90"></i>
-                </button>
-            </div>
-            
-            <!-- Perfil del Colaborador -->
-            <div class="rounded-xl p-4" style="background-color: rgba(30, 138, 149, 0.1); border: 1px solid rgba(30, 138, 149, 0.3);">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm" id="collabAvatar" style="background-color: #1E8A95;">
-                        C
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-white font-semibold text-sm truncate" id="collabName">Cargando...</h3>
-                        <p class="text-xs truncate" id="collabEmail" style="color: #1E8A95;">-</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Navegación -->
-        <nav class="flex-1 p-6">
-            <div class="space-y-2">
-                <a href="panel-colaborador.html" class="flex items-center gap-3 p-3 rounded-xl text-white hover:bg-[#1E8A95] transition-all duration-200 group">
-                    <i data-lucide="list" class="w-5 h-5 text-white"></i>
-                    <span class="font-medium">Solicitudes</span>
-                </a>
-                
-                <a href="rendimiento.html" class="flex items-center gap-3 p-3 rounded-xl text-white transition-all duration-200 group" style="background-color: #1E8A95;">
-                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
-                    <span class="font-medium">Rendimiento</span>
-                </a>
-            </div>
-        </nav>
-        
-        <!-- Footer del Sidebar -->
-        <div class="p-6" style="border-top: 1px solid rgba(30, 138, 149, 0.3);">
-            <button id="logoutBtn" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[#117D8B] text-white shadow hover:bg-[#1499a7] transition-all duration-200 group">
-                <i data-lucide="log-out" class="w-4 h-4"></i>
-                <span class="font-medium">Cerrar Sesión</span>
-            </button>
-        </div>
-    </aside>
-
-    <!-- Main Content -->
-    <main id="mainContent" class="flex-1 p-8 relative">
-        <button id="desktopMenuBtn" type="button" aria-label="Abrir menú" class="px-3 py-2 rounded-xl bg-[#117D8B] text-white shadow ring-1 ring-white/50 hover:bg-[#1499a7] transition-colors hidden absolute top-4 left-4 z-40 group" title="Abrir menú">
-          <i data-lucide="menu" class="w-6 h-6 text-white transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110"></i>
-        </button>
-        <!-- Métricas Principales -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div class="metric-card text-white p-6 rounded-xl card-hover">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <p class="text-sm" style="color: #1E8A95;">Solicitudes Completadas</p>
-                        <p class="text-3xl font-bold" id="completedCount">0</p>
-                    </div>
-                    <i data-lucide="check-circle" class="w-12 h-12" style="color: #1E8A95;"></i>
-                </div>
-            </div>
-            
-            <div class="metric-card text-white p-6 rounded-xl card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm" style="color: #1E8A95;">Trabajos Activos</p>
-                        <p class="text-3xl font-bold" id="activeCount">0</p>
-                    </div>
-                    <i data-lucide="truck" class="w-12 h-12" style="color: #1E8A95;"></i>
-                </div>
-            </div>
-            
-            <div class="metric-card text-white p-6 rounded-xl card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm" style="color: #1E8A95;">Tasa de Éxito</p>
-                        <p class="text-3xl font-bold" id="successRate">0%</p>
-                    </div>
-                    <i data-lucide="trending-up" class="w-12 h-12" style="color: #1E8A95;"></i>
-                </div>
-            </div>
-            
-            <div class="metric-card text-white p-6 rounded-xl card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm" style="color: #1E8A95;">Tiempo Promedio</p>
-                        <p class="text-3xl font-bold" id="avgTime">0h</p>
-                    </div>
-                    <i data-lucide="clock" class="w-12 h-12" style="color: #1E8A95;"></i>
-                </div>
-            </div>
-        </div>
-
-        <!-- Gráficos -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <!-- Gráfico de Rendimiento Semanal -->
-            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <i data-lucide="bar-chart-3" class="w-5 h-5 mr-2 text-blue-600"></i>
-                    Rendimiento Semanal
-                </h3>
-                <div class="chart-container">
-                    <canvas id="weeklyChart"></canvas>
-                </div>
-            </div>
-
-            <!-- Gráfico de Distribución de Servicios -->
-            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <i data-lucide="pie-chart" class="w-5 h-5 mr-2 text-green-600"></i>
-                    Distribución de Servicios
-                </h3>
-                <div class="chart-container">
-                    <canvas id="servicesChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Progreso Circular y Estadísticas Detalladas -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            <!-- Progreso Circular -->
-            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <i data-lucide="target" class="w-5 h-5 mr-2 text-purple-600"></i>
-                    Meta Mensual
-                </h3>
-                <div class="flex items-center justify-center">
-                    <div class="relative w-32 h-32">
-                        <svg class="progress-ring w-32 h-32">
-                            <circle class="progress-ring-circle stroke-gray-200" stroke-width="8" fill="transparent" r="56" cx="64" cy="64"/>
-                            <circle class="progress-ring-circle stroke-purple-600" stroke-width="8" fill="transparent" r="56" cx="64" cy="64" id="progressCircle"/>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <span class="text-2xl font-bold text-gray-800" id="progressPercent">0%</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="text-center mt-4">
-                    <p class="text-sm text-gray-600">Meta: <span id="monthlyGoal">50</span> solicitudes</p>
-                    <p class="text-sm text-gray-600">Completadas: <span id="monthlyCompleted">0</span></p>
-                </div>
-            </div>
-
-            <!-- Estadísticas por Tipo de Vehículo -->
-            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <i data-lucide="truck" class="w-5 h-5 mr-2 text-orange-600"></i>
-                    Por Tipo de Vehículo
-                </h3>
-                <div class="space-y-3" id="vehicleStats">
-                    <!-- Se llenará dinámicamente -->
-                </div>
-            </div>
-
-            <!-- Horarios de Mayor Actividad -->
-            <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <i data-lucide="clock" class="w-5 h-5 mr-2 text-indigo-600"></i>
-                    Horarios Activos
-                </h3>
-                <div class="space-y-3" id="timeStats">
-                    <!-- Se llenará dinámicamente -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Historial Reciente -->
-        <div class="bg-white rounded-xl shadow-lg card-hover">
-            <div class="p-6 border-b border-gray-200">
-                <!-- ✅ CORRECCIÓN: Estructura HTML reparada y responsiva -->
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                        <i data-lucide="history" class="w-5 h-5 mr-2 text-gray-600"></i>
-                        Historial Reciente
-                    </h3>
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
-                        <input id="historySearch" type="text" placeholder="Buscar servicio..." aria-label="Buscar en historial" class="w-full sm:w-64 text-sm px-3 py-2 border rounded" />
-                        <select id="historyStatusFilter" aria-label="Filtrar por estado" class="text-sm px-3 py-2 border rounded">
-                            <option value="">Todos</option>
-                            <option value="Completada">Completados</option>
-                            <option value="Activo">Activos</option>
-                            <option value="Cancelada">Cancelados</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <div class="p-6">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full w-full">
-                        <thead>
-                            <tr class="text-left text-sm text-gray-600 border-b">
-                                <th class="pb-3 px-4 whitespace-nowrap">Fecha</th>
-                                <th id="thService" class="pb-3 px-4 whitespace-nowrap hidden sm:table-cell">Servicio</th>
-                                <th id="thVehicle" class="pb-3 px-4 whitespace-nowrap hidden md:table-cell">Vehículo</th>
-                                <th class="pb-3 px-4 whitespace-nowrap">Estado</th>
-                                <th id="thTime" class="pb-3 px-4 whitespace-nowrap hidden sm:table-cell">Tiempo</th>
-                            </tr>
-                        </thead>
-                        <tbody id="recentHistory" class="text-sm">
-                            <!-- Se llenará dinámicamente -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Modal de Horarios -->
-    <div id="scheduleModal" class="fixed inset-0 z-50 hidden">
-        <div class="absolute inset-0 bg-black bg-opacity-50"></div>
-        <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-2xl flex items-center justify-center">
-            <div class="w-full bg-white rounded-xl shadow-2xl p-6 animate-fade-in-up">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-semibold text-gray-900">Configurar Horario</h3>
-                    <button id="closeScheduleModal" class="text-gray-500 hover:text-gray-700" aria-label="Cerrar">
-                        <i data-lucide="x" class="w-6 h-6"></i>
-                    </button>
-                </div>
-                
-                <form id="scheduleForm" class="space-y-4">
-                    <!-- Horario de Entrada y Salida -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Hora de Entrada</label>
-                            <input type="time" name="startTime" class="form-input w-full" required>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Hora de Salida</label>
-                            <input type="time" name="endTime" class="form-input w-full" required>
-                        </div>
-                    </div>
-                    
-                    <!-- Días Laborables -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Días Laborables</label>
-                        <div class="grid grid-cols-4 gap-2">
-                            <label class="flex items-center space-x-2">
-                                <input type="checkbox" name="workDays" value="Lun" class="form-checkbox">
-                                <span class="text-sm">Lun</span>
-                            </label>
-                            <label class="flex items-center space-x-2">
-                                <input type="checkbox" name="workDays" value="Mar" class="form-checkbox">
-                                <span class="text-sm">Mar</span>
-                            </label>
-                            <label class="flex items-center space-x-2">
-                                <input type="checkbox" name="workDays" value="Mié" class="form-checkbox">
-                                <span class="text-sm">Mié</span>
-                            </label>
-                            <label class="flex items-center space-x-2">
-                                <input type="checkbox" name="workDays" value="Jue" class="form-checkbox">
-                                <span class="text-sm">Jue</span>
-                            </label>
-                            <label class="flex items-center space-x-2">
-                                <input type="checkbox" name="workDays" value="Vie" class="form-checkbox">
-                                <span class="text-sm">Vie</span>
-                            </label>
-                            <label class="flex items-center space-x-2">
-                                <input type="checkbox" name="workDays" value="Sáb" class="form-checkbox">
-                                <span class="text-sm">Sáb</span>
-                            </label>
-                            <label class="flex items-center space-x-2">
-                                <input type="checkbox" name="workDays" value="Dom" class="form-checkbox">
-                                <span class="text-sm">Dom</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="flex justify-end gap-3 pt-4">
-                        <button type="button" id="cancelSchedule" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                            Cancelar
-                        </button>
-                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
-                            Guardar
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
     </div>
 
-    
-    <script src="js/theme.js"></script>
-    <!-- Supabase client and config -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="js/supabase-config.js"></script>
-    <!-- Inline guard: redirect to login if no collaborator session -->
-    <script>
-      (async () => {
-        try {
-          const { data: { session }, error } = await supabaseConfig.client.auth.getSession();
-          if (error || !session) {
-            const msg = 'No hay sesión de colaborador activa. Redirigiendo al login.';
-            if (typeof window.showError === 'function') {
-              window.showError('Sesión requerida', msg);
-            } else {
-              const banner = document.createElement('div');
-              banner.textContent = msg;
-              banner.className = 'fixed top-0 left-0 right-0 z-50 bg-yellow-100 text-yellow-800 px-4 py-2 text-sm shadow';
-              document.body.prepend(banner);
-            }
-            setTimeout(() => { window.location.href = 'login-colaborador.html'; }, 400);
-          }
-        } catch (e) {
-          setTimeout(() => { window.location.href = 'login-colaborador.html'; }, 400);
-        }
-      })();
-    </script>
-    <script src="js/sidebar-collab.js?v=1.2" defer></script>
-    <script src="js/rendimiento.js?v=1.1"></script>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--turquesa)">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium opacity-80">Órdenes Asignadas</p>
+            <p class="text-3xl font-bold" id="metricAssigned">0</p>
+          </div>
+          <i data-lucide="clipboard-list" class="w-8 h-8 opacity-60"></i>
+        </div>
+      </div>
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--azul)">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium opacity-80">Órdenes Completadas</p>
+            <p class="text-3xl font-bold" id="metricCompleted">0</p>
+          </div>
+          <i data-lucide="check-circle" class="w-8 h-8 opacity-60"></i>
+        </div>
+      </div>
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--azul-claro)">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium opacity-80">Tiempo Promedio</p>
+            <p class="text-3xl font-bold" id="metricAvgTime">0h</p>
+          </div>
+          <i data-lucide="timer" class="w-8 h-8 opacity-60"></i>
+        </div>
+      </div>
+    </div>
+
+    <section class="card p-6">
+      <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--azul)">
+        <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="bar-chart" class="w-5 h-5 text-blue-600"></i></span>
+        Órdenes realizadas y distribución
+      </h2>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="col-span-1 h-72 bg-white rounded-lg border"><canvas id="chartWeekly"></canvas></div>
+        <div class="col-span-1 h-72 bg-white rounded-lg border"><canvas id="chartServices"></canvas></div>
+        <div class="col-span-1 h-72 bg-white rounded-lg border"><canvas id="chartVehicles"></canvas></div>
+      </div>
+    </section>
+
+    <section class="card p-6">
+      <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--turquesa)">
+        <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="history" class="w-5 h-5 text-blue-600"></i></span>
+        Historial Reciente
+      </h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full">
+          <thead>
+            <tr>
+              <th class="table-header">ID</th>
+              <th class="table-header">Cliente</th>
+              <th class="table-header">Servicio</th>
+              <th class="table-header">Fecha</th>
+              <th class="table-header">Estado</th>
+              
+            </tr>
+          </thead>
+          <tbody id="recentTable" class="divide-y divide-gray-100"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/rendimiento.js"></script>
 </body>
 </html>

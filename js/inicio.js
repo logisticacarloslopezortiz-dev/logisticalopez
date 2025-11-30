@@ -626,6 +626,16 @@ async function generateAndSendInvoice(orderId) {
 
     const pdfUrl = pdfData.pdfUrl;
 
+    try {
+      const linkWrap = document.getElementById('invoiceLink');
+      const linkA = document.getElementById('invoiceLinkAnchor');
+      if (linkWrap && linkA) {
+        linkA.href = pdfUrl;
+        linkA.textContent = 'Ver factura';
+        linkWrap.style.display = 'block';
+      }
+    } catch(_) { }
+
     const { data: emailResp } = await supabaseConfig.client.functions.invoke('send-invoice', {
       body: { orderId: order.id, email: clientEmail }
     });

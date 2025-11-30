@@ -137,13 +137,13 @@ if (!window.supabaseConfig) {
       try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
     }
     await this.ensureFreshSession();
-    let { data, error } = await this.client.from('orders').select('*');
+    let { data, error } = await this.client.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
 
     if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
       console.warn('JWT expirado o no autorizado para obtener orders. Reintentando con cliente anon...');
       try {
         const publicClient = this.getPublicClient();
-        const resp = await publicClient.from('orders').select('*');
+        const resp = await publicClient.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
         if (resp.error) console.error('Error fetching orders (anon):', resp.error);
         return resp.data || [];
       } catch (e) {
@@ -153,6 +153,29 @@ if (!window.supabaseConfig) {
 
     if (error) console.error('Error fetching orders:', error);
     return data || [];
+  },
+
+  async getOrderById(orderId) {
+    await this.ensureFreshSession();
+    let { data, error } = await this.client
+      .from('orders')
+      .select('*, service:services(name), vehicle:vehicles(name)')
+      .eq('id', orderId)
+      .maybeSingle();
+    if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
+      try {
+        const publicClient = this.getPublicClient();
+        const resp = await publicClient
+          .from('orders')
+          .select('*, service:services(name), vehicle:vehicles(name)')
+          .eq('id', orderId)
+          .maybeSingle();
+        data = resp.data;
+        error = resp.error;
+      } catch (e) {}
+    }
+    if (error) return null;
+    return data || null;
   },
 
   /**
@@ -240,9 +263,6 @@ if (!window.supabaseConfig) {
     
     // Sanea payload: elimina campos que no existen en el esquema conocidas y reintenta si la BD rechaza columnas
     let safeUpdates = { ...updates };
-    delete safeUpdates.last_collab_status;
-    delete safeUpdates.lastCollabStatus;
-    // Eliminar el campo tracking si existe en las actualizaciones
     if ('tracking' in safeUpdates) {
       delete safeUpdates.tracking;
     }
@@ -270,9 +290,9 @@ if (!window.supabaseConfig) {
 
       if (!error) break; // éxito
 
-      // Si el error contiene texto indicando que una columna no existe, remover esos campos y reintentar
-      const msg = String(error.message || error.error || '').toLowerCase();
-      const colsToCheck = ['tracking', 'tracking_data', 'last_collab_status', 'lastCollabStatus'];
+      const msgRaw = String(error.message || error.error || '');
+      const msg = msgRaw.toLowerCase();
+      const colsToCheck = ['tracking', 'tracking_data', 'lastCollabStatus', 'collaborator_name'];
       let removed = false;
       for (const col of colsToCheck) {
         if (msg.includes(`column "${col.toLowerCase()}"`) || msg.includes(`column ${col.toLowerCase()}`)) {
@@ -280,6 +300,13 @@ if (!window.supabaseConfig) {
             delete safeUpdates[col];
             removed = true;
           }
+        }
+      }
+      if (!removed) {
+        const m = msgRaw.match(/Could not find the '([^']+)' column/i);
+        if (m && m[1] && Object.prototype.hasOwnProperty.call(safeUpdates, m[1])) {
+          delete safeUpdates[m[1]];
+          removed = true;
         }
       }
 
@@ -403,6 +430,53 @@ if (!window.supabaseConfig) {
     }
     console.log('Configuración guardada exitosamente:', data);
     return data;
+  },
+
+  /**
+   * Valida si un usuario es un colaborador activo en la base de datos.
+   * @param {string} userId - El ID del usuario autenticado.
+   * @returns {Promise<object>} { isValid: boolean, collaborator: object|null, error: string|null }
+   */
+  async validateActiveCollaborator(userId) {
+    try {
+      if (!userId) {
+        return { isValid: false, collaborator: null, error: 'User ID is empty' };
+      }
+      
+      // Consultar tabla collaborators
+      const { data: collaborator, error } = await this.client
+        .from('collaborators')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error validating collaborator:', error);
+        return { isValid: false, collaborator: null, error: error.message };
+      }
+      
+      if (!collaborator) {
+        console.warn(`Collaborator with ID ${userId} not found in database`);
+        return { isValid: false, collaborator: null, error: 'Collaborator not found' };
+      }
+      
+      // Validar que el status sea 'activo'
+      if (String(collaborator.status || '').toLowerCase() !== 'activo') {
+        console.warn(`Collaborator ${userId} has status: ${collaborator.status}`);
+        return { isValid: false, collaborator, error: 'Collaborator is not active' };
+      }
+      
+      // Validar que el role sea 'colaborador'
+      if (String(collaborator.role || '').toLowerCase() !== 'colaborador') {
+        console.warn(`Collaborator ${userId} has role: ${collaborator.role}`);
+        return { isValid: false, collaborator, error: 'Invalid role for this panel' };
+      }
+      
+      return { isValid: true, collaborator, error: null };
+    } catch (e) {
+      console.error('Unexpected error in validateActiveCollaborator:', e);
+      return { isValid: false, collaborator: null, error: e.message };
+    }
   }
   };
 } // end if guard

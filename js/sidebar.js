@@ -1,25 +1,25 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // --- INICIO: Auth Guard para el Panel de Administrador ---
+    const path = (location.pathname || '').toLowerCase();
+    const isAdminPage = path.endsWith('/inicio.html') || path.endsWith('inicio.html');
+    const loginHref = isAdminPage ? 'login.html' : 'login-colaborador.html';
+
     const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
-
     if (sessionError || !session) {
-        console.error('No hay sesión activa. Redirigiendo al login.');
-        window.location.href = '/login.html';
+        window.location.href = loginHref;
         return;
     }
 
-    const userRole = localStorage.getItem('userRole');
-    if (userRole !== 'administrador') {
-        console.error('Acceso denegado. Se requiere rol de administrador.');
-        localStorage.clear(); // Limpieza completa para evitar fugas de datos
-        await supabaseConfig.client.auth.signOut();
-        window.location.href = '/login.html';
-        return;
+    if (isAdminPage) {
+        const userRole = localStorage.getItem('userRole');
+        if (userRole !== 'administrador') {
+            try { localStorage.clear(); } catch(_){}
+            try { await supabaseConfig.client.auth.signOut(); } catch(_){}
+            window.location.href = 'login.html';
+            return;
+        }
     }
-    // --- FIN: Auth Guard ---
 
-    // Emitir evento global indicando que la sesión admin está lista
-    window.dispatchEvent(new Event('admin-session-ready'));
+    window.dispatchEvent(new Event(isAdminPage ? 'admin-session-ready' : 'session-ready'));
 
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('main-content');
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (error) {
                 console.error('Error al cerrar sesión:', error);
             }
-            window.location.href = '/login.html'; // Redirigir siempre al login
+            window.location.href = loginHref;
         });
     }
 });

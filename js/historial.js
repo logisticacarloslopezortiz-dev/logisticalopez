@@ -83,14 +83,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    evidenceGallery.innerHTML = order.evidence_photos.map(photoUrl => `
-      <a href="${photoUrl}" target="_blank" class="block group">
-        <img src="${photoUrl}" alt="Evidencia" class="w-full h-48 object-cover rounded-lg shadow-md group-hover:opacity-80 transition-opacity">
-      </a>
-    `).join('');
+    evidenceGallery.innerHTML = order.evidence_photos.map(item => {
+      const url = typeof item === 'string' ? item : (item && item.url ? item.url : '');
+      if (!url) return '';
+      return `
+        <a href="${url}" target="_blank" rel="noopener noreferrer" class="block group">
+          <img src="${url}" alt="Evidencia" class="w-full h-48 object-cover rounded-lg shadow-md group-hover:opacity-80 transition-opacity">
+        </a>
+      `;
+    }).join('');
 
     evidenceModal.classList.remove('hidden');
     evidenceModal.classList.add('flex');
+    if (window.lucide) lucide.createIcons();
   };
 
   // Función para cerrar el modal
