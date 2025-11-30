@@ -132,273 +132,178 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      
-      // Configuración del documento
       const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
-      let yPosition = 20;
-      
-      // === PRIMERA PÁGINA: INFORMACIÓN DE LA EMPRESA Y RESUMEN DEL SERVICIO ===
-      
-      // Información de la empresa - Encabezado
-      doc.setFontSize(18);
-      doc.setFont(undefined, 'bold');
-      doc.text('LOGISTICA LOPEZ ORTIZ', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 8;
-      doc.setFontSize(10);
-      doc.setFont(undefined, 'normal');
-      doc.text('RNC: 133139413', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 6;
-      doc.text('San Cristóbal, Plaza Vionicio, Calle Sánchez, Esquina Padre Ayala', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 6;
-      doc.text('Tel: 829-729-3822 | Email: transporteylogisticalopezortiz@gmail.com', pageWidth / 2, yPosition, { align: 'center' });
-      
-      // Línea separadora
-      yPosition += 10;
-      doc.setDrawColor(0, 0, 0);
-      doc.line(margin, yPosition, pageWidth - margin, yPosition);
-      
-      // Título del reporte
-      yPosition += 15;
-      doc.setFontSize(16);
-      doc.setFont(undefined, 'bold');
-      doc.text('REPORTE DE ORDEN DE SERVICIO', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 10;
-      doc.setFontSize(12);
-      doc.setFont(undefined, 'normal');
-      doc.text(`Número de Orden: #${order.id}`, pageWidth / 2, yPosition, { align: 'center' });
-      
-      // Datos del cliente
-      yPosition += 20;
-      doc.setFontSize(14);
-      doc.setFont(undefined, 'bold');
-      doc.text('DATOS DEL CLIENTE', margin, yPosition);
-      
-      yPosition += 12;
-      doc.setFontSize(11);
-      doc.setFont(undefined, 'normal');
-      
-      const clientDetails = [
-        ['Nombre:', order.name || 'N/A'],
-        ['Teléfono:', order.phone || 'N/A'],
-        ['Email:', order.email || 'N/A'],
-        ['Empresa:', order.empresa || 'N/A'],
-        ['RNC:', order.rnc || 'N/A']
-      ];
-      
-      clientDetails.forEach(([label, value]) => {
-        if (value !== 'N/A') {
-          doc.setFont(undefined, 'bold');
-          doc.text(label, margin, yPosition);
-          doc.setFont(undefined, 'normal');
-          doc.text(value, margin + 35, yPosition);
-          yPosition += 8;
-        }
-      });
-      
-      // Resumen del servicio
-      yPosition += 15;
-      doc.setFontSize(14);
-      doc.setFont(undefined, 'bold');
-      doc.text('RESUMEN DEL SERVICIO', margin, yPosition);
-      
-      yPosition += 12;
-      doc.setFontSize(11);
-      doc.setFont(undefined, 'normal');
-      
-      const serviceDetails = [
-        ['Servicio:', order.service?.name || order.service_name || 'N/A'],
-        ['Vehículo:', order.vehicle?.name || order.vehicle_name || 'N/A'],
-        ['Fecha de solicitud:', formatDate(order.created_at)],
-        ['Fecha de servicio:', `${order.date || 'N/A'} ${order.time || ''}`],
-        ['Estado:', order.status || 'N/A'],
-        ['Monto cobrado:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'Por confirmar']
-      ];
-      
-      serviceDetails.forEach(([label, value]) => {
-        doc.setFont(undefined, 'bold');
-        doc.text(label, margin, yPosition);
-        doc.setFont(undefined, 'normal');
-        doc.text(value, margin + 35, yPosition);
-        yPosition += 8;
-      });
-      
-      // Ruta del servicio
-      if (order.pickup || order.delivery) {
-        yPosition += 12;
-        doc.setFont(undefined, 'bold');
-        doc.text('RUTA:', margin, yPosition);
-        yPosition += 8;
-        doc.setFont(undefined, 'normal');
-        
-        if (order.pickup) {
-          doc.text(`Recogida: ${order.pickup}`, margin + 10, yPosition);
-          yPosition += 8;
-        }
-        if (order.delivery) {
-          doc.text(`Entrega: ${order.delivery}`, margin + 10, yPosition);
-          yPosition += 8;
-        }
-      }
-      
-      // Preguntas del servicio
-      if (order.service_questions && Object.keys(order.service_questions).length > 0) {
-        yPosition += 12;
+      const contentWidth = pageWidth - margin * 2;
+      let y = margin;
+
+      const brandDark = { r: 30, g: 64, b: 90 };
+      const brandTurq = { r: 30, g: 138, b: 149 };
+
+      const toDataURL = async (url) => {
+        try {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (_) { return null; }
+      };
+
+      const drawHeader = async () => {
+        doc.setFillColor(brandDark.r, brandDark.g, brandDark.b);
+        doc.rect(0, 0, pageWidth, 28, 'F');
+        doc.setFillColor(brandTurq.r, brandTurq.g, brandTurq.b);
+        doc.rect(pageWidth - 60, 0, 60, 28, 'F');
+        doc.setTextColor(255, 255, 255);
         doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
-        doc.text('DETALLES ADICIONALES', margin, yPosition);
-        
-        yPosition += 10;
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
-        
-        try {
-          const questions = typeof order.service_questions === 'string' 
-            ? JSON.parse(order.service_questions) 
-            : order.service_questions;
-            
-          Object.entries(questions).forEach(([key, value]) => {
-            if (yPosition > 250) { // Nueva página si no hay espacio
-              doc.addPage();
-              yPosition = 20;
-            }
-            doc.setFont(undefined, 'bold');
-            doc.text(`${key}:`, margin, yPosition);
-            doc.setFont(undefined, 'normal');
-            
-            // Manejar valores largos
-            const text = String(value || '');
-            if (text.length > 60) {
-              const lines = doc.splitTextToSize(text, pageWidth - 2 * margin - 10);
-              doc.text(lines, margin + 10, yPosition + 5);
-              yPosition += lines.length * 4 + 5;
-            } else {
-              doc.text(text, margin + 10, yPosition + 5);
-              yPosition += 12;
-            }
-          });
-        } catch (e) {
-          console.warn('Error al procesar service_questions:', e);
-        }
-      }
-      
-      // Evidencia
-      if (order.evidence_photos && order.evidence_photos.length > 0) {
-        yPosition += 10;
-        doc.setFontSize(11);
-        doc.setFont(undefined, 'bold');
-        doc.text(`Evidencia fotográfica: ${order.evidence_photos.length} foto(s) adjunta(s)`, margin, yPosition);
-        yPosition += 5;
+        doc.text('Logística López Ortiz', margin, 18);
         doc.setFontSize(9);
-        doc.setFont(undefined, 'italic');
-        doc.text('(Las fotos están disponibles en el sistema)', margin, yPosition);
-      }
-      
-      // === SEGUNDA PÁGINA: DATOS DEL COLABORADOR ===
-      
-      doc.addPage();
-      yPosition = 30;
-      
-      // Repetir encabezado de empresa en segunda página
+        doc.setFont(undefined, 'normal');
+        doc.text('RNC: 133139413', margin, 25);
+        const logo = await toDataURL('img/1vertical.png');
+        if (logo) {
+          try { doc.addImage(logo, 'PNG', pageWidth - 22, 6, 14, 14); } catch (_) {}
+        }
+        doc.setTextColor(0, 0, 0);
+        y = 40;
+      };
+
+      const ensureSpace = async (needed = 12) => {
+        if (y + needed > pageHeight - margin) {
+          doc.addPage();
+          await drawHeader();
+        }
+      };
+
+      const textBlock = async (text, opts = {}) => {
+        const { x = margin, width = contentWidth, lineHeight = 6, style = 'normal', size = 11 } = opts;
+        const lines = doc.splitTextToSize(String(text || ''), width);
+        const h = Math.max(lineHeight, lines.length * lineHeight);
+        await ensureSpace(h + 2);
+        doc.setFont(undefined, style);
+        doc.setFontSize(size);
+        doc.text(lines, x, y);
+        y += h;
+      };
+
+      const labelValue = async (label, value, labelW = 38) => {
+        const leftX = margin;
+        const rightX = margin + labelW;
+        const maxW = contentWidth - labelW;
+        const vLines = doc.splitTextToSize(String(value || 'N/A'), maxW);
+        const h = Math.max(8, vLines.length * 6);
+        await ensureSpace(h + 2);
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(11);
+        doc.text(String(label || ''), leftX, y);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(11);
+        doc.text(vLines, rightX, y);
+        y += h;
+      };
+
+      await drawHeader();
+
+      doc.setFontSize(15);
+      doc.setFont(undefined, 'bold');
+      await textBlock('Reporte de Orden de Servicio', { x: pageWidth / 2, width: contentWidth, lineHeight: 6, style: 'bold', size: 15 });
+      const titleYAdj = y;
+      y = titleYAdj;
+      doc.text(`Número de Orden: #${order.id}`, pageWidth / 2, y, { align: 'center' });
+      y += 10;
+
       doc.setFontSize(12);
       doc.setFont(undefined, 'bold');
-      doc.text('LOGISTICA LOPEZ ORTIZ - RNC: 133139413', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 15;
-      doc.setFontSize(16);
-      doc.text('INFORMACIÓN DE FINALIZACIÓN', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 20;
-      doc.setFontSize(12);
+      await textBlock('Datos del Cliente', { size: 13, style: 'bold' });
       doc.setFont(undefined, 'normal');
-      
+      await labelValue('Nombre:', order.name || 'N/A');
+      await labelValue('Teléfono:', order.phone || 'N/A');
+      await labelValue('Email:', order.email || 'N/A');
+      await labelValue('Empresa:', order.empresa || 'N/A');
+      await labelValue('RNC:', order.rnc || 'N/A');
+
+      y += 6;
+      doc.setFont(undefined, 'bold');
+      await textBlock('Resumen del Servicio', { size: 13, style: 'bold' });
+      doc.setFont(undefined, 'normal');
+      await labelValue('Servicio:', order.service?.name || order.service_name || 'N/A');
+      await labelValue('Vehículo:', order.vehicle?.name || order.vehicle_name || 'N/A');
+      await labelValue('Fecha solicitud:', formatDate(order.created_at));
+      await labelValue('Fecha servicio:', `${order.date || 'N/A'} ${order.time || ''}`);
+      await labelValue('Estado:', order.status || 'N/A');
+      await labelValue('Monto cobrado:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'Por confirmar');
+
+      if (order.pickup || order.delivery) {
+        y += 6;
+        doc.setFont(undefined, 'bold');
+        await textBlock('Ruta', { size: 13, style: 'bold' });
+        doc.setFont(undefined, 'normal');
+        if (order.pickup) await labelValue('Recogida:', order.pickup);
+        if (order.delivery) await labelValue('Entrega:', order.delivery);
+      }
+
+      if (order.service_questions && Object.keys(order.service_questions).length > 0) {
+        y += 6;
+        doc.setFont(undefined, 'bold');
+        await textBlock('Detalles adicionales', { size: 13, style: 'bold' });
+        doc.setFont(undefined, 'normal');
+        try {
+          const qs = typeof order.service_questions === 'string' ? JSON.parse(order.service_questions) : order.service_questions;
+          for (const [k, v] of Object.entries(qs)) {
+            await labelValue(`${k}:`, String(v || ''));
+          }
+        } catch (_) {}
+      }
+
+      if (order.evidence_photos && order.evidence_photos.length > 0) {
+        y += 6;
+        doc.setFont(undefined, 'bold');
+        await textBlock(`Evidencia fotográfica: ${order.evidence_photos.length} foto(s) adjunta(s)`, { size: 12, style: 'bold' });
+        doc.setFont(undefined, 'italic');
+        await textBlock('(Las fotos están disponibles en el sistema)', { size: 9, style: 'italic' });
+      }
+
+      doc.addPage();
+      await drawHeader();
+      doc.setFont(undefined, 'bold');
+      await textBlock('Información de finalización', { size: 14, style: 'bold' });
+      doc.setFont(undefined, 'normal');
       const collaboratorName = order.profiles?.full_name || order.completed_by_name || 'No asignado';
       const completedDate = formatDate(order.completed_at);
-      
-      const completionDetails = [
-        ['ID de Orden:', order.id.toString()],
-        ['Completado por:', collaboratorName],
-        ['Fecha de finalización:', completedDate],
-        ['Método de pago:', order.metodo_pago || 'No especificado'],
-        ['Monto final:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'No cobrado']
-      ];
-      
-      completionDetails.forEach(([label, value]) => {
+      await labelValue('ID de Orden:', String(order.id));
+      await labelValue('Completado por:', collaboratorName);
+      await labelValue('Fecha de finalización:', completedDate);
+      await labelValue('Método de pago:', order.metodo_pago || 'No especificado');
+      await labelValue('Monto final:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'No cobrado');
+
+      if (order.assigned_at || order.accepted_at) {
+        y += 6;
         doc.setFont(undefined, 'bold');
-        doc.text(label, margin, yPosition);
+        await textBlock('Historial de asignaciones', { size: 13, style: 'bold' });
         doc.setFont(undefined, 'normal');
-        doc.text(value, margin + 45, yPosition);
-        yPosition += 12;
-      });
-      
-      // Información adicional del colaborador
-      if (order.assigned_to || order.accepted_by) {
-        yPosition += 15;
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text('HISTORIAL DE ASIGNACIONES', margin, yPosition);
-        
-        yPosition += 12;
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
-        
-        if (order.assigned_at) {
-          doc.setFont(undefined, 'bold');
-          doc.text('Asignado el:', margin, yPosition);
-          doc.setFont(undefined, 'normal');
-          doc.text(formatDate(order.assigned_at), margin + 30, yPosition);
-          yPosition += 8;
-        }
-        
-        if (order.accepted_at) {
-          doc.setFont(undefined, 'bold');
-          doc.text('Aceptado el:', margin, yPosition);
-          doc.setFont(undefined, 'normal');
-          doc.text(formatDate(order.accepted_at), margin + 30, yPosition);
-          yPosition += 8;
-        }
+        if (order.assigned_at) await labelValue('Asignado el:', formatDate(order.assigned_at));
+        if (order.accepted_at) await labelValue('Aceptado el:', formatDate(order.accepted_at));
       }
-      
-      // Notas y observaciones
-      yPosition += 20;
-      doc.setFontSize(11);
-      doc.setFont(undefined, 'italic');
-      doc.text('Este documento es un reporte oficial de la orden de servicio.', margin, yPosition);
-      
-      yPosition += 6;
-      doc.text('Para consultas, contactar a Logistica Lopez Ortiz.', margin, yPosition);
-      
-      // Pie de página en ambas páginas
-      const addFooter = () => {
-        const footerY = doc.internal.pageSize.getHeight() - 20;
+
+      const footer = () => {
+        const footerY = pageHeight - 16;
         doc.setFontSize(9);
         doc.setFont(undefined, 'normal');
-        doc.text(`Generado el: ${new Date().toLocaleDateString('es-ES', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })}`, margin, footerY);
-        doc.text('Sistema de Gestión - Logistica Lopez Ortiz', pageWidth - margin, footerY, { align: 'right' });
+        doc.text(`Generado el: ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, margin, footerY);
+        doc.text('Sistema de Gestión - Logística López Ortiz', pageWidth - margin, footerY, { align: 'right' });
       };
-      
-      // Agregar pie de página a ambas páginas
-      addFooter();
-      
-      // Descargar el PDF
+      footer();
+
       const fileName = `orden_${order.id}_${order.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'cliente'}_${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(fileName);
-      
-      console.log(`[Historial] PDF generado exitosamente para la orden #${order.id}`);
-      
     } catch (error) {
-      console.error('[Historial] Error al generar PDF:', error);
-      alert('Error al generar el PDF. Por favor intente nuevamente.');
+      alert('Error al generar el PDF. Intente nuevamente.');
     }
   };
 

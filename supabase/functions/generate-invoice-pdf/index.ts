@@ -33,12 +33,40 @@ type BusinessDataMinimal = {
 
 async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDataMinimal): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create()
-  const page = pdfDoc.addPage()
-  const { width, height } = page.getSize()
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+  const brandDark = rgb(30 / 255, 64 / 255, 90 / 255)
+  const brandTurq = rgb(30 / 255, 138 / 255, 149 / 255)
 
-  let y = height - 50
+  const fetchLogo = async () => {
+    try {
+      const url = 'https://logisticalopezortiz.com/img/android-chrome-512x512.png'
+      const res = await fetch(url)
+      const buf = await res.arrayBuffer()
+      return await pdfDoc.embedPng(buf)
+    } catch (_) { return null }
+  }
+
+  const logo = await fetchLogo()
+
+  const addPageWithHeader = () => {
+    const page = pdfDoc.addPage()
+    const { width, height } = page.getSize()
+    page.drawRectangle({ x: 0, y: height - 60, width, height: 60, color: brandDark })
+    page.drawRectangle({ x: width - 100, y: height - 60, width: 100, height: 60, color: brandTurq })
+    page.drawText(business.business_name || 'Logística López Ortiz', { x: 40, y: height - 30, font: boldFont, size: 18, color: rgb(1, 1, 1) })
+    page.drawText(`RNC: ${business.rnc || 'N/A'}`, { x: 40, y: height - 45, font, size: 10, color: rgb(1, 1, 1) })
+    if (logo) {
+      const w = 36, h = 36
+      page.drawImage(logo, { x: width - 60, y: height - 48, width: w, height: h })
+    }
+    return page
+  }
+
+  let page = addPageWithHeader()
+  let { width, height } = page.getSize()
+  const margin = 40
+  let y = height - 80
 
   const wrapText = (text: string, maxWidth: number, fontRef: any, size: number): string[] => {
     const words = String(text || '').split(' ')
@@ -47,61 +75,70 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
     for (const w of words) {
       const test = current ? current + ' ' + w : w
       const tw = fontRef.widthOfTextAtSize(test, size)
-      if (tw > maxWidth) {
-        if (current) lines.push(current)
-        current = w
-      } else {
-        current = test
-      }
+      if (tw > maxWidth) { if (current) lines.push(current); current = w } else { current = test }
     }
     if (current) lines.push(current)
     return lines
   }
 
-  const truncateText = (text: string, maxWidth: number, fontRef: any, size: number): string => {
-    let t = String(text || '')
-    if (fontRef.widthOfTextAtSize(t, size) <= maxWidth) return t
-    const ellipsis = '…'
-    while (t.length > 0 && fontRef.widthOfTextAtSize(t + ellipsis, size) > maxWidth) {
-      t = t.slice(0, -1)
+  const ensureSpace = (needed = 16) => {
+    if (y - needed < margin) {
+      page = addPageWithHeader()
+      const s = page.getSize()
+      width = s.width; height = s.height
+      y = height - 80
     }
-    return t + ellipsis
   }
 
-  page.drawText(business.business_name || 'Logística López Ortiz', { x: 50, y, font: boldFont, size: 20, color: rgb(0.11, 0.25, 0.35) })
-  y -= 25
-  page.drawText(`RNC: ${business.rnc || 'N/A'}`, { x: 50, y, font, size: 10 })
-  y -= 15
-  const addrLine = `${business.address || ''} ${business.phone ? '| ' + business.phone : ''}`
-  const addrLines = wrapText(addrLine, width - 100, font, 10)
-  for (const line of addrLines) {
-    page.drawText(line, { x: 50, y, font, size: 10 })
-    y -= 12
+  const drawTextBlock = (text: string, size = 11, lineHeight = 14, x = margin, maxW = width - margin * 2, color = rgb(0, 0, 0), fontRef = font) => {
+    const lines = wrapText(String(text || ''), maxW, fontRef, size)
+    const h = Math.max(lineHeight, lines.length * lineHeight)
+    ensureSpace(h + 4)
+    page.drawText(lines.join('\n'), { x, y, font: fontRef, size, color })
+    y -= h
   }
+
+  const drawLabelValue = (label: string, value: string, labelW = 140) => {
+    const maxW = width - margin * 2 - labelW
+    const vLines = wrapText(String(value || 'N/A'), maxW, font, 11)
+    const h = Math.max(16, vLines.length * 14)
+    ensureSpace(h + 2)
+    page.drawText(label, { x: margin, y: y, font: boldFont, size: 11 })
+    page.drawText(vLines.join('\n'), { x: margin + labelW, y: y, font: font, size: 11 })
+    y -= h
+  }
+
+  page.drawText(`Factura Orden #${order.short_id || order.id}`, { x: margin, y, font: boldFont, size: 15, color: brandDark })
   y -= 18
+  page.drawText(`Fecha: ${new Date().toLocaleDateString('es-DO')}`, { x: margin, y, font, size: 10 })
+  y -= 22
 
-  page.drawText(`Factura Orden #${order.short_id || order.id}`, { x: 50, y, font: boldFont, size: 16 })
-  y -= 20
-  page.drawText(`Fecha: ${new Date().toLocaleDateString('es-DO')}`, { x: 50, y, font, size: 10 })
-  y -= 30
+  page.drawText('Facturar a:', { x: margin, y, font: boldFont, size: 12, color: brandTurq })
+  y -= 14
+  drawLabelValue('Nombre:', order.name || 'N/A')
+  drawLabelValue('Teléfono:', order.phone || 'N/A')
+  const addrLine = `${business.address || ''} ${business.phone ? '| ' + business.phone : ''}`
+  drawTextBlock(addrLine, 10)
 
-  page.drawText('Facturar a:', { x: 50, y, font: boldFont, size: 12 })
-  y -= 15
-  page.drawText(order.name || 'N/A', { x: 50, y, font, size: 10 })
-  y -= 15
-  page.drawText(order.phone || 'N/A', { x: 50, y, font, size: 10 })
-  y -= 30
+  y -= 10
+  page.drawText('Detalles del Servicio', { x: margin, y, font: boldFont, size: 12, color: brandTurq })
+  y -= 14
 
-  const table = { x: 50, y, width: width - 100, rowHeight: 20, col1: 150 }
-  const drawRow = (label: string, value: string, isHeader = false) => {
-    const v = truncateText(value, table.width - table.col1 - 15, isHeader ? boldFont : font, 10)
-    page.drawText(label, { x: table.x + 5, y: table.y - table.rowHeight / 1.5, font: isHeader ? boldFont : font, size: 10 })
-    page.drawText(v, { x: table.x + table.col1 + 5, y: table.y - table.rowHeight / 1.5, font: isHeader ? boldFont : font, size: 10 })
-    page.drawRectangle({ x: table.x, y: table.y - table.rowHeight, width: table.width, height: table.rowHeight, borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
-    table.y -= table.rowHeight
+  const tableX = margin
+  const tableW = width - margin * 2
+  const col1 = 160
+
+  const drawRow = (label: string, value: string, strong = false) => {
+    const fontRef = strong ? boldFont : font
+    const vLines = wrapText(String(value || ''), tableW - col1 - 16, fontRef, 11)
+    const rowH = Math.max(20, vLines.length * 14)
+    ensureSpace(rowH + 2)
+    page.drawRectangle({ x: tableX, y: y - rowH, width: tableW, height: rowH, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 0.5 })
+    page.drawText(label, { x: tableX + 8, y: y - 14, font: fontRef, size: 11 })
+    page.drawText(vLines.join('\n'), { x: tableX + col1, y: y - 14, font: fontRef, size: 11 })
+    y -= rowH
   }
 
-  drawRow('Descripción', 'Detalle', true)
   drawRow('Servicio', order.service?.name || 'N/A')
   drawRow('Vehículo', order.vehicle?.name || 'N/A')
   drawRow('Origen', order.pickup || 'N/A')
