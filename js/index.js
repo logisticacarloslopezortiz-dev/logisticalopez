@@ -69,3 +69,44 @@ window.addEventListener('scroll', () => {
     lastScrollY = window.scrollY;
   }
 });
+
+// --- Lógica de animaciones con Intersection Observer ---
+document.addEventListener('DOMContentLoaded', () => {
+
+    // Animación para sección de servicios
+    const serviceSection = document.getElementById('servicios');
+    if (serviceSection) {
+        const serviceCards = serviceSection.querySelectorAll('.service-card');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    serviceCards.forEach((card, index) => {
+                        setTimeout(() => {
+                            card.classList.add('animate-service-card');
+                        }, index * 100);
+                    });
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.2 });
+        observer.observe(serviceSection);
+    }
+
+    // Animación para sección de colaboradores
+    const collabSection = document.getElementById('colaboradores');
+    if (collabSection) {
+        const textColumn = collabSection.querySelector('div > div > div:first-child');
+        const formColumn = collabSection.querySelector('div > div > div:last-child');
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    if(textColumn) textColumn.classList.add('animate-colaboradores-text');
+                    if(formColumn) formColumn.classList.add('animate-colaboradores-form');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.2 });
+        observer.observe(collabSection);
+    }
+});

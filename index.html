@@ -44,6 +44,7 @@
   <link href="css/tailwind.min.css" rel="stylesheet">
   <link href="css/custom-styles.css" rel="stylesheet">
   <link href="css/animations.css" rel="stylesheet"> <!-- Animaciones personalizadas -->
+  <link href="css/landing.css" rel="stylesheet"> <!-- Estilos para la Landing Page -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"> <!-- Iconos -->
 
   <!-- ✅ Schema.org Markup (JSON-LD) para Google -->
@@ -176,7 +177,7 @@
   </header>
 
   <!-- HERO: Imagen de fondo, texto alineado a la izquierda -->
-  <section class="hero relative min-h-screen flex items-center bg-cover bg-center text-white" style="background-image: url('img/cargo.jpg');">
+  <section class="hero relative min-h-screen flex items-center bg-cover bg-center text-white">
     <!-- Overlay oscuro para legibilidad -->
     <div class="absolute inset-0 bg-black bg-opacity-60" aria-hidden="true"></div>
 
@@ -184,19 +185,19 @@
     <div class="relative z-10 max-w-7xl mx-auto px-6 w-full">
       <div class="flex justify-center md:justify-start">
         <!-- Contenido de texto (alineado a la izquierda) -->
-        <div class="md:w-1/2 lg:w-2/5 text-left animate-fadeInUp">
-          <h2 class="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight" style="text-shadow: 2px 2px 8px rgba(0,0,0,0.7);">
+        <div class="md:w-1/2 lg:w-2/5 text-left">
+          <h2 class="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight text-shadow-heavy animate-hero-title">
             Más que transporte, movemos confianza.
           </h2>
 
-          <p class="mt-6 text-lg md:text-xl text-white/90 max-w-xl mx-auto md:mx-0" style="text-shadow: 1px 1px 6px rgba(0,0,0,0.7);">
+          <p class="mt-6 text-lg md:text-xl text-white/90 max-w-xl mx-auto md:mx-0 text-shadow-medium animate-hero-p1">
             En Logística López Ortiz, cuidamos tu carga como si fuera nuestra.
           </p>
-          <p class="mt-2 text-lg md:text-xl text-white/90 max-w-xl mx-auto md:mx-0" style="text-shadow: 1px 1px 6px rgba(0,0,0,0.7);">
+          <p class="mt-2 text-lg md:text-xl text-white/90 max-w-xl mx-auto md:mx-0 text-shadow-medium animate-hero-p2">
             Con tecnología, compromiso y puntualidad, garantizamos que llegue segura y a tiempo.
           </p>
 
-          <div class="mt-8 flex flex-col sm:flex-row justify-start items-center gap-4">
+          <div class="mt-8 flex flex-col sm:flex-row justify-start items-center gap-4 animate-hero-buttons">
             <a href="cliente.html" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-acento hover:bg-yellow-500 text-slate-900 px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105" aria-label="Comenzar solicitud">
               🚚 Comenzar Solicitud
             </a>
@@ -295,75 +296,114 @@
   </section>
 
   <!-- Servicios -->
-  <section id="servicios" class="py-16 lg:py-24 bg-gray-50">
+  <section id="servicios" class="py-16 lg:py-24 bg-azulOscuro text-white">
     <div class="max-w-7xl mx-auto px-6 text-center">
-      <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-12">Soluciones para Cada Necesidad</h3>
+      <h3 class="text-3xl md:text-4xl font-bold mb-4">Soluciones para Cada Necesidad</h3>
+      <p class="max-w-2xl mx-auto text-white/80 text-lg mb-12">
+        Ofrecemos una gama completa de servicios de transporte diseñados para cumplir con tus requisitos específicos.
+      </p>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-        <!-- Tarjeta de Servicio -->
-        <div class="service-card bg-white p-6 border border-gray-200 rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-          <i class="fas fa-home text-4xl text-azulClaro mb-4"></i>
-          <h4 class="font-bold text-xl text-azulOscuro mb-2">Mudanzas</h4>
-          <p class="text-gray-600">Servicios completos de mudanza residencial y comercial.</p>
+        <!-- Tarjeta de Servicio 1 -->
+        <div class="service-card bg-white/5 p-8 border border-white/10 rounded-2xl shadow-lg hover:shadow-azulClaro/20 hover:-translate-y-2 transition-all duration-300">
+          <div class="w-16 h-16 flex items-center justify-center rounded-full bg-acento text-azulOscuro mx-auto mb-6">
+            <i class="fas fa-home text-3xl"></i>
+          </div>
+          <h4 class="font-bold text-2xl text-white mb-3">Mudanzas</h4>
+          <p class="text-white/70">Servicios completos de mudanza residencial y comercial.</p>
         </div>
-        <div class="service-card bg-white p-6 border border-gray-200 rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-          <i class="fas fa-boxes text-4xl text-azulClaro mb-4"></i>
-          <h4 class="font-bold text-xl text-azulOscuro mb-2">Carga Comercial</h4>
-          <p class="text-gray-600">Transporte seguro de mercancías comerciales.</p>
+        <!-- Tarjeta de Servicio 2 -->
+        <div class="service-card bg-white/5 p-8 border border-white/10 rounded-2xl shadow-lg hover:shadow-azulClaro/20 hover:-translate-y-2 transition-all duration-300" style="animation-delay: 100ms;">
+          <div class="w-16 h-16 flex items-center justify-center rounded-full bg-acento text-azulOscuro mx-auto mb-6">
+            <i class="fas fa-boxes text-3xl"></i>
+          </div>
+          <h4 class="font-bold text-2xl text-white mb-3">Carga Comercial</h4>
+          <p class="text-white/70">Transporte seguro de mercancías comerciales.</p>
         </div>
-        <div class="service-card bg-white p-6 border border-gray-200 rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-          <i class="fas fa-weight-hanging text-4xl text-azulClaro mb-4"></i>
-          <h4 class="font-bold text-xl text-azulOscuro mb-2">Carga Pesada</h4>
-          <p class="text-gray-600">Especialistas en transporte de carga pesada.</p>
+        <!-- Tarjeta de Servicio 3 -->
+        <div class="service-card bg-white/5 p-8 border border-white/10 rounded-2xl shadow-lg hover:shadow-azulClaro/20 hover:-translate-y-2 transition-all duration-300" style="animation-delay: 200ms;">
+          <div class="w-16 h-16 flex items-center justify-center rounded-full bg-acento text-azulOscuro mx-auto mb-6">
+            <i class="fas fa-weight-hanging text-3xl"></i>
+          </div>
+          <h4 class="font-bold text-2xl text-white mb-3">Carga Pesada</h4>
+          <p class="text-white/70">Especialistas en transporte de carga pesada.</p>
         </div>
-        <div class="service-card bg-white p-6 border border-gray-200 rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-          <i class="fas fa-shipping-fast text-4xl text-azulClaro mb-4"></i>
-          <h4 class="font-bold text-xl text-azulOscuro mb-2">Fletes</h4>
-          <p class="text-gray-600">Servicios de flete de todo tipo de mercancía.</p>
+        <!-- Tarjeta de Servicio 4 -->
+        <div class="service-card bg-white/5 p-8 border border-white/10 rounded-2xl shadow-lg hover:shadow-azulClaro/20 hover:-translate-y-2 transition-all duration-300" style="animation-delay: 300ms;">
+          <div class="w-16 h-16 flex items-center justify-center rounded-full bg-acento text-azulOscuro mx-auto mb-6">
+            <i class="fas fa-shipping-fast text-3xl"></i>
+          </div>
+          <h4 class="font-bold text-2xl text-white mb-3">Fletes</h4>
+          <p class="text-white/70">Servicios de flete de todo tipo de mercancía.</p>
         </div>
-        <div class="service-card bg-white p-6 border border-gray-200 rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-          <i class="fas fa-truck-pickup text-4xl text-azulClaro mb-4"></i>
-          <h4 class="font-bold text-xl text-azulOscuro mb-2">Grúas</h4>
-          <p class="text-gray-600">Transporte con grúa y equipos especializados.</p>
+        <!-- Tarjeta de Servicio 5 -->
+        <div class="service-card bg-white/5 p-8 border border-white/10 rounded-2xl shadow-lg hover:shadow-azulClaro/20 hover:-translate-y-2 transition-all duration-300" style="animation-delay: 400ms;">
+          <div class="w-16 h-16 flex items-center justify-center rounded-full bg-acento text-azulOscuro mx-auto mb-6">
+            <i class="fas fa-truck-pickup text-3xl"></i>
+          </div>
+          <h4 class="font-bold text-2xl text-white mb-3">Grúas</h4>
+          <p class="text-white/70">Transporte con grúa y equipos especializados.</p>
         </div>
-        <div class="service-card bg-white p-6 border border-gray-200 rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-          <i class="fas fa-box text-4xl text-azulClaro mb-4"></i>
-          <h4 class="font-bold text-xl text-azulOscuro mb-2">Paquetería</h4>
-          <p class="text-gray-600">Envíos de paquetes seguros y rápidos.</p>
+        <!-- Tarjeta de Servicio 6 -->
+        <div class="service-card bg-white/5 p-8 border border-white/10 rounded-2xl shadow-lg hover:shadow-azulClaro/20 hover:-translate-y-2 transition-all duration-300" style="animation-delay: 500ms;">
+          <div class="w-16 h-16 flex items-center justify-center rounded-full bg-acento text-azulOscuro mx-auto mb-6">
+            <i class="fas fa-box text-3xl"></i>
+          </div>
+          <h4 class="font-bold text-2xl text-white mb-3">Paquetería</h4>
+          <p class="text-white/70">Envíos de paquetes seguros y rápidos.</p>
         </div>
       </div>
     </div>
   </section>
 
   <!-- Colaboradores -->
-  <section id="colaboradores" class="py-16 lg:py-24 bg-white">
-    <div class="max-w-7xl mx-auto px-6 text-center">
-      <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-4">Únete a Nuestro Equipo</h3>
-      <p class="max-w-2xl mx-auto text-gray-600 text-lg mb-12">
-        Buscamos personas comprometidas y con ganas de crecer. Si tienes un vehículo de carga y quieres formar parte de nuestra red de colaboradores, completa el formulario y nos pondremos en contacto contigo.
-      </p>
+  <section id="colaboradores" class="py-16 lg:py-24 bg-gradient-to-b from-gray-50 to-white">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <!-- Columna de Texto -->
+        <div class="text-center lg:text-left">
+          <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-4">Únete a Nuestro Equipo</h3>
+          <p class="text-gray-600 text-lg mb-6">
+            Buscamos personas comprometidas y con ganas de crecer. Si tienes un vehículo de carga y quieres formar parte de nuestra red de colaboradores, completa el formulario y nos pondremos en contacto contigo.
+          </p>
+          <ul class="space-y-4 text-left">
+            <li class="flex items-center gap-3">
+              <i class="fas fa-check-circle text-xl text-acento"></i>
+              <span class="text-gray-700 font-medium">Flexibilidad de Horario</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <i class="fas fa-check-circle text-xl text-acento"></i>
+              <span class="text-gray-700 font-medium">Pagos Puntuales y Competitivos</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <i class="fas fa-check-circle text-xl text-acento"></i>
+              <span class="text-gray-700 font-medium">Soporte Continuo</span>
+            </li>
+          </ul>
+        </div>
 
-      <!-- Formulario de Colaboración -->
-      <div class="max-w-2xl mx-auto">
-        <form id="colaborador-form" class="grid grid-cols-1 gap-6 text-left">
-          <div>
-            <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre Completo</label>
-            <input type="text" id="nombre" name="nombre" required class="mt-1 block w-full px-4 py-3 bg-gray-100 border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-azulClaro transition">
-          </div>
-          <div>
-            <label for="telefono" class="block text-sm font-medium text-gray-700">Teléfono (WhatsApp)</label>
-            <input type="tel" id="telefono" name="telefono" required class="mt-1 block w-full px-4 py-3 bg-gray-100 border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-azulClaro transition">
-          </div>
-          <div>
-            <label for="mensaje" class="block text-sm font-medium text-gray-700">Mensaje (Opcional)</label>
-            <textarea id="mensaje" name="mensaje" rows="4" class="mt-1 block w-full px-4 py-3 bg-gray-100 border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-azulClaro transition" placeholder="Háblanos de ti, tu vehículo y tu experiencia."></textarea>
-          </div>
-          <div class="text-center">
-            <button type="submit" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-azulOscuro hover:bg-azulOscuro/90 text-white px-8 py-3 rounded-lg font-bold transition-transform hover:scale-105 shadow-lg">
-              <i class="fab fa-whatsapp"></i>
-              <span>Enviar Solicitud</span>
-            </button>
-          </div>
-        </form>
+        <!-- Columna del Formulario -->
+        <div class="bg-white p-8 rounded-2xl shadow-2xl border border-gray-200">
+          <form id="colaborador-form" class="grid grid-cols-1 gap-6 text-left">
+            <div class="relative">
+              <label for="nombre" class="absolute -top-2 left-4 bg-white px-1 text-xs font-medium text-gray-600">Nombre Completo</label>
+              <input type="text" id="nombre" name="nombre" required class="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-azulClaro transition">
+            </div>
+            <div class="relative">
+              <label for="telefono" class="absolute -top-2 left-4 bg-white px-1 text-xs font-medium text-gray-600">Teléfono (WhatsApp)</label>
+              <input type="tel" id="telefono" name="telefono" required class="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-azulClaro transition">
+            </div>
+            <div class="relative">
+              <label for="mensaje" class="absolute -top-2 left-4 bg-white px-1 text-xs font-medium text-gray-600">Mensaje (Opcional)</label>
+              <textarea id="mensaje" name="mensaje" rows="4" class="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-azulClaro transition" placeholder="Háblanos de ti, tu vehículo y tu experiencia."></textarea>
+            </div>
+            <div class="text-center">
+              <button type="submit" class="inline-flex items-center justify-center gap-2 w-full bg-azulOscuro hover:bg-azulOscuro/90 text-white px-8 py-3 rounded-lg font-bold transition-transform hover:scale-105 shadow-lg">
+                <i class="fab fa-whatsapp"></i>
+                <span>Enviar Solicitud</span>
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   </section>

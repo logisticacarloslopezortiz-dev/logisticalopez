@@ -1,0 +1,19 @@
+/* Estilos personalizados para la página de inicio (Landing Page) */
+
+:root {
+  --color-azul-oscuro: #1E405A;  /* Ejemplo */
+  --color-azul-claro: #1E8A95;   /* Ejemplo */
+  --color-acento: #FBBF24;       /* Ejemplo */
+}
+
+.hero {
+  background-image: url('../img/cargo.jpg');
+}
+
+.text-shadow-heavy {
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+.text-shadow-medium {
+  text-shadow: 1px 1px 6px rgba(0, 0, 0, 0.7);
+}

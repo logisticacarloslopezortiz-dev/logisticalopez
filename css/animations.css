@@ -51,23 +51,62 @@
     }
 }
 
-/* Animation Classes */
-.animate-fadeInUp {
-    animation: fadeInUp 0.6s ease-out forwards;
+/* --- Animation Classes --- */
+
+/* Hero Section Animations */
+.animate-hero-title {
+    animation: fadeInUp 0.8s ease-out forwards;
+    animation-delay: 0.2s;
+    opacity: 0;
+}
+.animate-hero-p1 {
+    animation: fadeInUp 0.8s ease-out forwards;
+    animation-delay: 0.4s;
+    opacity: 0;
+}
+.animate-hero-p2 {
+    animation: fadeInUp 0.8s ease-out forwards;
+    animation-delay: 0.6s;
+    opacity: 0;
+}
+.animate-hero-buttons {
+    animation: fadeInUp 0.8s ease-out forwards;
+    animation-delay: 0.8s;
+    opacity: 0;
 }
 
+
+/* How it works animation */
 .animate-truck-loop {
     animation: truckLoop 8s ease-in-out infinite;
 }
-
 .animate-package-loop-1 {
     animation: packageLoop 8s ease-in-out infinite;
 }
-
 .animate-package-loop-2 {
     animation: packageLoop 8s ease-in-out infinite 0.2s;
 }
-
 .animate-button-loop {
     animation: buttonLoop 8s ease-in-out infinite;
+}
+
+/* Service card animation */
+.service-card {
+    opacity: 0;
+}
+.animate-service-card {
+    animation: fadeInUp 0.5s ease-out forwards;
+}
+
+/* Colaboradores section animation */
+#colaboradores > div > div > div {
+    opacity: 0;
+}
+.animate-colaboradores-text {
+    animation: fadeInUp 0.6s ease-out forwards;
+    animation-delay: 100ms;
+}
+.animate-colaboradores-form {
+    animation: fadeInUp 0.6s ease-out forwards;
+    animation-delay: 200ms;
 }
