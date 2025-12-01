@@ -36,3 +36,5 @@
 
 /* Estados hover comunes usados en HTML */
 .hover\:bg-azulOscuro\/90:hover { background-color: var(--azul-oscuro) !important; opacity: 0.9; }
+
+.header-hidden { transform: translateY(-100%); }

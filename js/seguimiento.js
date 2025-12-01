@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Función para verificar si hay un ID en la URL al cargar la página
   function checkUrlForOrderId() {
     const params = new URLSearchParams(window.location.search);
-    const orderId = params.get('id');
+    const orderId = params.get('codigo') || params.get('id');
     if (orderId) {
       orderIdInput.value = orderId;
       trackOrder().then(() => {

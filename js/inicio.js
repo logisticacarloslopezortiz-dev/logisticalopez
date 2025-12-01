@@ -534,6 +534,89 @@ async function openAssignModal(orderId){
     });
   }
 
+  const notifyClientBtn = document.getElementById('notifyClientBtn');
+  if (notifyClientBtn) {
+    notifyClientBtn.replaceWith(notifyClientBtn.cloneNode(true));
+    document.getElementById('notifyClientBtn').addEventListener('click', async () => {
+      try {
+        const r = await fetch('/api/sendToOrder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: order.id,
+            title: `Actualización de su orden #${order.short_id || order.id}`,
+            body: 'Su orden ha sido actualizada',
+            data: { url: `/seguimiento.html?orderId=${order.short_id || order.id}` }
+          })
+        });
+        const j = await r.json();
+        if (j.success) {
+          notifications.success(`Notificación enviada al cliente (${j.sent}/${j.total})`);
+        } else {
+          notifications.warning(j.message || 'No se enviaron notificaciones');
+        }
+      } catch (e) {
+        notifications.error('Error al notificar al cliente');
+      }
+    });
+  }
+
+  const notifyCollabBtn = document.getElementById('notifyCollabBtn');
+  if (notifyCollabBtn) {
+    notifyCollabBtn.replaceWith(notifyCollabBtn.cloneNode(true));
+    document.getElementById('notifyCollabBtn').addEventListener('click', async () => {
+      try {
+        const r = await fetch('/api/sendByRole', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role: 'colaborador',
+            orderId: order.id,
+            title: `Orden #${order.short_id || order.id} actualizada`,
+            body: 'Revisa tu panel, se actualizó tu orden asignada',
+            data: { url: `/panel-colaborador.html?orderId=${order.short_id || order.id}` }
+          })
+        });
+        const j = await r.json();
+        if (j.success) {
+          notifications.success(`Notificación enviada al colaborador (${j.sent}/${j.total})`);
+        } else {
+          notifications.warning(j.message || 'No se enviaron notificaciones');
+        }
+      } catch (e) {
+        notifications.error('Error al notificar al colaborador');
+      }
+    });
+  }
+
+  const notifyAdminsBtn = document.getElementById('notifyAdminsBtn');
+  if (notifyAdminsBtn) {
+    notifyAdminsBtn.replaceWith(notifyAdminsBtn.cloneNode(true));
+    document.getElementById('notifyAdminsBtn').addEventListener('click', async () => {
+      try {
+        const r = await fetch('/api/sendByRole', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role: 'administrador',
+            orderId: order.id,
+            title: `Orden #${order.short_id || order.id} modificada`,
+            body: 'Se realizó una acción desde el panel del dueño',
+            data: { url: `/inicio.html?orderId=${order.short_id || order.id}` }
+          })
+        });
+        const j = await r.json();
+        if (j.success) {
+          notifications.success(`Notificación enviada a administradores (${j.sent}/${j.total})`);
+        } else {
+          notifications.warning(j.message || 'No se enviaron notificaciones');
+        }
+      } catch (e) {
+        notifications.error('Error al notificar a administradores');
+      }
+    });
+  }
+
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -839,13 +922,44 @@ document.addEventListener('DOMContentLoaded', function() {
     const message = `👋 ¡Hola, ${order.name}! Somos del equipo de Logística López Ortiz 🚛.\nQueríamos informarle que recibimos su solicitud y estamos revisando algunos detalles importantes antes de proceder.\nEn breve nos pondremos en contacto con más información.\n¡Gracias por elegirnos! 💼`;
     
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-  }
+  window.open(url, '_blank');
+}
+
+async function checkVapidStatus() {
+  try {
+    const r = await fetch('/api/vapidPublicKey', { headers: { 'Accept': 'application/json' } });
+    if (!r.ok) return;
+    const j = await r.json();
+    const k = j && (j.key || j.vapidPublicKey || j.publicKey);
+    if (!k || typeof k !== 'string') {
+      notifications.warning('Claves VAPID no configuradas', { title: 'Push deshabilitado' });
+      return;
+    }
+    const raw = vapidToBytes(k);
+    if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
+      notifications.warning('Clave VAPID inválida', { title: 'Push deshabilitado' });
+    } else {
+      notifications.info('VAPID configurada correctamente');
+    }
+  } catch (_) {}
+}
+
+function vapidToBytes(base64String) {
+  try {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+  } catch (_) { return new Uint8Array(0); }
+}
 
   // Inicialización
   function init() {
     loadOrders();
     loadAdminInfo();
+    checkVapidStatus();
   }
 
   init();

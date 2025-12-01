@@ -7,15 +7,20 @@ if (mobileBtn && mobileMenu) {
 
 // Lógica para la instalación de la PWA
 let deferredPrompt;
-const installButton = document.getElementById('install-app-btn');
+const installButtons = [
+  document.getElementById('install-app-btn'),
+  document.getElementById('install-app-header-btn'),
+  document.getElementById('install-app-mobile-btn'),
+  document.getElementById('install-app-animation-btn')
+].filter(Boolean);
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  if (installButton) {
-    installButton.classList.remove('hidden');
-    installButton.setAttribute('aria-hidden', 'false');
-  }
+  installButtons.forEach(btn => {
+    btn.classList.remove('hidden');
+    btn.setAttribute('aria-hidden', 'false');
+  });
 });
 
 // Detectar iOS para mostrar instrucciones de instalación manual
@@ -45,13 +50,13 @@ if (isIOS() && !isInStandaloneMode()) {
   }
 }
 
-if (installButton) {
-  installButton.addEventListener('click', async () => {
+installButtons.forEach(btn => {
+  btn.addEventListener('click', async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
     }
   });
-}
+});
 
 // --- Lógica para ocultar/mostrar header en scroll ---
 let lastScrollY = window.scrollY;
@@ -67,5 +72,43 @@ window.addEventListener('scroll', () => {
       header.classList.remove('header-hidden');
     }
     lastScrollY = window.scrollY;
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const heroContainer = document.querySelector('.hero .animate-fadeInUp');
+  if (heroContainer) {
+    const title = heroContainer.querySelector('h2');
+    const paragraphs = heroContainer.querySelectorAll('p');
+    const btnRow = heroContainer.querySelector('.mt-8');
+
+    const seq = [title, paragraphs[0], paragraphs[1], btnRow].filter(Boolean);
+    seq.forEach(el => { if (el) el.style.opacity = '0'; });
+
+    let delay = 0;
+    seq.forEach(el => {
+      if (!el) return;
+      setTimeout(() => {
+        el.style.opacity = '1';
+        el.classList.add('animate-fadeInUp');
+      }, delay);
+      delay += 200;
+    });
+  }
+
+  const toReveal = document.querySelectorAll('.reveal-on-scroll');
+  if (toReveal.length) {
+    const obs = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const el = entry.target;
+        el.classList.add('animate-fadeInUp');
+        el.classList.remove('opacity-0');
+        el.classList.remove('translate-y-4');
+        observer.unobserve(el);
+      });
+    }, { threshold: 0.2 });
+
+    toReveal.forEach(el => obs.observe(el));
   }
 });

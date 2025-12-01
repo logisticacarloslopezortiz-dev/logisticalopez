@@ -91,6 +91,46 @@
         { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
         { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
       ]
+    },
+    {
+      "name": "Function — get-vapid-key",
+      "method": "POST",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/get-vapid-key",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ],
+      "body": { "type": "json", "raw": "{}" }
+    },
+    {
+      "name": "Function — process-outbox",
+      "method": "POST",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/process-outbox",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ],
+      "body": { "type": "json", "raw": "{}" }
+    },
+    {
+      "name": "REST — notification_outbox_pending",
+      "method": "GET",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/rest/v1/notification_outbox_pending?select=*",
+      "headers": [
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ]
+    },
+    {
+      "name": "REST — orders completadas (muestra)",
+      "method": "GET",
+      "url": "https://fkprllkxyjtosjhtikxy.supabase.co/rest/v1/orders?status=in.(Completada,entregado)&select=id,client_id,monto_cobrado,completed_at&limit=5",
+      "headers": [
+        { "name": "apikey", "value": "<SUPABASE_ANON_KEY>" },
+        { "name": "Authorization", "value": "Bearer <SUPABASE_ANON_KEY>" }
+      ]
     }
   ]
 }

@@ -29,26 +29,48 @@ class PushNotificationManager {
     }
 
     async loadVapidKey() {
+        // 1) Intentar obtener desde servidor Node
         try {
-            // En producción, esto vendría de tu configuración
-            // Por ahora usamos la clave del entorno
+            const base = window.NODE_PUSH_SERVER_URL || '';
+            const url = base ? `${base}/api/vapidPublicKey` : '/api/vapidPublicKey';
+            const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!r.ok) throw new Error('Node vapid endpoint error');
+            const j = await r.json();
+            this.vapidPublicKey = j?.key || j?.vapidPublicKey || j?.publicKey || null;
+            if (!this.vapidPublicKey) throw new Error('Clave VAPID no encontrada en respuesta Node');
+            const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
+            if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
+              throw new Error('Clave VAPID inválida desde Node');
+            }
+            console.log('VAPID key obtenida desde servidor Node');
+            return;
+        } catch (e) {
+            console.warn('Fallo VAPID por Node, probando Supabase Functions:', e?.message || e);
+        }
+
+        // 2) Fallback: Supabase Functions
+        try {
             const client = supabaseConfig?.client;
             if (!client || !client.functions || typeof client.functions.invoke !== 'function') {
                 throw new Error('Supabase client/functions no disponible');
             }
             const { data, error } = await client.functions.invoke('get-vapid-key');
-            
             if (error) throw error;
-            
             this.vapidPublicKey = data?.vapidPublicKey || data?.publicKey || null;
             if (!this.vapidPublicKey) throw new Error('Clave VAPID no disponible en respuesta');
+            const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
+            if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
+              throw new Error('Clave VAPID inválida desde Supabase');
+            }
             console.log('VAPID key obtenida desde Supabase Functions');
+            return;
         } catch (error) {
-            console.error('Error loading VAPID key:', error);
-            // Fallback: usar clave hardcodeada (solo para desarrollo)
-            this.vapidPublicKey = 'BMuGvI89RtY2N2hFDLwkCmNitzvYP9iDrRCQlq8JmFfGtDjgFQWJGLaEHX9O8lF8Vl9WsXOYMbBq94vKwpWoXVE';
-            console.warn('Usando VAPID key de desarrollo (fallback). Configura get-vapid-key en producción.');
+            console.error('Error loading VAPID key (Supabase):', error);
         }
+
+        // 3) Último recurso: clave de desarrollo
+        this.vapidPublicKey = 'BMuGvI89RtY2N2hFDLwkCmNitzvYP9iDrRCQlq8JmFfGtDjgFQWJGLaEHX9O8lF8Vl9WsXOYMbBq94vKwpWoXVE';
+        console.warn('Usando VAPID key de desarrollo (fallback). Configura servidor Node o función get-vapid-key.');
     }
 
     async registerServiceWorker() {
@@ -256,32 +278,48 @@ class PushNotificationManager {
     }
 
     async sendTestNotification() {
+        // Intentar enviar vía servidor Node usando la suscripción actual del navegador
+        try {
+            if (!this.subscription) {
+                throw new Error('No existe suscripción activa del navegador');
+            }
+            const base = window.NODE_PUSH_SERVER_URL || '';
+            const nodeUrl = base ? `${base}/api/push` : '/api/push';
+            const payload = {
+                title: 'Notificación de prueba',
+                body: 'Esta es una notificación de prueba desde Node',
+                data: { url: '/inicio.html', type: 'test' }
+            };
+            const r = await fetch(nodeUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subscription: this.subscription, payload })
+            });
+            if (!r.ok) throw new Error('Fallo envío via Node');
+            const j = await r.json();
+            console.log('Test notification sent via Node:', j);
+            return j;
+        } catch (errNode) {
+            console.warn('Fallo envío de prueba por Node, probando Supabase:', errNode?.message || errNode);
+        }
+
+        // Fallback: usar Supabase Function
         try {
             const { data: { user } } = await supabaseConfig.client.auth.getUser();
-            
-            if (!user) {
-                throw new Error('User not authenticated');
-            }
-
+            if (!user) throw new Error('User not authenticated');
             const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
                 body: {
                     to_user_id: user.id,
                     title: 'Notificación de prueba',
                     body: 'Esta es una notificación de prueba del sistema LLO Admin',
-                    data: {
-                        url: '/inicio.html',
-                        type: 'test'
-                    }
+                    data: { url: '/inicio.html', type: 'test' }
                 }
             });
-
             if (error) throw error;
-            
-            console.log('Test notification sent:', data);
+            console.log('Test notification sent via Supabase:', data);
             return data;
-            
         } catch (error) {
-            console.error('Error sending test notification:', error);
+            console.error('Error sending test notification (Supabase):', error);
             throw error;
         }
     }
