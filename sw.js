@@ -1,7 +1,7 @@
 // sw.js
 
 // COMENTARIO: Se añade versionado de caché para forzar la actualización de archivos.
-const CACHE_NAME = 'tlc-cache-v5';
+const CACHE_NAME = 'tlc-cache-v6';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -82,7 +82,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
+  const url = new URL(event.request.url);
   const dest = event.request.destination; // 'document', 'script', 'style', 'image', 'font', ''
+
+  // No interceptar llamadas a API ni endpoints dinámicos del servidor
+  if (url.pathname.startsWith('/api/') || url.pathname === '/vapid-public-key') {
+    return; // dejar que el navegador maneje la solicitud
+  }
 
   event.respondWith((async () => {
     const cached = await caches.match(event.request, { ignoreSearch: true });
@@ -104,8 +110,8 @@ self.addEventListener('fetch', (event) => {
         const offline = await caches.match('/offline.html');
         if (offline) return offline;
       }
-      // Como último recurso, permitir que el navegador gestione el error sin forzar 503
-      return new Response('', { status: 408 });
+      // Último recurso: devolver respuesta vacía con 503 (mejor señal para recursos)
+      return new Response('', { status: 503 });
     }
   })());
 });

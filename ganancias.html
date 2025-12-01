@@ -3,42 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ganancia — Panel del Dueño</title>
-
-<!-- ✅ Favicon -->
-<link rel="icon" type="imag/x-icon" href="img/favicon.ico" />
-<link rel="icon" type="image/x-icon" href="img/favicon-16x16.png" sizes="16x16" />
-<link rel="icon" type="image/x-icon" href="img/favicon-32x32.png" sizes="32x32" />
-<link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
-
-
+  <title>Ganancias — Panel del Dueño</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net https://unpkg.com http://localhost:*; font-src 'self' data:; manifest-src 'self'; worker-src 'self'">
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
+  <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
   <link rel="stylesheet" href="css/admin-panel-styles.css">
 </head>
 <body class="bg-gray-100">
-
+  <!-- Overlay para móvil -->
+  <div id="sidebarOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-20 hidden md:hidden"></div>
   <!-- Botón de menú móvil -->
   <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden">
     <i data-lucide="menu" class="w-6 h-6 text-gray-800"></i>
   </button>
-
-  <!-- Overlay para móvil -->
-  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden md:hidden"></div>
-
-  <!-- Sidebar Modernizado -->
+  <!-- Sidebar -->
   <aside id="sidebar" class="fixed top-0 left-0 h-screen w-64 z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
-    <!-- Header del Sidebar -->
     <div class="sidebar-header flex items-center justify-center py-6 px-4">
-      <div class="sidebar-logo w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
-        LLO
-      </div>
+      <div class="sidebar-logo w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">LLO</div>
       <h2 class="text-xl font-bold text-white ml-3 sidebar-text">Admin</h2>
     </div>
-    <!-- Navegación -->
     <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
       <a href="inicio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="home" class="w-5 h-5"></i> <span class="sidebar-text">Inicio</span></a>
       <a href="servicios.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="box" class="w-5 h-5"></i> <span class="sidebar-text">Servicios</span></a>
@@ -47,7 +33,6 @@
       <a href="mi-negocio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5"></i> <span class="sidebar-text">Mi negocio</span></a>
       <a href="colaboradores.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="users" class="w-5 h-5"></i> <span class="sidebar-text">Colaboradores</span></a>
     </nav>
-    <!-- Footer del Sidebar -->
     <div class="sidebar-footer p-4">
       <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm">
         <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
@@ -61,200 +46,137 @@
   </aside>
 
   <!-- Contenido principal -->
-  <main id="main-content" class="main-content p-8 space-y-8">
-    <div class="flex items-center justify-between mb-6">
+  <main id="main-content" class="main-content p-6 space-y-6">
+    <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">Análisis de Ganancias</h1>
-        <p class="text-gray-600">Visualiza ingresos, estadísticas por período y genera reportes detallados.</p>
+        <h1 class="text-3xl font-bold text-gray-900 mb-1">Ganancias</h1>
+        <p class="text-gray-600">Resumen financiero y comisiones del equipo.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <select id="filterPeriod" class="border rounded px-3 py-2">
+          <option value="day">Últimos 30 días</option>
+          <option value="week">Últimas 12 semanas</option>
+          <option value="month" selected>Últimos 12 meses</option>
+        </select>
+        <button id="exportExcel" class="btn-primary px-4 py-2 rounded">Exportar Excel</button>
       </div>
     </div>
 
-    <!-- Resumen de ganancias con nuevos estilos -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-turquesa);">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--turquesa); color:white;">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm font-medium opacity-80">Ganancias Totales</p>
-            <p class="text-3xl font-bold" id="totalEarnings">$0.00</p>
+            <p class="opacity-80">Total</p>
+            <p id="totalEarnings" class="text-3xl font-bold">$0.00</p>
           </div>
-          <i data-lucide="dollar-sign" class="w-8 h-8 opacity-50"></i>
+          <i data-lucide="wallet" class="w-8 h-8 opacity-80"></i>
         </div>
       </div>
-      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--azul); color:white;">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm font-medium opacity-80">Ganancias Hoy</p>
-            <p class="text-3xl font-bold" id="todayEarnings">$0.00</p>
+            <p class="opacity-80">Hoy</p>
+            <p id="todayEarnings" class="text-3xl font-bold">$0.00</p>
           </div>
-          <i data-lucide="calendar-days" class="w-8 h-8 opacity-50"></i>
+          <i data-lucide="calendar-check" class="w-8 h-8 opacity-80"></i>
         </div>
       </div>
-      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--azul-claro); color:white;">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm font-medium opacity-80">Este Mes</p>
-            <p class="text-3xl font-bold" id="monthEarnings">$0.00</p>
+            <p class="opacity-80">Este Mes</p>
+            <p id="monthEarnings" class="text-3xl font-bold">$0.00</p>
           </div>
-          <i data-lucide="calendar" class="w-8 h-8 opacity-50"></i>
+          <i data-lucide="calendar" class="w-8 h-8 opacity-80"></i>
         </div>
       </div>
-      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
+      <div class="stat-card p-6 rounded-xl shadow-lg" style="background:var(--azul); color:white;">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm font-medium opacity-80">Promedio por Orden</p>
-            <p class="text-3xl font-bold" id="avgOrderValue">$0.00</p>
+            <p class="opacity-80">Promedio por Orden</p>
+            <p id="avgOrderValue" class="text-3xl font-bold">$0.00</p>
           </div>
-          <i data-lucide="bar-chart-3" class="w-8 h-8 opacity-50"></i>
+          <i data-lucide="gauge" class="w-8 h-8 opacity-80"></i>
         </div>
       </div>
     </div>
 
-    <!-- Panel de Gráfico de Ganancias -->
-    <div class="card p-6">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-        <div class="flex items-center gap-3 mb-4 sm:mb-0">
-          <h2 class="text-xl font-bold text-turquoise flex items-center gap-3">
-            <span class="bg-yellow-400 p-2 rounded-lg">
-              <i data-lucide="line-chart" class="w-5 h-5 text-white"></i>
-            </span>
-            Evolución de Ingresos
-          </h2>
-        </div>
-        <div class="flex flex-col sm:flex-row gap-3">
-          <div class="flex items-center gap-2">
-            <label class="text-sm font-medium text-gray-700">Período:</label>
-            <select id="filterPeriod" class="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors">
-              <option value="day">Por Día</option>
-              <option value="week">Por Semana</option>
-              <option value="month">Por Mes</option>
-            </select>
-          </div>
-          <button id="exportExcel" class="btn-primary px-4 py-2 rounded-lg flex items-center gap-2">
-            <i data-lucide="download" class="w-4 h-4"></i>
-            Exportar Excel
-          </button>
-          <button id="exportFinancePdf" class="px-4 py-2 rounded-lg flex items-center gap-2 border border-gray-300">
-            <i data-lucide="file-text" class="w-4 h-4"></i>
-            Exportar PDF
-          </button>
-        </div>
-      </div>
-      <div class="h-96">
+    <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+      <div class="h-80">
         <canvas id="gananciaChart"></canvas>
       </div>
-      <!-- Overlay de Carga -->
-      <div id="loadingOverlay" class="absolute inset-0 bg-white/70 flex items-center justify-center rounded-lg hidden">
-        <div class="flex flex-col items-center gap-2">
-          <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span class="text-gray-600">Actualizando datos...</span>
-        </div>
-      </div>
     </div>
 
-    <!-- Finanzas y Pagos: Cálculo de Comisiones de colaborador y Socios -->
-    <section class="card p-6" id="financeSection">
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-bold text-turquoise flex items-center gap-3">
-          <span class="bg-yellow-400 p-2 rounded-lg">
-            <i data-lucide="calculator" class="w-5 h-5 text-white"></i>
-          </span>
-          Finanzas y Pagos — Cálculo de Comisiones de colaborador y Socios
-        </h2>
-        <div class="text-sm text-gray-600 hidden" id="financeRoleWarning">Solo visible para Administradores</div>
-      </div>
+    <section id="financeSection" class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+      <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+        <span class="bg-yellow-400 p-2 rounded-lg"><i data-lucide="users" class="w-5 h-5 text-white"></i></span>
+        Finanzas por Colaborador
+      </h2>
 
-      <!-- Resumen General -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-turquesa);">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium opacity-80">Total Pagos a Colaboradores (Mes)</p>
-              <p class="text-3xl font-bold" id="sumCollabMonth">$0.00</p>
-            </div>
-            <i data-lucide="users" class="w-8 h-8 opacity-50"></i>
-          </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+        <div class="p-4 rounded-lg bg-green-50 border border-green-200">
+          <p class="text-green-700 text-sm font-medium">Total Colaboradores (Mes)</p>
+          <p id="sumCollabMonth" class="text-2xl font-bold text-green-800">$0.00</p>
         </div>
-        <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium opacity-80">Total Empresa (Mes)</p>
-              <p class="text-3xl font-bold" id="sumCompanyMonth">$0.00</p>
-            </div>
-            <i data-lucide="building" class="w-8 h-8 opacity-50"></i>
-          </div>
+        <div class="p-4 rounded-lg bg-blue-50 border border-blue-200">
+          <p class="text-blue-700 text-sm font-medium">Total Empresa (Mes)</p>
+          <p id="sumCompanyMonth" class="text-2xl font-bold text-blue-800">$0.00</p>
         </div>
-        <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium opacity-80">5% Mensual Acumulado</p>
-              <p class="text-3xl font-bold" id="sumFivePercent">$0.00</p>
-            </div>
-            <i data-lucide="percent" class="w-8 h-8 opacity-50"></i>
-          </div>
+        <div class="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
+          <p class="text-yellow-700 text-sm font-medium">5% Mensual Acumulado</p>
+          <p id="sumFivePercent" class="text-2xl font-bold text-yellow-800">$0.00</p>
         </div>
       </div>
 
-      <!-- Tabla de colaboradores con porcentaje configurable -->
-      <div class="mb-6">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-lg font-semibold text-gray-800">Porcentajes de Colaboradores</h3>
-          <span class="text-sm text-gray-500">Edita el % individual y guarda en tiempo real</span>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full">
-            <thead>
-              <tr>
-                <th class="table-header">Colaborador</th>
-                <th class="table-header">% Comisión</th>
-                <th class="table-header">Total Mes</th>
-                <th class="table-header">Total Acumulado</th>
-              </tr>
-            </thead>
-            <tbody id="collabFinanceTable" class="divide-y divide-gray-100"></tbody>
-          </table>
-        </div>
+      <div class="overflow-x-auto mb-6">
+        <table class="min-w-full">
+          <thead>
+            <tr>
+              <th class="table-header">Colaborador</th>
+              <th class="table-header">% Comisión</th>
+              <th class="table-header">Este Mes</th>
+              <th class="table-header">Total</th>
+            </tr>
+          </thead>
+          <tbody id="collabFinanceTable" class="divide-y divide-gray-200"></tbody>
+        </table>
       </div>
 
-      <!-- Vista detallada por colaborador -->
-      <div class="mb-6">
-        <div class="flex items-center gap-2 mb-3">
-          <label class="text-sm font-medium text-gray-700">Ver detalle de:</label>
-          <select id="detailCollabSelect" class="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors"></select>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full">
-            <thead>
-              <tr>
-                <th class="table-header">Orden</th>
-                <th class="table-header">Servicio</th>
-                <th class="table-header">Monto</th>
-                <th class="table-header">% Colab</th>
-                <th class="table-header">Gana Colab</th>
-                <th class="table-header">Gana Empresa</th>
-                <th class="table-header">5% Mensual</th>
-                <th class="table-header">Fecha</th>
-              </tr>
-            </thead>
-            <tbody id="collabDetailTable" class="divide-y divide-gray-100"></tbody>
-          </table>
-        </div>
+      <div class="flex items-center gap-3 mb-4">
+        <select id="detailCollabSelect" class="border rounded px-3 py-2"></select>
+        <button id="exportFinancePdf" class="px-3 py-2 rounded bg-gray-100 text-gray-800 hover:bg-gray-200">Exportar PDF</button>
       </div>
 
-      <!-- Historial de pagos (placeholder funcional) -->
-      <div>
-        <h3 class="text-lg font-semibold text-gray-800 mb-3">Historial de Pagos</h3>
-        <div id="paymentHistory" class="space-y-2 text-sm text-gray-700"></div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full">
+          <thead>
+            <tr>
+              <th class="table-header"># Orden</th>
+              <th class="table-header">Servicio</th>
+              <th class="table-header">Monto Cobrado</th>
+              <th class="table-header">%</th>
+              <th class="table-header">Colaborador</th>
+              <th class="table-header">Empresa</th>
+              <th class="table-header">5%</th>
+              <th class="table-header">Fecha</th>
+            </tr>
+          </thead>
+          <tbody id="collabDetailTable" class="divide-y divide-gray-200"></tbody>
+        </table>
       </div>
     </section>
+
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-25 hidden"></div>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="js/supabase-config.js"></script>
+  <script src="js/notifications.js"></script>
   <script src="js/sidebar.js"></script>
+  <script src="js/logging.js"></script>
   <script src="js/ganancias.js"></script>
-
 </body>
 </html>

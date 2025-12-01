@@ -126,7 +126,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${colab.status}
           </span>
         </td>
+        <td class="px-6 py-4">
+          <input type="number" min="0" max="100" step="0.5" value="${typeof colab.commission_percent === 'number' ? colab.commission_percent : (parseFloat(colab.commission_percent) || 0)}" data-collab-id="${colab.id}" class="w-24 border rounded px-2 py-1" />
+        </td>
         <td class="px-6 py-4 flex items-center gap-2">
+          <button onclick="viewMetrics('${colab.id}')" title="Ver rendimiento" class="text-azulClaro hover:text-azulOscuro"><i data-lucide="bar-chart-3" class="w-4 h-4"></i></button>
           <button onclick="editCollaborator('${colab.id}')" class="text-blue-600 hover:text-blue-800"><i data-lucide="edit" class="w-4 h-4"></i></button>
           <button onclick="deleteCollaborator('${colab.id}')" class="text-red-600 hover:text-red-800"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
         </td>
@@ -134,6 +138,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     `).join('');
 
     if (window.lucide) lucide.createIcons();
+
+    tableBody.querySelectorAll('input[type="number"]').forEach(inp => {
+      inp.addEventListener('change', async (e) => {
+        const id = e.target.getAttribute('data-collab-id');
+        const pct = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
+        e.target.value = pct;
+        try {
+          const { error } = await supabaseConfig.client
+            .from('collaborators')
+            .update({ commission_percent: pct })
+            .eq('id', id);
+          if (error) throw error;
+        } catch (err) {
+          console.error('Error al guardar porcentaje de comisión:', err);
+          alert('No se pudo guardar el porcentaje.');
+        }
+      });
+    });
   }
 
   // Filtrar y renderizar
@@ -328,6 +350,88 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Exponer por si se necesita al abrir métricas
   window.ensureChartJsLoaded = ensureChartJsLoaded;
 
+  // Abrir y poblar modal de métricas
+  window.viewMetrics = async (id) => {
+    try {
+      await ensureChartJsLoaded();
+      const modal = document.getElementById('metricsModal');
+      const nameEl = document.getElementById('modalCollabName');
+      const emailEl = document.getElementById('modalCollabEmail');
+      const avatarEl = document.getElementById('modalCollabAvatar');
+      const completedEl = document.getElementById('modalCompletedCount');
+      const activeEl = document.getElementById('modalActiveCount');
+      const successEl = document.getElementById('modalSuccessRate');
+      const avgTimeEl = document.getElementById('modalAvgTime');
+      const timeStatsEl = document.getElementById('modalTimeStats');
+      const vehicleStatsEl = document.getElementById('modalVehicleStats');
+      const collab = allCollaborators.find(c => String(c.id) === String(id));
+      if (!collab) return;
+
+      nameEl.textContent = collab.name || String(id);
+      emailEl.textContent = collab.email || '';
+      avatarEl.innerHTML = generateAvatar(collab.name || 'C');
+
+      const { data: orders } = await supabaseConfig.client
+        .from('orders')
+        .select('id, status, created_at, completed_at, service:services(name), vehicle:vehicles(name)')
+        .eq('assigned_to', id)
+        .order('created_at', { ascending: false });
+      const arr = Array.isArray(orders) ? orders : [];
+      const completed = arr.filter(o => String(o.status).toLowerCase() === 'completada');
+      const active = arr.filter(o => !['completada','cancelada'].includes(String(o.status).toLowerCase()));
+      completedEl.textContent = String(completed.length);
+      activeEl.textContent = String(active.length);
+      const successRate = arr.length > 0 ? Math.round((completed.length / arr.length) * 100) : 0;
+      successEl.textContent = `${successRate}%`;
+
+      // Tiempo promedio: diferencia created_at → completed_at en horas
+      const avgMs = completed
+        .map(o => (new Date(o.completed_at).getTime() - new Date(o.created_at).getTime()))
+        .filter(n => Number.isFinite(n) && n > 0)
+        .reduce((a,b) => a + b, 0) / Math.max(1, completed.length);
+      const avgHours = Math.round((avgMs / 3600000) * 10) / 10;
+      avgTimeEl.textContent = `${avgHours}h`;
+
+      // Horario simple: conteo por día de la semana para órdenes completadas
+      const counts = [0,0,0,0,0,0,0];
+      completed.forEach(o => { const d = new Date(o.completed_at); const idx = (d.getDay() || 7) - 1; counts[idx] += 1; });
+      timeStatsEl.innerHTML = counts.map((c,i) => `<div class="flex items-center justify-between"><span class="text-gray-600">${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][i]}</span><span class="font-semibold">${c}</span></div>`).join('');
+
+      // Estadísticas de vehículos
+      const vehCount = new Map();
+      arr.forEach(o => { const key = o.vehicle?.name || '—'; vehCount.set(key, (vehCount.get(key)||0)+1); });
+      vehicleStatsEl.innerHTML = Array.from(vehCount.entries()).map(([k,v]) => `<div class="flex items-center justify-between"><span class="text-gray-600">${k}</span><span class="font-semibold">${v}</span></div>`).join('');
+
+      // Gráfico semanal
+      const ctxW = document.getElementById('modalWeeklyChart');
+      if (window.__weeklyChart) { window.__weeklyChart.destroy(); }
+      window.__weeklyChart = new Chart(ctxW, {
+        type: 'bar',
+        data: { labels: ['L','M','X','J','V','S','D'], datasets: [{ label: 'Completadas', data: counts, backgroundColor: 'rgba(37,99,235,0.5)' }] },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // Gráfico de servicios
+      const svcCount = new Map();
+      arr.forEach(o => { const key = o.service?.name || '—'; svcCount.set(key, (svcCount.get(key)||0)+1); });
+      const labels = Array.from(svcCount.keys());
+      const dataVals = Array.from(svcCount.values());
+      const ctxS = document.getElementById('modalServicesChart');
+      if (window.__servicesChart) { window.__servicesChart.destroy(); }
+      window.__servicesChart = new Chart(ctxS, {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data: dataVals }] },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // Abrir modal
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      const closeBtn = document.getElementById('closeMetricsModal');
+      if (closeBtn) closeBtn.onclick = () => { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); };
+    } catch (e) { console.error('Error al abrir métricas:', e); }
+  };
+
   window.deleteCollaborator = async (id) => {
     if (!confirm('¿Estás seguro de que quieres eliminar a este colaborador? Esta acción no se puede deshacer.')) {
       return;
@@ -355,6 +459,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- INICIALIZACIÓN ---
   await loadCollaborators();
+  // Abrir modal de métricas desde sidebar
+  const openMetricsBtn = document.getElementById('openMetricsFromSidebar');
+  if (openMetricsBtn) openMetricsBtn.addEventListener('click', () => {
+    const first = allCollaborators[0];
+    if (first) viewMetrics(String(first.id));
+  });
   
   // Exponer función para reintentos manuales
   window.loadCollaborators = loadCollaborators;

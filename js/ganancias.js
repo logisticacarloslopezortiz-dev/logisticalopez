@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const { data, error } = await supabaseConfig.client
         .from('collaborators')
-        .select('id, full_name, commission_percent, role');
+        .select('id, name, commission_percent, role');
       if (error) throw error;
       collaborators = Array.isArray(data) ? data : [];
       collabPercentMap = new Map();
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function currency(value) {
-    return `$${Number(value || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `RD$ ${Number(value || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   function computeFinance(now = new Date()) {
@@ -143,13 +143,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Tabla porcentajes y totales
     ui.collabFinanceTable.innerHTML = '';
     let monthCollabSum = 0;
-    const rows = collaborators.map(c => {
+      const rows = collaborators.map(c => {
       const id = String(c.id);
       const stats = perCollab.get(id) || { month: 0, total: 0, pct: collabPercentMap.get(id) || 0 };
       monthCollabSum += stats.month;
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="table-cell">${c.full_name || id}</td>
+        <td class="table-cell">${c.name || id}</td>
         <td class="table-cell">
           <input type="number" min="0" max="100" step="0.5" value="${stats.pct}" data-collab-id="${id}" class="w-24 border rounded px-2 py-1" />
         </td>
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     collaborators.forEach(c => {
       const opt = document.createElement('option');
       opt.value = String(c.id);
-      opt.textContent = c.full_name || c.id;
+      opt.textContent = c.name || c.id;
       ui.detailCollabSelect.appendChild(opt);
     });
     const selId = ui.detailCollabSelect.value;
@@ -211,7 +211,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td class="table-cell">${currency(colShare)}</td>
         <td class="table-cell">${currency(companyShare)}</td>
         <td class="table-cell">${currency(fivePct)}</td>
-        <td class="table-cell">${o.completed_at.toLocaleString('es-ES')}</td>
+        <td class="table-cell">${o.completed_at.toLocaleString('es-DO')}</td>
       `;
       ui.collabDetailTable.appendChild(tr);
     });
@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       y += 20;
       collaborators.forEach(c => {
         const pct = collabPercentMap.get(String(c.id)) || 0;
-        doc.text(`${c.full_name || c.id}: ${pct}%`, 40, y);
+        doc.text(`${c.name || c.id}: ${pct}%`, 40, y);
         y += 18;
         if (y > 760) { doc.addPage(); y = 40; }
       });
@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       .reduce((sum, order) => sum + order.monto_cobrado, 0);
     const avgOrderValue = allOrders.length > 0 ? totalEarnings / allOrders.length : 0;
 
-    const formatCurrency = (value) => `$${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formatCurrency = (value) => `RD$ ${Number(value||0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     ui.totalEarnings.textContent = formatCurrency(totalEarnings);
     ui.todayEarnings.textContent = formatCurrency(todayEarnings);
@@ -276,32 +276,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dataMap = new Map();
     const now = new Date();
 
+    function monthsDiff(a, b) {
+      return (a.getFullYear() - b.getFullYear()) * 12 + (a.getMonth() - b.getMonth());
+    }
+
     allOrders.forEach(order => {
+      const d = new Date(order.completed_at);
       let key;
-      const date = order.completed_at;
 
       if (period === 'day') {
-        // Últimos 30 días
-        if (now - date > 30 * 24 * 60 * 60 * 1000) return;
-        key = date.toLocaleDateString('es-ES', { year: '2-digit', month: '2-digit', day: '2-digit' });
+        if (now.getTime() - d.getTime() > 30 * 24 * 60 * 60 * 1000) return;
+        key = d.toLocaleDateString('es-DO', { year: '2-digit', month: '2-digit', day: '2-digit' });
       } else if (period === 'week') {
-        // Últimas 12 semanas
-        if (now - date > 12 * 7 * 24 * 60 * 60 * 1000) return;
-        const startOfWeek = new Date(date.setDate(date.getDate() - date.getDay()));
-        key = `Semana del ${startOfWeek.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}`;
+        if (now.getTime() - d.getTime() > 12 * 7 * 24 * 60 * 60 * 1000) return;
+        const dow = d.getDay(); // 0=Dom
+        const start = new Date(d);
+        start.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1)); // Lunes como inicio
+        start.setHours(0,0,0,0);
+        key = `Semana del ${start.toLocaleDateString('es-DO', { day: '2-digit', month: 'short' })}`;
       } else { // month
-        // Últimos 12 meses
-        if (now.getFullYear() - date.getFullYear() > 1 && now.getMonth() > date.getMonth()) return;
-        key = date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long' });
+        if (monthsDiff(now, d) > 12) return;
+        key = d.toLocaleDateString('es-DO', { year: 'numeric', month: 'long' });
       }
 
       dataMap.set(key, (dataMap.get(key) || 0) + order.monto_cobrado);
     });
 
-    const sortedEntries = Array.from(dataMap.entries()).reverse();
+    const sortedEntries = Array.from(dataMap.entries());
     return {
-      labels: sortedEntries.map(entry => entry[0]),
-      data: sortedEntries.map(entry => entry[1]),
+      labels: sortedEntries.map(([label]) => label),
+      data: sortedEntries.map(([,value]) => value),
     };
   }
 
@@ -339,7 +343,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             beginAtZero: true,
             ticks: {
               callback: function(value) {
-                return '$' + value.toLocaleString('es-DO');
+                return 'RD$ ' + Number(value||0).toLocaleString('es-DO');
               }
             }
           }
@@ -351,13 +355,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           tooltip: {
             callbacks: {
               label: function(context) {
-                return ` Ganancias: $${context.raw.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
+                return ' Ganancias: RD$ ' + Number(context.raw || 0).toLocaleString('es-DO', { minimumFractionDigits: 2 });
               }
             }
           }
         }
-      }
-    });
+      });
   }
 
   /**
@@ -385,6 +388,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 4. --- Inicialización y Event Listeners ---
 
+  let realtimeSetup = false;
+  async function refreshUI() {
+    await fetchCompletedOrders();
+    updateStatCards();
+    renderChart();
+    await renderFinance(session);
+  }
+
   async function initialize() {
     await Promise.all([fetchCompletedOrders(), fetchCollaborators()]);
     updateStatCards();
@@ -396,23 +407,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (ui.exportFinancePdf) ui.exportFinancePdf.addEventListener('click', exportFinanceToPdf);
     if (ui.detailCollabSelect) ui.detailCollabSelect.addEventListener('change', (e) => renderCollabDetail(e.target.value));
 
-    // Suscripción a cambios en tiempo real
-    supabaseConfig.client
-      .channel('public:orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-        console.log('Cambio detectado en órdenes, actualizando datos de ganancias...');
-        initialize();
-      })
-      .subscribe();
+    if (!realtimeSetup) {
+      realtimeSetup = true;
+      const ordersChannel = supabaseConfig.client
+        .channel('public:orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async () => {
+          console.log('Cambio en órdenes → refrescando métricas');
+          await refreshUI();
+        })
+        .subscribe();
 
-    // Suscripción a cambios en colaboradores (para porcentajes)
-    supabaseConfig.client
-      .channel('public:collaborators')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborators' }, async (payload) => {
-        await fetchCollaborators();
-        await renderFinance(session);
-      })
-      .subscribe();
+      const collabChannel = supabaseConfig.client
+        .channel('public:collaborators')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborators' }, async () => {
+          await fetchCollaborators();
+          await renderFinance(session);
+        })
+        .subscribe();
+      // Guardar referencias si luego se requiere cerrar
+      window.__tlc_ordersChannel = ordersChannel;
+      window.__tlc_collabChannel = collabChannel;
+    }
   }
 
   initialize();

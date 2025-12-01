@@ -32,20 +32,27 @@ class PushNotificationManager {
         // 1) Intentar obtener desde servidor Node
         try {
             const base = window.NODE_PUSH_SERVER_URL || '';
-            const url = base ? `${base}/api/vapidPublicKey` : '/api/vapidPublicKey';
-            const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            if (!r.ok) throw new Error('Node vapid endpoint error');
-            const j = await r.json();
+            const urlPrimary = base ? `${base}/vapid-public-key` : '/vapid-public-key';
+            const r1 = await fetch(urlPrimary, { headers: { 'Accept': 'application/json' } });
+            let j = null;
+            if (r1 && r1.ok) {
+                j = await r1.json();
+            } else {
+                const urlFallback = base ? `${base}/api/vapidPublicKey` : '/api/vapidPublicKey';
+                const r2 = await fetch(urlFallback, { headers: { 'Accept': 'application/json' } });
+                if (!r2.ok) throw new Error('node_endpoint_unavailable');
+                j = await r2.json();
+            }
             this.vapidPublicKey = j?.key || j?.vapidPublicKey || j?.publicKey || null;
-            if (!this.vapidPublicKey) throw new Error('Clave VAPID no encontrada en respuesta Node');
+            if (!this.vapidPublicKey) throw new Error('invalid_vapid_key');
             const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
             if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
-              throw new Error('Clave VAPID inválida desde Node');
+              throw new Error('invalid_vapid_key_format');
             }
             console.log('VAPID key obtenida desde servidor Node');
             return;
-        } catch (e) {
-            console.warn('Fallo VAPID por Node, probando Supabase Functions:', e?.message || e);
+        } catch (_) {
+            console.info('VAPID por Node no disponible, usando Supabase Functions');
         }
 
         // 2) Fallback: Supabase Functions

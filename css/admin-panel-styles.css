@@ -6,12 +6,12 @@
 
 /* --- Estilos base y paleta de colores --- */
 :root {
-  --color-primario-oscuro: #1E405A;
+  --color-primario-oscuro: #174F57;
   --color-primario-turquesa: #1E8A95;
   --color-fondo-principal: #FFFFFF;
-  --color-fondo-secundario: #F9FAFB; /* Gris claro */
-  --color-texto-principal: #1F2937;
-  --color-texto-secundario: #6B7280;
+  --color-fondo-secundario: #F3F4F6;
+  --color-texto-principal: #111827;
+  --color-texto-secundario: #374151;
   --color-acento-amarillo: #FBBF24;
 }
 
@@ -92,7 +92,7 @@ body {
 }
 
 .btn-primary:hover {
-  background-color: #1a7b85; /* Un tono más oscuro de turquesa */
+  background-color: #176b74;
 }
 
 /* Estilos para Tablas Modernas */
@@ -125,3 +125,27 @@ body {
 .text-turquoise {
   color: var(--color-primario-turquesa);
 }
+.bg-azulOscuro { background-color: var(--color-primario-oscuro) !important; }
+.text-azulOscuro { color: var(--color-primario-oscuro) !important; }
+.border-azulOscuro { border-color: var(--color-primario-oscuro) !important; }
+
+.bg-azulClaro { background-color: var(--color-primario-turquesa) !important; }
+.text-azulClaro { color: var(--color-primario-turquesa) !important; }
+.border-azulClaro { border-color: var(--color-primario-turquesa) !important; }
+
+.bg-acento { background-color: var(--color-acento-amarillo) !important; }
+.text-acento { color: var(--color-acento-amarillo) !important; }
+.border-acento { border-color: var(--color-acento-amarillo) !important; }
+
+.btn-login {
+  background-color: var(--color-primario-oscuro);
+  color: var(--color-primario-turquesa);
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.3s, color 0.3s;
+}
+.btn-login:hover { background-color: var(--color-primario-turquesa); color: #FFFFFF; }
+
+.hover\:bg-azulOscuro\/90:hover { background-color: var(--color-primario-oscuro) !important; opacity: 0.9; }
+.header-hidden { transform: translateY(-100%); }

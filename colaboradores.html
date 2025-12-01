@@ -43,6 +43,10 @@
       <a href="ganancias.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="dollar-sign" class="w-5 h-5"></i> <span class="sidebar-text">Ganancia</span></a>
       <a href="historial-solicitudes.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="history" class="w-5 h-5"></i> <span class="sidebar-text">Historial</span></a>
       <a href="mi-negocio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5"></i> <span class="sidebar-text">Mi negocio</span></a>
+      <!-- Botón de rendimiento abre modal -->
+      <button id="openMetricsFromSidebar" class="flex items-center gap-3 px-4 py-3 rounded-lg">
+        <i data-lucide="bar-chart-3" class="w-5 h-5"></i> <span class="sidebar-text">Rendimiento</span>
+      </button>
       <a href="colaboradores.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="users" class="w-5 h-5"></i> <span class="sidebar-text">Colaboradores</span></a>
     </nav>
     <!-- Footer del Sidebar -->
@@ -144,23 +148,24 @@
         </h2>
       </div>
       
-      <!-- Tabla para mostrar los colaboradores -->
-      <div class="overflow-x-auto">
-        <table class="min-w-full">
-          <thead>
-            <tr>
-              <th class="table-header">Nombre</th>
-              <th class="table-header">Matrícula</th>
-              <th class="table-header">Email</th>
-              <th class="table-header">Estado</th>
-              <th class="table-header">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="colaboradoresTableBody" class="divide-y divide-gray-200">
-            <!-- Filas generadas dinámicamente -->
-          </tbody>
-        </table>
-      </div>
+          <!-- Tabla para mostrar los colaboradores -->
+          <div class="overflow-x-auto">
+            <table class="min-w-full">
+              <thead>
+                <tr>
+                  <th class="table-header">Nombre</th>
+                  <th class="table-header">Matrícula</th>
+                  <th class="table-header">Email</th>
+                  <th class="table-header">Estado</th>
+                  <th class="table-header">% Comisión</th>
+                  <th class="table-header">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="colaboradoresTableBody" class="divide-y divide-gray-200">
+                <!-- Filas generadas dinámicamente -->
+              </tbody>
+            </table>
+          </div>
     </div>
   </main>
   <!-- Modal de Métricas -->

@@ -33,6 +33,10 @@ app.get('/api/vapidPublicKey', (_req, res) => {
   res.json({ key: VAPID_PUBLIC_KEY });
 });
 
+app.get('/vapid-public-key', (_req, res) => {
+  res.json({ key: VAPID_PUBLIC_KEY, vapidPublicKey: VAPID_PUBLIC_KEY });
+});
+
 // Endpoint para enviar push a una suscripción
 // Body esperado: { subscription: {..}, payload: { title, body, icon, badge, data: { url } } }
 app.post('/api/push', async (req, res) => {
