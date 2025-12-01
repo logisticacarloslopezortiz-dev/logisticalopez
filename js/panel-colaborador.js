@@ -155,31 +155,29 @@ function renderPendingCards(orders) {
   }
   container.innerHTML = orders.map(o => {
     const statusLabel = String(o.status || '').toUpperCase();
+    const serviceName = (o.service && o.service.name) ? o.service.name : (o.service || '—');
+    const vehicleName = o.vehicle && o.vehicle.name ? o.vehicle.name : (o.vehicle || '');
+    const orderTitle = o.short_id ? `#${o.short_id}` : (o.id ? `#${o.id}` : '#—');
     return `
-      <div class="rounded-xl border bg-white shadow-sm overflow-hidden">
+      <div class="pending-card rounded-xl border border-blue-300 border-l-4 border-yellow-400 bg-blue-50 shadow-sm hover:shadow-lg overflow-hidden cursor-pointer" data-id="${o.id}">
         <div class="p-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">${statusLabel}</span>
           </div>
-          <div class="flex items-center gap-2">
-            <button class="px-3 py-1 rounded-lg bg-gray-100 text-gray-800 text-sm hover:bg-gray-200" data-action="view" data-id="${o.id}">Ver</button>
-            <button class="px-3 py-1 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700" data-action="accept" data-id="${o.id}">Aceptar</button>
-          </div>
+          <div class="text-sm font-bold text-gray-800">${orderTitle}</div>
         </div>
         <div class="px-4 pb-4 text-sm text-gray-700">
-          <h3 class="font-semibold text-gray-900 mb-1">${o.name || 'Cliente'}</h3>
-          <p class="text-gray-600 mb-2">${o.phone || ''}</p>
-          <div class="mb-2">
-            <p class="text-sm font-medium text-gray-800">${(o.service && o.service.name) ? o.service.name : (o.service || '—')}</p>
-            ${o.vehicle ? `<p class="text-xs text-gray-500">${(o.vehicle && o.vehicle.name) ? o.vehicle.name : o.vehicle}</p>` : ''}
-          </div>
-          <div class="text-xs text-gray-600 mb-2">
+          <h3 class="font-semibold text-gray-900 mb-1">${serviceName}</h3>
+          ${vehicleName ? `<p class="text-xs text-gray-500">${vehicleName}</p>` : ''}
+          <div class="mt-2 text-sm text-gray-800">${o.name || 'Cliente'}</div>
+          ${o.phone ? `<div class="text-xs text-gray-600">${o.phone}</div>` : ''}
+          <div class="text-xs text-gray-600 mt-2">
             <span class="font-medium">Ruta:</span>
             <span class="block truncate" title="${o.pickup || ''} → ${o.delivery || ''}">
               ${o.pickup || ''} → ${o.delivery || ''}
             </span>
           </div>
-          <div class="text-xs text-gray-600">
+          <div class="text-xs text-gray-600 mt-2">
             <span class="font-medium">Fecha:</span> ${o.date || ''} • ${o.time || ''}
           </div>
         </div>
@@ -187,6 +185,219 @@ function renderPendingCards(orders) {
     `;
   }).join('');
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btnActive = document.getElementById('tabBtnActive');
+  const btnHistory = document.getElementById('tabBtnHistory');
+  const btnRatings = document.getElementById('tabBtnRatings');
+  const sectionActive = document.getElementById('sectionActive');
+  const sectionHistory = document.getElementById('sectionHistory');
+  const sectionRatings = document.getElementById('sectionRatings');
+  const periodSelect = document.getElementById('historyPeriod');
+  const tableBody = document.getElementById('earningsTableBody');
+  const summaryDiv = document.getElementById('earningsSummary');
+  const chartCanvas = document.getElementById('earningsChart');
+  const downloadBtn = document.getElementById('downloadMonthlyReport');
+
+  function setActiveTab(tab) {
+    if (!btnActive || !btnHistory || !btnRatings || !sectionActive || !sectionHistory || !sectionRatings) return;
+    const tabs = [btnActive, btnHistory, btnRatings];
+    const sections = { active: sectionActive, history: sectionHistory, ratings: sectionRatings };
+    tabs.forEach(b => { b.classList.remove('bg-blue-600','text-white'); b.classList.add('bg-gray-200','text-gray-800'); });
+    Object.values(sections).forEach(s => s.classList.add('hidden'));
+    if (tab === 'active') { btnActive.classList.add('bg-blue-600','text-white'); sections.active.classList.remove('hidden'); }
+    else if (tab === 'history') { btnHistory.classList.add('bg-blue-600','text-white'); sections.history.classList.remove('hidden'); }
+    else { btnRatings.classList.add('bg-blue-600','text-white'); sections.ratings.classList.remove('hidden'); }
+    if (window.lucide) lucide.createIcons();
+  }
+
+  async function getCollaboratorId() {
+    try {
+      const { data: { session } } = await supabaseConfig.client.auth.getSession();
+      return session?.user?.id || null;
+    } catch (_) {
+      try { return localStorage.getItem('collaboratorId') || null; } catch (_){ return null; }
+    }
+  }
+
+  function formatMoney(n) { try { return `$${Number(n || 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`; } catch (_) { return `$${n}`; } }
+
+  async function fetchHistory(period) {
+    const collabId = await getCollaboratorId();
+    if (!collabId) return { rows: [], total: 0 };
+    const today = new Date();
+    const firstDayCurrent = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDayCurrent = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const firstDayPrev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastDayPrev = new Date(today.getFullYear(), today.getMonth(), 0);
+    const start = (period === 'previous') ? firstDayPrev : firstDayCurrent;
+    const end = (period === 'previous') ? lastDayPrev : lastDayCurrent;
+
+    let data = [];
+    try {
+      const { data: rpcData, error } = await supabaseConfig.client.rpc('get_collaborator_dashboard_data', {
+        collab_id: collabId, period_start: start.toISOString().slice(0,10), period_end: end.toISOString().slice(0,10)
+      });
+      if (!error && Array.isArray(rpcData)) data = rpcData;
+    } catch (_) {}
+    if (!Array.isArray(data) || data.length === 0) {
+      try {
+        const { data: orders } = await supabaseConfig.client
+          .from('orders')
+          .select('*')
+          .eq('assigned_to', collabId)
+          .eq('status', 'Completada')
+          .gte('date', start.toISOString().slice(0,10))
+          .lte('date', end.toISOString().slice(0,10));
+        const { data: collab } = await supabaseConfig.client
+          .from('collaborators')
+          .select('commission_percent')
+          .eq('id', collabId)
+          .maybeSingle();
+        const pct = (typeof collab?.commission_percent === 'number') ? collab.commission_percent : Number(collab?.commission_percent || 0.10);
+        data = (orders || []).map(o => ({
+          order_id: o.id,
+          date: o.date,
+          client_name: o.name,
+          commission_amount: Math.round(((Number(o.monto_cobrado || 0) * pct) + Number.EPSILON) * 100) / 100,
+          rating_stars: o.rating && typeof o.rating === 'object' ? Number(o.rating.stars || (o.rating['stars'])) : null,
+          customer_comment: o.customer_comment || (o.rating && o.rating.comment ? o.rating.comment : null)
+        }));
+      } catch (_) { data = []; }
+    }
+    const total = data.reduce((acc, r) => acc + Number(r.commission_amount || 0), 0);
+    return { rows: data, total };
+  }
+
+  function renderHistoryTable(rows) {
+    if (!tableBody) return;
+    tableBody.innerHTML = (rows || []).map(r => {
+      const stars = Number(r.rating_stars || 0);
+      const starsStr = stars > 0 ? '★★★★★'.slice(0, stars) + '☆☆☆☆☆'.slice(stars, 5) : '—';
+      const commentIcon = r.customer_comment ? `<button class="px-2 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200" data-comment="${String(r.customer_comment).replace(/"/g,'&quot;')}"><i data-lucide="message-square" class="w-4 h-4"></i></button>` : '—';
+      return `
+        <tr>
+          <td class="px-4 py-3 text-sm text-gray-700">${r.date || ''}</td>
+          <td class="px-4 py-3 text-sm text-gray-700">${r.client_name || ''}</td>
+          <td class="px-4 py-3 text-sm text-gray-900 font-semibold">${formatMoney(r.commission_amount)}</td>
+          <td class="px-4 py-3 text-sm text-gray-700">${starsStr}</td>
+          <td class="px-4 py-3">${commentIcon}</td>
+        </tr>
+      `;
+    }).join('');
+    if (window.lucide) lucide.createIcons();
+    tableBody.querySelectorAll('button[data-comment]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const modal = document.getElementById('customerCommentModal');
+        const body = document.getElementById('customerCommentBody');
+        if (body) body.textContent = btn.getAttribute('data-comment') || '';
+        if (modal) modal.classList.remove('hidden');
+      });
+    });
+  }
+
+  function renderSummary(total) {
+    if (!summaryDiv) return;
+    summaryDiv.innerHTML = `<div class="flex items-center justify-between"><div>Total del período</div><div class="font-bold">${formatMoney(total)}</div></div>`;
+  }
+
+  function renderChart(rows) {
+    if (!chartCanvas || !window.Chart) return;
+    const byDay = new Map();
+    rows.forEach(r => {
+      const d = String(r.date || '');
+      const val = Number(r.commission_amount || 0);
+      byDay.set(d, (byDay.get(d) || 0) + val);
+    });
+    const labels = Array.from(byDay.keys()).sort();
+    const data = labels.map(l => byDay.get(l));
+    if (chartCanvas._chart) { chartCanvas._chart.destroy(); }
+    chartCanvas._chart = new Chart(chartCanvas.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Comisión', data, backgroundColor: '#1E8A95' }] },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+  }
+
+  async function loadHistoryUI() {
+    const period = periodSelect ? periodSelect.value : 'current';
+    const { rows, total } = await fetchHistory(period);
+    renderHistoryTable(rows);
+    renderSummary(total);
+    try { renderChart(rows); } catch (_) {}
+  }
+
+  async function exportMonthlyPdf() {
+    try {
+      const collabId = await getCollaboratorId();
+      const { rows, total } = await fetchHistory('current');
+      const { jsPDF } = window.jspdf || {};
+      if (!jsPDF) { alert('No se pudo cargar el módulo de PDF'); return; }
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20; let y = margin;
+      doc.setFontSize(16); doc.setFont(undefined, 'bold');
+      doc.text('Logística López Ortiz', margin, y); y += 8;
+      doc.setFontSize(12); doc.setFont(undefined, 'normal');
+      doc.text('Reporte de Ganancias — ' + new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }), margin, y); y += 14;
+      doc.setFontSize(11); doc.setFont(undefined, 'bold');
+      doc.text('Fecha', margin, y); doc.text('Comisión', pageWidth - margin - 40, y, { align: 'right' }); y += 6;
+      doc.setFont(undefined, 'normal');
+      rows.forEach(r => { doc.text(String(r.date || ''), margin, y); doc.text(formatMoney(r.commission_amount), pageWidth - margin - 40, y, { align: 'right' }); y += 6; if (y > 270) { doc.addPage(); y = margin; } });
+      y += 6; doc.setFont(undefined, 'bold'); doc.text('Total', margin, y); doc.text(formatMoney(total), pageWidth - margin - 40, y, { align: 'right' });
+      const fileName = 'reporte_ganancias_' + new Date().toISOString().slice(0,7) + '.pdf';
+      doc.save(fileName);
+    } catch (_) { alert('No se pudo generar el PDF'); }
+  }
+
+  if (btnActive) btnActive.addEventListener('click', () => setActiveTab('active'));
+  if (btnHistory) btnHistory.addEventListener('click', async () => { setActiveTab('history'); await loadHistoryUI(); });
+  if (btnRatings) btnRatings.addEventListener('click', async () => { setActiveTab('ratings'); await loadRatingsUI(); });
+  if (periodSelect) periodSelect.addEventListener('change', loadHistoryUI);
+  const closeComment = document.getElementById('closeCustomerComment');
+  if (closeComment) closeComment.addEventListener('click', () => { const m = document.getElementById('customerCommentModal'); if (m) m.classList.add('hidden'); });
+  if (downloadBtn) downloadBtn.addEventListener('click', exportMonthlyPdf);
+
+  async function loadRatingsUI() {
+    const collabId = await getCollaboratorId();
+    const list = document.getElementById('myRatingsList');
+    if (!list || !collabId) return;
+    let rows = [];
+    try {
+      const { data } = await supabaseConfig.client
+        .from('orders')
+        .select('id, date, name, rating, customer_comment')
+        .eq('assigned_to', collabId)
+        .eq('status', 'Completada')
+        .order('completed_at', { ascending: false })
+        .limit(50);
+      rows = data || [];
+    } catch (_) { rows = []; }
+    list.innerHTML = rows.map(o => {
+      const stars = o.rating && (o.rating.stars || o.rating['stars']) ? Number(o.rating.stars || o.rating['stars']) : 0;
+      const starsStr = stars > 0 ? '★★★★★'.slice(0, stars) + '☆☆☆☆☆'.slice(stars, 5) : '—';
+      const comment = o.customer_comment || (o.rating && o.rating.comment ? o.rating.comment : '') || '';
+      return `
+        <div class="p-4 border border-gray-200 rounded-lg bg-white">
+          <div class="flex items-center justify-between"><div class="font-semibold">${o.name || ''}</div><div class="text-sm">${o.date || ''}</div></div>
+          <div class="text-amber-500">${starsStr}</div>
+          ${comment ? `<div class="text-sm text-gray-700 mt-2">${String(comment)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  setActiveTab('active');
+  const pendingContainer = document.getElementById('pendingOrdersContainer');
+  if (pendingContainer) {
+    pendingContainer.addEventListener('click', (e) => {
+      const card = e.target.closest('.pending-card');
+      if (!card) return;
+      const id = card.getAttribute('data-id');
+      if (id) openAcceptModal(id);
+    });
+  }
+});
 
 function renderAssignedCards(orders) {
   const container = document.getElementById('assignedOrdersContainer');
@@ -517,6 +728,19 @@ async function renderActiveJob(orderId, orderData) {
 
     const notes_el = document.getElementById('activeJobNotes');
     if (notes_el) notes_el.textContent = notes;
+    const qEl = document.getElementById('activeJobQuestions');
+    if (qEl) {
+      const q = order?.service_questions && typeof order.service_questions === 'object' ? order.service_questions : null;
+      if (q && Object.keys(q).length > 0) {
+        const rows = Object.entries(q).map(([k,v]) => {
+          const label = String(k).replace(/_/g,' ').replace(/\b\w/g, s => s.toUpperCase());
+          return `<div class="flex items-start justify-between gap-3"><div class="text-gray-600">${label}</div><div class="text-gray-900">${v || '—'}</div></div>`;
+        }).join('');
+        qEl.innerHTML = rows;
+      } else {
+        qEl.textContent = '—';
+      }
+    }
   }
 
   // Referencias a elementos opcionales
@@ -786,7 +1010,16 @@ function openAcceptModal(orderId) {
     const ruta = `${order?.pickup || '—'} → ${order?.delivery || '—'}`;
     const fecha = order?.date || '—';
     const hora = order?.time || '';
-    body.innerHTML = `<div class="space-y-2"><div><strong>Cliente:</strong> ${cliente}</div><div><strong>Contacto:</strong> ${contacto}</div><div><strong>Servicio:</strong> ${serv}</div><div><strong>Ruta:</strong> ${ruta}</div><div><strong>Fecha/Hora:</strong> ${fecha} ${hora}</div></div>`;
+    let qa = '';
+    const q = order?.service_questions && typeof order.service_questions === 'object' ? order.service_questions : null;
+    if (q && Object.keys(q).length > 0) {
+      const rows = Object.entries(q).map(([k,v]) => {
+        const label = String(k).replace(/_/g,' ').replace(/\b\w/g, s => s.toUpperCase());
+        return `<div class="flex items-start justify-between gap-3"><div class="text-gray-600">${label}</div><div class="text-gray-900">${v || '—'}</div></div>`;
+      }).join('');
+      qa = `<div class="mt-4 border-t pt-4"><div class="font-semibold mb-2">Preguntas del Servicio</div><div class="space-y-2">${rows}</div></div>`;
+    }
+    body.innerHTML = `<div class="space-y-2"><div><strong>Cliente:</strong> ${cliente}</div><div><strong>Contacto:</strong> ${contacto}</div><div><strong>Servicio:</strong> ${serv}</div><div><strong>Ruta:</strong> ${ruta}</div><div><strong>Fecha/Hora:</strong> ${fecha} ${hora}</div>${qa}</div>`;
     modal.classList.remove('hidden');
   });
   function close() { modal.classList.add('hidden'); }
@@ -858,7 +1091,19 @@ async function restoreActiveJob(){
 
 function setupRealtime() {
   try {
-    setInterval(fetchAndRender, 20000);
+    const ch = supabaseConfig.client
+      .channel('public:orders_collab')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async () => {
+        try {
+          await fetchAndRender();
+          const persisted = getPersistedActiveJob();
+          if (persisted) {
+            const updated = await supabaseConfig.getOrderById(persisted);
+            if (updated) await renderActiveJob(persisted, updated);
+          }
+        } catch (_) {}
+      })
+      .subscribe();
   } catch (_) {}
 }
 

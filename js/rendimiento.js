@@ -88,8 +88,7 @@ async function loadMetrics(collabId) {
   renderWeekly(completed);
   renderServiceDistribution(mine);
   renderVehicleDistribution(mine);
-  renderRecentTable(completed);
-  await renderMyEarnings(collabId, completed);
+  await renderUnifiedTable(collabId, completed);
 }
 
 function formatAvgTime(completed) {
@@ -226,8 +225,7 @@ async function renderMyEarnings(collabId, completed) {
   const pctEl = document.getElementById('myCommissionPct');
   const monthEl = document.getElementById('myMonthEarnings');
   const totalEl = document.getElementById('myTotalEarnings');
-  const tableEl = document.getElementById('myEarningsTable');
-  if (!pctEl || !monthEl || !totalEl || !tableEl) return;
+  if (!pctEl || !monthEl || !totalEl) return;
 
   let pct = 0;
   try {
@@ -243,21 +241,68 @@ async function renderMyEarnings(collabId, completed) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   let monthSum = 0;
   let totalSum = 0;
-  const rows = [];
   for (const o of (completed || [])) {
     const amount = parseFloat(o.monto_cobrado) || 0;
     const colShare = amount * (pct / 100);
     totalSum += colShare;
     const d = o.completed_at ? new Date(o.completed_at) : (o.date ? new Date(o.date) : null);
     if (d && d >= monthStart) monthSum += colShare;
-    const serv = (o.service && o.service.name) ? o.service.name : (o.service || '—');
-    const id = o.id ? `#${o.id}` : (o.short_id ? String(o.short_id) : 'Orden');
-    const dateStr = d ? d.toLocaleString('es-DO') : '—';
-    rows.push(`<tr class="bg-white"><td class="px-4 py-2">${id}</td><td class="px-4 py-2">${serv}</td><td class="px-4 py-2">${formatCurrency(amount)}</td><td class="px-4 py-2">${pct}%</td><td class="px-4 py-2">${formatCurrency(colShare)}</td><td class="px-4 py-2">${dateStr}</td></tr>`);
   }
   monthEl.textContent = formatCurrency(monthSum);
   totalEl.textContent = formatCurrency(totalSum);
-  tableEl.innerHTML = rows.slice(-20).reverse().join('') || '<tr><td class="px-4 py-3 text-gray-500" colspan="6">Sin datos de ganancias.</td></tr>';
+}
+
+async function renderUnifiedTable(collabId, completed) {
+  const body = document.getElementById('unifiedTable');
+  if (!body) return;
+  let pct = 0;
+  try {
+    const { data, error } = await supabaseConfig.client.from('collaborators').select('commission_percent').eq('id', collabId).maybeSingle();
+    if (!error && data && typeof data.commission_percent !== 'undefined') {
+      pct = typeof data.commission_percent === 'number' ? data.commission_percent : (parseFloat(data.commission_percent) || 0);
+    }
+  } catch (_) {}
+  pct = Math.max(0, Math.min(100, pct));
+  const pctEl = document.getElementById('myCommissionPct');
+  const monthEl = document.getElementById('myMonthEarnings');
+  const totalEl = document.getElementById('myTotalEarnings');
+  if (pctEl) pctEl.textContent = `${pct}%`;
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  let monthSum = 0;
+  let totalSum = 0;
+  const rows = (completed || []).map(o => {
+    const amount = parseFloat(o.monto_cobrado) || 0;
+    const colShare = amount * (pct / 100);
+    totalSum += colShare;
+    const d = o.completed_at ? new Date(o.completed_at) : (o.date ? new Date(o.date) : null);
+    if (d && d >= monthStart) monthSum += colShare;
+    const serv = (o.service && o.service.name) ? o.service.name : (o.service || '—');
+    const id = o.short_id ? `#${o.short_id}` : (o.id ? `#${o.id}` : '—');
+    const dateStr = d ? d.toLocaleString('es-DO') : '—';
+    const stars = o.rating && typeof o.rating === 'object' ? Number(o.rating.stars || o.rating['stars'] || 0) : Number(o.rating_stars || 0);
+    const starsStr = stars > 0 ? '★★★★★'.slice(0, stars) + '☆☆☆☆☆'.slice(stars, 5) : '—';
+    const comment = o.customer_comment || (o.rating && o.rating.comment ? o.rating.comment : '');
+    const btn = comment ? `<button class="px-2 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200" data-comment="${String(comment).replace(/"/g,'&quot;')}"><i data-lucide="cloud" class="w-4 h-4"></i></button>` : '—';
+    return `<tr class="bg-white"><td class="px-4 py-2">${id}</td><td class="px-4 py-2">${o.name || 'Cliente'}</td><td class="px-4 py-2">${serv}</td><td class="px-4 py-2">${dateStr}</td><td class="px-4 py-2">${formatCurrency(colShare)}</td><td class="px-4 py-2">${starsStr}</td><td class="px-4 py-2">${btn}</td></tr>`;
+  });
+  if (monthEl) monthEl.textContent = formatCurrency(monthSum);
+  if (totalEl) totalEl.textContent = formatCurrency(totalSum);
+  body.innerHTML = rows.slice(-20).reverse().join('') || '<tr><td class="px-4 py-3 text-gray-500" colspan="7">Sin datos disponibles.</td></tr>';
+  if (window.lucide) lucide.createIcons();
+  body.querySelectorAll('button[data-comment]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const modal = document.getElementById('customerCommentModal');
+      const bodyEl = document.getElementById('customerCommentBody');
+      if (bodyEl) bodyEl.textContent = btn.getAttribute('data-comment') || '';
+      if (modal) modal.classList.remove('hidden');
+    });
+  });
+  const closeBtn = document.getElementById('closeCustomerComment');
+  if (closeBtn) closeBtn.onclick = () => {
+    const modal = document.getElementById('customerCommentModal');
+    if (modal) modal.classList.add('hidden');
+  };
 }
 
 function setupAutoRefresh(collabId) {

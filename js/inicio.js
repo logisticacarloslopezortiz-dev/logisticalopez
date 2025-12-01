@@ -549,12 +549,25 @@ async function openAssignModal(orderId){
             data: { url: `/seguimiento.html?orderId=${order.short_id || order.id}` }
           })
         });
-        const j = await r.json();
-        if (j.success) {
-          notifications.success(`Notificación enviada al cliente (${j.sent}/${j.total})`);
-        } else {
-          notifications.warning(j.message || 'No se enviaron notificaciones');
+        if (r.ok) {
+          const j = await r.json();
+          if (j.success) {
+            notifications.success(`Notificación enviada al cliente (${j.sent}/${j.total})`);
+          } else {
+            notifications.warning(j.message || 'No se enviaron notificaciones');
+          }
+          return;
         }
+        const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
+          body: {
+            orderId: order.id,
+            title: `Actualización de su orden #${order.short_id || order.id}`,
+            body: 'Su orden ha sido actualizada',
+            data: { url: `/seguimiento.html?orderId=${order.short_id || order.id}` }
+          }
+        });
+        if (error) throw error;
+        notifications.success('Notificación enviada al cliente');
       } catch (e) {
         notifications.error('Error al notificar al cliente');
       }
@@ -577,12 +590,25 @@ async function openAssignModal(orderId){
             data: { url: `/panel-colaborador.html?orderId=${order.short_id || order.id}` }
           })
         });
-        const j = await r.json();
-        if (j.success) {
-          notifications.success(`Notificación enviada al colaborador (${j.sent}/${j.total})`);
-        } else {
-          notifications.warning(j.message || 'No se enviaron notificaciones');
+        if (r.ok) {
+          const j = await r.json();
+          if (j.success) {
+            notifications.success(`Notificación enviada al colaborador (${j.sent}/${j.total})`);
+          } else {
+            notifications.warning(j.message || 'No se enviaron notificaciones');
+          }
+          return;
         }
+        const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
+          body: {
+            orderId: order.id,
+            title: `Orden #${order.short_id || order.id} actualizada`,
+            body: 'Revisa tu panel, se actualizó tu orden asignada',
+            data: { url: `/panel-colaborador.html?orderId=${order.short_id || order.id}` }
+          }
+        });
+        if (error) throw error;
+        notifications.success('Notificación enviada al colaborador');
       } catch (e) {
         notifications.error('Error al notificar al colaborador');
       }
@@ -605,12 +631,25 @@ async function openAssignModal(orderId){
             data: { url: `/inicio.html?orderId=${order.short_id || order.id}` }
           })
         });
-        const j = await r.json();
-        if (j.success) {
-          notifications.success(`Notificación enviada a administradores (${j.sent}/${j.total})`);
-        } else {
-          notifications.warning(j.message || 'No se enviaron notificaciones');
+        if (r.ok) {
+          const j = await r.json();
+          if (j.success) {
+            notifications.success(`Notificación enviada a administradores (${j.sent}/${j.total})`);
+          } else {
+            notifications.warning(j.message || 'No se enviaron notificaciones');
+          }
+          return;
         }
+        const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
+          body: {
+            orderId: order.id,
+            title: `Orden #${order.short_id || order.id} modificada`,
+            body: 'Se realizó una acción desde el panel del dueño',
+            data: { url: `/inicio.html?orderId=${order.short_id || order.id}` }
+          }
+        });
+        if (error) throw error;
+        notifications.success('Notificación enviada a administradores');
       } catch (e) {
         notifications.error('Error al notificar a administradores');
       }

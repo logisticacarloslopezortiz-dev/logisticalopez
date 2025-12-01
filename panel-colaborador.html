@@ -108,25 +108,31 @@
 
   <main id="main-content" class="main-content p-8 space-y-8 md:ml-64">
 
-    <section class="card p-6">
-      <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--turquesa)">
-        <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="inbox" class="w-5 h-5 text-blue-600"></i></span>
-        Solicitudes Pendientes
-      </h2>
-      <div id="pendingOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-    </section>
+    <div class="card p-4">
+      <div class="flex flex-wrap gap-2">
+        <button id="tabBtnActive" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold">Trabajo Activo</button>
+      </div>
+    </div>
 
-    <section class="card p-6">
-      <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--azul)">
-        <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="list-check" class="w-5 h-5 text-blue-600"></i></span>
-        Trabajo Activo
-      </h2>
-            <div id="assignedOrdersWrapper">
-              <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-            </div>
-      <!-- ✅ MEJORA: Sección "Trabajo Activo" rediseñada y funcional CON COLORES VIBRANTES -->
-      <div id="activeJobSection" class="mt-8 hidden" role="region" aria-labelledby="active-job-heading">
-        <div class="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+    <section id="sectionActive" class="space-y-8">
+      <div class="card p-6">
+        <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--turquesa)">
+          <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="inbox" class="w-5 h-5 text-blue-600"></i></span>
+          Solicitudes Pendientes
+        </h2>
+        <div id="pendingOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      </div>
+
+      <div class="card p-6">
+        <h2 class="text-xl font-bold flex items-center gap-3 mb-4" style="color:var(--azul)">
+          <span class="bg-blue-100 p-2 rounded-lg"><i data-lucide="list-check" class="w-5 h-5 text-blue-600"></i></span>
+          Trabajo Activo
+        </h2>
+        <div id="assignedOrdersWrapper">
+          <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+        <div id="activeJobSection" class="mt-8 hidden" role="region" aria-labelledby="active-job-heading">
+          <div class="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
           <!-- Header con degradado y estado -->
           <div class="p-6 header-gradient border-b-4" style="border-color: rgba(30,64,90,0.9)">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -229,6 +235,14 @@
                 <p id="activeJobNotes" class="text-gray-800 text-sm leading-relaxed">—</p>
               </div>
 
+              <div class="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-5 border border-gray-200 shadow-sm">
+                <h3 class="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">
+                  <i data-lucide="list" class="w-4 h-4 text-blue-600"></i>
+                  Preguntas del Servicio
+                </h3>
+                <div id="activeJobQuestions" class="space-y-2 text-sm text-gray-800">—</div>
+              </div>
+
             </div>
 
             <!-- COLUMNA 2: Mapa y Evidencia (1 columna en desktop) -->
@@ -287,8 +301,11 @@
 
           </div>
         </div>
+        </div>
       </div>
     </section>
+
+    
   </main>
 
   <!-- Order Details Modal -->
@@ -320,9 +337,22 @@
     </div>
   </div>
 
+  <div id="customerCommentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl w-full max-w-xl overflow-hidden">
+      <div class="flex items-center justify-between p-4 border-b">
+        <h3 class="font-bold text-lg">Comentario del Cliente</h3>
+        <button id="closeCustomerComment" class="p-2 rounded hover:bg-gray-100"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="customerCommentBody" class="p-4 text-sm text-gray-700"></div>
+    </div>
+  </div>
+
   <script src="vendor/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
+  <script>window.NODE_PUSH_SERVER_URL='https://api.logisticalopezortiz.com';</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/sidebar.js"></script>
   <script src="js/order-manager.js"></script>

@@ -398,6 +398,81 @@ create index if not exists idx_notifications_unread on public.notifications((rea
 alter table public.notifications add column if not exists contact_id uuid references public.clients(id) on delete cascade;
 create index if not exists idx_notifications_contact on public.notifications(contact_id);
 
+-- Ajustes para comisiones y comentarios de clientes
+alter table public.collaborators add column if not exists commission_percent numeric default 0.10;
+alter table public.orders add column if not exists customer_comment text;
+
+-- RPC: Datos del panel del colaborador (historial y comisiones)
+create or replace function public.get_collaborator_dashboard_data(collab_id uuid, period_start date, period_end date)
+returns table (
+  order_id bigint,
+  "date" date,
+  client_name text,
+  commission_amount numeric,
+  rating_stars int,
+  customer_comment text
+)
+language sql stable security definer set search_path = pg_catalog, public as $$
+  select 
+    o.id as order_id,
+    o."date"::date as "date",
+    coalesce(o.name,'') as client_name,
+    round(coalesce(o.monto_cobrado,0) * coalesce(c.commission_percent, 0.10), 2) as commission_amount,
+    coalesce((o.rating->>'stars')::int, null) as rating_stars,
+    o.customer_comment
+  from public.orders o
+  left join public.collaborators c on c.id = o.assigned_to
+  where o.assigned_to = collab_id
+    and lower(o.status) = 'completada'
+    and (period_start is null or o."date" >= period_start)
+    and (period_end is null or o."date" <= period_end)
+  order by o."date" desc
+$$;
+grant execute on function public.get_collaborator_dashboard_data(uuid, date, date) to authenticated;
+
+-- RPC: Enviar calificación del cliente (5 estrellas + comentario)
+create or replace function public.submit_rating(order_id bigint, stars int, comment text)
+returns boolean language plpgsql security definer set search_path = pg_catalog, public as $$
+declare exists_order boolean;
+begin
+  select exists(select 1 from public.orders where id = order_id) into exists_order;
+  if not exists_order then
+    return false;
+  end if;
+
+  update public.orders
+  set rating = jsonb_build_object('stars', greatest(1, least(5, stars)), 'comment', nullif(comment,'')),
+      customer_comment = nullif(comment,'')
+  where id = order_id
+    and (lower(status) = 'completada' or completed_at is not null);
+  return true;
+end;
+$$;
+grant execute on function public.submit_rating(bigint, int, text) to anon, authenticated;
+
+-- RPC: Testimonios públicos para marketing
+create or replace function public.get_public_testimonials(limit_count int default 10)
+returns table (
+  order_id bigint,
+  stars int,
+  comment text,
+  client_name text
+)
+language sql stable security definer set search_path = pg_catalog, public as $$
+  select 
+    o.id as order_id,
+    coalesce((o.rating->>'stars')::int, null) as stars,
+    nullif(o.customer_comment,'') as comment,
+    nullif(o.name,'') as client_name
+  from public.orders o
+  where o.customer_comment is not null 
+    and trim(o.customer_comment) <> ''
+    and coalesce((o.rating->>'stars')::int, 0) >= 4
+  order by o.completed_at desc nulls last, o.created_at desc
+  limit greatest(1, limit_count)
+$$;
+grant execute on function public.get_public_testimonials(int) to anon, authenticated;
+
 -- Push subscriptions
 create table if not exists public.push_subscriptions (
   id bigserial primary key,

@@ -112,3 +112,38 @@ document.addEventListener('DOMContentLoaded', () => {
     toReveal.forEach(el => obs.observe(el));
   }
 });
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const grid = document.getElementById('testimonialsGrid');
+  const empty = document.getElementById('testimonialsEmpty');
+  if (!grid) return;
+  const client = (window.supabaseConfig && (window.supabaseConfig.getPublicClient ? window.supabaseConfig.getPublicClient() : window.supabaseConfig.client)) || null;
+  if (!client) {
+    empty && empty.classList.remove('hidden');
+    return;
+  }
+  let items = [];
+  try {
+    const { data, error } = await client.rpc('get_public_testimonials', { limit_count: 10 });
+    if (!error && Array.isArray(data)) items = data;
+  } catch (_) {}
+  if (!items.length) {
+    empty && empty.classList.remove('hidden');
+    return;
+  }
+  const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const html = items.map(it => {
+    const stars = Math.max(0, Math.min(5, parseInt(it.stars || 0, 10)));
+    const starsHtml = Array.from({ length: 5 }).map((_, i) => `<i class="fas fa-star ${i < stars ? 'text-yellow-400' : 'text-gray-300'}"></i>`).join('');
+    const comment = esc(it.comment || '');
+    const name = esc(it.client_name || 'Cliente');
+    return `
+      <div class="bg-white rounded-xl shadow-md border border-gray-200 p-6 text-left">
+        <div class="flex items-center gap-2 mb-3 text-lg">${starsHtml}</div>
+        <p class="text-gray-700 mb-4">${comment}</p>
+        <div class="text-sm text-gray-500 font-semibold">${name}</div>
+      </div>
+    `;
+  }).join('');
+  grid.innerHTML = html;
+});
