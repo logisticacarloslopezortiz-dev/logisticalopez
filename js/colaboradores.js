@@ -37,13 +37,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const maxRetries = 3;
     const retryDelay = 1000 * (retryCount + 1); // 1s, 2s, 3s
     
-    tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4">Cargando colaboradores${retryCount > 0 ? ` (intento ${retryCount + 1}/${maxRetries + 1})` : ''}...</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4">Cargando rendimiento de colaboradores${retryCount > 0 ? ` (intento ${retryCount + 1}/${maxRetries + 1})` : ''}...</td></tr>`;
 
     try {
+      // Llamada a la nueva función RPC para obtener datos de rendimiento
       const { data, error } = await supabaseConfig.client
-        .from('collaborators')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .rpc('get_collaborators_with_performance');
 
       if (error) {
         throw error;
@@ -52,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       allCollaborators = data || [];
       filterAndRender();
       updateSummary();
-      console.log(`[Colaboradores] Cargados ${allCollaborators.length} colaboradores exitosamente`);
+      console.log(`[Colaboradores] Cargados ${allCollaborators.length} colaboradores exitosamente con datos de rendimiento.`);
       
     } catch (error) {
       console.error(`Error al cargar colaboradores (intento ${retryCount + 1}):`, error);
@@ -63,8 +62,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         tableBody.innerHTML = `
           <tr>
-            <td colspan="5" class="text-center py-4">
-              <div class="text-red-500 mb-2">No se pudieron cargar los colaboradores</div>
+            <td colspan="7" class="text-center py-4">
+              <div class="text-red-500 mb-2">No se pudieron cargar los datos de rendimiento.</div>
+              <p class="text-sm text-gray-600 mb-2">Asegúrate de haber ejecutado el script SQL para crear la función 'get_collaborators_with_performance' en tu base de datos.</p>
               <button onclick="loadCollaborators()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
                 Reintentar
               </button>
@@ -104,26 +104,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Renderizar la tabla
   function renderTable(collaborators) {
     if (collaborators.length === 0) {
-      tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4">No se encontraron colaboradores.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="7" class="text-center py-4">No se encontraron colaboradores.</td></tr>';
       return;
     }
+
+    const formatCurrency = (value) => `$${Number(value || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     tableBody.innerHTML = collaborators.map(colab => `
       <tr class="border-b hover:bg-gray-50">
         <td class="px-6 py-4 font-medium text-gray-900">
           <div class="flex items-center gap-3">
-            ${generateAvatar(colab.name)}
+            ${generateAvatar(colab.full_name)}
             <div>
-              <div class="font-medium">${colab.name}</div>
+              <div class="font-medium">${colab.full_name}</div>
               <div class="text-sm text-gray-500">${colab.role || 'Colaborador'}</div>
             </div>
           </div>
         </td>
-        <td class="px-6 py-4">${colab.matricula || 'N/A'}</td>
         <td class="px-6 py-4">${colab.email}</td>
+        <td class="px-6 py-4 text-center">
+          <span class="font-semibold text-lg">${colab.monthly_services || 0}</span>
+        </td>
+        <td class="px-6 py-4">${formatCurrency(colab.monthly_revenue)}</td>
+        <td class="px-6 py-4 font-medium text-green-600">${formatCurrency(colab.monthly_commission)}</td>
         <td class="px-6 py-4">
           <span class="px-2 py-1 text-xs font-semibold rounded-full ${colab.status === 'activo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-            ${colab.status}
+            ${colab.status || 'inactivo'}
           </span>
         </td>
         <td class="px-6 py-4 flex items-center gap-2">
