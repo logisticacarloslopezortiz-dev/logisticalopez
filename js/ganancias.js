@@ -104,22 +104,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function computeFinance(now = new Date()) {
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthOrders = allOrders.filter(o => o.completed_at >= monthStart);
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    const monthOrders = allOrders.filter(o =>
+      o.completed_at.getFullYear() === currentYear &&
+      o.completed_at.getMonth() === currentMonth
+    );
 
     const fivePctMonth = monthOrders.reduce((s, o) => s + (o.monto_cobrado * 0.05), 0);
+    const totalMonthServices = monthOrders.length;
 
     const perCollab = new Map();
-    collaborators.forEach(c => perCollab.set(String(c.id), { month: 0, total: 0, pct: collabPercentMap.get(String(c.id)) || 0 }));
+    collaborators.forEach(c => perCollab.set(String(c.id), {
+      month: 0,
+      total: 0,
+      serviceCount: 0,
+      pct: collabPercentMap.get(String(c.id)) || 0
+    }));
 
     allOrders.forEach(o => {
       const collabId = String(o.completed_by || o.assigned_to || '');
       if (!collabId) return;
-      const pct = collabPercentMap.get(collabId) || 0;
+
+      const entry = perCollab.get(collabId) || { month: 0, total: 0, serviceCount: 0, pct: collabPercentMap.get(collabId) || 0 };
+      const pct = entry.pct;
       const colShare = o.monto_cobrado * (pct / 100);
-      const entry = perCollab.get(collabId) || { month: 0, total: 0, pct };
       entry.total += colShare;
-      if (o.completed_at >= monthStart) entry.month += colShare;
+
+      if (o.completed_at.getFullYear() === currentYear && o.completed_at.getMonth() === currentMonth) {
+        entry.month += colShare;
+        entry.serviceCount += 1;
+      }
       perCollab.set(collabId, entry);
     });
 
@@ -127,7 +143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const monthCollabSum = Array.from(perCollab.values()).reduce((s, v) => s + v.month, 0);
     const monthCompany = Math.max(0, monthGross - monthCollabSum);
 
-    return { perCollab, monthCompany, fivePctMonth };
+    return { perCollab, monthCompany, fivePctMonth, totalMonthServices };
   }
 
   async function renderFinance(session) {
@@ -138,26 +154,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     ui.financeSection.classList.remove('hidden');
 
-    const { perCollab, monthCompany, fivePctMonth } = computeFinance();
+    const { perCollab, monthCompany, fivePctMonth, totalMonthServices } = computeFinance();
 
     // Tabla porcentajes y totales
     ui.collabFinanceTable.innerHTML = '';
     let monthCollabSum = 0;
-    const rows = collaborators.map(c => {
+    collaborators.forEach(c => {
       const id = String(c.id);
-      const stats = perCollab.get(id) || { month: 0, total: 0, pct: collabPercentMap.get(id) || 0 };
+      const stats = perCollab.get(id) || { month: 0, total: 0, serviceCount: 0, pct: collabPercentMap.get(id) || 0 };
       monthCollabSum += stats.month;
+
+      const servicePercentage = totalMonthServices > 0 ? (stats.serviceCount / totalMonthServices) * 100 : 0;
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="table-cell">${c.full_name || id}</td>
+        <td class="table-cell">
+          <div class="flex items-center gap-3">
+            <i data-lucide="user-circle" class="w-8 h-8 text-gray-400"></i>
+            <span>${c.full_name || id}</span>
+          </div>
+        </td>
         <td class="table-cell">
           <input type="number" min="0" max="100" step="0.5" value="${stats.pct}" data-collab-id="${id}" class="w-24 border rounded px-2 py-1" />
         </td>
         <td class="table-cell">${currency(stats.month)}</td>
         <td class="table-cell">${currency(stats.total)}</td>
+        <td class="table-cell">
+          <div class="flex items-center gap-2">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div class="bg-turquoise h-2.5 rounded-full" style="width: ${servicePercentage.toFixed(2)}%"></div>
+            </div>
+            <span class="text-sm font-medium text-gray-600">${stats.serviceCount}/${totalMonthServices}</span>
+          </div>
+        </td>
       `;
       ui.collabFinanceTable.appendChild(tr);
     });
+
+    // Re-activar iconos Lucide
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
 
     ui.sumCollabMonth.textContent = currency(monthCollabSum);
     ui.sumCompanyMonth.textContent = currency(monthCompany);
@@ -249,16 +286,27 @@ document.addEventListener('DOMContentLoaded', async () => {
    */
   function updateStatCards() {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDay = now.getDate();
 
     const totalEarnings = allOrders.reduce((sum, order) => sum + order.monto_cobrado, 0);
+
     const todayEarnings = allOrders
-      .filter(order => order.completed_at >= todayStart)
+      .filter(order =>
+        order.completed_at.getFullYear() === currentYear &&
+        order.completed_at.getMonth() === currentMonth &&
+        order.completed_at.getDate() === currentDay
+      )
       .reduce((sum, order) => sum + order.monto_cobrado, 0);
+
     const monthEarnings = allOrders
-      .filter(order => order.completed_at >= monthStart)
+      .filter(order =>
+        order.completed_at.getFullYear() === currentYear &&
+        order.completed_at.getMonth() === currentMonth
+      )
       .reduce((sum, order) => sum + order.monto_cobrado, 0);
+
     const avgOrderValue = allOrders.length > 0 ? totalEarnings / allOrders.length : 0;
 
     const formatCurrency = (value) => `$${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
