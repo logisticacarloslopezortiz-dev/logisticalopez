@@ -34,9 +34,14 @@ class PushNotificationManager {
             if (!client || !client.functions || typeof client.functions.invoke !== 'function') {
                 throw new Error('Supabase client/functions no disponible');
             }
-            const { data, error } = await client.functions.invoke('getVapidKey');
-            if (error) throw error;
-            this.vapidPublicKey = data?.key || null;
+            // Primer intento: nombre canónico
+            let resp = await client.functions.invoke('getVapidKey');
+            if (resp.error || !resp.data?.key) {
+                // Segundo intento: nombre con guiones (posibles despliegues antiguos)
+                resp = await client.functions.invoke('get-vapid-key');
+            }
+            if (resp.error) throw resp.error;
+            this.vapidPublicKey = resp.data?.key || null;
             if (!this.vapidPublicKey) throw new Error('Clave VAPID no disponible');
             const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
             if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {

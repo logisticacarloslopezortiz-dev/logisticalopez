@@ -39,12 +39,20 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
   const brandTurq = rgb(30 / 255, 138 / 255, 149 / 255)
 
   const fetchLogo = async () => {
-    try {
-      const url = 'https://logisticalopezortiz.com/img/android-chrome-512x512.png'
-      const res = await fetch(url)
-      const buf = await res.arrayBuffer()
-      return await pdfDoc.embedPng(buf)
-    } catch (_) { return null }
+    const tryUrls = [
+      'https://logisticalopezortiz.com/img/1horizontal%20(1).png',
+      'https://logisticalopezortiz.com/img/1vertical.png',
+      'https://logisticalopezortiz.com/img/android-chrome-512x512.png'
+    ]
+    for (const url of tryUrls) {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) continue
+        const buf = await res.arrayBuffer()
+        return await pdfDoc.embedPng(buf)
+      } catch (_) { /* next */ }
+    }
+    return null
   }
 
   const logo = await fetchLogo()

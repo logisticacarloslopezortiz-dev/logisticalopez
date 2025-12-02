@@ -151,6 +151,16 @@
           <tbody id="unifiedTable" class="divide-y divide-gray-100"></tbody>
         </table>
       </div>
+      <div id="rendPagination" class="flex items-center justify-between mt-4">
+        <div class="text-sm text-gray-600">Mostrando <span id="rendShowingRange">0–0</span> de <span id="rendTotalCount">0</span></div>
+        <div class="flex items-center gap-2" aria-label="Paginación">
+          <button id="rendFirst" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Primera</button>
+          <button id="rendPrev" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Anterior</button>
+          <div id="rendPages" class="flex items-center gap-1"></div>
+          <button id="rendNext" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Siguiente</button>
+          <button id="rendLast" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Última</button>
+        </div>
+      </div>
     </section>
   </main>
 

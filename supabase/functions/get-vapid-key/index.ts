@@ -5,7 +5,7 @@ Deno.serve(async (req: Request) => {
   const corsPreflight = handleCors(req)
   if (corsPreflight) return corsPreflight
 
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405, req)
   }
 
@@ -24,4 +24,3 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: msg }, 500, req)
   }
 })
-

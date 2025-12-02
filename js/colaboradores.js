@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const colaboradoresActivosEl = document.getElementById('colaboradoresActivos');
 
   let allCollaborators = [];
+  const collabPageState = { data: [], currentPage: 1, pageSize: 15, totalPages: 1 };
 
   // --- LÓGICA PRINCIPAL ---
 
@@ -160,8 +161,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Filtrar y renderizar
   function filterAndRender() {
-    // Los filtros fueron eliminados de la UI. Ahora simplemente renderiza todos los colaboradores.
-    renderTable(allCollaborators);
+    collabPageState.data = allCollaborators.slice();
+    collabPageState.totalPages = Math.max(1, Math.ceil(collabPageState.data.length / collabPageState.pageSize));
+    collabPageState.currentPage = Math.min(collabPageState.currentPage, collabPageState.totalPages);
+    renderTablePage();
+    renderPagination();
+  }
+
+  function renderTablePage() {
+    const start = (collabPageState.currentPage - 1) * collabPageState.pageSize;
+    const end = start + collabPageState.pageSize;
+    const slice = collabPageState.data.slice(start, end);
+    renderTable(slice);
+    const showing = document.getElementById('collabShowingRange');
+    const total = document.getElementById('collabTotalCount');
+    if (showing) showing.textContent = `${Math.min(start+1, Math.max(0, collabPageState.data.length))}–${Math.min(end, collabPageState.data.length)}`;
+    if (total) total.textContent = String(collabPageState.data.length);
+  }
+
+  function renderPagination() {
+    const pagesEl = document.getElementById('collabPages');
+    const prev = document.getElementById('collabPrev');
+    const next = document.getElementById('collabNext');
+    const first = document.getElementById('collabFirst');
+    const last = document.getElementById('collabLast');
+    if (!pagesEl || !prev || !next || !first || !last) return;
+    const total = collabPageState.totalPages;
+    const current = collabPageState.currentPage;
+    prev.disabled = current <= 1;
+    first.disabled = current <= 1;
+    next.disabled = current >= total;
+    last.disabled = current >= total;
+    const windowSize = 5;
+    let start = Math.max(1, current - Math.floor(windowSize/2));
+    let end = Math.min(total, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    pagesEl.innerHTML = '';
+    for (let p = start; p <= end; p++) {
+      const btn = document.createElement('button');
+      btn.textContent = String(p);
+      btn.className = `px-3 py-2 rounded text-sm ${p===current? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`;
+      btn.addEventListener('click', () => { collabPageState.currentPage = p; renderTablePage(); renderPagination(); });
+      pagesEl.appendChild(btn);
+    }
+    prev.onclick = () => { if (collabPageState.currentPage>1) { collabPageState.currentPage--; renderTablePage(); renderPagination(); } };
+    next.onclick = () => { if (collabPageState.currentPage<total) { collabPageState.currentPage++; renderTablePage(); renderPagination(); } };
+    first.onclick = () => { collabPageState.currentPage = 1; renderTablePage(); renderPagination(); };
+    last.onclick = () => { collabPageState.currentPage = total; renderTablePage(); renderPagination(); };
   }
 
   // Actualizar tarjetas de resumen

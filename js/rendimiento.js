@@ -111,6 +111,8 @@ function formatAvgTime(completed) {
 let weeklyChart = null;
 let servicesChart = null;
 let vehiclesChart = null;
+// Paginación para tabla de rendimiento
+const rendPageState = { data: [], currentPage: 1, pageSize: 15, totalPages: 1 };
 
 function formatCurrency(n) {
   try { return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(n || 0); } catch { return `$${Number(n||0).toFixed(0)}`; }
@@ -288,8 +290,11 @@ async function renderUnifiedTable(collabId, completed) {
   });
   if (monthEl) monthEl.textContent = formatCurrency(monthSum);
   if (totalEl) totalEl.textContent = formatCurrency(totalSum);
-  body.innerHTML = rows.slice(-20).reverse().join('') || '<tr><td class="px-4 py-3 text-gray-500" colspan="7">Sin datos disponibles.</td></tr>';
-  if (window.lucide) lucide.createIcons();
+  rendPageState.data = rows.reverse();
+  rendPageState.totalPages = Math.max(1, Math.ceil(rendPageState.data.length / rendPageState.pageSize));
+  rendPageState.currentPage = Math.min(rendPageState.currentPage, rendPageState.totalPages);
+  renderUnifiedTablePage();
+  renderUnifiedPagination();
   body.querySelectorAll('button[data-comment]').forEach(btn => {
     btn.addEventListener('click', () => {
       const modal = document.getElementById('customerCommentModal');
@@ -303,6 +308,51 @@ async function renderUnifiedTable(collabId, completed) {
     const modal = document.getElementById('customerCommentModal');
     if (modal) modal.classList.add('hidden');
   };
+}
+
+function renderUnifiedTablePage() {
+  const body = document.getElementById('unifiedTable');
+  if (!body) return;
+  const start = (rendPageState.currentPage - 1) * rendPageState.pageSize;
+  const end = start + rendPageState.pageSize;
+  const slice = rendPageState.data.slice(start, end);
+  body.innerHTML = slice.join('') || '<tr><td class="px-4 py-3 text-gray-500" colspan="7">Sin datos disponibles.</td></tr>';
+  if (window.lucide) lucide.createIcons();
+  const showingEl = document.getElementById('rendShowingRange');
+  const totalEl = document.getElementById('rendTotalCount');
+  if (showingEl) showingEl.textContent = `${Math.min(start+1, Math.max(0, rendPageState.data.length))}–${Math.min(end, rendPageState.data.length)}`;
+  if (totalEl) totalEl.textContent = String(rendPageState.data.length);
+}
+
+function renderUnifiedPagination() {
+  const pagesEl = document.getElementById('rendPages');
+  const prev = document.getElementById('rendPrev');
+  const next = document.getElementById('rendNext');
+  const first = document.getElementById('rendFirst');
+  const last = document.getElementById('rendLast');
+  if (!pagesEl || !prev || !next || !first || !last) return;
+  const total = rendPageState.totalPages;
+  const current = rendPageState.currentPage;
+  prev.disabled = current <= 1;
+  first.disabled = current <= 1;
+  next.disabled = current >= total;
+  last.disabled = current >= total;
+  const windowSize = 5;
+  let start = Math.max(1, current - Math.floor(windowSize/2));
+  let end = Math.min(total, start + windowSize - 1);
+  start = Math.max(1, end - windowSize + 1);
+  pagesEl.innerHTML = '';
+  for (let p = start; p <= end; p++) {
+    const btn = document.createElement('button');
+    btn.textContent = String(p);
+    btn.className = `px-3 py-2 rounded text-sm ${p===current? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`;
+    btn.addEventListener('click', () => { rendPageState.currentPage = p; renderUnifiedTablePage(); renderUnifiedPagination(); });
+    pagesEl.appendChild(btn);
+  }
+  prev.onclick = () => { if (rendPageState.currentPage>1) { rendPageState.currentPage--; renderUnifiedTablePage(); renderUnifiedPagination(); } };
+  next.onclick = () => { if (rendPageState.currentPage<total) { rendPageState.currentPage++; renderUnifiedTablePage(); renderUnifiedPagination(); } };
+  first.onclick = () => { rendPageState.currentPage = 1; renderUnifiedTablePage(); renderUnifiedPagination(); };
+  last.onclick = () => { rendPageState.currentPage = total; renderUnifiedTablePage(); renderUnifiedPagination(); };
 }
 
 function setupAutoRefresh(collabId) {

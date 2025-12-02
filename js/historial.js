@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let allHistoryOrders = [];
   let filteredOrders = [];
+  const histPageState = { currentPage: 1, pageSize: 15, totalPages: 1 };
 
   // --- MODAL DE EVIDENCIA ---
   const evidenceModal = document.getElementById('evidenceModal');
@@ -166,7 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         doc.setFontSize(9);
         doc.setFont(undefined, 'normal');
         doc.text('RNC: 133139413', margin, 25);
-        const logo = await toDataURL('img/1vertical.png');
+        const logo = await toDataURL('img/1horizontal (1).png');
         if (logo) {
           try { doc.addImage(logo, 'PNG', pageWidth - 22, 6, 14, 14); } catch (_) {}
         }
@@ -313,7 +314,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const renderTable = () => {
     if (!tableBody) return;
 
-    if (filteredOrders.length === 0) {
+    const total = filteredOrders.length;
+    histPageState.totalPages = Math.max(1, Math.ceil(total / histPageState.pageSize));
+    if (histPageState.currentPage > histPageState.totalPages) histPageState.currentPage = histPageState.totalPages;
+    const start = total === 0 ? 0 : (histPageState.currentPage - 1) * histPageState.pageSize;
+    const end = total === 0 ? 0 : Math.min(start + histPageState.pageSize, total);
+
+    if (total === 0) {
       tableBody.innerHTML = `
         <tr>
           <td colspan="7" class="text-center py-10 text-gray-500">
@@ -322,8 +329,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         </tr>
       `;
     } else {
-      tableBody.innerHTML = filteredOrders.map(order => {
-        // ✅ CORRECCIÓN: Acceder al nombre del colaborador a través del objeto anidado 'profiles'.
+      const pageSlice = filteredOrders.slice(start, end);
+      tableBody.innerHTML = pageSlice.map(order => {
         const completadoPorNombre = order.profiles?.full_name || order.completed_by_name || 'No disponible';
         const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleDateString('es-ES', {
           year: 'numeric',
@@ -332,10 +339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           hour: '2-digit',
           minute: '2-digit'
         }) : 'No disponible';
-        
-        // Determinar clase de fila según el estado
         const rowClass = order.status === 'Cancelada' ? 'hover:bg-red-50 bg-red-50/30' : 'hover:bg-green-50';
-
         return `
           <tr class="${rowClass} cursor-pointer hover:shadow-md transition-all duration-200" 
               ondblclick="showPDFModal(${order.id})" 
@@ -360,18 +364,52 @@ document.addEventListener('DOMContentLoaded', async () => {
       }).join('');
     }
 
-    // Actualizar contadores
-    showingCountEl.textContent = filteredOrders.length;
+    const rangeStart = total === 0 ? 0 : start + 1;
+    const rangeEnd = total === 0 ? 0 : end;
+    showingCountEl.textContent = `${rangeStart}–${rangeEnd}`;
     totalCountEl.textContent = allHistoryOrders.length;
     if (window.lucide) lucide.createIcons();
+    renderPagination();
   };
 
   // Función de filtrado
   const filterAndRender = () => {
-    // Los filtros fueron eliminados de la UI. Ahora simplemente renderiza todo el historial.
     filteredOrders = allHistoryOrders;
+    histPageState.totalPages = Math.max(1, Math.ceil(filteredOrders.length / histPageState.pageSize));
+    histPageState.currentPage = 1;
     renderTable();
   };
+
+  function renderPagination() {
+    const pagesEl = document.getElementById('histPages');
+    const prev = document.getElementById('histPrev');
+    const next = document.getElementById('histNext');
+    const first = document.getElementById('histFirst');
+    const last = document.getElementById('histLast');
+    if (!pagesEl || !prev || !next || !first || !last) return;
+    const total = histPageState.totalPages;
+    const current = histPageState.currentPage;
+    prev.disabled = current <= 1;
+    first.disabled = current <= 1;
+    next.disabled = current >= total;
+    last.disabled = current >= total;
+    const windowSize = 5;
+    let start = Math.max(1, current - Math.floor(windowSize/2));
+    let end = Math.min(total, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    pagesEl.innerHTML = '';
+    for (let p = start; p <= end; p++) {
+      const btn = document.createElement('button');
+      btn.textContent = String(p);
+      btn.className = `px-3 py-2 rounded text-sm ${p===current? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`;
+      btn.addEventListener('click', () => { histPageState.currentPage = p; renderTable(); });
+      pagesEl.appendChild(btn);
+    }
+    prev.onclick = () => { if (histPageState.currentPage>1) { histPageState.currentPage--; renderTable(); } };
+    next.onclick = () => { if (histPageState.currentPage<total) { histPageState.currentPage++; renderTable(); } };
+    first.onclick = () => { histPageState.currentPage = 1; renderTable(); };
+    last.onclick = () => { histPageState.currentPage = total; renderTable(); };
+  }
 
   // Carga inicial de datos
   const loadHistory = async () => {

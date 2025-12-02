@@ -920,7 +920,13 @@ for insert with check (
 -- Lectura de órdenes pendientes (colaboradores activos), propias (cliente) y asignadas (colaborador)
 create policy public_read_pending_orders on public.orders
 for select using (
-  status = 'Pendiente' or client_id = auth.uid() or assigned_to = auth.uid() or public.is_owner(auth.uid()) or public.is_admin(auth.uid())
+  (status = 'Pendiente' and exists (
+    select 1 from public.collaborators c where c.id = auth.uid() and c.status = 'activo'
+  ))
+  or client_id = auth.uid()
+  or assigned_to = auth.uid()
+  or public.is_owner(auth.uid())
+  or public.is_admin(auth.uid())
 );
 -- Colaborador activo puede operar sobre pendientes o asignadas a él
 create policy collaborator_all_on_own_orders on public.orders
@@ -1015,7 +1021,7 @@ begin
 
   if new.status = 'Completada' and new.completed_at is not null then
     v_minutes := extract(epoch from (new.completed_at - coalesce(new.assigned_at, new.created_at))) / 60.0;
-    v_rating := coalesce((new.rating->>'score')::numeric, null);
+    v_rating := coalesce((new.rating->>'stars')::numeric, null);
     v_amount := new.monto_cobrado;
   end if;
 
@@ -1139,9 +1145,6 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 
 DROP TRIGGER IF EXISTS trg_orders_notify_status ON public.orders;
-CREATE TRIGGER trg_orders_notify_status
-AFTER UPDATE OF status, assigned_to ON public.orders
-FOR EACH ROW EXECUTE FUNCTION public.notify_order_status_change();
 
 -- [NUEVO] Trigger para notificar al crear una orden
 DROP TRIGGER IF EXISTS trg_orders_notify_creation ON public.orders;
@@ -1227,25 +1230,12 @@ BEGIN
   o := NULL;
 
   IF identifier ~ '^[0-9]+$' THEN
-    IF EXISTS (
-      SELECT 1 FROM information_schema.columns 
-      WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'supabase_seq_id'
-    ) THEN
-      SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
-      FROM public.orders o2
-      LEFT JOIN public.services s ON s.id = o2.service_id
-      LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
-      WHERE o2.supabase_seq_id = identifier::bigint
-      LIMIT 1;
-    END IF;
-    IF o IS NULL THEN
-      SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
-      FROM public.orders o2
-      LEFT JOIN public.services s ON s.id = o2.service_id
-      LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
-      WHERE o2.id = identifier::bigint
-      LIMIT 1;
-    END IF;
+    SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
+    FROM public.orders o2
+    LEFT JOIN public.services s ON s.id = o2.service_id
+    LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
+    WHERE o2.id = identifier::bigint
+    LIMIT 1;
   ELSIF identifier ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
     SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
     FROM public.orders o2
@@ -1309,7 +1299,7 @@ BEGIN
 
   RETURN res;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 
 create or replace function public.create_outbox_test_for_endpoint(ep text)
 returns bigint language plpgsql security definer set search_path = public as $$
@@ -1321,8 +1311,13 @@ begin
   role := 'cliente';
   select id into order_for_target from public.orders where (client_id = sub.user_id) or (client_contact_id = sub.client_contact_id) order by created_at desc limit 1;
   if order_for_target is null then order_for_target := 0; end if;
-  insert into public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-  values (order_for_target, 'Prueba', role, target, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true)))
+  if sub.user_id is not null then
+    insert into public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+    values (order_for_target, 'Prueba', role, sub.user_id, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true)));
+  else
+    insert into public.notification_outbox(order_id, new_status, target_role, target_contact_id, payload)
+    values (order_for_target, 'Prueba', role, sub.client_contact_id, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true)));
+  end if;
   returning id into oid;
   return oid;
 end;
@@ -1347,7 +1342,7 @@ declare oid bigint; order_for_target bigint;
 begin
   select id into order_for_target from public.orders where client_contact_id = c order by created_at desc limit 1;
   if order_for_target is null then order_for_target := 0; end if;
-  insert into public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+  insert into public.notification_outbox(order_id, new_status, target_role, target_contact_id, payload)
   values (order_for_target, 'Prueba', 'cliente', c, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true, 'contactId', c::text)))
   returning id into oid;
   return oid;
@@ -1422,20 +1417,13 @@ BEGIN
     VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
   END IF;
 
-  -- Colaborador asignado
-  IF (OLD.assigned_to IS DISTINCT FROM NEW.assigned_to AND NEW.assigned_to IS NOT NULL) THEN
-    collaborator_payload := jsonb_build_object(
-      'userId', NEW.assigned_to,
-      'orderId', NEW.id,
-      'title', '🛠️ Nueva Orden Asignada',
-      'body', 'Se te ha asignado la orden #' || NEW.short_id || '. Cliente: ' || coalesce(NEW.name, 'No especificado')
-    );
-    INSERT INTO public.notification_outbox(order_id, new_status, target_user_id, payload)
-    VALUES (NEW.id, 'Asignada', NEW.assigned_to, collaborator_payload);
-  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
+
+CREATE TRIGGER trg_orders_notify_status
+AFTER UPDATE OF status ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.notify_order_status_change();
 
 CREATE OR REPLACE FUNCTION public.notify_price_update()
 RETURNS trigger AS $$

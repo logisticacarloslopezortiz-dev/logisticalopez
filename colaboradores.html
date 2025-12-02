@@ -161,11 +161,21 @@
                   <th class="table-header">Acciones</th>
                 </tr>
               </thead>
-              <tbody id="colaboradoresTableBody" class="divide-y divide-gray-200">
-                <!-- Filas generadas dinámicamente -->
-              </tbody>
-            </table>
-          </div>
+          <tbody id="colaboradoresTableBody" class="divide-y divide-gray-200">
+            <!-- Filas generadas dinámicamente -->
+          </tbody>
+        </table>
+      </div>
+      <div id="collabPagination" class="flex items-center justify-between mt-4">
+        <div class="text-sm text-gray-600">Mostrando <span id="collabShowingRange">0–0</span> de <span id="collabTotalCount">0</span></div>
+        <div class="flex items-center gap-2" aria-label="Paginación">
+          <button id="collabFirst" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Primera</button>
+          <button id="collabPrev" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Anterior</button>
+          <div id="collabPages" class="flex items-center gap-1"></div>
+          <button id="collabNext" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Siguiente</button>
+          <button id="collabLast" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Última</button>
+        </div>
+      </div>
     </div>
   </main>
   <!-- Modal de Métricas -->

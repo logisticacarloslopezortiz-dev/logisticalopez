@@ -26,8 +26,17 @@
   <link rel="stylesheet" href="vendor/leaflet.css" />
   <script src="vendor/leaflet.js"></script>
 
-  <!-- Lucide Icons -->
-  <script src="vendor/lucide.min.js"></script>
+  <!-- Lucide Icons (CDN unificado) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      try {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      } catch(_){ }
+    });
+  </script>
 
   <style>
     :root {

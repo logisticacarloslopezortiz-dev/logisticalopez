@@ -46,22 +46,43 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMessage.classList.add('hidden');
 
     try {
+      await supabaseConfig.ensureFreshSession();
       // Determinar si el ID es secuencial (número) o UUID
       const isNumericId = /^\d+$/.test(id);
       const columnName = isNumericId ? 'id' : 'short_id';
-
-      const { data: order, error } = await supabaseConfig.client
-        .from('orders')
-        .select(`
-          *,
-          service:services(name),
-          vehicle:vehicles(name)
-        `)
-        .eq(columnName, id)
-        .maybeSingle();
-
+      let order = null;
+      let error = null;
+      try {
+        const r = await supabaseConfig.client
+          .from('orders')
+          .select(`
+            *,
+            service:services(name),
+            vehicle:vehicles(name)
+          `)
+          .eq(columnName, id)
+          .maybeSingle();
+        order = r.data;
+        error = r.error || null;
+      } catch (e) {
+        error = e;
+      }
+      if (error && (String(error.message || '').toLowerCase().includes('jwt expired') || (error.status === 401))) {
+        const publicClient = supabaseConfig.getPublicClient();
+        const r2 = await publicClient
+          .from('orders')
+          .select(`
+            *,
+            service:services(name),
+            vehicle:vehicles(name)
+          `)
+          .eq(columnName, id)
+          .maybeSingle();
+        order = r2.data;
+        error = r2.error || null;
+      }
       if (error) {
-        throw new Error(error.message);
+        throw new Error(error.message || String(error));
       }
 
       if (!order) {

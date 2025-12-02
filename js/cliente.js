@@ -246,7 +246,7 @@ async function loadServices() {
         </div>
       </div>
       <div class="check-indicator absolute top-2 right-2 hidden h-6 w-6 items-center justify-center rounded-full bg-azulClaro text-white transition-transform duration-300 scale-0">
-        <i class="fas fa-check text-xs"></i> 
+        <i class="fa-solid fa-check text-xs"></i> 
       </div>
     </div>
   `).join('');
@@ -329,7 +329,7 @@ async function loadVehicles() {
         <span class="block truncate font-semibold text-gray-700 group-hover:text-azulOscuro">${vehicle.name}</span>
       </div>
       <div class="check-indicator absolute top-2 right-2 hidden h-6 w-6 items-center justify-center rounded-full bg-azulClaro text-white transition-transform duration-300 scale-0">
-        <i class="fas fa-check text-xs"></i> 
+        <i class="fa-solid fa-check text-xs"></i> 
       </div>
     </div>
   `).join('');
@@ -1137,14 +1137,14 @@ function loadPOIsForBounds() {
   }).then(json => {
     if (!poiLayer) { poiLayer = L.layerGroup().addTo(map); } else { poiLayer.clearLayers(); }
     const iconFor = (tags) => {
-      if (tags.amenity === 'hospital' || tags.amenity === 'clinic') return L.divIcon({ html: '<i class="fas fa-hospital text-red-600"></i>', className: 'poi-icon' });
-      if (tags.amenity === 'school' || tags.amenity === 'university') return L.divIcon({ html: '<i class="fas fa-school text-blue-600"></i>', className: 'poi-icon' });
-      if (tags.shop === 'mall') return L.divIcon({ html: '<i class="fas fa-shopping-bag text-pink-600"></i>', className: 'poi-icon' });
-      if (tags.shop === 'supermarket') return L.divIcon({ html: '<i class="fas fa-store text-green-600"></i>', className: 'poi-icon' });
-      if (tags.leisure === 'park') return L.divIcon({ html: '<i class="fas fa-tree text-green-700"></i>', className: 'poi-icon' });
-      if (tags.amenity === 'police') return L.divIcon({ html: '<i class="fas fa-shield-alt text-gray-700"></i>', className: 'poi-icon' });
-      if (tags.amenity === 'fire_station') return L.divIcon({ html: '<i class="fas fa-fire-extinguisher text-orange-600"></i>', className: 'poi-icon' });
-      return L.divIcon({ html: '<i class="fas fa-map-marker-alt text-azulClaro"></i>', className: 'poi-icon' });
+      if (tags.amenity === 'hospital' || tags.amenity === 'clinic') return L.divIcon({ html: '<i class="fa-solid fa-hospital text-red-600"></i>', className: 'poi-icon' });
+      if (tags.amenity === 'school' || tags.amenity === 'university') return L.divIcon({ html: '<i class="fa-solid fa-school text-blue-600"></i>', className: 'poi-icon' });
+      if (tags.shop === 'mall') return L.divIcon({ html: '<i class="fa-solid fa-bag-shopping text-pink-600"></i>', className: 'poi-icon' });
+      if (tags.shop === 'supermarket') return L.divIcon({ html: '<i class="fa-solid fa-store text-green-600"></i>', className: 'poi-icon' });
+      if (tags.leisure === 'park') return L.divIcon({ html: '<i class="fa-solid fa-tree text-green-700"></i>', className: 'poi-icon' });
+      if (tags.amenity === 'police') return L.divIcon({ html: '<i class="fa-solid fa-shield-halved text-gray-700"></i>', className: 'poi-icon' });
+      if (tags.amenity === 'fire_station') return L.divIcon({ html: '<i class="fa-solid fa-fire-extinguisher text-orange-600"></i>', className: 'poi-icon' });
+      return L.divIcon({ html: '<i class="fa-solid fa-location-dot text-azulClaro"></i>', className: 'poi-icon' });
     };
     json.elements.forEach(el => {
       const lat = el.lat || el.center?.lat;

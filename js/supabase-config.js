@@ -340,9 +340,12 @@ if (!window.supabaseConfig) {
   async getVapidPublicKey() {
     try {
       if (this.vapidPublicKey) return this.vapidPublicKey;
-      const { data, error } = await this.client.functions.invoke('getVapidKey');
-      if (!error && data && data.key) {
-        this.vapidPublicKey = data.key;
+      let resp = await this.client.functions.invoke('getVapidKey');
+      if ((resp.error || !resp.data?.key)) {
+        resp = await this.client.functions.invoke('get-vapid-key');
+      }
+      if (!resp.error && resp.data && resp.data.key) {
+        this.vapidPublicKey = resp.data.key;
         return this.vapidPublicKey;
       }
       this.vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
