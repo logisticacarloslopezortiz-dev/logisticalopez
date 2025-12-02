@@ -1153,14 +1153,16 @@ async function notifyStatusChange(orderId, status) {
     if (!order) return;
     const contactId = order.client_contact_id || null;
     const shortId = order.short_id || orderId;
-  const payload = contactId ? {
-    contactId,
-    title: 'Estado del pedido actualizado',
-    body: `Tu pedido #${shortId} ahora está en estado: ${status}`
-  } : null;
-  if (payload && supabaseConfig?.client?.functions?.invoke) {
+  if (supabaseConfig?.client?.functions?.invoke) {
     try {
-      const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', { body: payload });
+      const { error } = await supabaseConfig.client.functions.invoke('notify-role', {
+        body: {
+          role: 'cliente',
+          orderId,
+          title: 'Estado del pedido actualizado',
+          body: `Tu pedido #${shortId} ahora está en estado: ${status}`
+        }
+      });
       if (error) {
         try { await supabaseConfig.runProcessOutbox(); } catch(_) {}
       }

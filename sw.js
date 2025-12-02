@@ -85,10 +85,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   const dest = event.request.destination; // 'document', 'script', 'style', 'image', 'font', ''
 
-  // No interceptar llamadas a API ni endpoints dinámicos del servidor
-  if (url.pathname.startsWith('/api/') || url.pathname === '/vapid-public-key') {
-    return; // dejar que el navegador maneje la solicitud
-  }
+  
 
   event.respondWith((async () => {
     const cached = await caches.match(event.request, { ignoreSearch: true });

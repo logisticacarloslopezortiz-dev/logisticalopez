@@ -1,4 +1,3 @@
-/// <reference path="../globals.d.ts" />
 import { handleCors, jsonResponse } from '../cors-config.ts'
 
 Deno.serve(async (req: Request) => {

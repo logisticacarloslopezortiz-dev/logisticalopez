@@ -91,37 +91,50 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function isAdmin(session) {
     try {
-      const roleLocal = localStorage.getItem('userRole');
-      if (roleLocal && roleLocal.toLowerCase().includes('admin')) return true;
       const uid = session.user?.id;
       const me = collaborators.find(c => String(c.id) === String(uid));
       return me && String(me.role).toLowerCase().includes('admin');
     } catch (_) { return false; }
   }
 
+  function debounce(fn, wait = 300) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(null, args), wait);
+    };
+  }
+
   function currency(value) {
     return `RD$ ${Number(value || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
-  function computeFinance(now = new Date()) {
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthOrders = allOrders.filter(o => o.completed_at >= monthStart);
+  function monthStartOf(date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
 
+  function collabShare(order, pct) {
+    return order.monto_cobrado * (pct / 100);
+  }
+
+  function computeFinance(now = new Date()) {
+    const monthStart = monthStartOf(now);
+    const monthOrders = allOrders.filter(o => o.completed_at >= monthStart);
     const fivePctMonth = monthOrders.reduce((s, o) => s + (o.monto_cobrado * 0.05), 0);
 
     const perCollab = new Map();
     collaborators.forEach(c => perCollab.set(String(c.id), { month: 0, total: 0, pct: collabPercentMap.get(String(c.id)) || 0 }));
 
-    allOrders.forEach(o => {
+    for (const o of allOrders) {
       const collabId = String(o.completed_by || o.assigned_to || '');
-      if (!collabId) return;
+      if (!collabId) continue;
       const pct = collabPercentMap.get(collabId) || 0;
-      const colShare = o.monto_cobrado * (pct / 100);
+      const colShareVal = collabShare(o, pct);
       const entry = perCollab.get(collabId) || { month: 0, total: 0, pct };
-      entry.total += colShare;
-      if (o.completed_at >= monthStart) entry.month += colShare;
+      entry.total += colShareVal;
+      if (o.completed_at >= monthStart) entry.month += colShareVal;
       perCollab.set(collabId, entry);
-    });
+    }
 
     const monthGross = monthOrders.reduce((s, o) => s + o.monto_cobrado, 0);
     const monthCollabSum = Array.from(perCollab.values()).reduce((s, v) => s + v.month, 0);
@@ -141,23 +154,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { perCollab, monthCompany, fivePctMonth } = computeFinance();
 
     // Tabla porcentajes y totales
-    ui.collabFinanceTable.innerHTML = '';
+    ui.collabFinanceTable.textContent = '';
     let monthCollabSum = 0;
-      const rows = collaborators.map(c => {
+    const frag = document.createDocumentFragment();
+    collaborators.forEach(c => {
       const id = String(c.id);
       const stats = perCollab.get(id) || { month: 0, total: 0, pct: collabPercentMap.get(id) || 0 };
       monthCollabSum += stats.month;
+
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="table-cell">${c.name || id}</td>
-        <td class="table-cell">
-          <input type="number" min="0" max="100" step="0.5" value="${stats.pct}" data-collab-id="${id}" class="w-24 border rounded px-2 py-1" />
-        </td>
-        <td class="table-cell">${currency(stats.month)}</td>
-        <td class="table-cell">${currency(stats.total)}</td>
-      `;
-      ui.collabFinanceTable.appendChild(tr);
+      tr.className = 'border-b hover:bg-gray-50';
+
+      const tdName = document.createElement('td');
+      tdName.className = 'table-cell';
+      tdName.textContent = c.name || id;
+
+      const tdPct = document.createElement('td');
+      tdPct.className = 'table-cell';
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '0';
+      input.max = '100';
+      input.step = '0.5';
+      input.value = String(stats.pct);
+      input.setAttribute('data-collab-id', id);
+      input.className = 'w-24 border rounded px-2 py-1';
+      tdPct.appendChild(input);
+
+      const tdMonth = document.createElement('td');
+      tdMonth.className = 'table-cell';
+      tdMonth.textContent = currency(stats.month);
+
+      const tdTotal = document.createElement('td');
+      tdTotal.className = 'table-cell';
+      tdTotal.textContent = currency(stats.total);
+
+      tr.appendChild(tdName);
+      tr.appendChild(tdPct);
+      tr.appendChild(tdMonth);
+      tr.appendChild(tdTotal);
+      frag.appendChild(tr);
     });
+    ui.collabFinanceTable.appendChild(frag);
 
     ui.sumCollabMonth.textContent = currency(monthCollabSum);
     ui.sumCompanyMonth.textContent = currency(monthCompany);
@@ -175,46 +213,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderCollabDetail(selId);
 
     // Handlers de edición de %
+    const savePctDebounced = debounce(async (id, pct) => {
+      try {
+        const { error } = await supabaseConfig.client.from('collaborators').update({ commission_percent: pct }).eq('id', id);
+        if (error) throw error;
+        collabPercentMap.set(String(id), pct);
+        await renderFinance(session);
+        notifications.success('Comisión actualizada');
+      } catch (err) {
+        console.error('No se pudo actualizar la comisión:', err);
+        notifications.error('Error al guardar el porcentaje');
+      }
+    }, 350);
     ui.collabFinanceTable.querySelectorAll('input[type="number"]').forEach(inp => {
-      inp.addEventListener('change', async (e) => {
+      inp.addEventListener('input', (e) => {
         const id = e.target.getAttribute('data-collab-id');
         const pct = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
         e.target.value = pct;
-        try {
-          const { error } = await supabaseConfig.client.from('collaborators').update({ commission_percent: pct }).eq('id', id);
-          if (error) throw error;
-          collabPercentMap.set(String(id), pct);
-          await renderFinance(session);
-          notifications.success('Comisión actualizada');
-        } catch (err) {
-          console.error('No se pudo actualizar la comisión:', err);
-          notifications.error('Error al guardar el porcentaje');
-        }
+        savePctDebounced(id, pct);
       });
     });
   }
 
   function renderCollabDetail(collabId) {
-    ui.collabDetailTable.innerHTML = '';
+    ui.collabDetailTable.textContent = '';
     const pct = collabPercentMap.get(String(collabId)) || 0;
     const items = allOrders.filter(o => String(o.completed_by || o.assigned_to || '') === String(collabId));
+    const fragDetail = document.createDocumentFragment();
     items.forEach(o => {
       const colShare = o.monto_cobrado * (pct / 100);
       const companyShare = Math.max(0, o.monto_cobrado - colShare);
       const fivePct = o.monto_cobrado * 0.05;
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="table-cell">#${o.id}</td>
-        <td class="table-cell">${o.service?.name || ''}</td>
-        <td class="table-cell">${currency(o.monto_cobrado)}</td>
-        <td class="table-cell">${pct}%</td>
-        <td class="table-cell">${currency(colShare)}</td>
-        <td class="table-cell">${currency(companyShare)}</td>
-        <td class="table-cell">${currency(fivePct)}</td>
-        <td class="table-cell">${o.completed_at.toLocaleString('es-DO')}</td>
-      `;
-      ui.collabDetailTable.appendChild(tr);
+      tr.className = 'border-b';
+
+      const cells = [
+        `#${o.id}`,
+        o.service?.name || '',
+        currency(o.monto_cobrado),
+        `${pct}%`,
+        currency(colShare),
+        currency(companyShare),
+        currency(fivePct),
+        o.completed_at.toLocaleString('es-DO')
+      ];
+      cells.forEach(text => {
+        const td = document.createElement('td');
+        td.className = 'table-cell';
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      fragDetail.appendChild(tr);
     });
+    ui.collabDetailTable.appendChild(fragDetail);
   }
 
   function exportFinanceToPdf() {

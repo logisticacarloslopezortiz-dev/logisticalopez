@@ -159,8 +159,8 @@
                 try {
                     showResult('push-notification-result', 'Enviando solicitud...');
                     
-                    const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
-                        body: { orderId, title, body }
+                    const { data, error } = await supabaseConfig.client.functions.invoke('notify-role', {
+                        body: { role: 'cliente', orderId, title, body }
                     });
                     
                     if (error) throw error;

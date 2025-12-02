@@ -558,8 +558,9 @@ async function openAssignModal(orderId){
           }
           return;
         }
-        const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
+        const { data, error } = await supabaseConfig.client.functions.invoke('notify-role', {
           body: {
+            role: 'cliente',
             orderId: order.id,
             title: `Actualización de su orden #${order.short_id || order.id}`,
             body: 'Su orden ha sido actualizada',
@@ -579,28 +580,9 @@ async function openAssignModal(orderId){
     notifyCollabBtn.replaceWith(notifyCollabBtn.cloneNode(true));
     document.getElementById('notifyCollabBtn').addEventListener('click', async () => {
       try {
-        const r = await fetch('/api/sendByRole', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            role: 'colaborador',
-            orderId: order.id,
-            title: `Orden #${order.short_id || order.id} actualizada`,
-            body: 'Revisa tu panel, se actualizó tu orden asignada',
-            data: { url: `/panel-colaborador.html?orderId=${order.short_id || order.id}` }
-          })
-        });
-        if (r.ok) {
-          const j = await r.json();
-          if (j.success) {
-            notifications.success(`Notificación enviada al colaborador (${j.sent}/${j.total})`);
-          } else {
-            notifications.warning(j.message || 'No se enviaron notificaciones');
-          }
-          return;
-        }
-        const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
+        const { data, error } = await supabaseConfig.client.functions.invoke('notify-role', {
           body: {
+            role: 'colaborador',
             orderId: order.id,
             title: `Orden #${order.short_id || order.id} actualizada`,
             body: 'Revisa tu panel, se actualizó tu orden asignada',
@@ -608,7 +590,15 @@ async function openAssignModal(orderId){
           }
         });
         if (error) throw error;
-        notifications.success('Notificación enviada al colaborador');
+        const sent = (data && typeof data.sent === 'number') ? data.sent : null;
+        const total = (data && typeof data.total === 'number') ? data.total : null;
+        if (sent !== null && total !== null) {
+          notifications.success(`Notificación enviada al colaborador (${sent}/${total})`);
+        } else if (data?.success) {
+          notifications.success('Notificación enviada al colaborador');
+        } else {
+          notifications.warning(data?.message || 'No se enviaron notificaciones');
+        }
       } catch (e) {
         notifications.error('Error al notificar al colaborador');
       }
@@ -620,28 +610,9 @@ async function openAssignModal(orderId){
     notifyAdminsBtn.replaceWith(notifyAdminsBtn.cloneNode(true));
     document.getElementById('notifyAdminsBtn').addEventListener('click', async () => {
       try {
-        const r = await fetch('/api/sendByRole', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            role: 'administrador',
-            orderId: order.id,
-            title: `Orden #${order.short_id || order.id} modificada`,
-            body: 'Se realizó una acción desde el panel del dueño',
-            data: { url: `/inicio.html?orderId=${order.short_id || order.id}` }
-          })
-        });
-        if (r.ok) {
-          const j = await r.json();
-          if (j.success) {
-            notifications.success(`Notificación enviada a administradores (${j.sent}/${j.total})`);
-          } else {
-            notifications.warning(j.message || 'No se enviaron notificaciones');
-          }
-          return;
-        }
-        const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
+        const { data, error } = await supabaseConfig.client.functions.invoke('notify-role', {
           body: {
+            role: 'administrador',
             orderId: order.id,
             title: `Orden #${order.short_id || order.id} modificada`,
             body: 'Se realizó una acción desde el panel del dueño',
@@ -649,7 +620,15 @@ async function openAssignModal(orderId){
           }
         });
         if (error) throw error;
-        notifications.success('Notificación enviada a administradores');
+        const sent = (data && typeof data.sent === 'number') ? data.sent : null;
+        const total = (data && typeof data.total === 'number') ? data.total : null;
+        if (sent !== null && total !== null) {
+          notifications.success(`Notificación enviada a administradores (${sent}/${total})`);
+        } else if (data?.success) {
+          notifications.success('Notificación enviada a administradores');
+        } else {
+          notifications.warning(data?.message || 'No se enviaron notificaciones');
+        }
       } catch (e) {
         notifications.error('Error al notificar a administradores');
       }
@@ -966,10 +945,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function checkVapidStatus() {
   try {
-    const r = await fetch('/api/vapidPublicKey', { headers: { 'Accept': 'application/json' } });
-    if (!r.ok) return;
-    const j = await r.json();
-    const k = j && (j.key || j.vapidPublicKey || j.publicKey);
+    const { data, error } = await supabaseConfig.client.functions.invoke('getVapidKey');
+    if (error) return;
+    const k = data && data.key;
     if (!k || typeof k !== 'string') {
       notifications.warning('Claves VAPID no configuradas', { title: 'Push deshabilitado' });
       return;

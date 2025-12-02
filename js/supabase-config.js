@@ -340,34 +340,15 @@ if (!window.supabaseConfig) {
   async getVapidPublicKey() {
     try {
       if (this.vapidPublicKey) return this.vapidPublicKey;
-      
-      // Primero intentamos obtener la clave desde la función Edge de Supabase
-      try {
-        const { data, error } = await this.client.functions.invoke('get-vapid-key');
-        if (!error && data && data.vapidPublicKey) {
-          this.vapidPublicKey = data.vapidPublicKey;
-          return this.vapidPublicKey;
-        }
-      } catch (supabaseError) {
-        console.log('Intentando método alternativo para obtener VAPID key...');
+      const { data, error } = await this.client.functions.invoke('getVapidKey');
+      if (!error && data && data.key) {
+        this.vapidPublicKey = data.key;
+        return this.vapidPublicKey;
       }
-      
-      // Si falla, intentamos el endpoint API tradicional
-      const resp = await fetch('/api/vapidPublicKey');
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const json = await resp.json();
-      this.vapidPublicKey = json?.key || null;
-      
-      // Si todo falla, usamos una clave de respaldo (solo para desarrollo)
-      if (!this.vapidPublicKey) {
-        console.warn('Usando VAPID key de respaldo (solo para desarrollo)');
-        this.vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
-      }
-      
+      this.vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
       return this.vapidPublicKey;
     } catch (e) {
       console.warn('No se pudo obtener VAPID public key:', e);
-      // Usar clave de respaldo en caso de error (solo para desarrollo)
       this.vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
       return this.vapidPublicKey;
     }

@@ -93,10 +93,10 @@ Deno.serve(async (req: Request) => {
     const _recipientUserIds: string[] = [];
 
     if (role === 'cliente') {
-      // Notificar al cliente de la orden
+      // Notificar al cliente de la orden (soporta user_id y client_contact_id)
       const { data: order, error } = await supabase
         .from('orders')
-        .select('client_id, notification_subscription, push_subscription')
+        .select('client_id, client_contact_id')
         .eq('id', orderId)
         .maybeSingle();
       if (error) {
@@ -104,19 +104,26 @@ Deno.serve(async (req: Request) => {
         await logDb(supabase, 'notify-role', 'warning', 'Error obteniendo orden para cliente', { orderId, error: errorToString(error) });
       }
 
-      // Intentar subscripciones por client_id
+      // Intentar subscripciones por client_id y luego por client_contact_id
       let subscriptions: WebPushSubscription[] = [];
       if (order?.client_id) {
-        const { data: subs, error: subErr } = await supabase
+        const { data: subsByUser } = await supabase
           .from('push_subscriptions')
           .select('endpoint, keys')
           .eq('user_id', order.client_id);
-        if (!subErr && subs) {
-          subscriptions = subs as WebPushSubscription[];
+        if (Array.isArray(subsByUser) && subsByUser.length > 0) {
+          subscriptions = subsByUser as WebPushSubscription[];
         }
       }
-
-      
+      if (subscriptions.length === 0 && order?.client_contact_id) {
+        const { data: subsByContact } = await supabase
+          .from('push_subscriptions')
+          .select('endpoint, keys')
+          .eq('client_contact_id', order.client_contact_id);
+        if (Array.isArray(subsByContact) && subsByContact.length > 0) {
+          subscriptions = subsByContact as WebPushSubscription[];
+        }
+      }
 
       if (subscriptions.length === 0) {
         await logDb(supabase, 'notify-role', 'info', 'Cliente sin suscripciones', { orderId });

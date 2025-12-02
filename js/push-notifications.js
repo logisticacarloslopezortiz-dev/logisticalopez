@@ -29,55 +29,26 @@ class PushNotificationManager {
     }
 
     async loadVapidKey() {
-        // 1) Intentar obtener desde servidor Node
-        try {
-            const base = window.NODE_PUSH_SERVER_URL || '';
-            const urlPrimary = base ? `${base}/vapid-public-key` : '/vapid-public-key';
-            const r1 = await fetch(urlPrimary, { headers: { 'Accept': 'application/json' } });
-            let j = null;
-            if (r1 && r1.ok) {
-                j = await r1.json();
-            } else {
-                const urlFallback = base ? `${base}/api/vapidPublicKey` : '/api/vapidPublicKey';
-                const r2 = await fetch(urlFallback, { headers: { 'Accept': 'application/json' } });
-                if (!r2.ok) throw new Error('node_endpoint_unavailable');
-                j = await r2.json();
-            }
-            this.vapidPublicKey = j?.key || j?.vapidPublicKey || j?.publicKey || null;
-            if (!this.vapidPublicKey) throw new Error('invalid_vapid_key');
-            const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
-            if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
-              throw new Error('invalid_vapid_key_format');
-            }
-            console.log('VAPID key obtenida desde servidor Node');
-            return;
-        } catch (_) {
-            console.info('VAPID por Node no disponible, usando Supabase Functions');
-        }
-
-        // 2) Fallback: Supabase Functions
         try {
             const client = supabaseConfig?.client;
             if (!client || !client.functions || typeof client.functions.invoke !== 'function') {
                 throw new Error('Supabase client/functions no disponible');
             }
-            const { data, error } = await client.functions.invoke('get-vapid-key');
+            const { data, error } = await client.functions.invoke('getVapidKey');
             if (error) throw error;
-            this.vapidPublicKey = data?.vapidPublicKey || data?.publicKey || null;
-            if (!this.vapidPublicKey) throw new Error('Clave VAPID no disponible en respuesta');
+            this.vapidPublicKey = data?.key || null;
+            if (!this.vapidPublicKey) throw new Error('Clave VAPID no disponible');
             const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
             if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
-              throw new Error('Clave VAPID inválida desde Supabase');
+              throw new Error('Formato de VAPID inválido');
             }
             console.log('VAPID key obtenida desde Supabase Functions');
             return;
         } catch (error) {
             console.error('Error loading VAPID key (Supabase):', error);
+            this.vapidPublicKey = 'BMuGvI89RtY2N2hFDLwkCmNitzvYP9iDrRCQlq8JmFfGtDjgFQWJGLaEHX9O8lF8Vl9WsXOYMbBq94vKwpWoXVE';
+            console.warn('Usando VAPID key de desarrollo (fallback). Configura la función getVapidKey.');
         }
-
-        // 3) Último recurso: clave de desarrollo
-        this.vapidPublicKey = 'BMuGvI89RtY2N2hFDLwkCmNitzvYP9iDrRCQlq8JmFfGtDjgFQWJGLaEHX9O8lF8Vl9WsXOYMbBq94vKwpWoXVE';
-        console.warn('Usando VAPID key de desarrollo (fallback). Configura servidor Node o función get-vapid-key.');
     }
 
     async registerServiceWorker() {
@@ -285,48 +256,22 @@ class PushNotificationManager {
     }
 
     async sendTestNotification() {
-        // Intentar enviar vía servidor Node usando la suscripción actual del navegador
         try {
-            if (!this.subscription) {
-                throw new Error('No existe suscripción activa del navegador');
-            }
-            const base = window.NODE_PUSH_SERVER_URL || '';
-            const nodeUrl = base ? `${base}/api/push` : '/api/push';
-            const payload = {
-                title: 'Notificación de prueba',
-                body: 'Esta es una notificación de prueba desde Node',
-                data: { url: '/inicio.html', type: 'test' }
-            };
-            const r = await fetch(nodeUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ subscription: this.subscription, payload })
-            });
-            if (!r.ok) throw new Error('Fallo envío via Node');
-            const j = await r.json();
-            console.log('Test notification sent via Node:', j);
-            return j;
-        } catch (errNode) {
-            console.warn('Fallo envío de prueba por Node, probando Supabase:', errNode?.message || errNode);
-        }
-
-        // Fallback: usar Supabase Function
-        try {
-            const { data: { user } } = await supabaseConfig.client.auth.getUser();
-            if (!user) throw new Error('User not authenticated');
-            const { data, error } = await supabaseConfig.client.functions.invoke('send-push-notification', {
+            if (!this.subscription) throw new Error('No existe suscripción activa del navegador');
+            const { data, error } = await supabaseConfig.client.functions.invoke('sendPush', {
                 body: {
-                    to_user_id: user.id,
                     title: 'Notificación de prueba',
-                    body: 'Esta es una notificación de prueba del sistema LLO Admin',
-                    data: { url: '/inicio.html', type: 'test' }
+                    body: 'Esta es una notificación de prueba del sistema',
+                    icon: '/img/android-chrome-192x192.png',
+                    url: '/inicio.html',
+                    subscription: this.subscription
                 }
             });
             if (error) throw error;
-            console.log('Test notification sent via Supabase:', data);
+            console.log('Test notification sent via Supabase send-push:', data);
             return data;
         } catch (error) {
-            console.error('Error sending test notification (Supabase):', error);
+            console.error('Error sending test notification:', error);
             throw error;
         }
     }

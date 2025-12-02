@@ -40,11 +40,11 @@ async function getPushSubscription() {
     const registration = await navigator.serviceWorker.ready;
     let vapidKey = null;
     try {
-      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key', { body: {} });
+      const { data, error } = await supabaseConfig.client.functions.invoke('getVapidKey');
       if (error) console.warn('No se pudo obtener VAPID por función:', error.message);
-      vapidKey = data?.vapidPublicKey || data?.publicKey || null;
+      vapidKey = data?.key || null;
     } catch (e) {
-      console.warn('Fallo al invocar get-vapid-key:', e?.message || String(e));
+      console.warn('Fallo al invocar getVapidKey:', e?.message || String(e));
     }
     if (!vapidKey || typeof vapidKey !== 'string') {
       console.warn('VAPID pública no disponible');
@@ -1194,13 +1194,13 @@ async function subscribeUserToPush(savedOrder) {
     // Obtener la clave VAPID válida desde el servidor
     let vapidKey = null;
     try {
-      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key', { body: {} });
+      const { data, error } = await supabaseConfig.client.functions.invoke('getVapidKey');
       if (error) {
         console.warn('No se pudo obtener VAPID por función:', error.message);
       }
-      vapidKey = data?.vapidPublicKey || null;
+      vapidKey = data?.key || null;
     } catch (e) {
-      console.warn('Fallo al invocar get-vapid-key:', e?.message || String(e));
+      console.warn('Fallo al invocar getVapidKey:', e?.message || String(e));
     }
 
     if (!vapidKey || typeof vapidKey !== 'string') {
