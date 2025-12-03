@@ -10,29 +10,8 @@ let selectedOrderIdForAssign = null; // Guardará el ID del pedido a asignar
 // Carga inicial de órdenes
 async function loadOrders() {
   try {
-    // Usar el cliente adecuado para la vista orders_with_client
-    const client = supabaseConfig.client || supabaseConfig.getPublicClient();
-
-    // Consultar directamente la tabla orders con relaciones definidas
-    const { data: orders, error } = await client
-      .from('orders')
-      .select(`
-        *,
-        service:services(name),
-        vehicle:vehicles(name)
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error("Error al cargar las órdenes:", error?.message || error);
-      if (window.showError) {
-        window.showError('No se pudieron cargar las solicitudes. Reintenta en unos segundos.', { title: 'Error de carga' });
-      }
-      return;
-    }
-
+    const orders = await supabaseConfig.getOrders();
     allOrders = orders || [];
-
     filterOrders();
   } catch (err) {
     console.error('Fallo inesperado al cargar órdenes:', err?.message || err);
@@ -145,7 +124,15 @@ function sortTable(column, element) {
     const icon = element.querySelector('i');
     icon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
     icon.classList.add('text-blue-600');
-    lucide.createIcons();
+    if (window.lucide) {
+      try {
+        document.querySelectorAll('[data-lucide]').forEach(function(el){
+          var name = el.getAttribute('data-lucide');
+          if (!name || !window.lucide.icons[name]) el.setAttribute('data-lucide', 'info');
+        });
+        window.lucide.createIcons();
+      } catch(_){ }
+    }
   }
 }
 
@@ -288,7 +275,15 @@ function renderOrders(){
     });
   }
 
-  if (window.lucide) lucide.createIcons();
+  if (window.lucide) {
+    try {
+      document.querySelectorAll('[data-lucide]').forEach(function(el){
+        var name = el.getAttribute('data-lucide');
+        if (!name || !window.lucide.icons[name]) el.setAttribute('data-lucide', 'info');
+      });
+      window.lucide.createIcons();
+    } catch(_){ }
+  }
   updateCharts();
 }
 
@@ -539,25 +534,6 @@ async function openAssignModal(orderId){
     notifyClientBtn.replaceWith(notifyClientBtn.cloneNode(true));
     document.getElementById('notifyClientBtn').addEventListener('click', async () => {
       try {
-        const r = await fetch('/api/sendToOrder', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: order.id,
-            title: `Actualización de su orden #${order.short_id || order.id}`,
-            body: 'Su orden ha sido actualizada',
-            data: { url: `/seguimiento.html?orderId=${order.short_id || order.id}` }
-          })
-        });
-        if (r.ok) {
-          const j = await r.json();
-          if (j.success) {
-            notifications.success(`Notificación enviada al cliente (${j.sent}/${j.total})`);
-          } else {
-            notifications.warning(j.message || 'No se enviaron notificaciones');
-          }
-          return;
-        }
         const { data, error } = await supabaseConfig.client.functions.invoke('notify-role', {
           body: {
             role: 'cliente',
@@ -568,7 +544,8 @@ async function openAssignModal(orderId){
           }
         });
         if (error) throw error;
-        notifications.success('Notificación enviada al cliente');
+        if (data?.success) notifications.success('Notificación enviada al cliente');
+        else notifications.warning(data?.message || 'Cliente sin suscripciones');
       } catch (e) {
         notifications.error('Error al notificar al cliente');
       }
@@ -635,7 +612,15 @@ async function openAssignModal(orderId){
     });
   }
 
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  if (typeof lucide !== 'undefined') {
+    try {
+      document.querySelectorAll('[data-lucide]').forEach(function(el){
+        var name = el.getAttribute('data-lucide');
+        if (!name || !window.lucide.icons[name]) el.setAttribute('data-lucide', 'info');
+      });
+      window.lucide.createIcons();
+    } catch(_){ }
+  }
 }
 
 function closeAssignModal(){

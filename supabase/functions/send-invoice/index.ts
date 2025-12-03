@@ -1,6 +1,6 @@
 /// <reference path="../globals.d.ts" />
 // Función para generar y enviar facturas por email
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse } from '../cors-config.ts';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 
@@ -175,7 +175,7 @@ Deno.serve(async (req: Request) => {
     }
     
     // Crear cliente de Supabase
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE) as unknown as SupabaseClientLike;
+    const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     
     // Extraer datos del cuerpo de la solicitud
     const { orderId, email, contact_id } = await req.json();
@@ -217,8 +217,8 @@ Deno.serve(async (req: Request) => {
     try { await (supabase as any).storage.createBucket('invoices', { public: true }); } catch (_) {}
     const filePath = `${order.client_id || 'anon'}/${invoiceNumber}-${Date.now()}.pdf`;
     await supabase.storage.from('invoices').upload(filePath, pdfBytes, { contentType: 'application/pdf', upsert: true });
-    const { data: pub } = await (supabase as any).storage.from('invoices').getPublicUrl(filePath);
-    const pdfUrl = (pub && (pub as any).publicUrl) || '';
+    const { data: pub } = supabase.storage.from('invoices').getPublicUrl(filePath);
+    const pdfUrl = ((pub as any)?.publicUrl) || '';
     
     // Enviar por email si se proporcionó
     let emailResult = null;
@@ -313,16 +313,4 @@ type QueryBuilder = {
   maybeSingle: () => Promise<{ data?: any; error?: any }>;
 };
 
-type SupabaseClientLike = {
-  from: (table: 'orders' | 'business' | 'clients' | 'invoices' | 'profiles') => {
-    select: (columns: string) => QueryBuilder;
-    insert: (values: unknown) => Promise<{ data?: unknown; error?: unknown }>;
-  };
-  storage: {
-    from: (bucket: string) => {
-      upload: (path: string, data: Uint8Array, opts: { contentType?: string; upsert?: boolean }) => Promise<{ data?: unknown; error?: unknown }>;
-      getPublicUrl: (path: string) => Promise<{ data?: unknown; error?: unknown }>;
-    };
-    createBucket: (name: string, opts: { public?: boolean }) => Promise<{ data?: unknown; error?: unknown }>;
-  };
-};
+type SupabaseClientLike = SupabaseClient;

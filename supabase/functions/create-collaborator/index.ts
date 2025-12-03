@@ -1,5 +1,5 @@
 /// <reference path="../globals.d.ts" />
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
 
 // Función para registrar logs detallados
@@ -24,7 +24,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Crear cliente de Supabase con rol de servicio para operaciones administrativas
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+    const admin: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
 
     // Extraer datos del cuerpo de la solicitud
     const body = await req.json();
@@ -115,32 +115,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: collabErr.message }, 400);
       }
 
-      // 3. Insertar en tabla matriculas si se proporcionó
-      if (matricula) {
-        const { error: matriculaErr } = await admin
-          .from('matriculas')
-          .insert({
-            user_id: user.id,
-            matricula,
-            status: 'activo',
-            created_at: new Date().toISOString()
-          });
-
-        if (matriculaErr) {
-          logDebug('Error al insertar en matriculas', matriculaErr);
-          // Rollback: eliminar collaborator y profile y auth
-          try { await admin.from('collaborators').delete().eq('id', user.id); } catch (cleanupError) {
-            logDebug('Fallo al limpiar collaborators tras error matriculas', cleanupError);
-          }
-          try { await admin.from('profiles').delete().eq('id', user.id); } catch (cleanupError) {
-            logDebug('Fallo al limpiar profiles tras error matriculas', cleanupError);
-          }
-          try { await admin.auth.admin.deleteUser(user.id); } catch (cleanupError) {
-            logDebug('Fallo al limpiar usuario auth tras error matriculas', cleanupError);
-          }
-          return jsonResponse({ error: matriculaErr.message }, 400);
-        }
-      }
+      
     }
 
     return jsonResponse({ 

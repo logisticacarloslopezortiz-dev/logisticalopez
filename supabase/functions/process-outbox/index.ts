@@ -1,5 +1,5 @@
 /// <reference path="../globals.d.ts" />
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse } from '../cors-config.ts';
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -170,14 +170,14 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise
     const recentSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
     if (targetUserId) {
-      const { data: existing } = await (supabase as any).from('notifications').select('id').eq('user_id', targetUserId).eq('title', title).eq('body', body).filter('data->>orderId', 'eq', String(row.order_id)).gte('created_at', recentSince).limit(1);
+      const { data: existing } = await supabase.from('notifications').select('id').eq('user_id', targetUserId).eq('title', title).eq('body', body).filter('data->>orderId', 'eq', String(row.order_id)).gte('created_at', recentSince).limit(1);
       if (!existing || existing.length === 0) {
-        await (supabase as any).from('notifications').insert({ user_id: targetUserId, title, body, data: { orderId: row.order_id, newStatus: row.new_status, results }, created_at: new Date().toISOString() });
+        await supabase.from('notifications').insert({ user_id: targetUserId, title, body, data: { orderId: row.order_id, newStatus: row.new_status, results }, created_at: new Date().toISOString() });
       }
     } else if (contactId) {
-      const { data: existingC } = await (supabase as any).from('notifications').select('id').eq('contact_id', contactId).eq('title', title).eq('body', body).filter('data->>orderId', 'eq', String(row.order_id)).gte('created_at', recentSince).limit(1);
+      const { data: existingC } = await supabase.from('notifications').select('id').eq('contact_id', contactId).eq('title', title).eq('body', body).filter('data->>orderId', 'eq', String(row.order_id)).gte('created_at', recentSince).limit(1);
       if (!existingC || existingC.length === 0) {
-        await (supabase as any).from('notifications').insert({ contact_id: contactId, title, body, data: { orderId: row.order_id, newStatus: row.new_status, results }, created_at: new Date().toISOString() });
+        await supabase.from('notifications').insert({ contact_id: contactId, title, body, data: { orderId: row.order_id, newStatus: row.new_status, results }, created_at: new Date().toISOString() });
       }
     }
   } catch (err) {

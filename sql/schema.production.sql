@@ -176,15 +176,7 @@ create table if not exists public.clients (
 );
 comment on table public.clients is 'Tabla para clientes no autenticados (invitados).';
 
--- Matriculas
-create table if not exists public.matriculas (
-  id bigserial primary key,
-  created_at timestamptz not null default now(),
-  user_id uuid not null references public.profiles(id) on delete cascade,
-  matricula text not null,
-  status text not null default 'activo'
-);
-create index if not exists idx_matriculas_user_id on public.matriculas(user_id);
+
 
 -- 5) CONFIGURACIÓN DEL NEGOCIO
 create table if not exists public.business (
@@ -756,7 +748,6 @@ alter table public.vehicles enable row level security;
 alter table public.services enable row level security;
 alter table public.profiles enable row level security;
 alter table public.collaborators enable row level security;
-alter table public.matriculas enable row level security;
 alter table public.business enable row level security;
 alter table public.orders enable row level security;
 alter table public.notifications enable row level security;
@@ -788,9 +779,6 @@ drop policy if exists collaborator_self_manage on public.collaborators;
 drop policy if exists collaborator_self_select on public.collaborators;
 drop policy if exists collaborator_self_update on public.collaborators;
 drop policy if exists admin_manage_collaborators on public.collaborators;
--- Matriculas
-drop policy if exists collaborator_read_own_matriculas on public.matriculas;
-drop policy if exists admin_manage_matriculas on public.matriculas;
 -- Business
 drop policy if exists owner_full_access_business on public.business;
 -- Notifications
@@ -854,11 +842,6 @@ create policy admin_manage_collaborators on public.collaborators
 for all using (public.is_admin(auth.uid()) or public.is_owner(auth.uid()))
 with check (public.is_admin(auth.uid()) or public.is_owner(auth.uid()));
 
--- Matriculas
-create policy collaborator_read_own_matriculas on public.matriculas for select using (user_id = auth.uid());
-create policy admin_manage_matriculas on public.matriculas
-for all using (public.is_admin(auth.uid()) or public.is_owner(auth.uid()))
-with check (public.is_admin(auth.uid()) or public.is_owner(auth.uid()));
 
 -- Business y Business Settings
 create policy owner_full_access_business on public.business
@@ -1301,53 +1284,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 
-create or replace function public.create_outbox_test_for_endpoint(ep text)
-returns bigint language plpgsql security definer set search_path = public as $$
-declare sub record; oid bigint; target uuid; role text; order_for_target bigint;
-begin
-  select user_id, client_contact_id into sub from public.push_subscriptions where endpoint = ep limit 1;
-  if not found then return null; end if;
-  target := coalesce(sub.user_id, sub.client_contact_id);
-  role := 'cliente';
-  select id into order_for_target from public.orders where (client_id = sub.user_id) or (client_contact_id = sub.client_contact_id) order by created_at desc limit 1;
-  if order_for_target is null then order_for_target := 0; end if;
-  if sub.user_id is not null then
-    insert into public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-    values (order_for_target, 'Prueba', role, sub.user_id, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true)));
-  else
-    insert into public.notification_outbox(order_id, new_status, target_role, target_contact_id, payload)
-    values (order_for_target, 'Prueba', role, sub.client_contact_id, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true)));
-  end if;
-  returning id into oid;
-  return oid;
-end;
-$$;
 
-create or replace function public.create_outbox_test_for_user(u uuid)
-returns bigint language plpgsql security definer set search_path = public as $$
-declare oid bigint; order_for_target bigint;
-begin
-  select id into order_for_target from public.orders where client_id = u order by created_at desc limit 1;
-  if order_for_target is null then order_for_target := 0; end if;
-  insert into public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-  values (order_for_target, 'Prueba', 'cliente', u, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true, 'userId', u::text)))
-  returning id into oid;
-  return oid;
-end;
-$$;
-
-create or replace function public.create_outbox_test_for_contact(c uuid)
-returns bigint language plpgsql security definer set search_path = public as $$
-declare oid bigint; order_for_target bigint;
-begin
-  select id into order_for_target from public.orders where client_contact_id = c order by created_at desc limit 1;
-  if order_for_target is null then order_for_target := 0; end if;
-  insert into public.notification_outbox(order_id, new_status, target_role, target_contact_id, payload)
-  values (order_for_target, 'Prueba', 'cliente', c, jsonb_build_object('title','Notificación de prueba','body','Este es un envío de prueba','icon','https://logisticalopezortiz.com/img/android-chrome-192x192.png','data', jsonb_build_object('test', true, 'contactId', c::text)))
-  returning id into oid;
-  return oid;
-end;
-$$;
 
 GRANT EXECUTE ON FUNCTION public.get_order_details_public(text) TO anon, authenticated;
 -- Notificar al colaborador cuando se le asigna una orden
@@ -1383,7 +1320,6 @@ CREATE OR REPLACE FUNCTION public.notify_order_status_change()
 RETURNS trigger AS $$
 DECLARE
   client_payload jsonb;
-  collaborator_payload jsonb;
   admin_payload jsonb;
 BEGIN
   IF (OLD.status IS DISTINCT FROM NEW.status) THEN

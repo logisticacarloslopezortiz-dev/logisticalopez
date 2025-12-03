@@ -91,11 +91,15 @@ self.addEventListener('fetch', (event) => {
     const cached = await caches.match(event.request, { ignoreSearch: true });
     try {
       const networkResponse = await fetch(event.request);
-      // Cachea en segundo plano algunos recursos estáticos para mejor experiencia offline
-      if (['script', 'style', 'image', 'font'].includes(dest)) {
+      // Cachea en segundo plano recursos estáticos de mismo origen y respuestas OK
+      if (
+        networkResponse && networkResponse.ok &&
+        ['script', 'style', 'image', 'font'].includes(dest) &&
+        url.origin === self.location.origin
+      ) {
         try {
           const cache = await caches.open(CACHE_NAME);
-          cache.put(event.request, networkResponse.clone());
+          await cache.put(event.request, networkResponse.clone());
         } catch (_) {}
       }
       return networkResponse;

@@ -126,22 +126,27 @@ const OrderManager = {
    * Guarda el monto cobrado y método de pago usando RPC segura.
    * Devuelve el registro de la orden actualizado o lanza error.
    */
-  async setOrderAmount(orderId, amount, method, collaboratorId) {
+  async setOrderAmount(orderId, amount, method) {
     try {
       if (!supabaseConfig?.client) throw new Error('Supabase client no configurado');
+      await supabaseConfig.ensureFreshSession?.();
       const rpcPayload = {
         order_id: Number(orderId),
         amount: Number(amount),
         method: method,
-        collaborator_id: collaboratorId,
       };
-      console.debug('[OrderManager.setOrderAmount] RPC set_order_amount payload:', rpcPayload);
-      const { data, error } = await supabaseConfig.client.rpc('set_order_amount', rpcPayload);
-      if (error) {
-        console.error('[OrderManager.setOrderAmount] RPC error:', error);
-        throw error;
-      }
-      return data;
+      console.debug('[OrderManager.setOrderAmount] RPC set_order_amount_admin payload:', rpcPayload);
+      const { data, error } = await supabaseConfig.client.rpc('set_order_amount_admin', rpcPayload);
+      if (!error && data) return data;
+      console.warn('[OrderManager.setOrderAmount] RPC fallo, aplicando fallback UPDATE:', error?.message || error);
+      const { data: upd, error: updErr } = await supabaseConfig.client
+        .from('orders')
+        .update({ monto_cobrado: Number(amount), metodo_pago: method })
+        .eq('id', Number(orderId))
+        .select('*')
+        .maybeSingle();
+      if (updErr) throw updErr;
+      return upd;
     } catch (err) {
       console.error('[OrderManager.setOrderAmount] Error:', err);
       this._toast('No se pudo guardar el monto.');
@@ -397,42 +402,7 @@ const OrderManager = {
 
       // 4. Enviar notificaciones push (cliente y roles)
       // Cliente: mantener notificación existente
-      try {
-        // Crear el cuerpo de la solicitud para diagnóstico detallado
-        const notificationBody = {
-          orderId: orderId,
-          newStatus: newStatus
-        };
-        
-        console.log(`[OrderManager] Enviando notificación push para orden #${orderId}:`, JSON.stringify(notificationBody));
-        
-        const { data: { session } } = await supabaseConfig.client.auth.getSession();
-        const fnUrl = 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/send-push-notification';
-        const resp = await fetch(fnUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
-          },
-          body: JSON.stringify(notificationBody),
-          keepalive: true
-        });
-        const respJson = await resp.json().catch(() => ({}));
-        console.log(`[OrderManager] Respuesta de notificación para orden #${orderId}:`, respJson);
-        console.log(`[OrderManager] Solicitud de notificación (keepalive) enviada para la orden #${orderId}.`);
-      } catch (invokeError) {
-        // Log detallado del error para diagnóstico
-        console.error(`[OrderManager] ERROR al enviar notificación para la orden #${orderId}:`, {
-          mensaje: invokeError.message,
-          código: invokeError.code || 'N/A',
-          detalles: invokeError.details || 'N/A',
-          respuesta: invokeError.response || 'N/A',
-          cuerpo: {
-            orderId: orderId,
-            newStatus: newStatus
-          }
-        });
-      }
+      // Notificación directa obsoleta eliminada; se usa notify-role más abajo
 
       // Notificar a administradores del cambio de estado
       try {

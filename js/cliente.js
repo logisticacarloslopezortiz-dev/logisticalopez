@@ -37,14 +37,24 @@ async function getPushSubscription() {
       return null;
     }
 
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.warn('[Push] Permiso de notificaciones no concedido');
+      return null;
+    }
+
     const registration = await navigator.serviceWorker.ready;
     let vapidKey = null;
     try {
-      const { data, error } = await supabaseConfig.client.functions.invoke('getVapidKey');
+      let resp = await supabaseConfig.client.functions.invoke('getVapidKey');
+      if (resp.error || !resp.data?.key) {
+        resp = await supabaseConfig.client.functions.invoke('get-vapid-key');
+      }
+      const { data, error } = resp;
       if (error) console.warn('No se pudo obtener VAPID por función:', error.message);
       vapidKey = data?.key || null;
     } catch (e) {
-      console.warn('Fallo al invocar getVapidKey:', e?.message || String(e));
+      console.warn('Fallo al invocar getVapidKey/get-vapid-key:', e?.message || String(e));
     }
     if (!vapidKey || typeof vapidKey !== 'string') {
       console.warn('VAPID pública no disponible');

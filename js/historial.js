@@ -415,19 +415,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loadHistory = async () => {
     try {
       console.log('[Historial] Iniciando carga de solicitudes...');
+      try { await supabaseConfig.ensureFreshSession(); } catch(_){ }
       const client = supabaseConfig.client || supabaseConfig.getPublicClient();
       const publicClient = supabaseConfig.getPublicClient();
 
       // Obtener órdenes Completadas y Canceladas, con columnas necesarias
-      const { data: orders, error: ordersError } = await client
+      let { data: orders, error: ordersError } = await client
         .from('orders')
         .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions')
         .or('status.eq.Completada,status.eq.Cancelada')
         .order('completed_at', { ascending: false });
 
       if (ordersError) {
-        console.error('[Historial] Error al cargar órdenes:', ordersError);
-        throw new Error(`Error al obtener órdenes: ${ordersError.message}`);
+        const msg = String(ordersError.message || '').toLowerCase();
+        const isAuth = ordersError.status === 401 || /jwt expired|invalid jwt/i.test(msg) || ordersError.code === 'PGRST303';
+        if (isAuth) {
+          console.warn('[Historial] JWT expirado/no autorizado. Reintentando con cliente público...');
+          const resp = await publicClient
+            .from('orders')
+            .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions')
+            .or('status.eq.Completada,status.eq.Cancelada')
+            .order('completed_at', { ascending: false });
+          if (resp.error) {
+            console.error('[Historial] Error (anon) al cargar órdenes:', resp.error);
+            throw new Error(`Error al obtener órdenes: ${resp.error.message}`);
+          }
+          orders = resp.data || [];
+        } else {
+          console.error('[Historial] Error al cargar órdenes:', ordersError);
+          throw new Error(`Error al obtener órdenes: ${ordersError.message}`);
+        }
       }
        if (!orders || orders.length === 0) {
         console.log('[Historial] No se encontraron órdenes en el historial.');
@@ -555,6 +572,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       )
       .subscribe((status) => {
         console.log('[Historial] Estado de suscripción en tiempo real:', status);
+        if (status === 'CHANNEL_ERROR') {
+          try { channel.unsubscribe(); } catch(_){ }
+          console.warn('[Historial] Reintentando suscripción en modo público por error de canal...');
+          try {
+            const pubCh = supabaseConfig.getPublicClient().channel('historial-updates-public');
+            pubCh
+              .on('postgres_changes', 
+                { event: '*', schema: 'public', table: 'orders', filter: 'status=in.(Completada,Cancelada)' },
+                (payload) => {
+                  console.log('[Historial] [Public] Cambio en tiempo real:', payload);
+                  if (payload.new && ['Completada','Cancelada'].includes(payload.new.status)) {
+                    const idx = allHistoryOrders.findIndex(o => o.id === payload.new.id);
+                    if (idx === -1) loadOrderDetails(payload.new.id); else { allHistoryOrders[idx] = { ...allHistoryOrders[idx], ...payload.new }; filterAndRender(); }
+                  }
+                }
+              )
+              .subscribe((st) => console.log('[Historial] Estado suscripción pública:', st));
+          } catch (e) {
+            console.warn('[Historial] No se pudo suscribir con cliente público:', e?.message || e);
+          }
+        }
       });
   };
 
@@ -568,7 +606,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         .select(`
           *,
           service:services(name),
-          profiles:completed_by(full_name)
+          profiles:profiles!orders_completed_by_fkey(full_name)
         `)
         .eq('id', orderId)
         .single();
@@ -580,7 +618,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           .select(`
             *,
             service:services(name),
-            profiles:completed_by(full_name)
+            profiles:profiles!orders_completed_by_fkey(full_name)
           `)
           .eq('id', orderId)
           .single();

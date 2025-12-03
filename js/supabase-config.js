@@ -36,10 +36,12 @@ if (!window.supabaseConfig) {
     getEvidenceBucket() { return (this.buckets && this.buckets.evidence) ? this.buckets.evidence : 'evidence'; },
     async runProcessOutbox(){
       try {
-        const url = `${this.client.supabaseUrl.replace('.supabase.co','')}.functions.supabase.co/process-outbox`;
-        const r = await fetch(url);
-        return await r.json();
-      } catch(e){ return { success:false, error: String(e?.message||e) }; }
+        const { data, error } = await this.client.functions.invoke('process-outbox');
+        if (error) return { success: false, error: String(error?.message || error) };
+        return data || { success: true };
+      } catch(e){
+        return { success:false, error: String(e?.message||e) };
+      }
     },
     async triggerOutboxTestForContact(contactId){
       try {

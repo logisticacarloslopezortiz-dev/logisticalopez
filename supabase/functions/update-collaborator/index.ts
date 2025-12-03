@@ -75,15 +75,7 @@ Deno.serve(async (req: Request) => {
       if (profErr) return jsonResponse({ error: profErr.message }, 400);
     }
 
-    // 4) Upsert matrícula
-    if (matricula !== undefined) {
-      const { error: matErr } = await admin
-        .from('matriculas')
-        .upsert({ user_id, matricula, status: 'activo', created_at: new Date().toISOString() }, { onConflict: 'user_id' });
-      if (matErr) return jsonResponse({ error: matErr.message }, 400);
-    }
-
-    // 5) Registrar cambios de perfil para auditoría
+    // 4) Registrar cambios de perfil para auditoría
     try {
       // Obtener el usuario que realiza el cambio (si hay JWT proporcionado)
       let changedBy: string | null = null;
