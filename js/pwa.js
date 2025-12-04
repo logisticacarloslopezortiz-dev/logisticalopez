@@ -9,9 +9,12 @@
       const reg = await navigator.serviceWorker.register('/sw.js');
       console.log('ServiceWorker registrado con éxito:', reg.scope);
 
-      // If a waiting worker exists, notify the page
+      // If a waiting worker exists, notify and activate immediately
       if (reg.waiting) {
         sendMessageToClients({ type: 'sw-update-ready' });
+        if (window.pwaHelpers && typeof window.pwaHelpers.skipWaiting === 'function') {
+          window.pwaHelpers.skipWaiting();
+        }
       }
 
       reg.addEventListener('updatefound', () => {
@@ -19,8 +22,11 @@
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // New content is available; notify the client
+            // New content is available; notify and activate immediately
             sendMessageToClients({ type: 'sw-update-ready' });
+            if (window.pwaHelpers && typeof window.pwaHelpers.skipWaiting === 'function') {
+              window.pwaHelpers.skipWaiting();
+            }
           }
         });
       });
@@ -80,4 +86,16 @@
       console.warn('sendMessageToClients failed:', e);
     }
   }
+
+  // Force reload once when controller changes to ensure new SW takes over
+  (function setupControllerChangeReload(){
+    try {
+      let reloaded = false;
+      navigator.serviceWorker && navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloaded) return;
+        reloaded = true;
+        location.reload();
+      });
+    } catch(_){}
+  })();
 })();

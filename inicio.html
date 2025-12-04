@@ -53,6 +53,11 @@
       animation: toast-out 0.5s ease-in forwards;
       animation-fill-mode: forwards;
     }
+    .lucide { stroke-width: 1.75; vertical-align: middle; display: inline-block; flex-shrink: 0; }
+    .icon-pill { display:inline-flex; align-items:center; justify-content:center; padding: .5rem; border-radius: .5rem; }
+    .icon-pill.yellow { background-color: #fbbf24; }
+    .icon-pill.blue { background-color: #93c5fd; }
+    .icon-pill.white { background-color: rgba(255,255,255,.2); }
   </style>
 </head>
 <body class="bg-gray-100">
@@ -76,21 +81,21 @@
     </div>
     <!-- Navegación -->
     <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
-      <a href="inicio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="home" class="w-5 h-5"></i> <span class="sidebar-text">Inicio</span></a>
-      <a href="servicios.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="box" class="w-5 h-5"></i> <span class="sidebar-text">Servicios</span></a>
-      <a href="ganancias.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="dollar-sign" class="w-5 h-5"></i> <span class="sidebar-text">Ganancia</span></a>
-      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="history" class="w-5 h-5"></i> <span class="sidebar-text">Historial</span></a>
-      <a href="mi-negocio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5"></i> <span class="sidebar-text">Mi negocio</span></a>
-      <a href="colaboradores.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="users" class="w-5 h-5"></i> <span class="sidebar-text">Colaboradores</span></a>
+      <a href="inicio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="home" class="w-5 h-5 text-white"></i> <span class="sidebar-text">Inicio</span></a>
+      <a href="servicios.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="box" class="w-5 h-5 text-white"></i> <span class="sidebar-text">Servicios</span></a>
+      <a href="ganancias.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="dollar-sign" class="w-5 h-5 text-white"></i> <span class="sidebar-text">Ganancia</span></a>
+      <a href="historial-solicitudes.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="history" class="w-5 h-5 text-white"></i> <span class="sidebar-text">Historial</span></a>
+      <a href="mi-negocio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5 text-white"></i> <span class="sidebar-text">Mi negocio</span></a>
+      <a href="colaboradores.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="users" class="w-5 h-5 text-white"></i> <span class="sidebar-text">Colaboradores</span></a>
     </nav>
     <!-- Footer del Sidebar -->
     <div class="sidebar-footer p-4">
       <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm">
-        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
+        <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5 text-white"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
       </button>
       <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm">
-        <i data-lucide="log-out" class="w-5 h-5"></i>
+        <i data-lucide="log-out" class="w-5 h-5 text-white"></i>
         <span class="sidebar-text font-medium">Cerrar Sesión</span>
       </button>
     </div>
@@ -128,7 +133,7 @@
             <p class="text-3xl font-bold" id="totalPedidos">0</p>
             <p class="text-sm opacity-80 mt-1">+<span id="pedidosHoy">0</span> hoy</p>
           </div>
-          <i data-lucide="package" class="w-12 h-12 opacity-50"></i>
+          <i data-lucide="package" class="w-12 h-12 opacity-50 text-white"></i>
         </div>
       </div>
       <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
@@ -138,7 +143,7 @@
             <p class="text-3xl font-bold" id="pedidosCompletados">0</p>
             <p class="text-sm opacity-80 mt-1"><span id="porcentajeCompletados">0</span>% del total</p>
           </div>
-          <i data-lucide="check-circle" class="w-12 h-12 opacity-50"></i>
+          <i data-lucide="check-circle" class="w-12 h-12 opacity-50 text-white"></i>
         </div>
       </div>
       <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-acento-amarillo); color: var(--color-texto-principal);">
@@ -148,7 +153,7 @@
             <p class="text-3xl font-bold" id="pedidosPendientes">0</p>
             <p class="text-sm opacity-80 mt-1"><span id="urgentes">0</span> urgentes</p>
           </div>
-          <i data-lucide="alert-triangle" class="w-12 h-12 opacity-50"></i>
+          <i data-lucide="alert-triangle" class="w-12 h-12 opacity-50 text-gray-800"></i>
         </div>
       </div>
     </div>
@@ -177,7 +182,7 @@
     <!-- Alertas -->
     <div class="card p-6">
       <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
-        <span class="bg-yellow-400 p-2 rounded-lg">
+        <span class="icon-pill yellow">
           <i data-lucide="bell" class="w-5 h-5 text-white"></i>
         </span>
         Alertas del Día
@@ -191,7 +196,7 @@
     <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
       <div class="px-6 py-5 border-b border-gray-200 flex flex-wrap justify-between items-center gap-4">
         <h3 class="text-lg font-bold text-turquoise flex items-center gap-3">
-          <span class="bg-yellow-400 p-2 rounded-lg">
+          <span class="icon-pill yellow">
             <i data-lucide="clipboard-list" class="w-5 h-5 text-white"></i>
           </span>
           Pedidos Recientes

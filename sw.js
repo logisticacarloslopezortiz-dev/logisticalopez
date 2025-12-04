@@ -85,6 +85,12 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   const dest = event.request.destination; // 'document', 'script', 'style', 'image', 'font', ''
 
+  if (url.origin !== self.location.origin) {
+    const host = url.hostname || '';
+    if (host.includes('stadiamaps.com') || host.includes('tile.openstreetmap.org') || host.includes('basemaps.cartocdn.com')) {
+      return;
+    }
+  }
   
 
   event.respondWith((async () => {

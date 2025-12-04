@@ -201,8 +201,8 @@
             <a href="cliente.html" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-acento hover:bg-yellow-500 text-slate-900 px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105" aria-label="Comenzar solicitud">
               🚚 Comenzar Solicitud
             </a>
-            <a href="seguimiento.html" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto border-2 border-white hover:bg-white hover:text-azulOscuro text-white px-8 py-3 rounded-xl shadow-lg font-bold transition-all hover:scale-105" aria-label="Ver estado">
-              Ver Estado
+            <a href="seguimiento.html" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto border-2 border-white hover:bg-white hover:text-azulOscuro text-white px-8 py-3 rounded-xl shadow-lg font-bold transition-all hover:scale-105 cta-view-status" aria-label="Ver estado">
+              Ver Estado <i class="fa-solid fa-arrow-right text-sm"></i>
             </a>
           </div>
 
@@ -519,3 +519,10 @@
   </script>
 </body>
 </html>
+  <style>
+    .cta-view-status { position: relative; overflow: hidden; cursor: pointer; }
+    .cta-view-status::after { content:''; position:absolute; top:50%; left:50%; width:0; height:0; background: rgba(255,255,255,0.2); border-radius: 9999px; transform: translate(-50%, -50%); transition: width .25s ease, height .25s ease; }
+    .cta-view-status:hover::after { width: 160%; height: 160%; }
+    .cta-view-status .fa-arrow-right { transition: transform .2s ease; }
+    .cta-view-status:hover .fa-arrow-right { transform: translateX(4px); }
+  </style>
