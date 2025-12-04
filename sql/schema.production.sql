@@ -1571,3 +1571,4 @@ DO $$ BEGIN
       WITH CHECK ( true );
   END IF;
 END $$;
+select pg_notify('pgrst', 'reload schema');

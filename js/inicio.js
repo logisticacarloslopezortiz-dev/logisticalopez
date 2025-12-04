@@ -153,6 +153,7 @@ function renderOrders(){
   
   // Actualizar paneles de resumen
   updateResumen();
+  updateAlerts();
 
   if(filteredOrders.length === 0){
     ordersTableBody.innerHTML='<tr><td colspan="9" class="text-center py-6 text-gray-500">No hay pedidos que coincidan con los filtros.</td></tr>';
@@ -380,74 +381,69 @@ function updateResumen(){
 function updateCharts() {
   const servicesChartEl = document.getElementById('servicesChart');
   const vehiclesChartEl = document.getElementById('vehiclesChart');
-  const alertasEl = document.getElementById('alertasLista');
-
-  if (!servicesChartEl || !vehiclesChartEl) return; // No hacer nada si los gráficos no están en la página
-  // Gráfico de servicios
-  const serviceStats = {};
-  allOrders.forEach(o => {
-    const serviceName = o.service?.name || 'Sin Servicio';
-    serviceStats[serviceName] = (serviceStats[serviceName] || 0) + 1;
-  });
-
-  servicesChartEl.innerHTML = '';
-  const maxService = Math.max(1, ...Object.values(serviceStats)); // Evitar división por cero
-
-  Object.entries(serviceStats).forEach(([service, count]) => {
-    const percentage = maxService > 0 ? (count / maxService) * 100 : 0;
-    servicesChartEl.innerHTML += `
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-sm font-medium text-gray-700">${service}</span>
-        <span class="text-sm text-gray-500">${count}</span>
-      </div>
-      <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
-        <div class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
-      </div>
-    `;
-  });
-
-  // Gráfico de vehículos
-  const vehicleStats = {};
-  allOrders.forEach(o => {
-    const vehicleName = o.vehicle?.name || 'Sin Vehículo';
-    vehicleStats[vehicleName] = (vehicleStats[vehicleName] || 0) + 1;
-  });
-
-  vehiclesChartEl.innerHTML = '';
-  const maxVehicle = Math.max(1, ...Object.values(vehicleStats)); // Evitar división por cero
-
-  Object.entries(vehicleStats).forEach(([vehicle, count]) => {
-    const percentage = maxVehicle > 0 ? (count / maxVehicle) * 100 : 0;
-    vehiclesChartEl.innerHTML += `
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-sm font-medium text-gray-700">${vehicle}</span>
-        <span class="text-sm text-gray-500">${count}</span>
-      </div>
-      <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
-        <div class="bg-red-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
-      </div>
-    `;
-  });
-
-  // Alertas
-  if (alertasEl) {
-    alertasEl.innerHTML = '';
-    const now = new Date();
-    const proximos = allOrders.filter(o => {
-      const serviceTime = new Date(`${o.date}T${o.time || '00:00'}`);
-      const diffMin = (serviceTime - now) / 60000;
-      return diffMin > 0 && diffMin <= 60;
+  if (servicesChartEl) {
+    const serviceStats = {};
+    allOrders.forEach(o => {
+      const serviceName = o.service?.name || 'Sin Servicio';
+      serviceStats[serviceName] = (serviceStats[serviceName] || 0) + 1;
     });
+    servicesChartEl.innerHTML = '';
+    const maxService = Math.max(1, ...Object.values(serviceStats));
+    Object.entries(serviceStats).forEach(([service, count]) => {
+      const percentage = maxService > 0 ? (count / maxService) * 100 : 0;
+      servicesChartEl.innerHTML += `
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-gray-700">${service}</span>
+          <span class="text-sm text-gray-500">${count}</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
+          <div class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+        </div>
+      `;
+    });
+  }
 
-    if (proximos.length === 0) {
-      alertasEl.innerHTML = '<li class="text-gray-500">No hay alertas por ahora.</li>';
-    } else {
-      proximos.forEach(o => {
-        const li = document.createElement('li');
-        li.innerHTML = `<strong>${o.service?.name}</strong> para <strong>${o.name}</strong> comienza a las <strong>${o.time}</strong>`;
-        alertasEl.appendChild(li);
-      });
-    }
+  if (vehiclesChartEl) {
+    const vehicleStats = {};
+    allOrders.forEach(o => {
+      const vehicleName = o.vehicle?.name || 'Sin Vehículo';
+      vehicleStats[vehicleName] = (vehicleStats[vehicleName] || 0) + 1;
+    });
+    vehiclesChartEl.innerHTML = '';
+    const maxVehicle = Math.max(1, ...Object.values(vehicleStats));
+    Object.entries(vehicleStats).forEach(([vehicle, count]) => {
+      const percentage = maxVehicle > 0 ? (count / maxVehicle) * 100 : 0;
+      vehiclesChartEl.innerHTML += `
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-gray-700">${vehicle}</span>
+          <span class="text-sm text-gray-500">${count}</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
+          <div class="bg-red-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+        </div>
+      `;
+    });
+  }
+}
+
+function updateAlerts() {
+  const alertasEl = document.getElementById('alertasLista');
+  if (!alertasEl) return;
+  alertasEl.innerHTML = '';
+  const now = new Date();
+  const proximos = allOrders.filter(o => {
+    const serviceTime = new Date(`${o.date}T${o.time || '00:00'}`);
+    const diffMin = (serviceTime - now) / 60000;
+    return diffMin > 0 && diffMin <= 60;
+  });
+  if (proximos.length === 0) {
+    alertasEl.innerHTML = '<li class="text-gray-500">No hay alertas por ahora.</li>';
+  } else {
+    proximos.forEach(o => {
+      const li = document.createElement('li');
+      li.innerHTML = `<strong>${o.service?.name}</strong> para <strong>${o.name}</strong> comienza a las <strong>${o.time}</strong>`;
+      alertasEl.appendChild(li);
+    });
   }
 }
 // Gestión de asignación y eliminación de pedidos desde modal
@@ -525,26 +521,46 @@ async function openAssignModal(orderId){
   if (copyTrackBtn) {
     copyTrackBtn.replaceWith(copyTrackBtn.cloneNode(true));
     document.getElementById('copyTrackingLinkBtn').addEventListener('click', async () => {
+      const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
+      try { await navigator.clipboard.writeText(url); } catch(_) {}
       try {
-        const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
-        await navigator.clipboard.writeText(url);
-        notifications.success('Enlace de seguimiento copiado');
-      } catch (_) {
-        notifications.warning('No se pudo copiar. Abriendo enlace…');
-        window.open(`https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`, '_blank');
+        let phone = (order.phone || '').replace(/[^0-9]/g, '');
+        if (phone.length === 10 && !phone.startsWith('1')) phone = '1809' + phone;
+        if (phone.length === 7) phone = '1809' + phone;
+        if (phone) {
+          const msg = `👋 Hola, ${order.name || 'cliente'}. Aquí puedes ver el estado de tu servicio en tiempo real:\n${url}\n\nSi necesitas ayuda, respóndenos por aquí. ¡Gracias por elegirnos! 🚛`;
+          const wa = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+          window.open(wa, '_blank');
+          notifications.success('Enviado por WhatsApp: seguimiento');
+        } else {
+          window.open(url, '_blank');
+          notifications.warning('Número no disponible. Abriendo enlace de seguimiento');
+        }
+      } catch(_) {
+        window.open(url, '_blank');
       }
     });
   }
   if (copyRatingBtn) {
     copyRatingBtn.replaceWith(copyRatingBtn.cloneNode(true));
     document.getElementById('copyRatingLinkBtn').addEventListener('click', async () => {
+      const url = `https://logisticalopezortiz.com/calificar.html?pedido=${order.id}`;
+      try { await navigator.clipboard.writeText(url); } catch(_) {}
       try {
-        const url = `https://logisticalopezortiz.com/calificar.html?pedido=${order.id}`;
-        await navigator.clipboard.writeText(url);
-        notifications.success('Enlace de calificación copiado');
-      } catch (_) {
-        notifications.warning('No se pudo copiar. Abriendo enlace…');
-        window.open(`https://logisticalopezortiz.com/calificar.html?pedido=${order.id}` , '_blank');
+        let phone = (order.phone || '').replace(/[^0-9]/g, '');
+        if (phone.length === 10 && !phone.startsWith('1')) phone = '1809' + phone;
+        if (phone.length === 7) phone = '1809' + phone;
+        if (phone) {
+          const msg = `🙏 Hola, ${order.name || 'cliente'}. Gracias por confiar en nosotros. ¿Podrías dejarnos tu calificación? Tu opinión nos ayuda a mejorar.\n${url}\n\nTe toma menos de un minuto. ¡Gracias! ⭐`;
+          const wa = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+          window.open(wa, '_blank');
+          notifications.success('Enviado por WhatsApp: calificación');
+        } else {
+          window.open(url, '_blank');
+          notifications.warning('Número no disponible. Abriendo enlace de calificación');
+        }
+      } catch(_) {
+        window.open(url, '_blank');
       }
     });
   }
