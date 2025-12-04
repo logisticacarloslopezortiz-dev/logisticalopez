@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calificar Servicio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">Califica tu Servicio</h1>
+    <p class="text-gray-600 mb-4">Tu opinión nos ayuda a mejorar. Toma 30 segundos.</p>
+    <form id="orderLookupForm" class="hidden space-y-3 mb-4">
+      <label class="block text-sm font-medium text-gray-700">ID de seguimiento</label>
+      <input id="lookupInput" type="text" class="w-full border rounded-lg p-2" placeholder="Ej: TLC01 o UUID" maxlength="40" />
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg py-2">Buscar pedido</button>
+      <div id="lookupResult" class="hidden mt-2 text-sm"></div>
+    </form>
+    <form id="ratingForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Calificación del Servicio</label>
+        <select id="serviceRating" class="w-full border rounded-lg p-2" required>
+          <option value="">Selecciona…</option>
+          <option value="5">5 - Excelente</option>
+          <option value="4">4 - Muy bueno</option>
+          <option value="3">3 - Bueno</option>
+          <option value="2">2 - Regular</option>
+          <option value="1">1 - Malo</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Calificación del Colaborador</label>
+        <select id="collabRating" class="w-full border rounded-lg p-2" required>
+          <option value="">Selecciona…</option>
+          <option value="5">5 - Excelente</option>
+          <option value="4">4 - Muy bueno</option>
+          <option value="3">3 - Bueno</option>
+          <option value="2">2 - Regular</option>
+          <option value="1">1 - Malo</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Comentario (opcional)</label>
+        <textarea id="comment" class="w-full border rounded-lg p-2" rows="4" placeholder="Cuéntanos tu experiencia"></textarea>
+      </div>
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg py-2">Enviar Calificación</button>
+    </form>
+    <div id="result" class="hidden mt-4 p-3 rounded-lg text-sm"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(location.search);
+      let orderId = params.get('pedido');
+      const form = document.getElementById('ratingForm');
+      const result = document.getElementById('result');
+      const lookupForm = document.getElementById('orderLookupForm');
+      const lookupInput = document.getElementById('lookupInput');
+      const lookupResult = document.getElementById('lookupResult');
+      if (!orderId) {
+        form.classList.add('hidden');
+        lookupForm.classList.remove('hidden');
+        lookupForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const v = (lookupInput.value || '').trim();
+          if (!v) return;
+          lookupResult.classList.add('hidden');
+          try {
+            // Intentar por short_id y luego por id
+            let found = null;
+            let resp = await supabaseConfig.client.from('orders').select('id, short_id').eq('short_id', v).maybeSingle();
+            if (!resp.error && resp.data) found = resp.data;
+            if (!found) {
+              resp = await supabaseConfig.client.from('orders').select('id, short_id').eq('id', v).maybeSingle();
+              if (!resp.error && resp.data) found = resp.data;
+            }
+            if (found && found.id) {
+              orderId = found.id;
+              lookupResult.className = 'mt-2 p-2 rounded bg-green-100 text-green-800 text-sm';
+              lookupResult.textContent = `Pedido encontrado: #${found.short_id || found.id}`;
+              lookupResult.classList.remove('hidden');
+              form.classList.remove('hidden');
+              lookupForm.classList.add('hidden');
+            } else {
+              lookupResult.className = 'mt-2 p-2 rounded bg-red-100 text-red-800 text-sm';
+              lookupResult.textContent = 'No encontramos el pedido. Verifica el ID e intenta nuevamente.';
+              lookupResult.classList.remove('hidden');
+            }
+          } catch (err) {
+            lookupResult.className = 'mt-2 p-2 rounded bg-red-100 text-red-800 text-sm';
+            lookupResult.textContent = err?.message || 'Error al buscar el pedido.';
+            lookupResult.classList.remove('hidden');
+          }
+        });
+        return;
+      }
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const s = parseInt(document.getElementById('serviceRating').value, 10);
+        const c = parseInt(document.getElementById('collabRating').value, 10);
+        const comentario = document.getElementById('comment').value || '';
+        try {
+          const { error } = await supabaseConfig.client
+            .from('calificaciones')
+            .insert({ order_id: orderId, calificacion_servicio: s, calificacion_colaborador: c, comentario });
+          if (error) throw error;
+          result.className = 'mt-4 p-3 rounded-lg text-sm bg-green-100 text-green-800';
+          result.textContent = '¡Gracias! Tu calificación fue registrada.';
+          result.classList.remove('hidden');
+          form.classList.add('hidden');
+        } catch (err) {
+          result.className = 'mt-4 p-3 rounded-lg text-sm bg-red-100 text-red-800';
+          result.textContent = err?.message || 'Error al guardar calificación.';
+          result.classList.remove('hidden');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

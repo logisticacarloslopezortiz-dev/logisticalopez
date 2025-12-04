@@ -296,5 +296,20 @@
       }catch(_){}
     })();
   </script>
+  <script>
+    // Recarga automática cada 30s si la página está visible
+    (function(){
+      var last = Date.now();
+      function tick(){
+        var now = Date.now();
+        var diff = now - last;
+        // Evitar recargas si la página no está activa
+        if (document.visibilityState === 'visible' && diff >= 30000) {
+          location.reload();
+        }
+      }
+      setInterval(tick, 5000);
+    })();
+  </script>
 </body>
 </html>

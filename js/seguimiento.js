@@ -370,11 +370,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Suscripción en tiempo real para actualizaciones de la orden
   let orderSubscription = null;
+  let pollingTimer = null;
+  let lastOrderIdSubscribed = null;
   async function subscribeToOrderUpdates(orderId) {
     try {
       if (orderSubscription) {
         try { supabaseConfig.client.removeChannel(orderSubscription); } catch(_) {}
       }
+
+      // Si no hay conexión, activar modo polling y evitar abrir WebSocket
+      if (!navigator.onLine) {
+        try { if (pollingTimer) clearInterval(pollingTimer); } catch(_){}
+        lastOrderIdSubscribed = orderId;
+        pollingTimer = setInterval(async () => {
+          try {
+            const { data: order } = await supabaseConfig.client
+              .from('orders')
+              .select('*, service:services(name), vehicle:vehicles(name)')
+              .eq('id', orderId)
+              .maybeSingle();
+            if (order) {
+              renderTrackingInfo(order);
+              initializeMap(order);
+              try { updateTimelineRealtimeIndicator(); } catch(_){}
+            }
+          } catch(_){}
+        }, 10000);
+        return;
+      } else {
+        try { if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; } } catch(_){}
+      }
+
+      lastOrderIdSubscribed = orderId;
       orderSubscription = supabaseConfig.client
         .channel('public:orders_tracking_' + orderId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: 'id=eq.' + orderId }, async () => {
@@ -390,7 +417,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           } catch (e) { console.warn('Realtime update failed', e); }
         })
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            // Fallback: activar polling si el canal falla
+            try { if (pollingTimer) clearInterval(pollingTimer); } catch(_){}
+            pollingTimer = setInterval(async () => {
+              try {
+                const { data: order } = await supabaseConfig.client
+                  .from('orders')
+                  .select('*, service:services(name), vehicle:vehicles(name)')
+                  .eq('id', orderId)
+                  .maybeSingle();
+                if (order) {
+                  renderTrackingInfo(order);
+                  initializeMap(order);
+                  try { updateTimelineRealtimeIndicator(); } catch(_){}
+                }
+              } catch(_){}
+            }, 10000);
+          }
+        });
     } catch (e) { console.warn('Realtime subscribe fail', e); }
   }
 
@@ -425,8 +471,22 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(_) {}
   }
 
-  window.addEventListener('online', () => { setRealtimeDotOnline(true); try { updateTimelineRealtimeIndicator(); } catch(_){} });
-  window.addEventListener('offline', () => { setRealtimeDotOnline(false); try { updateTimelineRealtimeIndicator(); } catch(_){} });
+  window.addEventListener('online', () => {
+    setRealtimeDotOnline(true);
+    try { updateTimelineRealtimeIndicator(); } catch(_){}
+    if (lastOrderIdSubscribed) {
+      // Reintentar suscripción en tiempo real al recuperar conexión
+      subscribeToOrderUpdates(lastOrderIdSubscribed);
+    }
+  });
+  window.addEventListener('offline', () => {
+    setRealtimeDotOnline(false);
+    try { updateTimelineRealtimeIndicator(); } catch(_){}
+    if (lastOrderIdSubscribed) {
+      // Cambiar a modo polling mientras está sin conexión
+      subscribeToOrderUpdates(lastOrderIdSubscribed);
+    }
+  });
   // Estado inicial
   setRealtimeDotOnline(navigator.onLine);
 });

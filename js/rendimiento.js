@@ -74,16 +74,37 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadMetrics(collabId) {
-  const all = await supabaseConfig.getOrders();
-  const mine = (all || []).filter(o => o.assigned_to === collabId);
-  const assigned = mine.filter(o => !['completada','cancelada'].includes(String(o.status || '').toLowerCase()));
-  const completed = mine.filter(o => String(o.status || '').toLowerCase() === 'completada');
-  const assignedEl = document.getElementById('metricAssigned');
-  if (assignedEl) assignedEl.textContent = String(assigned.length);
-  const completedEl = document.getElementById('metricCompleted');
-  if (completedEl) completedEl.textContent = String(completed.length);
-  const avgEl = document.getElementById('metricAvgTime');
-  if (avgEl) avgEl.textContent = formatAvgTime(completed);
+  // Preferir RPC para métricas agregadas; fallback local si falla
+  let mine = [];
+  let completed = [];
+  let assigned = [];
+  try {
+    const { data, error } = await supabaseConfig.client.rpc('get_collaborator_metrics', { collaborator_id: collabId });
+    if (!error && Array.isArray(data) && data[0]) {
+      const m = data[0];
+      const assignedEl = document.getElementById('metricAssigned');
+      if (assignedEl) assignedEl.textContent = String(m.assigned || 0);
+      const completedEl = document.getElementById('metricCompleted');
+      if (completedEl) completedEl.textContent = String(m.completed || 0);
+      const avgEl = document.getElementById('metricAvgTime');
+      if (avgEl) avgEl.textContent = `${Math.round(Number(m.avg_hours || 0))}h`;
+    }
+  } catch (_) {}
+
+  try {
+    const all = await supabaseConfig.getOrders();
+    mine = (all || []).filter(o => o.assigned_to === collabId);
+    assigned = mine.filter(o => !['completada','cancelada'].includes(String(o.status || '').toLowerCase()));
+    completed = mine.filter(o => String(o.status || '').toLowerCase() === 'completada');
+    // Fallback/consumo para gráficos y tabla
+    const assignedEl = document.getElementById('metricAssigned');
+    if (assignedEl && !assignedEl.textContent) assignedEl.textContent = String(assigned.length);
+    const completedEl = document.getElementById('metricCompleted');
+    if (completedEl && !completedEl.textContent) completedEl.textContent = String(completed.length);
+    const avgEl = document.getElementById('metricAvgTime');
+    if (avgEl && !avgEl.textContent) avgEl.textContent = formatAvgTime(completed);
+  } catch (_) {}
+
   renderCharts(mine);
   renderWeekly(completed);
   renderServiceDistribution(mine);

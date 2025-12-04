@@ -184,7 +184,7 @@ function renderOrders(){
     tr.innerHTML = /*html*/`
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
       <td class="px-6 py-4 whitespace-nowrap">
-        <div class="text-sm font-medium text-gray-900">${o.client_name || o.name || 'N/A'}</div>
+        <div class="text-sm font-medium text-gray-900">${o.name || 'N/A'}</div>
         <div class="text-sm text-gray-500">${o.client_phone || o.phone || ''}</div>
         ${o.client_email || o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.client_email || o.email}">${o.client_email || o.email}</div>` : ''}
         ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block" title="Empresa: ${o.empresa || 'N/A'}">RNC: ${o.rnc}</div>` : ''}
@@ -284,7 +284,10 @@ function renderOrders(){
       window.lucide.createIcons();
     } catch(_){ }
   }
-  updateCharts();
+  try {
+    const hasCharts = document.getElementById('servicesChart') && document.getElementById('vehiclesChart');
+    if (hasCharts) updateCharts();
+  } catch(_) {}
 }
 
 // --- Menú de acciones eliminado ---
@@ -508,6 +511,8 @@ async function openAssignModal(orderId){
   const invoiceBtn = document.getElementById('generateInvoiceBtn');
   const cancelBtn = document.getElementById('assignCancelBtn');
   const deleteBtn = document.getElementById('deleteOrderBtn');
+  const copyTrackBtn = document.getElementById('copyTrackingLinkBtn');
+  const copyRatingBtn = document.getElementById('copyRatingLinkBtn');
 
   // ✅ CORRECCIÓN: Asignar evento con addEventListener para mayor fiabilidad.
   if (whatsappBtn) {
@@ -519,6 +524,34 @@ async function openAssignModal(orderId){
   if (invoiceBtn) invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
   if (cancelBtn) cancelBtn.onclick = () => closeAssignModal();
   if (deleteBtn) deleteBtn.onclick = () => deleteSelectedOrder();
+
+  // Copiar enlaces directos (seguimiento y calificación)
+  if (copyTrackBtn) {
+    copyTrackBtn.replaceWith(copyTrackBtn.cloneNode(true));
+    document.getElementById('copyTrackingLinkBtn').addEventListener('click', async () => {
+      try {
+        const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
+        await navigator.clipboard.writeText(url);
+        notifications.success('Enlace de seguimiento copiado');
+      } catch (_) {
+        notifications.warning('No se pudo copiar. Abriendo enlace…');
+        window.open(`https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`, '_blank');
+      }
+    });
+  }
+  if (copyRatingBtn) {
+    copyRatingBtn.replaceWith(copyRatingBtn.cloneNode(true));
+    document.getElementById('copyRatingLinkBtn').addEventListener('click', async () => {
+      try {
+        const url = `https://logisticalopezortiz.com/calificar.html?pedido=${order.id}`;
+        await navigator.clipboard.writeText(url);
+        notifications.success('Enlace de calificación copiado');
+      } catch (_) {
+        notifications.warning('No se pudo copiar. Abriendo enlace…');
+        window.open(`https://logisticalopezortiz.com/calificar.html?pedido=${order.id}` , '_blank');
+      }
+    });
+  }
 
   // Doble clic para expandir el cuerpo del modal
   const modalBody = document.getElementById('assignModalBody');

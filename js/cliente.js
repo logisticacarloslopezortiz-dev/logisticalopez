@@ -37,7 +37,8 @@ async function getPushSubscription() {
       return null;
     }
 
-    const permission = await Notification.requestPermission();
+    const currentPerm = Notification.permission;
+    const permission = currentPerm === 'default' ? await Notification.requestPermission() : currentPerm;
     if (permission !== 'granted') {
       console.warn('[Push] Permiso de notificaciones no concedido');
       return null;

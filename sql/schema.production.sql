@@ -1504,3 +1504,70 @@ begin
   return resp;
 end;
 $$;
+-- RPC: métricas del colaborador
+CREATE OR REPLACE FUNCTION public.get_collaborator_metrics(collaborator_id uuid)
+RETURNS TABLE(
+  assigned integer,
+  completed integer,
+  avg_hours numeric,
+  month_earnings numeric,
+  total_earnings numeric
+) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+WITH mine AS (
+  SELECT o.* FROM public.orders o WHERE o.assigned_to = collaborator_id
+),
+assigned_ct AS (
+  SELECT count(*) AS c FROM mine WHERE lower(coalesce(status,'')) NOT IN ('completada','cancelada')
+),
+completed_ct AS (
+  SELECT count(*) AS c FROM mine WHERE lower(coalesce(status,'')) = 'completada'
+),
+dur AS (
+  SELECT avg(EXTRACT(EPOCH FROM (o.completed_at - o.accepted_at)) / 3600.0) AS avg_h
+  FROM mine o WHERE o.accepted_at IS NOT NULL AND o.completed_at IS NOT NULL AND o.completed_at > o.accepted_at
+),
+commission_pct AS (
+  SELECT coalesce(c.commission_percent,0)::numeric AS pct FROM public.collaborators c WHERE c.id = collaborator_id
+),
+earn AS (
+  SELECT
+    sum( coalesce(o.monto_cobrado,0)::numeric * ((SELECT pct FROM commission_pct) / 100.0) ) AS total,
+    sum( CASE WHEN o.completed_at >= date_trunc('month', now()) THEN coalesce(o.monto_cobrado,0)::numeric * ((SELECT pct FROM commission_pct) / 100.0) ELSE 0 END ) AS month
+  FROM mine o WHERE lower(coalesce(o.status,'')) = 'completada'
+)
+SELECT
+  (SELECT c FROM assigned_ct) AS assigned,
+  (SELECT c FROM completed_ct) AS completed,
+  coalesce((SELECT avg_h FROM dur), 0) AS avg_hours,
+  coalesce((SELECT month FROM earn), 0) AS month_earnings,
+  coalesce((SELECT total FROM earn), 0) AS total_earnings;
+$$;
+
+-- Tabla: calificaciones
+CREATE TABLE IF NOT EXISTS public.calificaciones (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL,
+  collaborator_id uuid,
+  calificacion_servicio integer CHECK (calificacion_servicio BETWEEN 1 AND 5),
+  calificacion_colaborador integer CHECK (calificacion_colaborador BETWEEN 1 AND 5),
+  comentario text,
+  fecha_creacion timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.calificaciones ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='calificaciones' AND policyname='calificaciones_select_own'
+  ) THEN
+    CREATE POLICY calificaciones_select_own ON public.calificaciones
+      FOR SELECT
+      USING ( collaborator_id = auth.uid() );
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='calificaciones' AND policyname='calificaciones_insert_any'
+  ) THEN
+    CREATE POLICY calificaciones_insert_any ON public.calificaciones
+      FOR INSERT
+      WITH CHECK ( true );
+  END IF;
+END $$;

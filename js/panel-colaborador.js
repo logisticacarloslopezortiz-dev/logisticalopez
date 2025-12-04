@@ -485,7 +485,15 @@ function setupActions() {
         const canFinish = await canFinalizeOrder(id);
         if (!canFinish) { showWarning('Debes subir al menos 1 foto antes de finalizar.'); return; }
         const updates = { status: 'Completada', completed_at: new Date().toISOString() };
-        try { await supabaseConfig.updateOrder(id, updates); await updateLastStatus(id, 'Completada'); showSuccess('Servicio completado.'); await notifyStatusChange(id, 'Completada'); updateNotifyIndicator('Completada'); } catch (e) { showWarning('Sin conexión. Guardado para sincronizar.'); queueOfflineUpdate(id, updates); }
+        try {
+          await supabaseConfig.updateOrder(id, updates);
+          await updateLastStatus(id, 'Completada');
+          showSuccess('Servicio completado.');
+          await notifyStatusChange(id, 'Completada');
+          // Enviar correo de calificación
+          try { await supabaseConfig.client.functions.invoke('send-rating-email', { body: { orderId: id } }); } catch(_){ }
+          updateNotifyIndicator('Completada');
+        } catch (e) { showWarning('Sin conexión. Guardado para sincronizar.'); queueOfflineUpdate(id, updates); }
         // clear persisted active job when completed
         try { localStorage.removeItem('tlc_active_job'); } catch (_) {}
         await fetchAndRender();
@@ -1093,18 +1101,90 @@ function setupRealtime() {
   try {
     const ch = supabaseConfig.client
       .channel('public:orders_collab')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async (payload) => {
         try {
-          await fetchAndRender();
-          const persisted = getPersistedActiveJob();
-          if (persisted) {
-            const updated = await supabaseConfig.getOrderById(persisted);
-            if (updated) await renderActiveJob(persisted, updated);
+          const next = payload?.new || payload?.old;
+          if (!next || !next.id) return;
+
+          // Actualización quirúrgica: solo tocar el elemento afectado
+          await applyOrderPatch(next);
+
+          // Si el trabajo activo coincide, refrescar su vista sin reconsultar todo
+          const active = getPersistedActiveJob();
+          if (active && String(active) === String(next.id)) {
+            await renderActiveJob(next.id, next);
           }
         } catch (_) {}
       })
       .subscribe();
   } catch (_) {}
+}
+
+async function applyOrderPatch(order){
+  try {
+    // Determinar si pertenece al colaborador actual
+    let collabId = null;
+    try { const { data: { session } } = await supabaseConfig.client.auth.getSession(); collabId = session?.user?.id || null; } catch(_){ try { collabId = localStorage.getItem('collaboratorId') || null; } catch(_){}}
+
+    const st = String(order.status || '').toLowerCase();
+    const isMine = collabId && order.assigned_to === collabId;
+
+    // Pending bucket: existe una tarjeta con data-id
+    const pendingContainer = document.getElementById('pendingOrdersContainer');
+    if (pendingContainer) {
+      const card = pendingContainer.querySelector(`.pending-card[data-id="${order.id}"]`);
+      if (card) {
+        // Si dejó de ser pendiente o se asignó, quitar la tarjeta
+        if (st !== 'pendiente' || !!order.assigned_to) {
+          card.remove();
+        } else {
+          const pill = card.querySelector('span.px-2');
+          if (pill) pill.textContent = String(order.status || '').toUpperCase();
+          const title = card.querySelector('.text-sm.font-bold');
+          if (title) title.textContent = order.short_id ? `#${order.short_id}` : (order.id ? `#${order.id}` : '#—');
+        }
+      } else {
+        // Si ahora es pendiente y no asignada, refrescar contenedor
+        if (st === 'pendiente' && !order.assigned_to) {
+          await fetchAndRender();
+        }
+      }
+    }
+
+    // Assigned bucket: localizar por botón con data-id
+    const assignedContainer = document.getElementById('assignedOrdersContainer');
+    if (assignedContainer) {
+      const anyBtn = assignedContainer.querySelector(`[data-id="${order.id}"]`);
+      const card = anyBtn ? anyBtn.closest('.rounded-xl.border.bg-white.shadow-sm') : null;
+      if (card) {
+        if (!isMine || ['completada','cancelada'].includes(st)) {
+          card.remove();
+        } else {
+          const pill = card.querySelector('span.rounded-full');
+          if (pill) {
+            const badge = st === 'en curso' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700';
+            const label = st === 'en curso' ? 'EN CURSO' : (st === 'aceptada' ? 'ACEPTADA' : 'ASIGNADA');
+            pill.className = `px-2 py-1 text-xs font-semibold rounded-full ${badge}`;
+            pill.textContent = label;
+          }
+        }
+      } else {
+        // Si pasó a ser mío o cambió de estado dentro del bucket, refrescar contenedor
+        if (isMine && !['completada','cancelada'].includes(st)) {
+          await fetchAndRender();
+        }
+      }
+    }
+
+    // Contadores rápidos
+    try {
+      const all = JSON.parse(localStorage.getItem('cached_orders') || '[]');
+      const nextAll = Array.isArray(all) ? all.map(o => String(o.id)===String(order.id)? order : o) : [order];
+      localStorage.setItem('cached_orders', JSON.stringify(nextAll));
+    } catch(_){ }
+
+    if (window.lucide) { try { lucide.createIcons(); } catch(_){ } }
+  } catch(_){ }
 }
 
 function queueOfflineUpdate(orderId, updates) {
