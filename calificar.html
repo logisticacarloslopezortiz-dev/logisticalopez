@@ -61,6 +61,7 @@
       const lookupForm = document.getElementById('orderLookupForm');
       const lookupInput = document.getElementById('lookupInput');
       const lookupResult = document.getElementById('lookupResult');
+      let isSubmitting = false;
       if (!orderId) {
         form.classList.add('hidden');
         lookupForm.classList.remove('hidden');
@@ -100,22 +101,38 @@
       }
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
+        isSubmitting = true;
+        form.querySelector('button[type="submit"]').disabled = true;
+
         const s = parseInt(document.getElementById('serviceRating').value, 10);
         const c = parseInt(document.getElementById('collabRating').value, 10);
         const comentario = document.getElementById('comment').value || '';
+
+        if (comentario.length > 0 && comentario.length < 10) {
+          result.className = 'mt-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-800';
+          result.textContent = 'El comentario debe tener al menos 10 caracteres.';
+          result.classList.remove('hidden');
+          isSubmitting = false;
+          form.querySelector('button[type="submit"]').disabled = false;
+          return;
+        }
+
         try {
           const { error } = await supabaseConfig.client
             .from('calificaciones')
             .insert({ order_id: orderId, calificacion_servicio: s, calificacion_colaborador: c, comentario });
           if (error) throw error;
           result.className = 'mt-4 p-3 rounded-lg text-sm bg-green-100 text-green-800';
-          result.textContent = '¡Gracias! Tu calificación fue registrada.';
+          result.textContent = '¡Gracias! Tu calificación fue registrada. Nos ayudará a mejorar.';
           result.classList.remove('hidden');
           form.classList.add('hidden');
         } catch (err) {
           result.className = 'mt-4 p-3 rounded-lg text-sm bg-red-100 text-red-800';
-          result.textContent = err?.message || 'Error al guardar calificación.';
+          result.textContent = err?.message || 'Error al guardar calificación. Intenta nuevamente.';
           result.classList.remove('hidden');
+          isSubmitting = false;
+          form.querySelector('button[type="submit"]').disabled = false;
         }
       });
     });

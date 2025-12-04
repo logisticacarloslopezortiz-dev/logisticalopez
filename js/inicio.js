@@ -284,10 +284,6 @@ function renderOrders(){
       window.lucide.createIcons();
     } catch(_){ }
   }
-  try {
-    const hasCharts = document.getElementById('servicesChart') && document.getElementById('vehiclesChart');
-    if (hasCharts) updateCharts();
-  } catch(_) {}
 }
 
 // --- Menú de acciones eliminado ---
