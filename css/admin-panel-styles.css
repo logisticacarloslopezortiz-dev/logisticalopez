@@ -153,3 +153,46 @@ body {
 
 .hover\:bg-azulOscuro\/90:hover { background-color: var(--color-primario-oscuro) !important; opacity: 0.9; }
 .header-hidden { transform: translateY(-100%); }
+
+/* --- Estilos Centralizados de inicio.html --- */
+@keyframes toast-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast-in {
+  animation: toast-in 0.5s ease-out forwards;
+}
+
+.toast-out {
+  animation: toast-out 0.5s ease-in forwards;
+  animation-fill-mode: forwards;
+}
+
+.lucide {
+  stroke-width: 1.75;
+  vertical-align: middle;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.icon-pill {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding: .5rem;
+  border-radius: .5rem;
+}
+.icon-pill.yellow { background-color: #fbbf24; }
+.icon-pill.blue { background-color: #93c5fd; }
+.icon-pill.white { background-color: rgba(255,255,255,.2); }
+
+.bg-primario-turquesa { background-color: var(--color-primario-turquesa); }
+.bg-primario-oscuro { background-color: var(--color-primario-oscuro); }
+.bg-acento-amarillo { background-color: var(--color-acento-amarillo); }

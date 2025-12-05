@@ -31,17 +31,36 @@ async function logDb(supabase: SupabaseClientLike, fn_name: string, level: 'info
   try { await supabase.from('function_logs').insert({ fn_name, level, message, payload }); } catch (_) { void 0; }
 }
 
+import { sendNotification, type PushSubscription } from "https://deno.land/x/web_push@0.3.0/mod.ts";
+
 async function sendWebPush(endpoint: string, payload: unknown, keys: { p256dh: string; auth: string }, attempts = 3): Promise<void> {
-  const webpush = await import('web-push');
   const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
   const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
   const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('Faltan claves VAPID');
-  webpush.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+  const subscription: PushSubscription = {
+    endpoint,
+    keys: {
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+    },
+  };
 
   for (let i = 0; i < attempts; i++) {
     try {
-      await webpush.default.sendNotification({ endpoint, keys }, JSON.stringify(payload), { TTL: 600 });
+      await sendNotification(
+        subscription,
+        JSON.stringify(payload),
+        {
+          vapid: {
+            publicKey: VAPID_PUBLIC_KEY,
+            privateKey: VAPID_PRIVATE_KEY,
+            subject: VAPID_SUBJECT,
+          },
+          ttl: 600,
+        }
+      );
       return;
     } catch (err) {
       if (i === attempts - 1) throw err;

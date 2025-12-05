@@ -1584,6 +1584,17 @@ function openOrderModal(orderId) {
         body.innerHTML = '<div class="text-sm text-gray-600">No se encontró la orden.</div>';
       } else {
         title.textContent = `Orden: ${order.short_id || order.id}`;
+
+        let qaHtml = '';
+        const questions = order.service_questions;
+        if (questions && typeof questions === 'object' && Object.keys(questions).length > 0) {
+          const questionRows = Object.entries(questions).map(([key, value]) => {
+            const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            return `<div class="flex justify-between items-start"><span class="text-gray-500">${formattedKey}:</span> <span class="text-right font-medium">${value || 'N/A'}</span></div>`;
+          }).join('');
+          qaHtml = `<div class="mt-4 pt-4 border-t"><h4 class="font-semibold mb-2 text-gray-800">Detalles del Servicio</h4><div class="space-y-1">${questionRows}</div></div>`;
+        }
+
         body.innerHTML = `
           <div class="space-y-2">
             <div><strong>Cliente:</strong> ${order.name || '—'}</div>
@@ -1593,6 +1604,7 @@ function openOrderModal(orderId) {
             <div><strong>Fecha/Hora:</strong> ${order.date || '—'} ${order.time || ''}</div>
             <div><strong>Estado:</strong> ${order.status || '—'}</div>
             <div class="pt-2"><strong>Notas:</strong><div class="text-xs text-gray-600 mt-1">${order.notes || '—'}</div></div>
+            ${qaHtml}
           </div>
         `;
       }
