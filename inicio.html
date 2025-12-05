@@ -35,30 +35,6 @@
   <link rel="stylesheet" href="css/admin-panel-styles.css">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
-  <style>
-    @keyframes toast-in {
-      from {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-    .toast-in {
-      animation: toast-in 0.5s ease-out forwards;
-    }
-    .toast-out {
-      animation: toast-out 0.5s ease-in forwards;
-      animation-fill-mode: forwards;
-    }
-    .lucide { stroke-width: 1.75; vertical-align: middle; display: inline-block; flex-shrink: 0; }
-    .icon-pill { display:inline-flex; align-items:center; justify-content:center; padding: .5rem; border-radius: .5rem; }
-    .icon-pill.yellow { background-color: #fbbf24; }
-    .icon-pill.blue { background-color: #93c5fd; }
-    .icon-pill.white { background-color: rgba(255,255,255,.2); }
-  </style>
 </head>
 <body class="bg-gray-100">
   
@@ -126,7 +102,7 @@
 
     <!-- Resumen diario -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-turquesa);">
+      <div class="stat-card p-6 rounded-xl shadow-lg bg-primario-turquesa">
         <div class="flex items-center justify-between">
           <div>
             <p class="opacity-80">Total pedidos</p>
@@ -136,7 +112,7 @@
           <i data-lucide="package" class="w-12 h-12 opacity-50 text-white"></i>
         </div>
       </div>
-      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-primario-oscuro);">
+      <div class="stat-card p-6 rounded-xl shadow-lg bg-primario-oscuro">
         <div class="flex items-center justify-between">
           <div>
             <p class="opacity-80">Completados</p>
@@ -146,7 +122,7 @@
           <i data-lucide="check-circle" class="w-12 h-12 opacity-50 text-white"></i>
         </div>
       </div>
-      <div class="stat-card p-6 rounded-xl shadow-lg" style="background-color: var(--color-acento-amarillo); color: var(--color-texto-principal);">
+      <div class="stat-card p-6 rounded-xl shadow-lg bg-acento-amarillo text-gray-900">
         <div class="flex items-center justify-between">
           <div>
             <p class="opacity-80">Pendientes</p>

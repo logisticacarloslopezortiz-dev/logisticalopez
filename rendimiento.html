@@ -170,12 +170,12 @@
   <script src="js/sidebar.js"></script>
   <script src="js/rendimiento.js"></script>
   <div id="customerCommentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-xl w-full max-w-xl overflow-hidden">
-      <div class="flex items-center justify-between p-4 border-b">
+    <div class="bg-white rounded-xl w-full max-w-xl max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between p-4 border-b flex-shrink-0">
         <h3 class="font-bold text-lg">Comentario del Cliente</h3>
         <button id="closeCustomerComment" class="p-2 rounded hover:bg-gray-100"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div id="customerCommentBody" class="p-4 text-sm text-gray-700"></div>
+      <div id="customerCommentBody" class="p-4 text-sm text-gray-700 overflow-y-auto"></div>
     </div>
   </div>
 </body>

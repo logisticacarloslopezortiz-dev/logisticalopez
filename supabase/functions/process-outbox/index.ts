@@ -31,32 +31,119 @@ async function logDb(supabase: SupabaseClientLike, fn_name: string, level: 'info
   try { await supabase.from('function_logs').insert({ fn_name, level, message, payload }); } catch (_) { void 0; }
 }
 
-async function sendWebPush(endpoint: string, payload: unknown, keys: { p256dh: string; auth: string }, attempts = 3): Promise<void> {
-  const webpush = await import('web-push');
+import { sendNotification, type PushSubscription } from "https://deno.land/x/web_push@0.3.0/mod.ts";
+
+type SendPushResult = {
+  status: 'success' | 'expired' | 'error';
+  error?: unknown;
+};
+
+async function sendWebPush(endpoint: string, payload: unknown, keys: { p256dh: string; auth: string }, attempts = 3): Promise<SendPushResult> {
   const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
   const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
   const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('Faltan claves VAPID');
-  webpush.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+      return { status: 'error', error: new Error('Faltan claves VAPID en el servidor.') };
+  }
+
+  const subscription: PushSubscription = {
+    endpoint,
+    keys: { p256dh: keys.p256dh, auth: keys.auth },
+  };
 
   for (let i = 0; i < attempts; i++) {
     try {
-      await webpush.default.sendNotification({ endpoint, keys }, JSON.stringify(payload), { TTL: 600 });
-      return;
+      await sendNotification(
+        subscription,
+        JSON.stringify(payload),
+        {
+          vapid: {
+            publicKey: VAPID_PUBLIC_KEY,
+            privateKey: VAPID_PRIVATE_KEY,
+            subject: VAPID_SUBJECT,
+          },
+          ttl: 600,
+        }
+      );
+      return { status: 'success' };
     } catch (err) {
-      if (i === attempts - 1) throw err;
-      await delay(500); // espera 500ms antes de reintentar
+      // La librería web_push de Deno expone el status code en el objeto de error
+      const status = (err as any)?.status;
+      if (status === 404 || status === 410) {
+        // Suscripción expirada, no tiene sentido reintentar.
+        return { status: 'expired', error: err };
+      }
+
+      // Para otros errores (ej. de red), reintentar hasta el límite.
+      if (i === attempts - 1) {
+        return { status: 'error', error: err };
+      }
+      await delay(500);
     }
   }
+
+  // Este punto no debería ser alcanzable en condiciones normales.
+  return { status: 'error', error: new Error('Bucle de reintentos finalizado inesperadamente.') };
 }
+
+
+const BASE_URL = 'https://logisticalopezortiz.com';
 
 function buildPayloadFromOutbox(row: OutboxRow) {
   const p = row.payload ?? {};
   const title = String(p['title'] ?? (row.new_status ? `Actualización de orden` : 'Notificación'));
   const body = String(p['body'] ?? (row.new_status ? `La orden #${row.order_id} cambió a ${row.new_status}` : ''));
-  const icon = String(p['icon'] ?? 'https://logisticalopezortiz.com/img/android-chrome-192x192.png');
-  const data = { orderId: row.order_id, newStatus: row.new_status, ...((p['data'] ?? {}) as Record<string, unknown>) };
-  return { title, body, icon, data };
+
+  // Asegurar URL absoluta para el ícono
+  let icon = String(p['icon'] ?? '/img/android-chrome-192x192.png');
+  if (icon.startsWith('/')) {
+    icon = BASE_URL + icon;
+  }
+
+  const data = {
+    orderId: row.order_id,
+    newStatus: row.new_status,
+    ...((p['data'] ?? {}) as Record<string, unknown>)
+  };
+
+  // Asegurar URL absoluta para la redirección
+  if (typeof data.url === 'string' && data.url.startsWith('/')) {
+    data.url = BASE_URL + data.url;
+  }
+
+  // Añadir badge con URL absoluta
+  let badge = String(p['badge'] ?? '/img/favicon-32x32.png');
+  if (badge.startsWith('/')) {
+    badge = BASE_URL + badge;
+  }
+
+  return { title, body, icon, badge, data };
+}
+
+function parseSubscriptionRow(row: any): WebPushSubscription | null {
+  if (!row || !row.endpoint) return null;
+  let keys: { p256dh?: string; auth?: string } | undefined;
+
+  if (row.keys) {
+    if (typeof row.keys === 'object' && row.keys !== null) {
+      keys = row.keys;
+    } else if (typeof row.keys === 'string') {
+      try {
+        keys = JSON.parse(row.keys);
+      } catch {
+        keys = undefined;
+      }
+    }
+  }
+
+  if ((!keys?.p256dh || !keys?.auth) && row.p256dh && row.auth) {
+    keys = { p256dh: row.p256dh, auth: row.auth };
+  }
+
+  if (keys?.p256dh && keys?.auth) {
+    return { endpoint: row.endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } };
+  }
+  return null;
 }
 
 async function fetchSubscriptions(supabase: SupabaseClientLike, userId?: string, contactId?: string): Promise<WebPushSubscription[]> {
@@ -70,14 +157,10 @@ async function fetchSubscriptions(supabase: SupabaseClientLike, userId?: string,
     const r = await (supabase as any).from('push_subscriptions').select('endpoint, keys, p256dh, auth').eq(q.column, q.id);
     const rows = r.data ?? [];
     for (const row of rows) {
-      let keys: { p256dh?: string; auth?: string } | undefined;
-      if (row.keys && typeof row.keys === 'string') { try { keys = JSON.parse(row.keys); } catch { keys = undefined; } }
-      else if (row.keys && typeof row.keys === 'object') keys = row.keys;
-      if (!keys?.p256dh) keys = { p256dh: row.p256dh, auth: row.auth };
-      const endpoint = row.endpoint;
-      if (endpoint && keys?.p256dh && keys?.auth && !seen.has(endpoint)) {
-        seen.add(endpoint);
-        out.push({ endpoint, keys: { p256dh: keys.p256dh!, auth: keys.auth! } });
+      const sub = parseSubscriptionRow(row);
+      if (sub && !seen.has(sub.endpoint)) {
+        seen.add(sub.endpoint);
+        out.push(sub);
       }
     }
   }
@@ -105,14 +188,10 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise
         const rows = r.data ?? [];
         const seen = new Set<string>();
         for (const rowS of rows) {
-          let keys: { p256dh?: string; auth?: string } | undefined;
-          if (rowS.keys && typeof rowS.keys === 'string') { try { keys = JSON.parse(rowS.keys); } catch { keys = undefined; } }
-          else if (rowS.keys && typeof rowS.keys === 'object') keys = rowS.keys;
-          if (!keys?.p256dh) keys = { p256dh: rowS.p256dh, auth: rowS.auth };
-          const endpoint = rowS.endpoint;
-          if (endpoint && keys?.p256dh && keys?.auth && !seen.has(endpoint)) {
-            seen.add(endpoint);
-            subscriptions.push({ endpoint, keys: { p256dh: keys.p256dh!, auth: keys.auth! } });
+          const sub = parseSubscriptionRow(rowS);
+          if (sub && !seen.has(sub.endpoint)) {
+            seen.add(sub.endpoint);
+            subscriptions.push(sub);
           }
         }
       }
@@ -150,15 +229,25 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise
     return { successCount: 0, failCount: 0 };
   }
 
-  const payload = { notification: { title, body, icon, vibrate: [100, 50, 100], data: { ...data } } };
-  const results: Array<{ success: boolean; endpoint: string; error?: string }> = [];
+  const payload = { title, body, icon, vibrate: [100, 50, 100], data };
+  const pushResults: Array<{ status: 'success' | 'expired' | 'error'; endpoint: string; error?: string }> = [];
 
   await Promise.all(subscriptions.map(async (sub) => {
-    try { await sendWebPush(sub.endpoint, payload, sub.keys); results.push({ success: true, endpoint: sub.endpoint }); }
-    catch (err) { results.push({ success: false, endpoint: sub.endpoint, error: errToString(err) }); }
+    const result = await sendWebPush(sub.endpoint, payload, sub.keys);
+    pushResults.push({ status: result.status, endpoint: sub.endpoint, error: result.error ? errToString(result.error) : undefined });
+
+    if (result.status === 'expired') {
+      // Auto-limpieza de suscripción expirada
+      try {
+        await logDb(supabase, 'process-outbox', 'info', 'subscription_expired', { endpoint: sub.endpoint });
+        await (supabase as any).from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      } catch (dbErr) {
+        await logDb(supabase, 'process-outbox', 'error', 'subscription_delete_failed', { endpoint: sub.endpoint, error: errToString(dbErr) });
+      }
+    }
   }));
 
-  const successCount = results.filter(r => r.success).length;
+  const successCount = pushResults.filter(r => r.status === 'success').length;
   const failCount = results.length - successCount;
   await logDb(supabase, 'process-outbox', 'info', 'processing_end', { outboxId: row.id, successCount, failCount });
 
@@ -256,6 +345,17 @@ Deno.serve(async (req: Request) => {
     await logDb(supabase, 'process-outbox', 'info', 'invoke_end', { processed: pending.length });
     return jsonResponse({ success: true, processed: pending.length });
   } catch (error) {
-    return jsonResponse({ success: false, error: errToString(error) }, 200);
+    // Loguear el error antes de responder.
+    try {
+        const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+        const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (SUPABASE_URL && SUPABASE_KEY) {
+            const supabase = createClient(SUPABASE_URL, SUPABASE_KEY) as unknown as SupabaseClientLike;
+            await logDb(supabase, 'process-outbox', 'error', 'main_handler_crash', { error: errToString(error) });
+        }
+    } catch (_) {
+        // Ignorar si el logueo falla para no enmascarar el error original.
+    }
+    return jsonResponse({ success: false, error: errToString(error) }, 500);
   }
 });
