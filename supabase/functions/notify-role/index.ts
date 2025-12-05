@@ -1,6 +1,11 @@
 /// <reference path="../globals.d.ts" />
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders as _corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
+const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
+const absolutize = (u: string) => {
+  const s = String(u || '')
+  return /^https?:\/\//i.test(s) ? s : SITE_BASE + (s.startsWith('/') ? '' : '/') + s
+}
 
 // -------------------------------
 // Tipos
@@ -51,23 +56,19 @@ async function sendPush(sub: WebPushSubscription, payload: unknown) {
 
   const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
   const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
-  const VAPID_JWK = Deno.env.get('VAPID_JWK');
   const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     throw new Error('Faltan claves VAPID en el servidor');
   }
 
-  let vapidKeys: any;
-  try {
-    vapidKeys = VAPID_JWK ? webpush.importVapidKeys(JSON.parse(VAPID_JWK)) : { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
-  } catch (_) {
-    vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
-  }
+  const vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
 
   const appServer = await webpush.ApplicationServer.new({ contactInformation: VAPID_SUBJECT, vapidKeys });
-  const subscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } };
-  return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000 });
+  const k: any = sub.keys as any
+  const keys = typeof k === 'string' ? (() => { try { return JSON.parse(k) } catch { return {} } })() : k
+  const subscription = { endpoint: sub.endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } };
+  return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high' });
 }
 
 // ===============================================================
@@ -157,15 +158,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ success: false, message: 'Cliente sin suscripciones' }, 200);
       }
 
-      const payload = {
-        notification: {
-          title,
-          body: messageBody,
-          icon,
-          vibrate: [100, 50, 100],
-          data: { orderId, role: normalizedRole, ...data }
-        }
-      };
+      const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
 
       const results = [];
       for (const sub of subscriptions) {
@@ -225,15 +218,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: false, message: 'No hay suscripciones para el rol' }, 200);
     }
 
-    const payload = {
-      notification: {
-        title,
-        body: messageBody,
-        icon,
-        vibrate: [100, 50, 100],
-        data: { orderId, role: normalizedRole, ...data }
-      }
-    };
+    const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
 
     const results = [];
     for (const sub of subscriptions) {
