@@ -153,6 +153,7 @@ function renderOrders(){
   
   // Actualizar paneles de resumen
   updateResumen();
+  updateAlerts();
 
   if(filteredOrders.length === 0){
     ordersTableBody.innerHTML='<tr><td colspan="9" class="text-center py-6 text-gray-500">No hay pedidos que coincidan con los filtros.</td></tr>';
@@ -441,16 +442,6 @@ function updateCharts() {
       const diffMin = (serviceTime - now) / 60000;
       return diffMin > 0 && diffMin <= 60;
     });
-
-    if (proximos.length === 0) {
-      alertasEl.innerHTML = '<li class="text-gray-500">No hay alertas por ahora.</li>';
-    } else {
-      proximos.forEach(o => {
-        const li = document.createElement('li');
-        li.innerHTML = `<strong>${o.service?.name}</strong> para <strong>${o.name}</strong> comienza a las <strong>${o.time}</strong>`;
-        alertasEl.appendChild(li);
-      });
-    }
   }
 }
 // Gestión de asignación y eliminación de pedidos desde modal
@@ -528,26 +519,46 @@ async function openAssignModal(orderId){
   if (copyTrackBtn) {
     copyTrackBtn.replaceWith(copyTrackBtn.cloneNode(true));
     document.getElementById('copyTrackingLinkBtn').addEventListener('click', async () => {
+      const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
+      try { await navigator.clipboard.writeText(url); } catch(_) {}
       try {
-        const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
-        await navigator.clipboard.writeText(url);
-        notifications.success('Enlace de seguimiento copiado');
-      } catch (_) {
-        notifications.warning('No se pudo copiar. Abriendo enlace…');
-        window.open(`https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`, '_blank');
+        let phone = (order.phone || '').replace(/[^0-9]/g, '');
+        if (phone.length === 10 && !phone.startsWith('1')) phone = '1809' + phone;
+        if (phone.length === 7) phone = '1809' + phone;
+        if (phone) {
+          const msg = `👋 Hola, ${order.name || 'cliente'}. Aquí puedes ver el estado de tu servicio en tiempo real:\n${url}\n\nSi necesitas ayuda, respóndenos por aquí. ¡Gracias por elegirnos! 🚛`;
+          const wa = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+          window.open(wa, '_blank');
+          notifications.success('Enviado por WhatsApp: seguimiento');
+        } else {
+          window.open(url, '_blank');
+          notifications.warning('Número no disponible. Abriendo enlace de seguimiento');
+        }
+      } catch(_) {
+        window.open(url, '_blank');
       }
     });
   }
   if (copyRatingBtn) {
     copyRatingBtn.replaceWith(copyRatingBtn.cloneNode(true));
     document.getElementById('copyRatingLinkBtn').addEventListener('click', async () => {
+      const url = `https://logisticalopezortiz.com/calificar.html?pedido=${order.id}`;
+      try { await navigator.clipboard.writeText(url); } catch(_) {}
       try {
-        const url = `https://logisticalopezortiz.com/calificar.html?pedido=${order.id}`;
-        await navigator.clipboard.writeText(url);
-        notifications.success('Enlace de calificación copiado');
-      } catch (_) {
-        notifications.warning('No se pudo copiar. Abriendo enlace…');
-        window.open(`https://logisticalopezortiz.com/calificar.html?pedido=${order.id}` , '_blank');
+        let phone = (order.phone || '').replace(/[^0-9]/g, '');
+        if (phone.length === 10 && !phone.startsWith('1')) phone = '1809' + phone;
+        if (phone.length === 7) phone = '1809' + phone;
+        if (phone) {
+          const msg = `🙏 Hola, ${order.name || 'cliente'}. Gracias por confiar en nosotros. ¿Podrías dejarnos tu calificación? Tu opinión nos ayuda a mejorar.\n${url}\n\nTe toma menos de un minuto. ¡Gracias! ⭐`;
+          const wa = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+          window.open(wa, '_blank');
+          notifications.success('Enviado por WhatsApp: calificación');
+        } else {
+          window.open(url, '_blank');
+          notifications.warning('Número no disponible. Abriendo enlace de calificación');
+        }
+      } catch(_) {
+        window.open(url, '_blank');
       }
     });
   }

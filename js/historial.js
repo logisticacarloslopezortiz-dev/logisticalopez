@@ -232,11 +232,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       doc.setFont(undefined, 'bold');
       await textBlock('Datos del Cliente', { size: 13, style: 'bold' });
       doc.setFont(undefined, 'normal');
-      await labelValue('Nombre:', order.name || 'N/A');
-      await labelValue('Teléfono:', order.phone || 'N/A');
-      await labelValue('Email:', order.email || 'N/A');
-      await labelValue('Empresa:', order.empresa || 'N/A');
-      await labelValue('RNC:', order.rnc || 'N/A');
+      if (order.name) await labelValue('Nombre:', order.name);
+      if (order.phone) await labelValue('Teléfono:', order.phone);
+      if (order.email) await labelValue('Email:', order.email);
+      if (order.empresa) await labelValue('Empresa:', order.empresa);
+      if (order.rnc) await labelValue('RNC:', order.rnc);
 
       y += 6;
       doc.setFont(undefined, 'bold');
@@ -245,9 +245,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       await labelValue('Servicio:', order.service?.name || order.service_name);
       await labelValue('Vehículo:', order.vehicle?.name || order.vehicle_name);
       await labelValue('Fecha solicitud:', formatDate(order.created_at));
-      await labelValue('Fecha servicio:', `${order.date || 'N/A'} ${order.time || ''}`);
-      await labelValue('Estado:', order.status || 'N/A');
-      await labelValue('Monto cobrado:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'Por confirmar');
+      if (order.date) await labelValue('Fecha servicio:', `${order.date} ${order.time || ''}`);
+      if (order.status) await labelValue('Estado:', order.status);
+      if (order.monto_cobrado) await labelValue('Monto cobrado:', `$${Number(order.monto_cobrado).toLocaleString('es-DO')}`);
 
       if (order.pickup || order.delivery) {
         y += 6;
@@ -266,7 +266,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
           const qs = typeof order.service_questions === 'string' ? JSON.parse(order.service_questions) : order.service_questions;
           for (const [k, v] of Object.entries(qs)) {
-            await labelValue(`${k}:`, String(v || ''));
+            const label = String(k).replace(/_/g, ' ').replace(/\b\w/g, s => s.toUpperCase());
+            if (v !== undefined && v !== null && String(v).trim() !== '') {
+              await labelValue(`${label}:`, String(v));
+            }
           }
         } catch (_) {}
       }
@@ -289,8 +292,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       await labelValue('ID de Orden:', String(order.id));
       await labelValue('Completado por:', collaboratorName);
       await labelValue('Fecha de finalización:', completedDate);
-      await labelValue('Método de pago:', order.metodo_pago || 'No especificado');
-      await labelValue('Monto final:', order.monto_cobrado ? `$${Number(order.monto_cobrado).toLocaleString('es-DO')}` : 'No cobrado');
+      if (order.metodo_pago) await labelValue('Método de pago:', order.metodo_pago);
+      if (order.monto_cobrado) await labelValue('Monto final:', `$${Number(order.monto_cobrado).toLocaleString('es-DO')}`);
 
       if (order.assigned_at || order.accepted_at) {
         y += 6;
