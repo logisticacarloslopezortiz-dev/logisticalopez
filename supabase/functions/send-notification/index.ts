@@ -6,6 +6,7 @@ import { corsHeaders, handleCors, jsonResponse } from '../cors-config.ts'
 // Ve a Project Settings > Edge Functions > Add new secret
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
+const VAPID_JWK = Deno.env.get('VAPID_JWK') || null
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:example@example.com'
 
 Deno.serve(async (req: Request) => {
@@ -29,23 +30,15 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: false, error: 'Falta la suscripción o el payload de la notificación' }, 200);
     }
 
-    const options = {
-      vapidDetails: {
-        subject: VAPID_SUBJECT,
-        publicKey: VAPID_PUBLIC_KEY,
-        privateKey: VAPID_PRIVATE_KEY,
-      },
-    };
-
-    // Importar dinámicamente la librería web-push para evitar fallos en inicialización
-    const { default: webpush } = await import('https://esm.sh/web-push@3.6.1');
-
-    // Enviar la notificación push usando la librería web-push
-    await webpush.sendNotification(
-      subscription,
-      JSON.stringify(notification),
-      options
-    );
+    const webpush = await import('jsr:@negrel/webpush')
+    let vapidKeys: any
+    try {
+      vapidKeys = VAPID_JWK ? webpush.importVapidKeys(JSON.parse(VAPID_JWK)) : { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY }
+    } catch (_) {
+      vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY }
+    }
+    const appServer = await webpush.ApplicationServer.new({ contactInformation: VAPID_SUBJECT, vapidKeys })
+    await appServer.push(subscription, JSON.stringify(notification), { ttl: 2592000, urgency: 'high' })
 
     return jsonResponse({ success: true, message: 'Notificación push enviada con éxito' }, 200);
   } catch (error) {

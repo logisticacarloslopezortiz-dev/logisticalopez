@@ -170,3 +170,4 @@ body {
 .icon-pill.yellow { background-color: #fbbf24; }
 .icon-pill.blue { background-color: #93c5fd; }
 .icon-pill.white { background-color: rgba(255,255,255,.2); }
+html { text-size-adjust: 100%; }

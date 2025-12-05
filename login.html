@@ -13,29 +13,29 @@
   <link rel="manifest" href="img/site.webmanifest" />
   <meta name="theme-color" content="#174F57" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/admin-panel-styles.css">
+  <link rel="stylesheet" href="css/admin-panel-styles.css?v=20251204">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
   <!-- Scripts de Supabase (cargados primero) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-config.js?v=20251204"></script>
 </head>
 <body class="bg-white flex justify-center items-center h-screen">
 
   <main class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
     <div class="flex flex-col items-center mb-6">
       <img src="img/1vertical.png" alt="Logo de la empresa" class="w-24 h-24 object-contain mb-3">
-      <h1 class="text-2xl font-bold text-center" style="color: #1E405A;">Panel LLO - Login</h1>
+      <h1 class="text-2xl font-bold text-center text-azulOscuro">Panel LLO - Login</h1>
     </div>
 
     <form id="loginForm" class="flex flex-col gap-4">
       <div>
-        <label class="block font-semibold mb-1" style="color: #1E405A;">Usuario</label>
-        <input type="text" id="username" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="admin">
+        <label for="username" class="block font-semibold mb-1 text-azulOscuro">Usuario</label>
+        <input type="text" id="username" autocomplete="username" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="admin">
       </div>
       <div>
-        <label class="block font-semibold mb-1" style="color: #1E405A;">Contraseña</label>
-        <input type="password" id="password" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="********">
+        <label for="password" class="block font-semibold mb-1 text-azulOscuro">Contraseña</label>
+        <input type="password" id="password" autocomplete="current-password" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="********">
       </div>
       <button type="submit" class="btn-login">Ingresar</button>
     </form>
@@ -122,30 +122,30 @@
           if (error) throw error;
 
           if (authData.user) {
-            // Una vez autenticado, obtenemos los detalles del perfil desde la tabla 'colaboradores'
-            // usando supabase-js (no fetch directo) para aprovechar las políticas RLS corregidas
-            const { data: collaboratorProfile, error: profileError } = await supabaseConfig.client
-              .from('collaborators')
-              .select('*')
-              .eq('id', authData.user.id)
-              .single();
+            const user = authData.user;
+            const appRoles = (user?.app_metadata?.roles || user?.app_metadata?.role || []);
+            const metaRole = user?.user_metadata?.role;
+            const isAdminMeta = (Array.isArray(appRoles) ? appRoles.includes('administrador') : String(appRoles || '').toLowerCase() === 'administrador') || String(metaRole || '').toLowerCase() === 'administrador' || user?.user_metadata?.is_admin === true;
 
-            if (profileError) {
-              console.error('Error al obtener perfil de colaborador:', profileError);
-              await supabaseConfig.client.auth.signOut();
-              throw new Error('Perfil de colaborador no encontrado.');
+            if (isAdminMeta) {
+              window.location.href = 'inicio.html';
+            } else {
+              const { data: collaboratorProfile, error: profileError } = await supabaseConfig.client
+                .from('collaborators')
+                .select('role')
+                .eq('id', user.id)
+                .maybeSingle();
+              if (profileError) {
+                await supabaseConfig.client.auth.signOut();
+                throw new Error('Perfil de colaborador no encontrado.');
+              }
+              if (!collaboratorProfile || String(collaboratorProfile.role || '').toLowerCase() !== 'administrador') {
+                await supabaseConfig.client.auth.signOut();
+                throw new Error('Acceso denegado. Esta área es solo para administradores.');
+              }
+              localStorage.setItem('userRole', collaboratorProfile.role);
+              window.location.href = 'inicio.html';
             }
-
-            // --- VERIFICACIÓN DE ROL ---
-            if (collaboratorProfile.role?.toLowerCase() !== 'administrador') {
-              await supabaseConfig.client.auth.signOut();
-              throw new Error('Acceso denegado. Esta área es solo para administradores.');
-            }
-
-            // Guardar datos del colaborador para uso en otras páginas
-            localStorage.setItem('userRole', collaboratorProfile.role);
-            localStorage.setItem('userData', JSON.stringify(collaboratorProfile));
-            window.location.href = 'inicio.html';
           } else {
             // Esto no debería ocurrir si no hay error, pero es una salvaguarda.
             errorMsg.textContent = 'Usuario o contraseña incorrectos.';
@@ -166,7 +166,7 @@
     });
     // --- FIN: Lógica de Login Mejorada ---
   </script>
-  <script src="js/pwa.js"></script>
+  <script src="js/pwa.js?v=20251204"></script>
 
 </body>
 </html>

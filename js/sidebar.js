@@ -10,10 +10,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (isAdminPage) {
-        const userRole = localStorage.getItem('userRole');
-        if (userRole !== 'administrador') {
-            try { localStorage.clear(); } catch(_){}
-            try { await supabaseConfig.client.auth.signOut(); } catch(_){}
+        const user = session.user;
+        const appRoles = (user?.app_metadata?.roles || user?.app_metadata?.role || []);
+        const metaRole = user?.user_metadata?.role;
+        const isAdminMeta = user?.user_metadata?.is_admin;
+        let hasAdminRole =
+            (Array.isArray(appRoles) ? appRoles.includes('administrador') : String(appRoles || '').toLowerCase() === 'administrador') ||
+            String(metaRole || '').toLowerCase() === 'administrador' ||
+            isAdminMeta === true;
+        if (!hasAdminRole) {
+            try {
+                const { data: collab } = await supabaseConfig.client
+                    .from('collaborators')
+                    .select('role')
+                    .eq('id', user.id)
+                    .maybeSingle();
+                hasAdminRole = !!collab && String(collab.role || '').toLowerCase() === 'administrador';
+            } catch(_) {}
+        }
+        if (!hasAdminRole) {
+            try { localStorage.clear(); } catch(_){ }
+            try { await supabaseConfig.client.auth.signOut(); } catch(_){ }
             window.location.href = 'login.html';
             return;
         }

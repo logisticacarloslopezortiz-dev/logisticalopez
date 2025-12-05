@@ -51,8 +51,8 @@ class PushNotificationManager {
             return;
         } catch (error) {
             console.error('Error loading VAPID key (Supabase):', error);
-            this.vapidPublicKey = 'BMuGvI89RtY2N2hFDLwkCmNitzvYP9iDrRCQlq8JmFfGtDjgFQWJGLaEHX9O8lF8Vl9WsXOYMbBq94vKwpWoXVE';
-            console.warn('Usando VAPID key de desarrollo (fallback). Configura la función getVapidKey.');
+            this.vapidPublicKey = null;
+            throw new Error('No se pudo obtener la clave VAPID pública del servidor');
         }
     }
 

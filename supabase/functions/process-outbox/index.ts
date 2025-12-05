@@ -32,20 +32,29 @@ async function logDb(supabase: SupabaseClientLike, fn_name: string, level: 'info
 }
 
 async function sendWebPush(endpoint: string, payload: unknown, keys: { p256dh: string; auth: string }, attempts = 3): Promise<void> {
-  const webpush = await import('web-push');
+  const webpush = await import('jsr:@negrel/webpush');
   const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
   const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
+  const VAPID_JWK = Deno.env.get('VAPID_JWK');
   const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('Faltan claves VAPID');
-  webpush.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+  let vapidKeys: any;
+  try {
+    vapidKeys = VAPID_JWK ? webpush.importVapidKeys(JSON.parse(VAPID_JWK)) : { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
+  } catch (_) {
+    vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
+  }
+  const appServer = await webpush.ApplicationServer.new({ contactInformation: VAPID_SUBJECT, vapidKeys });
+  const subscription = { endpoint, keys };
 
   for (let i = 0; i < attempts; i++) {
     try {
-      await webpush.default.sendNotification({ endpoint, keys }, JSON.stringify(payload), { TTL: 600 });
+      await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 600 });
       return;
     } catch (err) {
       if (i === attempts - 1) throw err;
-      await delay(500); // espera 500ms antes de reintentar
+      await delay(500);
     }
   }
 }
