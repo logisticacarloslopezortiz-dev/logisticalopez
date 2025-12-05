@@ -12,7 +12,13 @@ async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
   if (!pub || !priv) throw new Error('VAPID keys not configured')
   const vapidKeys = { publicKey: pub, privateKey: priv }
   const appServer = await webpush.ApplicationServer.new({ contactInformation: subject, vapidKeys })
-  return await appServer.push(sub as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high' })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+  try {
+    return await appServer.push(sub as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high', signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -35,7 +41,7 @@ Deno.serve(async (req: Request) => {
     const endpoint: string = String(rawSub?.endpoint || '')
     let keys: SubscriptionKeys | undefined = rawSub?.keys
     if (typeof keys === 'string') { try { keys = JSON.parse(keys) } catch { keys = undefined } }
-    if (!keys?.p256dh && rawSub?.p256dh && rawSub?.auth) { keys = { p256dh: rawSub?.p256dh, auth: rawSub?.auth } }
+    if ((!keys?.p256dh || !keys?.auth) && rawSub?.p256dh && rawSub?.auth) { keys = { p256dh: rawSub?.p256dh, auth: rawSub?.auth } }
 
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return jsonResponse({ error: 'invalid_subscription' }, 400, req)

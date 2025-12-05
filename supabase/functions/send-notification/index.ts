@@ -18,7 +18,13 @@ async function push(subscription: { endpoint: string; keys: { p256dh: string; au
   const webpush = await import('jsr:@negrel/webpush')
   const vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY }
   const appServer = await webpush.ApplicationServer.new({ contactInformation: VAPID_SUBJECT, vapidKeys })
-  return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high' })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+  try {
+    return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high', signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 Deno.serve(async (req: Request) => {
