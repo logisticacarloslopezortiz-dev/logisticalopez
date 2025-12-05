@@ -13,25 +13,8 @@
 
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function(){
-      try {
-        // Fallback para nombres de iconos inválidos
-        if (window.lucide && window.lucide.icons) {
-          document.querySelectorAll('[data-lucide]').forEach(function(el){
-            var name = el.getAttribute('data-lucide');
-            if (!name || !window.lucide.icons[name]) {
-              el.setAttribute('data-lucide', 'info');
-            }
-          });
-        }
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-          window.lucide.createIcons();
-        }
-      } catch(_){ }
-    });
-  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>lucide.createIcons();</script>
   <link rel="stylesheet" href="css/admin-panel-styles.css">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">

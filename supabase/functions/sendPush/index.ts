@@ -1,8 +1,22 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleCors, jsonResponse } from '../cors-config.ts'
+const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
+const absolutize = (u: string) => /^https?:\/\//i.test(String(u||'')) ? String(u) : SITE_BASE + (String(u||'').startsWith('/') ? '' : '/') + String(u||'')
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+  { auth: { autoRefreshToken: false, persistSession: false } }
+)
 
 type SubscriptionKeys = { p256dh: string; auth: string }
 type WebPushSubscription = { endpoint: string; keys: SubscriptionKeys }
+interface PushRequestBody {
+  title?: string
+  body?: string
+  icon?: string
+  url?: string
+  subscription?: WebPushSubscription | any
+}
 
 async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
   const webpush = await import('jsr:@negrel/webpush')
@@ -30,9 +44,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const body = await req.json().catch(() => ({}))
-    const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
-    const absolutize = (u: string) => /^https?:\/\//i.test(String(u||'')) ? String(u) : SITE_BASE + (String(u||'').startsWith('/') ? '' : '/') + String(u||'')
+    const body: PushRequestBody = await req.json().catch(() => ({} as PushRequestBody))
     const title: string = String(body?.title || 'Notificación')
     const bodyText: string = String(body?.body || '')
     const icon: string = absolutize(body?.icon || '/img/android-chrome-192x192.png')
@@ -56,20 +68,15 @@ Deno.serve(async (req: Request) => {
       const statusCode = (err as any)?.statusCode as number | undefined
       if (statusCode === 404 || statusCode === 410) {
         try {
-          const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') || '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-            { auth: { autoRefreshToken: false, persistSession: false } }
-          )
           await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint)
         } catch (_) {}
         return jsonResponse({ success: false, expired: true }, 410, req)
       }
-      const message = (err instanceof Error) ? err.message : String(err)
+      const message = (err instanceof Error) ? (err.message || 'unknown_error') : (String(err) || 'unknown_error')
       return jsonResponse({ success: false, error: message, statusCode }, 500, req)
     }
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e)
+    const message = e instanceof Error ? (e.message || 'unknown_error') : (String(e) || 'unknown_error')
     return jsonResponse({ error: message }, 500, req)
   }
 })

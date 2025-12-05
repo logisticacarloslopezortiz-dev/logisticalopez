@@ -7,6 +7,12 @@ const absolutize = (u: string) => {
   return /^https?:\/\//i.test(s) ? s : SITE_BASE + (s.startsWith('/') ? '' : '/') + s
 }
 
+const supabase: SupabaseClient = createClient(
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+  { auth: { autoRefreshToken: false, persistSession: false } }
+)
+
 // -------------------------------
 // Tipos
 // -------------------------------
@@ -65,10 +71,41 @@ async function sendPush(sub: WebPushSubscription, payload: unknown) {
   const vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
 
   const appServer = await webpush.ApplicationServer.new({ contactInformation: VAPID_SUBJECT, vapidKeys });
-  const k: any = sub.keys as any
-  const keys = typeof k === 'string' ? (() => { try { return JSON.parse(k) } catch { return {} } })() : k
+  const k: any = sub.keys as any;
+  const keys = typeof k === 'string' ? (() => { try { return JSON.parse(k) } catch { return {} } })() : k;
+  if (!keys?.p256dh || !keys?.auth) {
+    throw new Error('keys_invalidas_en_suscripcion');
+  }
   const subscription = { endpoint: sub.endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } };
-  return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high' });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high', signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function pushToMany(subscriptions: WebPushSubscription[], payload: unknown, client: SupabaseClient) {
+  const results: Array<{ success: boolean; endpoint: string; error?: string }> = [];
+  for (const sub of subscriptions) {
+    try {
+      await sendPush(sub, payload);
+      results.push({ success: true, endpoint: sub.endpoint });
+      await logDb(client, 'notify-role', 'info', 'push_sent', { endpoint: sub.endpoint });
+    } catch (err) {
+      const code = (err as any)?.statusCode;
+      if (code === 404 || code === 410) {
+        try { await client.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); } catch (_) {}
+      }
+      const msg = errorToString(err);
+      results.push({ success: false, endpoint: sub.endpoint, error: msg });
+      await logDb(client, 'notify-role', 'warning', 'push_failed', { endpoint: sub.endpoint, error: msg, statusCode: code });
+    }
+  }
+  const sent = results.filter(r => r.success).length;
+  const failed = results.length - sent;
+  return { results, sent, failed, total: results.length };
 }
 
 // ===============================================================
@@ -87,12 +124,9 @@ Deno.serve(async (req: Request) => {
   // --------------------------------------------
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
   const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
     return jsonResponse({ success: false, error: 'Error de configuración del servidor' }, 500);
   }
-
-  const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
 
   try {
     const body = (await req.json()) as NotifyRoleRequest;
@@ -155,24 +189,11 @@ Deno.serve(async (req: Request) => {
       }
 
       if (subscriptions.length === 0) {
-        return jsonResponse({ success: false, message: 'Cliente sin suscripciones' }, 200);
+        return jsonResponse({ success: false, message: 'Cliente sin suscripciones', sent: 0, failed: 0, total: 0 }, 200);
       }
 
       const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
-
-      const results = [];
-      for (const sub of subscriptions) {
-        try {
-          await sendPush(sub, payload);
-          results.push({ success: true, endpoint: sub.endpoint });
-        } catch (err) {
-          const code = (err as any)?.statusCode;
-          if (code === 404 || code === 410) {
-            await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
-          }
-          results.push({ success: false, endpoint: sub.endpoint, error: errorToString(err) });
-        }
-      }
+      const { results, sent, failed, total } = await pushToMany(subscriptions, payload, supabase);
 
       await supabase.from('notifications').insert({
         user_id: order?.client_id ?? null,
@@ -181,8 +202,7 @@ Deno.serve(async (req: Request) => {
         data: { orderId, role: normalizedRole },
         created_at: new Date().toISOString()
       });
-
-      return jsonResponse({ success: results.some(r => r.success), results }, 200);
+      return jsonResponse({ success: sent > 0, sent, failed, total, results }, 200);
     }
 
     // ===================================================================
@@ -219,30 +239,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
-
-    const results = [];
-    for (const sub of subscriptions) {
-      try {
-        await sendPush(sub, payload);
-        results.push({ success: true, endpoint: sub.endpoint });
-      } catch (err) {
-        const code = (err as any)?.statusCode;
-        if (code === 404 || code === 410) {
-          await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
-        }
-        results.push({ success: false, endpoint: sub.endpoint, error: errorToString(err) });
-      }
-    }
-
-    return jsonResponse(
-      {
-        success: results.some(r => r.success),
-        sent: results.filter(r => r.success).length,
-        total: results.length,
-        results
-      },
-      200
-    );
+    const { results, sent, failed, total } = await pushToMany(subscriptions, payload, supabase);
+    return jsonResponse({ success: sent > 0, sent, failed, total, results }, 200);
 
   } catch (error) {
     const msg = errorToString(error);

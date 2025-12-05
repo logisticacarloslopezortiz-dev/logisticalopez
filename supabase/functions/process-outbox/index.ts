@@ -1,25 +1,16 @@
 /// <reference path="../globals.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { handleCors, jsonResponse } from '../cors-config.ts';
+const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
+const absolutize = (u: string) => {
+  const s = String(u || '')
+  return /^https?:\/\//i.test(s) ? s : SITE_BASE + (s.startsWith('/') ? '' : '/') + s
+}
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 type WebPushSubscription = { endpoint: string; keys: { p256dh: string; auth: string } };
 
-type QueryChain = {
-  eq: (column: string, value: string | number) => QueryChain;
-  is: (column: string, value: null) => QueryChain;
-  order: (column: string, options: { ascending: boolean }) => QueryChain;
-  limit: (n: number) => Promise<{ data?: unknown; error?: unknown }> | QueryChain;
-  or: (spec: string) => QueryChain;
-};
-
-type SupabaseClientLike = {
-  from: (table: string) => {
-    select: (columns: string) => QueryChain;
-    insert: (values: unknown) => Promise<{ data?: unknown; error?: unknown }>;
-    update: (values: unknown) => { eq: (column: string, value: string | number) => Promise<{ data?: unknown; error?: unknown }> };
-  };
-};
+type SupabaseClientLike = any;
 type OutboxRow = { id: number; order_id: number; new_status: string | null; target_role: 'administrador' | 'colaborador' | 'cliente' | null; target_user_id: string | null; target_contact_id: string | null; payload: Record<string, unknown> | null; created_at: string; processed_at: string | null };
 
 function errToString(err: unknown): string {
@@ -43,12 +34,16 @@ async function sendWebPush(endpoint: string, payload: unknown, keys: { p256dh: s
   const subscription = { endpoint, keys };
 
   for (let i = 0; i < attempts; i++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high' });
+      await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high', signal: controller.signal });
       return;
     } catch (err) {
       if (i === attempts - 1) throw err;
       await delay(500);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }
@@ -57,7 +52,7 @@ function buildPayloadFromOutbox(row: OutboxRow) {
   const p = row.payload ?? {};
   const title = String(p['title'] ?? (row.new_status ? `Actualización de orden` : 'Notificación'));
   const body = String(p['body'] ?? (row.new_status ? `La orden #${row.order_id} cambió a ${row.new_status}` : ''));
-  const icon = String(p['icon'] ?? 'https://logisticalopezortiz.com/img/android-chrome-192x192.png');
+  const icon = absolutize(String(p['icon'] ?? '/img/android-chrome-192x192.png'));
   const data = { orderId: row.order_id, newStatus: row.new_status, ...((p['data'] ?? {}) as Record<string, unknown>) };
   return { title, body, icon, data };
 }
@@ -78,7 +73,7 @@ async function fetchSubscriptions(supabase: SupabaseClientLike, userId?: string,
       else if (row.keys && typeof row.keys === 'object') keys = row.keys;
       if (!keys?.p256dh) keys = { p256dh: row.p256dh, auth: row.auth };
       const endpoint = row.endpoint;
-      if (endpoint && keys?.p256dh && keys?.auth && !seen.has(endpoint)) {
+      if (endpoint && keys?.p256dh && keys?.auth && typeof keys.p256dh === 'string' && typeof keys.auth === 'string' && !seen.has(endpoint)) {
         seen.add(endpoint);
         out.push({ endpoint, keys: { p256dh: keys.p256dh!, auth: keys.auth! } });
       }
@@ -150,6 +145,9 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise
 
   if (subscriptions.length === 0) {
     await logDb(supabase, 'process-outbox', 'warning', 'no_subscriptions', { outboxId: row.id });
+    try {
+      await (supabase as any).from('notification_outbox').update({ processed_at: new Date().toISOString() }).eq('id', row.id);
+    } catch (_) {}
     return { successCount: 0, failCount: 0 };
   }
 
@@ -173,12 +171,12 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise
     const recentSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
     if (targetUserId) {
-      const { data: existing } = await supabase.from('notifications').select('id').eq('user_id', targetUserId).eq('title', title).eq('body', body).filter('data->>orderId', 'eq', String(row.order_id)).gte('created_at', recentSince).limit(1);
+      const { data: existing } = await supabase.from('notifications').select('id').eq('user_id', targetUserId).eq('title', title).eq('body', body).eq('data->>orderId', String(row.order_id)).gte('created_at', recentSince).limit(1);
       if (!existing || existing.length === 0) {
         await supabase.from('notifications').insert({ user_id: targetUserId, title, body, data: { orderId: row.order_id, newStatus: row.new_status, results }, created_at: new Date().toISOString() });
       }
     } else if (contactId) {
-      const { data: existingC } = await supabase.from('notifications').select('id').eq('contact_id', contactId).eq('title', title).eq('body', body).filter('data->>orderId', 'eq', String(row.order_id)).gte('created_at', recentSince).limit(1);
+      const { data: existingC } = await supabase.from('notifications').select('id').eq('contact_id', contactId).eq('title', title).eq('body', body).eq('data->>orderId', String(row.order_id)).gte('created_at', recentSince).limit(1);
       if (!existingC || existingC.length === 0) {
         await supabase.from('notifications').insert({ contact_id: contactId, title, body, data: { orderId: row.order_id, newStatus: row.new_status, results }, created_at: new Date().toISOString() });
       }

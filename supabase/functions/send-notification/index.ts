@@ -1,10 +1,16 @@
 /// <reference path="../globals.d.ts" />
 import { handleCors, jsonResponse } from '../cors-config.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:example@example.com'
 const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+  { auth: { autoRefreshToken: false, persistSession: false } }
+)
 
 function absolutize(url: string): string {
   try {
@@ -37,20 +43,20 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
-      return jsonResponse({ success: false, error: 'Faltan claves VAPID en el servidor' }, 200)
+      return jsonResponse({ success: false, error: 'Faltan claves VAPID en el servidor' }, 500)
     }
 
     const body = await req.json().catch(() => ({}))
     const rawSub = body?.subscription || {}
     let keys = rawSub?.keys
     if (typeof keys === 'string') { try { keys = JSON.parse(keys) } catch { keys = undefined } }
-    if (!keys?.p256dh && rawSub?.p256dh && rawSub?.auth) { keys = { p256dh: rawSub.p256dh, auth: rawSub.auth } }
+    if ((!keys?.p256dh || !keys?.auth) && rawSub?.p256dh && rawSub?.auth) { keys = { p256dh: rawSub.p256dh, auth: rawSub.auth } }
     const endpoint: string = String(rawSub?.endpoint || '')
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
-      return jsonResponse({ success: false, error: 'Suscripción inválida' }, 200)
+      return jsonResponse({ success: false, error: 'Suscripción inválida' }, 400)
     }
 
-    const n = body?.notification || body || {}
+    const n = body?.notification ?? body ?? {}
     const title = String(n?.title || 'Notificación')
     const bodyText = String(n?.body || '')
     const icon = absolutize(n?.icon || '/img/android-chrome-192x192.png')
@@ -59,10 +65,20 @@ Deno.serve(async (req: Request) => {
     const url = absolutize((dataObj as any)?.url || '/')
     const payload = { title, body: bodyText, icon, badge, data: { ...dataObj, url } }
 
-    await push({ endpoint, keys }, payload)
-    return jsonResponse({ success: true }, 200)
+    try {
+      await push({ endpoint, keys }, payload)
+      return jsonResponse({ success: true }, 200)
+    } catch (err) {
+      const statusCode = (err as any)?.statusCode as number | undefined
+      if (statusCode === 404 || statusCode === 410) {
+        try { await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint) } catch (_) {}
+        return jsonResponse({ success: false, expired: true }, 410)
+      }
+      const msg = (err instanceof Error) ? (err.message || 'unknown_error') : (String(err) || 'unknown_error')
+      return jsonResponse({ success: false, error: msg, statusCode }, 500)
+    }
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Fallo inesperado'
-    return jsonResponse({ success: false, error: msg }, 200)
+    const msg = error instanceof Error ? (error.message || 'unknown_error') : (String(error) || 'unknown_error')
+    return jsonResponse({ success: false, error: msg }, 500)
   }
 })
