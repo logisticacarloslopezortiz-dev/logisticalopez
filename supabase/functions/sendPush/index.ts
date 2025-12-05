@@ -5,20 +5,12 @@ type SubscriptionKeys = { p256dh: string; auth: string }
 type WebPushSubscription = { endpoint: string; keys: SubscriptionKeys }
 
 async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
-  const webpush = await import('jsr:@negrel/webpush')
+  const { default: webpush } = await import('web-push')
   const pub = Deno.env.get('VAPID_PUBLIC_KEY')
   const priv = Deno.env.get('VAPID_PRIVATE_KEY')
-  const jwk = Deno.env.get('VAPID_JWK')
-  const subject = Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com'
   if (!pub || !priv) throw new Error('VAPID keys not configured')
-  let vapidKeys: any
-  try {
-    vapidKeys = jwk ? webpush.importVapidKeys(JSON.parse(jwk)) : { publicKey: pub, privateKey: priv }
-  } catch (_) {
-    vapidKeys = { publicKey: pub, privateKey: priv }
-  }
-  const appServer = await webpush.ApplicationServer.new({ contactInformation: subject, vapidKeys })
-  return await appServer.push(sub as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high' })
+  webpush.setVapidDetails('mailto:contacto@logisticalopezortiz.com', pub, priv)
+  return await webpush.sendNotification(sub as any, JSON.stringify(payload), { TTL: 2592000 })
 }
 
 Deno.serve(async (req: Request) => {

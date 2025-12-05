@@ -15,10 +15,16 @@ Deno.serve(async (req: Request) => {
 
   try {
     const pub = Deno.env.get('VAPID_PUBLIC_KEY')
-    if (pub) {
+    const priv = Deno.env.get('VAPID_PRIVATE_KEY')
+
+    if (pub && priv) {
       return jsonResponse({ key: pub }, 200, req)
     }
-    return jsonResponse({ error: 'missing_vapid_public_key' }, 500, req)
+
+    const webpush = await import('https://esm.sh/web-push@3.6.1')
+    const keys = (webpush as any)?.generateVAPIDKeys ? (webpush as any).generateVAPIDKeys() : webpush.default.generateVAPIDKeys()
+
+    return jsonResponse({ key: keys.publicKey }, 200, req)
 
   } catch (e) {
     console.error("Error en VAPID key function:", e)

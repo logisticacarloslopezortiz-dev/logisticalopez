@@ -47,27 +47,23 @@ function errorToString(err: unknown) {
 // Enviar PUSH
 // -------------------------------
 async function sendPush(sub: WebPushSubscription, payload: unknown) {
-  const webpush = await import('jsr:@negrel/webpush');
+  const webpush = await import('https://esm.sh/web-push@3.6.1');
 
   const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
   const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
-  const VAPID_JWK = Deno.env.get('VAPID_JWK');
   const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     throw new Error('Faltan claves VAPID en el servidor');
   }
 
-  let vapidKeys: any;
-  try {
-    vapidKeys = VAPID_JWK ? webpush.importVapidKeys(JSON.parse(VAPID_JWK)) : { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
-  } catch (_) {
-    vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
-  }
+  webpush.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
-  const appServer = await webpush.ApplicationServer.new({ contactInformation: VAPID_SUBJECT, vapidKeys });
-  const subscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } };
-  return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000 });
+  return await webpush.default.sendNotification(
+    sub,
+    JSON.stringify(payload),
+    { TTL: 2592000 }
+  );
 }
 
 // ===============================================================

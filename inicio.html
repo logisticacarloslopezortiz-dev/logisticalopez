@@ -86,7 +86,7 @@
         <p class="text-gray-600">Pedidos recientes, resumen diario y alertas importantes.</p>
       </div>
       <div class="flex items-center gap-3 bg-white rounded-lg shadow-sm px-4 py-2 border">
-        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold bg-primario-oscuro" id="adminAvatar">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold" id="adminAvatar" style="background-color: var(--color-primario-oscuro);">
           A
         </div>
         <div>
@@ -166,24 +166,6 @@
       <ul id="alertasLista" class="list-disc list-inside text-gray-700 space-y-2">
         <!-- Las alertas se cargarán aquí -->
       </ul>
-    </div>
-
-    <div class="card p-6 mt-6">
-      <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
-        <span class="icon-pill blue">
-          <i data-lucide="bell-ring" class="w-5 h-5 text-white"></i>
-        </span>
-        Notificaciones Push
-      </h2>
-      <div class="flex flex-wrap items-center gap-3 mb-3 text-sm text-gray-700">
-        <span id="pushStatusPerm">Permiso: —</span>
-        <span id="pushStatusSub">Suscripción: —</span>
-      </div>
-      <div class="flex flex-wrap gap-3">
-        <button id="pushEnableBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">Activar</button>
-        <button id="pushDisableBtn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm font-semibold hover:bg-gray-300">Desactivar</button>
-        <button id="pushTestBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700">Probar</button>
-      </div>
     </div>
 
     <!-- Tabla de pedidos recientes -->
@@ -373,42 +355,19 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> <!-- 1. Librería de Supabase -->
-  <script src="js/supabase-config.js?v=20251204"></script> <!-- 2. Configuración de Supabase -->
-  <script src="js/push-notifications.js?v=20251204"></script>
-  <script src="js/notifications.js?v=20251204"></script> <!-- 3. Scripts de notificaciones -->
+  <script src="js/supabase-config.js"></script> <!-- 2. Configuración de Supabase -->
+  <script src="js/push-notifications.js"></script>
+  <script src="js/notifications.js"></script> <!-- 3. Scripts de notificaciones -->
   
   <!-- Scripts de UI y PWA -->
-  <script src="js/sidebar.js?v=20251204"></script> <!-- 4. Script de la barra lateral -->
-  <script src="js/pwa.js?v=20251204"></script> <!-- 5. Script para PWA -->
+  <script src="js/sidebar.js"></script> <!-- 4. Script de la barra lateral -->
+  <script src="js/pwa.js"></script> <!-- 5. Script para PWA -->
 
   <!-- Lógica centralizada de gestión de órdenes -->
-  <script src="js/order-manager.js?v=20251204"></script>
+  <script src="js/order-manager.js"></script>
 
   <!-- Lógica principal de la página de inicio -->
-  <script src="js/inicio.js?v=20251204"></script>
-  <script>
-    (function(){
-      function updatePushUI(){
-        var permEl = document.getElementById('pushStatusPerm');
-        var subEl = document.getElementById('pushStatusSub');
-        if (!permEl || !subEl || !window.pushNotifications) return;
-        var perm = window.pushNotifications.permission;
-        var isSub = window.pushNotifications.isEnabled ? 'Activa' : 'Inactiva';
-        permEl.textContent = 'Permiso: ' + (perm || '—');
-        subEl.textContent = 'Suscripción: ' + isSub;
-      }
-      function wire(){
-        var en = document.getElementById('pushEnableBtn');
-        var dis = document.getElementById('pushDisableBtn');
-        var tst = document.getElementById('pushTestBtn');
-        if (en) en.addEventListener('click', async function(){ try { await window.pushNotifications.enable(); notifications.success('Push activado'); } catch(e){ notifications.error('No se pudo activar push'); } finally { updatePushUI(); }});
-        if (dis) dis.addEventListener('click', async function(){ try { await window.pushNotifications.disable(); notifications.info('Push desactivado'); } catch(e){ notifications.error('No se pudo desactivar push'); } finally { updatePushUI(); }});
-        if (tst) tst.addEventListener('click', async function(){ try { await window.pushNotifications.sendTest(); notifications.success('Enviado'); } catch(e){ notifications.error('No se pudo enviar prueba'); } finally { updatePushUI(); }});
-        updatePushUI();
-      }
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
-    })();
-  </script>
+  <script src="js/inicio.js"></script>
 
 </body>
 </html>

@@ -70,8 +70,6 @@
 </head>
 <body class="bg-white text-gray-800">
 
-  <!-- Ejemplo de comentario: Esta línea sirve solo para documentar -->
-
   <!-- Header -->
   <header id="main-header" class="fixed w-full bg-white shadow-lg z-50 transition-all duration-300 h-20">
     <div class="container mx-auto flex justify-between items-center px-4 h-full">
@@ -187,19 +185,19 @@
     <div class="relative z-10 max-w-7xl mx-auto px-6 w-full">
       <div class="flex justify-center md:justify-start">
         <!-- Contenido de texto (alineado a la izquierda) -->
-        <div class="md:w-1/2 lg:w-2/5 text-left">
-          <h2 class="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight animate-on-scroll" style="text-shadow: 2px 2px 8px rgba(0,0,0,0.7);">
+        <div class="md:w-1/2 lg:w-2/5 text-left animate-fadeInUp">
+          <h2 class="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight opacity-0" style="text-shadow: 2px 2px 8px rgba(0,0,0,0.7);">
             Más que transporte, movemos confianza.
           </h2>
 
-          <p class="mt-6 text-lg md:text-xl text-white/90 max-w-xl mx-auto md:mx-0 animate-on-scroll" style="text-shadow: 1px 1px 6px rgba(0,0,0,0.7);">
+          <p class="mt-6 text-lg md:text-xl text-white/90 max-w-xl mx-auto md:mx-0 opacity-0" style="text-shadow: 1px 1px 6px rgba(0,0,0,0.7);">
             En Logística López Ortiz, cuidamos tu carga como si fuera nuestra.
           </p>
-          <p class="mt-2 text-lg md:text-xl text-white/90 max-w-xl mx-auto md:mx-0 animate-on-scroll" style="text-shadow: 1px 1px 6px rgba(0,0,0,0.7);">
+          <p class="mt-2 text-lg md:text-xl text-white/90 max-w-xl mx-auto md:mx-0 opacity-0" style="text-shadow: 1px 1px 6px rgba(0,0,0,0.7);">
             Con tecnología, compromiso y puntualidad, garantizamos que llegue segura y a tiempo.
           </p>
 
-          <div class="mt-8 flex flex-col sm:flex-row justify-start items-center gap-4 animate-on-scroll" data-anim-delay="0.1s">
+          <div class="mt-8 flex flex-col sm:flex-row justify-start items-center gap-4 opacity-0">
             <a href="cliente.html" class="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-acento hover:bg-yellow-500 text-slate-900 px-8 py-3 rounded-xl shadow-lg font-bold transition-transform hover:scale-105" aria-label="Comenzar solicitud">
               🚚 Comenzar Solicitud
             </a>
@@ -212,8 +210,6 @@
       </div>
     </div>
   </section>
-
-  
 
   <!-- Modal de Instalación para iOS -->
   <div id="ios-install-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4">
@@ -339,45 +335,10 @@
   </section>
 
   <section id="testimonios" class="py-16 lg:py-24 bg-white">
-    <div class="max-w-7xl mx-auto px-6">
-      <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-4 animate-on-scroll">Qué opinan nuestros clientes</h3>
-      <p class="max-w-2xl text-gray-600 mb-10 animate-on-scroll">Experiencias reales que destacan puntualidad, cuidado y comunicación clara en cada servicio.</p>
-      <div id="testimonialsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <article class="rounded-2xl border border-gray-100 shadow-sm p-6 bg-white animate-on-scroll">
-          <div class="flex items-center gap-4 mb-4">
-            <img src="https://i.pravatar.cc/100?img=13" alt="Avatar de cliente" class="w-12 h-12 rounded-full object-cover" referrerpolicy="no-referrer">
-            <div>
-              <h4 class="font-semibold text-gray-900">María Fernández</h4>
-              <div class="text-yellow-500 text-sm">
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-regular fa-star"></i>
-              </div>
-            </div>
-          </div>
-          <p class="text-gray-700 leading-relaxed">Excelente experiencia. El equipo fue puntual y el seguimiento en tiempo real me dio mucha tranquilidad. ¡Recomendados!</p>
-          <div class="mt-4 text-xs text-gray-500">Servicio: Flete Santo Domingo → San Cristóbal · Enero 2025</div>
-        </article>
-        <article class="rounded-2xl border border-gray-100 shadow-sm p-6 bg-white animate-on-scroll" data-anim-delay="0.15s">
-          <div class="flex items-center gap-4 mb-4">
-            <img src="https://i.pravatar.cc/100?img=32" alt="Avatar de cliente" class="w-12 h-12 rounded-full object-cover" referrerpolicy="no-referrer">
-            <div>
-              <h4 class="font-semibold text-gray-900">José Martínez</h4>
-              <div class="text-yellow-500 text-sm">
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-              </div>
-            </div>
-          </div>
-          <p class="text-gray-700 leading-relaxed">Muy profesionales y cuidadosos con la carga. Me gustó que avisan cada etapa y cumplen el tiempo estimado.</p>
-          <div class="mt-4 text-xs text-gray-500">Servicio: Mudanza residencial · Febrero 2025</div>
-        </article>
-      </div>
+    <div class="max-w-7xl mx-auto px-6 text-center">
+      <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-12">Opiniones de Clientes</h3>
+      <div id="testimonialsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+      <div id="testimonialsEmpty" class="hidden text-gray-600">Aún no hay testimonios disponibles.</div>
     </div>
   </section>
 
@@ -521,24 +482,6 @@
       if (animationSection) {
         observer.observe(animationSection);
       }
-
-      // Animación genérica por scroll para elementos con clase 'animate-on-scroll'
-      const scrollEls = Array.from(document.querySelectorAll('.animate-on-scroll'));
-      scrollEls.forEach(el => {
-        el.style.opacity = '0';
-        const delay = el.getAttribute('data-anim-delay') || '0s';
-        const onEntry = (entries, obs) => {
-          entries.forEach(entry => {
-            if (!entry.isIntersecting) return;
-            el.style.opacity = '1';
-            el.style.animationDelay = delay;
-            el.classList.add('animate-fadeInUp');
-            obs.unobserve(el);
-          });
-        };
-        const obs = new IntersectionObserver(onEntry, { threshold: 0.2 });
-        obs.observe(el);
-      });
     });
     // --- FIN: Lógica para activar animación ---
   </script>

@@ -108,20 +108,6 @@ self.addEventListener('fetch', (event) => {
           await cache.put(event.request, networkResponse.clone());
         } catch (_) {}
       }
-      if (
-        networkResponse && networkResponse.ok &&
-        ['script', 'style', 'image', 'font'].includes(dest) &&
-        url.origin === self.location.origin
-      ) {
-        try {
-          const forHeaders = networkResponse.clone();
-          const bodyBlob = await forHeaders.blob();
-          const headers = new Headers(forHeaders.headers);
-          if (!headers.has('Cache-Control')) headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-          headers.set('X-Content-Type-Options', 'nosniff');
-          return new Response(bodyBlob, { status: forHeaders.status, statusText: forHeaders.statusText, headers });
-        } catch (_) { }
-      }
       return networkResponse;
     } catch (e) {
       // Fallback a caché si existe
@@ -165,33 +151,14 @@ self.addEventListener('push', (event) => {
     requireInteraction: true,
     renotify: true,
     tag: orderId ? `tlc-order-${orderId}` : 'tlc-order',
-    data: { url: builtUrl },
-    actions: [
-      { action: 'open', title: 'Ver', icon: '/img/android-chrome-192x192.png' },
-      { action: 'dismiss', title: 'Ignorar' }
-    ]
+    data: { url: builtUrl }
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || '/';
-  const action = event.action;
-  if (action === 'dismiss') {
-    return;
-  }
-  event.waitUntil((async () => {
-    const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const client of allClients) {
-      try {
-        const url = new URL(client.url);
-        if (url.pathname === new URL(targetUrl, self.location.origin).pathname) {
-          client.focus();
-          return;
-        }
-      } catch (_) { }
-    }
-    await clients.openWindow(targetUrl);
-  })());
+  event.waitUntil(
+    clients.openWindow(event.notification.data.url)
+  );
 });
