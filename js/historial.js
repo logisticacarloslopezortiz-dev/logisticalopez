@@ -194,18 +194,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
 
       const labelValue = async (label, value, labelW = 38) => {
+        // Si el valor es nulo, indefinido o una cadena vacía, no hacer nada.
+        if (value === null || value === undefined || value === '') {
+          return;
+        }
+
         const leftX = margin;
         const rightX = margin + labelW;
         const maxW = contentWidth - labelW;
-        const vLines = doc.splitTextToSize(String(value || 'N/A'), maxW);
+        const vLines = doc.splitTextToSize(String(value), maxW);
         const h = Math.max(8, vLines.length * 6);
+
         await ensureSpace(h + 2);
+
         doc.setFont(undefined, 'bold');
         doc.setFontSize(11);
         doc.text(String(label || ''), leftX, y);
+
         doc.setFont(undefined, 'normal');
         doc.setFontSize(11);
         doc.text(vLines, rightX, y);
+
         y += h;
       };
 
@@ -233,8 +242,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       doc.setFont(undefined, 'bold');
       await textBlock('Resumen del Servicio', { size: 13, style: 'bold' });
       doc.setFont(undefined, 'normal');
-      await labelValue('Servicio:', order.service?.name || order.service_name || 'N/A');
-      await labelValue('Vehículo:', order.vehicle?.name || order.vehicle_name || 'N/A');
+      await labelValue('Servicio:', order.service?.name || order.service_name);
+      await labelValue('Vehículo:', order.vehicle?.name || order.vehicle_name);
       await labelValue('Fecha solicitud:', formatDate(order.created_at));
       await labelValue('Fecha servicio:', `${order.date || 'N/A'} ${order.time || ''}`);
       await labelValue('Estado:', order.status || 'N/A');

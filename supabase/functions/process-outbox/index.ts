@@ -31,17 +31,36 @@ async function logDb(supabase: SupabaseClientLike, fn_name: string, level: 'info
   try { await supabase.from('function_logs').insert({ fn_name, level, message, payload }); } catch (_) { void 0; }
 }
 
+import { sendNotification, type PushSubscription } from "https://deno.land/x/web_push@0.3.0/mod.ts";
+
 async function sendWebPush(endpoint: string, payload: unknown, keys: { p256dh: string; auth: string }, attempts = 3): Promise<void> {
-  const webpush = await import('web-push');
   const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
   const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
   const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('Faltan claves VAPID');
-  webpush.default.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+  const subscription: PushSubscription = {
+    endpoint,
+    keys: {
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+    },
+  };
 
   for (let i = 0; i < attempts; i++) {
     try {
-      await webpush.default.sendNotification({ endpoint, keys }, JSON.stringify(payload), { TTL: 600 });
+      await sendNotification(
+        subscription,
+        JSON.stringify(payload),
+        {
+          vapid: {
+            publicKey: VAPID_PUBLIC_KEY,
+            privateKey: VAPID_PRIVATE_KEY,
+            subject: VAPID_SUBJECT,
+          },
+          ttl: 600,
+        }
+      );
       return;
     } catch (err) {
       if (i === attempts - 1) throw err;
@@ -50,13 +69,57 @@ async function sendWebPush(endpoint: string, payload: unknown, keys: { p256dh: s
   }
 }
 
+const BASE_URL = 'https://logisticalopezortiz.com';
+
 function buildPayloadFromOutbox(row: OutboxRow) {
   const p = row.payload ?? {};
   const title = String(p['title'] ?? (row.new_status ? `Actualización de orden` : 'Notificación'));
   const body = String(p['body'] ?? (row.new_status ? `La orden #${row.order_id} cambió a ${row.new_status}` : ''));
-  const icon = String(p['icon'] ?? 'https://logisticalopezortiz.com/img/android-chrome-192x192.png');
-  const data = { orderId: row.order_id, newStatus: row.new_status, ...((p['data'] ?? {}) as Record<string, unknown>) };
+
+  // Asegurar URL absoluta para el ícono
+  let icon = String(p['icon'] ?? '/img/android-chrome-192x192.png');
+  if (icon.startsWith('/')) {
+    icon = BASE_URL + icon;
+  }
+
+  const data = {
+    orderId: row.order_id,
+    newStatus: row.new_status,
+    ...((p['data'] ?? {}) as Record<string, unknown>)
+  };
+
+  // Asegurar URL absoluta para la redirección
+  if (typeof data.url === 'string' && data.url.startsWith('/')) {
+    data.url = BASE_URL + data.url;
+  }
+
   return { title, body, icon, data };
+}
+
+function parseSubscriptionRow(row: any): WebPushSubscription | null {
+  if (!row || !row.endpoint) return null;
+  let keys: { p256dh?: string; auth?: string } | undefined;
+
+  if (row.keys) {
+    if (typeof row.keys === 'object' && row.keys !== null) {
+      keys = row.keys;
+    } else if (typeof row.keys === 'string') {
+      try {
+        keys = JSON.parse(row.keys);
+      } catch {
+        keys = undefined;
+      }
+    }
+  }
+
+  if ((!keys?.p256dh || !keys?.auth) && row.p256dh && row.auth) {
+    keys = { p256dh: row.p256dh, auth: row.auth };
+  }
+
+  if (keys?.p256dh && keys?.auth) {
+    return { endpoint: row.endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } };
+  }
+  return null;
 }
 
 async function fetchSubscriptions(supabase: SupabaseClientLike, userId?: string, contactId?: string): Promise<WebPushSubscription[]> {
@@ -70,14 +133,10 @@ async function fetchSubscriptions(supabase: SupabaseClientLike, userId?: string,
     const r = await (supabase as any).from('push_subscriptions').select('endpoint, keys, p256dh, auth').eq(q.column, q.id);
     const rows = r.data ?? [];
     for (const row of rows) {
-      let keys: { p256dh?: string; auth?: string } | undefined;
-      if (row.keys && typeof row.keys === 'string') { try { keys = JSON.parse(row.keys); } catch { keys = undefined; } }
-      else if (row.keys && typeof row.keys === 'object') keys = row.keys;
-      if (!keys?.p256dh) keys = { p256dh: row.p256dh, auth: row.auth };
-      const endpoint = row.endpoint;
-      if (endpoint && keys?.p256dh && keys?.auth && !seen.has(endpoint)) {
-        seen.add(endpoint);
-        out.push({ endpoint, keys: { p256dh: keys.p256dh!, auth: keys.auth! } });
+      const sub = parseSubscriptionRow(row);
+      if (sub && !seen.has(sub.endpoint)) {
+        seen.add(sub.endpoint);
+        out.push(sub);
       }
     }
   }
@@ -105,14 +164,10 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise
         const rows = r.data ?? [];
         const seen = new Set<string>();
         for (const rowS of rows) {
-          let keys: { p256dh?: string; auth?: string } | undefined;
-          if (rowS.keys && typeof rowS.keys === 'string') { try { keys = JSON.parse(rowS.keys); } catch { keys = undefined; } }
-          else if (rowS.keys && typeof rowS.keys === 'object') keys = rowS.keys;
-          if (!keys?.p256dh) keys = { p256dh: rowS.p256dh, auth: rowS.auth };
-          const endpoint = rowS.endpoint;
-          if (endpoint && keys?.p256dh && keys?.auth && !seen.has(endpoint)) {
-            seen.add(endpoint);
-            subscriptions.push({ endpoint, keys: { p256dh: keys.p256dh!, auth: keys.auth! } });
+          const sub = parseSubscriptionRow(rowS);
+          if (sub && !seen.has(sub.endpoint)) {
+            seen.add(sub.endpoint);
+            subscriptions.push(sub);
           }
         }
       }
@@ -150,7 +205,7 @@ async function processRow(supabase: SupabaseClientLike, row: OutboxRow): Promise
     return { successCount: 0, failCount: 0 };
   }
 
-  const payload = { notification: { title, body, icon, vibrate: [100, 50, 100], data: { ...data } } };
+  const payload = { title, body, icon, vibrate: [100, 50, 100], data };
   const results: Array<{ success: boolean; endpoint: string; error?: string }> = [];
 
   await Promise.all(subscriptions.map(async (sub) => {

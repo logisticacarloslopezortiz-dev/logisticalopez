@@ -10,8 +10,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (isAdminPage) {
-        const userRole = localStorage.getItem('userRole');
-        if (userRole !== 'administrador') {
+        try {
+            const { data, error } = await supabaseConfig.client.rpc('is_admin');
+            if (error || !data) {
+                console.warn('Fallo en la verificación de admin o el usuario no es admin:', error);
+                try { localStorage.clear(); } catch(_){}
+                try { await supabaseConfig.client.auth.signOut(); } catch(_){}
+                window.location.href = 'login.html';
+                return;
+            }
+        } catch (rpcError) {
+            console.error('Error catastrófico llamando a is_admin RPC:', rpcError);
             try { localStorage.clear(); } catch(_){}
             try { await supabaseConfig.client.auth.signOut(); } catch(_){}
             window.location.href = 'login.html';
