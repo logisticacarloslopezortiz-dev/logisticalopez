@@ -490,3 +490,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // Estado inicial
   setRealtimeDotOnline(navigator.onLine);
 });
+
+// Indicador de latencia de notificaciones
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const el = document.getElementById('notifLatencyIndicator');
+    if (!el) return;
+    const v = localStorage.getItem('tlc_outbox_latency_ms');
+    if (v) {
+      const ms = parseInt(v, 10);
+      if (!isNaN(ms)) el.textContent = 'Notificaciones en tiempo real (latencia: ' + ms + ' ms)';
+    }
+  } catch(_) {}
+});
+
+// Auto-recarga suave: cada 30s si visible
+document.addEventListener('DOMContentLoaded', () => {
+  let last = Date.now();
+  function tick(){
+    const now = Date.now();
+    const diff = now - last;
+    if (document.visibilityState === 'visible' && diff >= 30000) {
+      location.reload();
+    }
+  }
+  setInterval(tick, 5000);
+});

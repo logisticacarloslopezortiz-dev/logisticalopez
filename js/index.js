@@ -147,3 +147,78 @@ document.addEventListener('DOMContentLoaded', async () => {
   }).join('');
   grid.innerHTML = html;
 });
+
+// --- Animaciones con IntersectionObserver centralizadas ---
+document.addEventListener('DOMContentLoaded', () => {
+  const animationSection = document.getElementById('animation-section');
+  const truck = document.getElementById('truck-animation');
+  const package1 = document.getElementById('package-animation-1');
+  const package2 = document.getElementById('package-animation-2');
+  const actionButtons = document.getElementById('action-buttons');
+
+  const elementsToAnimate = [
+    { el: truck, animClass: 'animate-truck-loop' },
+    { el: package1, animClass: 'animate-package-loop-1' },
+    { el: package2, animClass: 'animate-package-loop-2' },
+    { el: actionButtons, animClass: 'animate-button-loop' }
+  ];
+
+  elementsToAnimate.forEach(({ el }) => el && (el.style.opacity = '0'));
+
+  const observerCallback = (entries, observer) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      elementsToAnimate.forEach(({ el, animClass }) => {
+        if (el) {
+          el.style.opacity = '1';
+          el.classList.add(animClass);
+        }
+      });
+      observer.unobserve(entry.target);
+    });
+  };
+
+  const observer = new IntersectionObserver(observerCallback, { threshold: 0.5 });
+  if (animationSection) observer.observe(animationSection);
+
+  const scrollEls = Array.from(document.querySelectorAll('.animate-on-scroll'));
+  scrollEls.forEach(el => {
+    el.style.opacity = '0';
+    const delay = el.getAttribute('data-anim-delay') || '0s';
+    const onEntry = (entries, obs) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        el.style.opacity = '1';
+        el.style.animationDelay = delay;
+        el.classList.add('animate-fadeInUp');
+        obs.unobserve(el);
+      });
+    };
+    const obs = new IntersectionObserver(onEntry, { threshold: 0.2 });
+    obs.observe(el);
+  });
+});
+
+// --- Formulario de colaboración: abrir WhatsApp ---
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('colaborador-form');
+  if (!form) return;
+  form.addEventListener('submit', function(event) {
+    event.preventDefault();
+    const nombreEl = document.getElementById('nombre');
+    const telefonoEl = document.getElementById('telefono');
+    const mensajeEl = document.getElementById('mensaje');
+    const nombre = (nombreEl && 'value' in nombreEl) ? nombreEl.value : '';
+    const telefono = (telefonoEl && 'value' in telefonoEl) ? telefonoEl.value : '';
+    const mensaje = (mensajeEl && 'value' in mensajeEl) ? mensajeEl.value : '';
+    if (!nombre.trim() || !telefono.trim()) {
+      alert('Por favor, completa tu nombre y teléfono.');
+      return;
+    }
+    const numeroEmpresa = '18297293822';
+    let textoWhatsApp = `¡Hola! Quisiera colaborar con ustedes.\n\n*Nombre:* ${nombre}\n*Teléfono:* ${telefono}`;
+    if (mensaje) textoWhatsApp += `\n\n*Mensaje:* ${mensaje}`;
+    const urlWhatsApp = `https://wa.me/${numeroEmpresa}?text=${encodeURIComponent(textoWhatsApp)}`;
+    window.open(urlWhatsApp, '_blank');
+  });
+});

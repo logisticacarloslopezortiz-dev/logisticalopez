@@ -28,97 +28,8 @@
 
   <!-- Lucide Icons (CDN unificado) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function(){
-      try {
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-          window.lucide.createIcons();
-        }
-      } catch(_){ }
-    });
-  </script>
 
-  <style>
-    :root {
-      --color-primario-oscuro: #1E405A;
-      --color-primario-turquesa: #1E8A95;
-      --color-acento-amarillo: #FBBF24;
-    }
-    .text-turquoise {
-      color: var(--color-primario-turquesa);
-    }
-    .glass-effect {
-      backdrop-filter: blur(10px);
-      background: rgba(255, 255, 255, 0.9);
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-      transition: all 0.3s ease;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
-    }
-
-    .status-badge {
-      padding: 0.25rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.875rem;
-      font-weight: 500;
-    }
-
-    .status-Pendiente { background-color: #fef3c7; color: #92400e; } /* yellow */
-    .status-Aceptada, .status-En-proceso { background-color: #dbeafe; color: #1e40af; } /* blue */
-    .status-En-camino-a-recoger, .status-En-origen, .status-En-curso, .status-En-destino { background-color: #e9d5ff; color: #6b21a8; } /* purple */
-    .status-Completada { background-color: #dcfce7; color: #166534; } /* green */
-    .status-Cancelada { background-color: #fee2e2; color: #991b1b; } /* red */
-
-    .timeline-item {
-      position: relative;
-      padding-left: 2rem;
-      padding-bottom: 1.5rem;
-    }
-
-    .timeline-item::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0.5rem;
-      width: 1rem;
-      height: 1rem;
-      background-color: #e5e7eb; /* bg-gray-200 */
-      border-radius: 9999px;
-      border: 3px solid white;
-      z-index: 10;
-    }
-
-    .timeline-item.active::before {
-      background-color: #2563eb; /* blue-600 */
-    }
-
-    .timeline-item::after {
-      content: '';
-      position: absolute;
-      left: 0.5rem; /* left-2 = 0.5rem */
-      top: 1.5rem;   /* top-6 = 1.5rem */
-      width: 2px;
-      height: 100%;
-      background-color: #e5e7eb; /* bg-gray-200 */
-    }
-
-    .timeline-item:last-child::after {
-      display: none;
-    }
-
-    /* Indicador de actualización en tiempo real bajo el título del timeline */
-    .realtime-indicator { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
-    .realtime-dot { width: 0.55rem; height: 0.55rem; border-radius: 9999px; background: #10B981; box-shadow: 0 0 8px rgba(16,185,129,0.35); }
-    .realtime-dot.offline { background: #f97316; box-shadow: 0 0 8px rgba(249,115,22,0.35); }
-    .pulse-flash { animation: realtime-pulse 1.1s ease-in-out; }
-    @keyframes realtime-pulse { 0% { transform: scale(1); box-shadow: 0 0 6px rgba(16,185,129,0.25); } 50% { transform: scale(1.35); box-shadow: 0 0 18px rgba(16,185,129,0.45); } 100% { transform: scale(1); box-shadow: 0 0 6px rgba(16,185,129,0.25); } }
-  </style>
+  <link href="css/seguimiento-styles.css" rel="stylesheet">
 </head>
 <body class="bg-gray-50 min-h-screen">
 
@@ -283,33 +194,5 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/seguimiento.js?v=1.0"></script>
-  <script>
-    (function(){
-      try{
-        var el = document.getElementById('notifLatencyIndicator');
-        if(!el) return;
-        var v = localStorage.getItem('tlc_outbox_latency_ms');
-        if(v){
-          var ms = parseInt(v,10);
-          if(!isNaN(ms)) el.textContent = 'Notificaciones en tiempo real (latencia: ' + ms + ' ms)';
-        }
-      }catch(_){}
-    })();
-  </script>
-  <script>
-    // Recarga automática cada 30s si la página está visible
-    (function(){
-      var last = Date.now();
-      function tick(){
-        var now = Date.now();
-        var diff = now - last;
-        // Evitar recargas si la página no está activa
-        if (document.visibilityState === 'visible' && diff >= 30000) {
-          location.reload();
-        }
-      }
-      setInterval(tick, 5000);
-    })();
-  </script>
 </body>
 </html>

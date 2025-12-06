@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mainContent = document.getElementById('main-content');
     const toggleButton = document.getElementById('sidebar-toggle');
     const logoutButton = document.getElementById('logout-button');
+    const logoutMobile = document.getElementById('logout-button-mobile');
     const mobileToggle = document.getElementById('mobileSidebarToggle');
     const sidebarOverlay = document.getElementById('sidebarOverlay');
     
@@ -155,17 +156,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- FIN: Lógica de Sidebar Mejorada ---
 
     // --- INICIO: Lógica de Logout ---
+    async function performLogout(){
+        const { error } = await supabaseConfig.client.auth.signOut();
+        localStorage.clear();
+        if (error) {
+            console.error('Error al cerrar sesión:', error);
+        }
+        window.location.href = loginHref;
+    }
+
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
-            const { error } = await supabaseConfig.client.auth.signOut();
-            
-            // ✅ MEJORA: Limpieza completa de localStorage para asegurar que no queden datos de la sesión anterior.
-            localStorage.clear();
-
-            if (error) {
-                console.error('Error al cerrar sesión:', error);
-            }
-            window.location.href = loginHref;
+            await performLogout();
+        });
+    }
+    if (logoutMobile) {
+        logoutMobile.addEventListener('click', async () => {
+            await performLogout();
         });
     }
 });

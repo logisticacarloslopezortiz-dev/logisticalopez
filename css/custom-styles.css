@@ -20,6 +20,9 @@
   --azul-oscuro: #1E405A;
   --azul-claro: #1E8A95;
   --acento: #FBBF24;
+  --color-primario: #1E405A;
+  --color-secundario: #1E8A95;
+  --color-acento: #FBBF24;
 }
 
 .bg-azulOscuro { background-color: var(--azul-oscuro) !important; }
@@ -34,7 +37,27 @@
 .text-acento { color: var(--acento) !important; }
 .border-acento { border-color: var(--acento) !important; }
 
+/* Aliases globales de colores */
+.bg-primario { background-color: var(--color-primario) !important; }
+.text-primario { color: var(--color-primario) !important; }
+.border-primario { border-color: var(--color-primario) !important; }
+
+.bg-secundario { background-color: var(--color-secundario) !important; }
+.text-secundario { color: var(--color-secundario) !important; }
+.border-secundario { border-color: var(--color-secundario) !important; }
+
+.bg-acento-global { background-color: var(--color-acento) !important; }
+.text-acento-global { color: var(--color-acento) !important; }
+.border-acento-global { border-color: var(--color-acento) !important; }
+
 /* Estados hover comunes usados en HTML */
 .hover\:bg-azulOscuro\/90:hover { background-color: var(--azul-oscuro) !important; opacity: 0.9; }
 
 .header-hidden { transform: translateY(-100%); }
+
+/* CTA efecto ripple en Ver Estado (centralizado) */
+.cta-view-status { position: relative; overflow: hidden; cursor: pointer; }
+.cta-view-status::after { content:''; position:absolute; top:50%; left:50%; width:0; height:0; background: rgba(255,255,255,0.2); border-radius: 9999px; transform: translate(-50%, -50%); transition: width .25s ease, height .25s ease; }
+.cta-view-status:hover::after { width: 160%; height: 160%; }
+.cta-view-status .fa-arrow-right { transition: transform .2s ease; }
+.cta-view-status:hover .fa-arrow-right { transform: translateX(4px); }

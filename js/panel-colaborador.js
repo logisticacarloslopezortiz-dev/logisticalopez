@@ -886,25 +886,77 @@ function generateActiveJobButtons(orderId, order) {
     'completada': { bg: 'linear-gradient(90deg,#10B981,#34D399)', color: '#ffffff' }
   };
 
-  // Renderizar botones
+  // Determinar secuencia y habilitación
+  const baseFlow = ['en camino a recoger','cargando','en camino a entregar'];
+  function idxOf(st){
+    switch(st){
+      case 'en camino a recoger': return 0;
+      case 'cargando': return 1;
+      case 'en camino a entregar': return 2;
+      case 'completada': return 3;
+      default: return -1;
+    }
+  }
+  const currIdx = idxOf(status);
+  const nextAllowed = currIdx === -1 ? 'en camino a recoger' : (currIdx < 2 ? baseFlow[currIdx+1] : null);
+  const canDelay = true;
+  const canFinalize = currIdx >= 2;
+
+  // Renderizar botones con habilitación, resaltando el siguiente paso
   container.innerHTML = buttons
     .filter(b => b.show)
-    .map(b => `
-      <button data-status="${b.status}" class="${b.class} hover:shadow-lg transform hover:scale-105 active:scale-95 transition-all" title="${b.label}" style="padding: 0.6rem 1rem; border-radius: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; border: none; cursor: pointer; box-shadow: 0 6px 18px rgba(2,6,23,0.1); background:${gradient[b.status].bg}; color:${gradient[b.status].color};">
-        <i data-lucide="${b.icon}" class="w-4 h-4"></i>
-        <span>${b.label}</span>
-      </button>
-    `)
+    .map(b => {
+      const isNext = b.status === nextAllowed;
+      const enabled = (b.status === nextAllowed) || (b.status === 'retraso por tapon' && canDelay) || (b.status === 'completada' && canFinalize);
+      const disabledCls = enabled ? '' : 'opacity-60 cursor-not-allowed';
+      const highlight = isNext ? 'ring-2 ring-[var(--acento)]' : '';
+      return `
+        <button data-status="${b.status}" class="${b.class} ${disabledCls} ${highlight} hover:shadow-lg transform hover:scale-105 active:scale-95 transition-all" title="${b.label}" style="padding: 0.6rem 1rem; border-radius: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; border: none; cursor: pointer; box-shadow: 0 6px 18px rgba(2,6,23,0.1); background:${gradient[b.status].bg}; color:${gradient[b.status].color};">
+          <i data-lucide="${b.icon}" class="w-4 h-4"></i>
+          <span>${b.label}</span>
+        </button>
+      `;
+    })
     .join('');
 
   // Actualizar iconos de Lucide
   if (window.lucide) lucide.createIcons();
+
+  // Renderizar stepper de progreso
+  const stepper = document.getElementById('activeJobStepper');
+  if (stepper) {
+    const steps = [
+      { key: 'en camino a recoger', label: 'Recoger' },
+      { key: 'cargando', label: 'Carga' },
+      { key: 'en camino a entregar', label: 'Entrega' },
+      { key: 'completada', label: 'Finalizar' }
+    ];
+    const currentIndex = Math.max(0, idxOf(status));
+    const htmlStepper = steps.map((stp, i) => {
+      const isDone = i < currentIndex || status === 'completada';
+      const isActive = i === currentIndex && status !== 'completada';
+      const chipClass = isDone ? 'bg-emerald-100 text-emerald-700' : (isActive ? 'ring-2 ring-[var(--acento)] bg-white text-gray-800' : 'bg-gray-100 text-gray-500');
+      const icon = isDone ? 'check' : (isActive ? 'circle' : 'dot');
+      return `
+        <div class="flex items-center gap-2">
+          <div class="px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 ${chipClass}">
+            <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
+            <span>${stp.label}</span>
+          </div>
+          ${i < steps.length - 1 ? '<div class="w-8 h-px bg-gray-300"></div>' : ''}
+        </div>
+      `;
+    }).join('');
+    stepper.innerHTML = htmlStepper;
+    if (window.lucide) lucide.createIcons();
+  }
 
   // Agregar listeners de click
   container.querySelectorAll('[data-status]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (btn.classList.contains('cursor-not-allowed')) return;
       const newStatus = btn.getAttribute('data-status');
       console.log('Button clicked, updating status to:', newStatus);
       await updateOrderStatus(orderId, newStatus);
@@ -915,25 +967,56 @@ function generateActiveJobButtons(orderId, order) {
 // Actualizar estado de la orden y UI
 async function updateOrderStatus(orderId, newStatus) {
   try {
+    const current = await supabaseConfig.getOrderById(orderId);
+    const currentStatus = String(current?.status || '').toLowerCase();
+    const baseFlow = ['en camino a recoger','cargando','en camino a entregar'];
+    function idxOf(st){
+      switch(st){
+        case 'en camino a recoger': return 0;
+        case 'cargando': return 1;
+        case 'en camino a entregar': return 2;
+        case 'completada': return 3;
+        default: return -1;
+      }
+    }
+    const isDelay = String(newStatus).toLowerCase() === 'retraso por tapon';
+    const isFinalize = String(newStatus).toLowerCase() === 'completada';
+    const currIdx = idxOf(currentStatus);
+    const targetIdx = idxOf(String(newStatus).toLowerCase());
+    let allowed = false;
+    if (isDelay) {
+      allowed = true;
+    } else if (isFinalize) {
+      // Requiere evidencia fotográfica
+      const ok = await canFinalizeOrder(orderId);
+      if (!ok) { showWarning('Debes subir evidencia fotográfica antes de finalizar.'); return; }
+      allowed = currIdx >= 2;
+    } else {
+      allowed = (currIdx === -1 && targetIdx === 0) || (targetIdx === currIdx + 1);
+    }
+    if (!allowed) { showWarning('Acción no permitida: respeta la secuencia'); return; }
     // Crear etiqueta legible: "en camino a recoger" -> "En camino a recoger"
     const statusLabel = String(newStatus)
       .split(' ')
       .map((word, idx) => idx === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word)
       .join(' ');
-    
+
     console.log('Updating order status:', { orderId, newStatus, statusLabel });
     
-    // Actualizar en BD
+    // UI optimista: reflejar cambios antes de confirmar en BD
+    persistActiveJob(orderId, statusLabel);
+    updateNotifyIndicator(statusLabel);
+    await renderActiveJob(orderId, { ...current, status: statusLabel });
+    generateActiveJobButtons(orderId, { ...current, status: statusLabel });
+
+    // Actualizar en BD en segundo plano
     const updates = { status: statusLabel, updated_at: new Date().toISOString() };
     await supabaseConfig.updateOrder(orderId, updates);
     await updateLastStatus(orderId, statusLabel);
-    
-    // Persistir y notificar
-    persistActiveJob(orderId, statusLabel);
     showSuccess(`✓ Estado actualizado a: ${statusLabel}`);
     await notifyStatusChange(orderId, statusLabel);
     
-    // Refrescar UI
+    // Refrescar UI con datos confirmados
     const updated = await supabaseConfig.getOrderById(orderId);
     if (statusLabel.toLowerCase() === 'completada') {
       try { localStorage.removeItem('tlc_active_job'); } catch(_){ }
@@ -968,7 +1051,7 @@ function updateNotifyIndicator(status) {
 }
 
 async function canFinalizeOrder(orderId) {
-  const input = document.getElementById('evidenceInput');
+  const input = document.getElementById('photoUpload') || document.getElementById('evidenceInput');
   const selected = Array.from(input?.files || []);
   if (selected.length > 0) return true;
   const order = await supabaseConfig.getOrderById(orderId);
