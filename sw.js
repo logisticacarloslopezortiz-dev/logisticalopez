@@ -148,6 +148,7 @@ self.addEventListener('message', (event) => {
 // --- Lógica de Notificaciones Push (sin cambios) ---
 
 self.addEventListener('push', (event) => {
+  console.log('[SW] PUSH RECIBIDO', event);
   let incoming = {};
   try { incoming = event.data && typeof event.data.json === 'function' ? event.data.json() : {}; } catch (_) {}
   const payload = incoming && typeof incoming === 'object' && incoming.notification ? incoming.notification : incoming;

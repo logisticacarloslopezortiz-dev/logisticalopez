@@ -52,6 +52,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       closePdfModal();
     };
 
+    // Configurar botón de Calificar
+    const ratingBtn = document.getElementById('openRatingBtn');
+    if (ratingBtn) {
+      const idForRating = order.short_id || order.id;
+      const ratingLink = `https://logisticalopezortiz.com/calificar.html?pedido=${encodeURIComponent(String(idForRating))}`;
+      let phone = String(order.phone || '').replace(/[^0-9]/g, '');
+      if (phone.length === 10 && !phone.startsWith('1')) phone = '1' + phone;
+      const msg = `🙏 Hola, ${order.name || 'cliente'}. Gracias por confiar en nosotros. ¿Podrías dejarnos tu calificación? Tu opinión nos ayuda a mejorar.\n${ratingLink}`;
+      const wa = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : ratingLink;
+      ratingBtn.setAttribute('href', wa);
+      ratingBtn.onclick = (e) => { e.preventDefault(); window.open(wa, '_blank'); };
+    }
+
     // Configurar botón de cancelar
     document.getElementById('cancelPdfBtn').onclick = closePdfModal;
 

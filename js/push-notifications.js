@@ -83,6 +83,16 @@ class PushNotificationManager {
                 
                 // Verificar si está guardada en la base de datos
                 await this.syncSubscriptionWithServer(subscription);
+
+                try {
+                    const savedKey = localStorage.getItem('tlc_vapid_pub') || '';
+                    if (this.vapidPublicKey && savedKey && savedKey !== this.vapidPublicKey) {
+                        await this.unsubscribe();
+                        await this.subscribe();
+                    } else if (this.vapidPublicKey && !savedKey) {
+                        localStorage.setItem('tlc_vapid_pub', this.vapidPublicKey);
+                    }
+                } catch (_) {}
             }
             
             return subscription;
@@ -126,6 +136,7 @@ class PushNotificationManager {
             await this.saveSubscriptionToServer(subscription);
             
             this.subscription = subscription;
+            try { if (this.vapidPublicKey) localStorage.setItem('tlc_vapid_pub', this.vapidPublicKey); } catch(_){}
             return subscription;
             
         } catch (error) {
@@ -269,7 +280,7 @@ class PushNotificationManager {
                     body: 'Esta es una notificación de prueba del sistema',
                     icon: '/img/android-chrome-192x192.png',
                     url: '/inicio.html',
-                    subscription: this.subscription
+                    subscription: (typeof this.subscription.toJSON === 'function') ? this.subscription.toJSON() : this.subscription
                 }
             });
             if (error) throw error;

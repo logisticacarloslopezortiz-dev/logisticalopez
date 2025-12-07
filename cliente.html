@@ -317,8 +317,8 @@
               <input type="text" name="dimensiones" placeholder="Ej: 5m x 2m x 3m" class="w-full border p-2 rounded" required>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Se necesita montacargas, grúa o brazo hidráulico para subir o bajar la carga?</label>
-              <select name="equipo_carga" class="w-full border p-2 rounded" required>
+              <label for="equipo_carga" class="block text-sm font-medium mb-2">¿Se necesita montacargas, grúa o brazo hidráulico para subir o bajar la carga?</label>
+              <select id="equipo_carga" name="equipo_carga" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="montacargas">Montacargas</option>
                 <option value="grua">Grúa</option>
@@ -331,8 +331,8 @@
               <input type="text" name="equipos_especiales" placeholder="paletas, estibas, correas, cadenas, carretillas, etc." class="w-full border p-2 rounded">
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
-              <select name="personal_disponible" class="w-full border p-2 rounded" required>
+              <label for="personal_disponible_carga_pesada" class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
+              <select id="personal_disponible_carga_pesada" name="personal_disponible" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si_personal">Sí, tenemos personal</option>
                 <option value="si_montacargas">Sí, tenemos montacargas</option>
@@ -361,28 +361,28 @@
           </div>
           <form id="form-paqueteria" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium mb-2">¿Qué tipo de artículo desea enviar?</label>
-              <input type="text" name="tipo_articulo" placeholder="Documentos, productos, regalos, etc." class="w-full border p-2 rounded" required>
+              <label for="tipo_articulo_paqueteria" class="block text-sm font-medium mb-2">¿Qué tipo de artículo desea enviar?</label>
+              <input id="tipo_articulo_paqueteria" type="text" name="tipo_articulo" placeholder="Documentos, productos, regalos, etc." class="w-full border p-2 rounded" required>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Es un solo paquete o varios bultos?</label>
-              <select name="cantidad_paquetes" class="w-full border p-2 rounded" required>
+              <label for="cantidad_paquetes" class="block text-sm font-medium mb-2">¿Es un solo paquete o varios bultos?</label>
+              <select id="cantidad_paquetes" name="cantidad_paquetes" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="uno">Un solo paquete</option>
                 <option value="varios">Varios bultos</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Los paquetes están debidamente empacados o sellados?</label>
-              <select name="empacado" class="w-full border p-2 rounded" required>
+              <label for="empacado" class="block text-sm font-medium mb-2">¿Los paquetes están debidamente empacados o sellados?</label>
+              <select id="empacado" name="empacado" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si">Sí, están empacados</option>
                 <option value="no">No, necesitan empaque</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿El paquete debe ser transportado en vehículo cerrado o en moto?</label>
-              <select name="tipo_vehiculo" class="w-full border p-2 rounded" required>
+              <label for="tipo_vehiculo_paqueteria" class="block text-sm font-medium mb-2">¿El paquete debe ser transportado en vehículo cerrado o en moto?</label>
+              <select id="tipo_vehiculo_paqueteria" name="tipo_vehiculo" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="vehiculo_cerrado">Vehículo cerrado</option>
                 <option value="moto">Moto</option>
@@ -390,8 +390,8 @@
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Habrá alguien disponible para entregar y recibir el paquete en ambos puntos?</label>
-              <select name="persona_disponible" class="w-full border p-2 rounded" required>
+              <label for="persona_disponible_paqueteria" class="block text-sm font-medium mb-2">¿Habrá alguien disponible para entregar y recibir el paquete en ambos puntos?</label>
+              <select id="persona_disponible_paqueteria" name="persona_disponible" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si_ambos">Sí, en ambos puntos</option>
                 <option value="solo_origen">Solo en origen</option>
@@ -432,16 +432,16 @@
               <input type="number" name="cantidad_bultos" placeholder="Número de bultos" class="w-full border p-2 rounded" required>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Requiere ayudantes para cargar o descargar la mercancía?</label>
-              <select name="ayudantes" class="w-full border p-2 rounded" required>
+              <label for="ayudantes_flete" class="block text-sm font-medium mb-2">¿Requiere ayudantes para cargar o descargar la mercancía?</label>
+              <select id="ayudantes_flete" name="ayudantes" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si">Sí, necesito ayudantes</option>
                 <option value="no">No, no necesito</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Se necesita montacargas, grúa, rampa o polea para subir o bajar la carga?</label>
-              <select name="equipo_necesario" class="w-full border p-2 rounded" required>
+              <label for="equipo_necesario_flete" class="block text-sm font-medium mb-2">¿Se necesita montacargas, grúa, rampa o polea para subir o bajar la carga?</label>
+              <select id="equipo_necesario_flete" name="equipo_necesario" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="montacargas">Montacargas</option>
                 <option value="grua">Grúa</option>
@@ -451,8 +451,8 @@
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
-              <select name="personal_disponible" class="w-full border p-2 rounded" required>
+              <label for="personal_disponible_flete" class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
+              <select id="personal_disponible_flete" name="personal_disponible" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si_personal">Sí, tenemos personal</option>
                 <option value="si_montacargas">Sí, tenemos montacargas</option>
@@ -485,8 +485,8 @@
               <input type="text" name="tipo_productos" placeholder="Productos comerciales, mercancía, etc." class="w-full border p-2 rounded" required>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿La carga es propia de la empresa o de un cliente?</label>
-              <select name="propiedad_carga" class="w-full border p-2 rounded" required>
+              <label for="propiedad_carga_comercial" class="block text-sm font-medium mb-2">¿La carga es propia de la empresa o de un cliente?</label>
+              <select id="propiedad_carga_comercial" name="propiedad_carga" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="propia">Propia de la empresa</option>
                 <option value="cliente">De un cliente</option>
@@ -501,16 +501,16 @@
               <input type="text" name="peso_total" placeholder="Ej: 1.5 toneladas" class="w-full border p-2 rounded" required>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Requiere ayudantes adicionales para carga y descarga?</label>
-              <select name="ayudantes_adicionales" class="w-full border p-2 rounded" required>
+              <label for="ayudantes_adicionales_comercial" class="block text-sm font-medium mb-2">¿Requiere ayudantes adicionales para carga y descarga?</label>
+              <select id="ayudantes_adicionales_comercial" name="ayudantes_adicionales" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si">Sí, necesito ayudantes</option>
                 <option value="no">No, no necesito</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
-              <select name="personal_disponible" class="w-full border p-2 rounded" required>
+              <label for="personal_disponible_comercial" class="block text-sm font-medium mb-2">¿La empresa dispone de personal o montacargas en el punto de carga?</label>
+              <select id="personal_disponible_comercial" name="personal_disponible" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si_personal">Sí, tenemos personal</option>
                 <option value="si_montacargas">Sí, tenemos montacargas</option>
@@ -530,7 +530,7 @@
 
   <!-- Modal Mudanza (Optimizado) -->
   <div id="modal-mudanza" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
-    <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="flex items-center justify-center min-h-screen p-4 overscroll-contain">
       <div class="bg-white rounded-lg max-w-2xl w-full">
         <div class="w-full max-h-[90vh] flex flex-col">
           <div class="px-6 py-4 flex justify-between items-center border-b">
@@ -745,8 +745,8 @@
           </div>
           <form id="form-grua-vehiculo" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium mb-2">¿Qué tipo de vehículo es?</label>
-              <select name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
+              <label for="tipo_vehiculo_vehiculo" class="block text-sm font-medium mb-2">¿Qué tipo de vehículo es?</label>
+              <select id="tipo_vehiculo_vehiculo" name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="carro">Carro</option>
                 <option value="jeepeta">Jeepeta</option>
@@ -765,8 +765,8 @@
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿El vehículo tiene tracción delantera, trasera o es 4x4?</label>
-              <select name="traccion" class="w-full border p-2 rounded" required>
+              <label for="traccion_vehiculo" class="block text-sm font-medium mb-2">¿El vehículo tiene tracción delantera, trasera o es 4x4?</label>
+              <select id="traccion_vehiculo" name="traccion" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="delantera">Tracción delantera</option>
                 <option value="trasera">Tracción trasera</option>
@@ -775,8 +775,8 @@
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Qué tipo de servicio necesita?</label>
-              <select name="tipo_servicio" class="w-full border p-2 rounded" required>
+              <label for="tipo_servicio_vehiculo" class="block text-sm font-medium mb-2">¿Qué tipo de servicio necesita?</label>
+              <select id="tipo_servicio_vehiculo" name="tipo_servicio" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="remolque_averia">Remolque por avería</option>
                 <option value="accidente_transito">Accidente de tránsito</option>
@@ -813,8 +813,8 @@
               <input type="text" name="peso_carga" placeholder="Ej: 10 toneladas" class="w-full border p-2 rounded" required>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Cuenta con puntos de anclaje o enganche para izar la carga de forma segura?</label>
-              <select name="puntos_anclaje" class="w-full border p-2 rounded" required>
+              <label for="puntos_anclaje_grua" class="block text-sm font-medium mb-2">¿Cuenta con puntos de anclaje o enganche para izar la carga de forma segura?</label>
+              <select id="puntos_anclaje_grua" name="puntos_anclaje" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si">Sí, cuenta con puntos de anclaje</option>
                 <option value="no">No, necesita evaluación</option>
@@ -822,8 +822,8 @@
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">¿Qué tipo de maniobra se realizará?</label>
-              <select name="tipo_maniobra" class="w-full border p-2 rounded" required>
+              <label for="tipo_maniobra_grua" class="block text-sm font-medium mb-2">¿Qué tipo de maniobra se realizará?</label>
+              <select id="tipo_maniobra_grua" name="tipo_maniobra" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="izado_vertical">Izado vertical</option>
                 <option value="carga_transporte">Carga y transporte</option>
@@ -851,8 +851,8 @@
           </div>
           <form id="form-botes-mineros" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium mb-2">¿Qué tipo de material desea transportar?</label>
-              <select name="tipo_material" class="w-full border p-2 rounded" required>
+              <label for="tipo_material_botes" class="block text-sm font-medium mb-2">¿Qué tipo de material desea transportar?</label>
+              <select id="tipo_material_botes" name="tipo_material" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="material_construccion">Material de construcción</option>
                 <option value="desechos">Desechos</option>
@@ -865,7 +865,7 @@
             </div>
             <div>
               <label class="block text-sm font-medium mb-2">¿El lugar es accesible para un camión?</label>
-                <select name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
+                <select id="acceso_camion" name="tipo_vivienda_origen" class="w-full border p-2 rounded" required>
                 <option value="">Seleccione una opción</option>
                 <option value="si">Sí, es accesible</option>
                 <option value="no">No, es de difícil acceso</option>
@@ -873,8 +873,8 @@
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-2">Prioridad del servicio</label>
-              <select name="prioridad" class="w-full border p-2 rounded" required>
+              <label for="prioridad_botes" class="block text-sm font-medium mb-2">Prioridad del servicio</label>
+              <select id="prioridad_botes" name="prioridad" class="w-full border p-2 rounded" required>
                 <option value="normal">Servicio Normal</option>
                 <option value="urgente">Servicio Urgente</option>
               </select>

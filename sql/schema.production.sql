@@ -410,7 +410,7 @@ language sql stable security definer set search_path = pg_catalog, public as $$
     o."date"::date as "date",
     coalesce(o.name,'') as client_name,
     round(coalesce(o.monto_cobrado,0) * coalesce(c.commission_percent, 0.10), 2) as commission_amount,
-    coalesce((o.rating->>'stars')::int, null) as rating_stars,
+    coalesce((o.rating->>'service')::int, (o.rating->>'stars')::int, null) as rating_stars,
     o.customer_comment
   from public.orders o
   left join public.collaborators c on c.id = o.assigned_to
@@ -442,6 +442,30 @@ end;
 $$;
 grant execute on function public.submit_rating(bigint, int, text) to anon, authenticated;
 
+create or replace function public.submit_rating_v2(order_id bigint, service_stars int, collab_stars int, comment text)
+returns boolean language plpgsql security definer set search_path = pg_catalog, public as $$
+declare exists_order boolean;
+begin
+  select exists(select 1 from public.orders where id = order_id) into exists_order;
+  if not exists_order then
+    return false;
+  end if;
+
+  update public.orders
+  set rating = jsonb_build_object(
+      'service', greatest(1, least(5, service_stars)),
+      'collab', greatest(1, least(5, collab_stars)),
+      'stars', greatest(1, least(5, service_stars)),
+      'comment', nullif(comment,'')
+    ),
+      customer_comment = nullif(comment,'')
+  where id = order_id
+    and (lower(status) = 'completada' or completed_at is not null);
+  return true;
+end;
+$$;
+grant execute on function public.submit_rating_v2(bigint, int, int, text) to anon, authenticated;
+
 -- RPC: Testimonios públicos para marketing
 create or replace function public.get_public_testimonials(limit_count int default 10)
 returns table (
@@ -453,7 +477,7 @@ returns table (
 language sql stable security definer set search_path = pg_catalog, public as $$
   select 
     o.id as order_id,
-    coalesce((o.rating->>'stars')::int, null) as stars,
+    coalesce((o.rating->>'service')::int, (o.rating->>'stars')::int, null) as stars,
     nullif(o.customer_comment,'') as comment,
     nullif(o.name,'') as client_name
   from public.orders o

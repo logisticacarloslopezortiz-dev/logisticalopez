@@ -291,6 +291,8 @@ async function loadServices() {
       const modal = document.getElementById(`modal-${normalizedName}`);
       if (modal) {
         modal.classList.remove('hidden');
+        document.documentElement.classList.add('overflow-hidden');
+        document.body.classList.add('overflow-hidden');
       }
     });
   });
@@ -1393,6 +1395,7 @@ document.addEventListener('DOMContentLoaded', function() {
   helpText = document.getElementById('help-text');
   // Evitar doble envío del formulario
   let isSubmittingOrder = false;
+  let hasSubmittedOrder = false;
   
   // Cargar datos dinámicos
   loadServices();
@@ -1456,7 +1459,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // Manejar cierre de modales
   document.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', function() {
-      this.closest('.fixed').classList.add('hidden');
+      const overlay = this.closest('.fixed');
+      if (overlay) overlay.classList.add('hidden');
+      document.documentElement.classList.remove('overflow-hidden');
+      document.body.classList.remove('overflow-hidden');
     });
   });
 
@@ -1512,6 +1518,8 @@ document.addEventListener('DOMContentLoaded', function() {
       // Solo cerrar el modal, no avanzar de paso
       const overlay = formEl.closest('.fixed');
       if (overlay) overlay.classList.add('hidden');
+      document.documentElement.classList.remove('overflow-hidden');
+      document.body.classList.remove('overflow-hidden');
     });
   });
 
@@ -1580,6 +1588,11 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
 
       if (!validateCurrentStep()) return;
+
+      if (hasSubmittedOrder) {
+        notifications.info('La solicitud ya fue enviada.', { title: 'Ya enviado' });
+        return;
+      }
 
       // Botón de envío y guardia de doble clic
       const submitBtn = serviceForm.querySelector('button[type="submit"], input[type="submit"]');
@@ -1738,6 +1751,15 @@ document.addEventListener('DOMContentLoaded', function() {
           );
         }
 
+        hasSubmittedOrder = true;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.classList.add('bg-gray-300','cursor-not-allowed');
+          submitBtn.classList.remove('bg-azulClaro','hover:bg-azulOscuro');
+          submitBtn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4 inline mr-2"></i> Solicitud enviada';
+          if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+        }
+
         // Mostrar tarjeta de opt-in para notificaciones push (si tenemos id)
         if (savedOrder) {
           // [CORRECCIÓN] Se elimina el bloque que intentaba guardar la suscripción desde el cliente.
@@ -1775,8 +1797,8 @@ document.addEventListener('DOMContentLoaded', function() {
             { title: 'Error Inesperado' });
         }
       } finally {
-        // Restaurar estado del botón y guardia
-        if (submitBtn) {
+        // Restaurar estado del botón y guardia solo si no se envió
+        if (submitBtn && !hasSubmittedOrder) {
           submitBtn.disabled = false;
           // @ts-ignore
           submitBtn.innerHTML = submitBtn.dataset.originalHTML || submitBtn.innerHTML;
