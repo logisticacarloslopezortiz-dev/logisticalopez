@@ -51,7 +51,8 @@ Deno.serve(async (req: Request) => {
     let keys = rawSub?.keys
     if (typeof keys === 'string') { try { keys = JSON.parse(keys) } catch { keys = undefined } }
     if ((!keys?.p256dh || !keys?.auth) && rawSub?.p256dh && rawSub?.auth) { keys = { p256dh: rawSub.p256dh, auth: rawSub.auth } }
-    const endpoint: string = String(rawSub?.endpoint || '')
+    const endpoint: string = String(rawSub?.endpoint || '').trim().replace(/`/g, '')
+    if (keys && keys.p256dh && keys.auth) { keys = { p256dh: String(keys.p256dh).trim(), auth: String(keys.auth).trim() } }
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return jsonResponse({ success: false, error: 'Suscripción inválida' }, 400)
     }

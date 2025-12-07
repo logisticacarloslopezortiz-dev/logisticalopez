@@ -1271,10 +1271,10 @@ async function subscribeUserToPush(savedOrder) {
         // Inserta o actualiza en push_subscriptions usando formato de keys JSON { p256dh, auth }
         const payload = {
           user_id: userId,
-          endpoint: subscription?.endpoint,
+          endpoint: String(subscription?.endpoint || '').trim().replace(/`/g, ''),
           keys: {
-            p256dh: subscription?.keys?.p256dh || (subscription?.toJSON?.().keys?.p256dh),
-            auth: subscription?.keys?.auth || (subscription?.toJSON?.().keys?.auth)
+            p256dh: String((subscription?.keys?.p256dh || (subscription?.toJSON?.().keys?.p256dh) || '')).trim(),
+            auth: String((subscription?.keys?.auth || (subscription?.toJSON?.().keys?.auth) || '')).trim()
           }
         };
         // Upsert para evitar duplicados por (user_id, endpoint) cuando el esquema lo soporta
@@ -1289,10 +1289,10 @@ async function subscribeUserToPush(savedOrder) {
       } else if (savedOrder && savedOrder.client_contact_id) {
         const payloadAnon = {
           client_contact_id: savedOrder.client_contact_id,
-          endpoint: subscription?.endpoint,
+          endpoint: String(subscription?.endpoint || '').trim().replace(/`/g, ''),
           keys: {
-            p256dh: subscription?.keys?.p256dh || (subscription?.toJSON?.().keys?.p256dh),
-            auth: subscription?.keys?.auth || (subscription?.toJSON?.().keys?.auth)
+            p256dh: String((subscription?.keys?.p256dh || (subscription?.toJSON?.().keys?.p256dh) || '')).trim(),
+            auth: String((subscription?.keys?.auth || (subscription?.toJSON?.().keys?.auth) || '')).trim()
           }
         };
         const { error: upsertAnonErr } = await supabaseConfig.client

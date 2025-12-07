@@ -32,21 +32,38 @@ async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
 
 interface OutboxMessage {
   id: number
-  subscription_endpoint?: string | null
-  subscription_keys?: SubscriptionKeys | null
-  user_id?: string | null
-  payload_json?: any
+  target_user_id?: string | null
+  target_contact_id?: string | null
+  payload?: any
   attempts?: number
-  status?: string
   created_at?: string
+}
+
+async function resolveSubscription(userId?: string | null, contactId?: string | null) {
+  if (userId) {
+    const { data } = await supabase
+      .from('push_subscriptions')
+      .select('endpoint, keys')
+      .eq('user_id', userId)
+      .limit(1)
+    if (data && data.length) return { endpoint: data[0].endpoint, keys: data[0].keys as SubscriptionKeys }
+  }
+  if (contactId) {
+    const { data } = await supabase
+      .from('push_subscriptions')
+      .select('endpoint, keys')
+      .eq('client_contact_id', contactId)
+      .limit(1)
+    if (data && data.length) return { endpoint: data[0].endpoint, keys: data[0].keys as SubscriptionKeys }
+  }
+  return null
 }
 
 async function processPending(limit = 50) {
   const { data: messages, error } = await supabase
     .from('notification_outbox')
-    .select('*')
-    .in('status', ['pending', 'retry'])
-    .lte('attempts', 3)
+    .select('id, target_user_id, target_contact_id, payload, attempts, created_at')
+    .is('processed_at', null)
     .order('created_at', { ascending: true })
     .limit(limit)
   if (error) throw new Error(`outbox_select_error: ${error.message}`)
@@ -56,25 +73,14 @@ async function processPending(limit = 50) {
   for (const msg of messages as OutboxMessage[]) {
     const attempts = (msg.attempts || 0) + 1
     try {
-      // Resolver suscripción
-      let endpoint = String(msg.subscription_endpoint || '')
-      let keys = msg.subscription_keys || undefined
-      if ((!endpoint || !keys?.p256dh || !keys?.auth) && msg.user_id) {
-        const { data: subs } = await supabase
-          .from('push_subscriptions')
-          .select('endpoint, p256dh, auth')
-          .eq('user_id', msg.user_id)
-          .limit(1)
-        if (subs && subs.length) {
-          endpoint = subs[0].endpoint
-          keys = { p256dh: subs[0].p256dh, auth: subs[0].auth }
-        }
-      }
-      if (!endpoint || !keys?.p256dh || !keys?.auth) {
-        throw new Error('missing_subscription')
+      const sub = await resolveSubscription(msg.target_user_id || null, msg.target_contact_id || null)
+      if (!sub || !sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
+        const next = attempts >= 3
+        await supabase.from('notification_outbox').update({ attempts, last_error: 'missing_subscription', processed_at: next ? new Date().toISOString() : null }).eq('id', msg.id)
+        continue
       }
 
-      const n = msg.payload_json || {}
+      const n = msg.payload || {}
       const payload = {
         title: String(n.title || 'Notificación'),
         body: String(n.body || ''),
@@ -83,43 +89,20 @@ async function processPending(limit = 50) {
         data: { ...(typeof n.data === 'object' ? n.data : {}), url: absolutize((n?.data?.url) || '/') }
       }
 
-      await sendWebPush({ endpoint, keys: keys as SubscriptionKeys }, payload)
+      const cleanEndpoint = String(sub.endpoint || '').trim().replace(/`/g, '')
+      const cleanKeys = { p256dh: String(sub.keys.p256dh || '').trim(), auth: String(sub.keys.auth || '').trim() }
+      await sendWebPush({ endpoint: cleanEndpoint, keys: cleanKeys }, payload)
 
-      // Éxito: marcar como sent
-      await supabase.from('notification_outbox').update({ status: 'sent', attempts }).eq('id', msg.id)
+      await supabase.from('notification_outbox').update({ attempts, processed_at: new Date().toISOString(), last_error: null }).eq('id', msg.id)
       processed++
     } catch (err) {
       const statusCode = (err as any)?.statusCode as number | undefined
       const message = err instanceof Error ? (err.message || 'unknown_error') : String(err)
       if (statusCode === 404 || statusCode === 410) {
-        // Limpieza de suscripciones muertas
-        try {
-          if (msg.subscription_endpoint) {
-            await supabase.from('push_subscriptions').delete().eq('endpoint', msg.subscription_endpoint)
-          }
-        } catch (_) {}
-        // Mover a failed inmediatamente
-        await supabase.from('notification_outbox_failed').insert({
-          outbox_id: msg.id,
-          reason: `expired_subscription_${statusCode}`,
-          error_message: message,
-          payload_json: msg.payload_json,
-          created_at: new Date().toISOString()
-        })
-        await supabase.from('notification_outbox').update({ status: 'failed', attempts }).eq('id', msg.id)
-      } else if (attempts >= 3) {
-        // Dead-letter
-        await supabase.from('notification_outbox_failed').insert({
-          outbox_id: msg.id,
-          reason: 'max_attempts_reached',
-          error_message: message,
-          payload_json: msg.payload_json,
-          created_at: new Date().toISOString()
-        })
-        await supabase.from('notification_outbox').update({ status: 'failed', attempts }).eq('id', msg.id)
+        await supabase.from('notification_outbox').update({ attempts, last_error: `expired_subscription_${statusCode}`, processed_at: new Date().toISOString() }).eq('id', msg.id)
       } else {
-        // Reintento
-        await supabase.from('notification_outbox').update({ status: 'retry', attempts }).eq('id', msg.id)
+        const next = attempts >= 3
+        await supabase.from('notification_outbox').update({ attempts, last_error: message, processed_at: next ? new Date().toISOString() : null }).eq('id', msg.id)
       }
     }
   }
@@ -143,4 +126,3 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: msg }, 500, req)
   }
 })
-

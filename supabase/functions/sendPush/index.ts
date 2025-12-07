@@ -50,10 +50,11 @@ Deno.serve(async (req: Request) => {
     const icon: string = absolutize(body?.icon || '/img/android-chrome-192x192.png')
     const url: string = absolutize(body?.url || '/')
     const rawSub = body?.subscription || {}
-    const endpoint: string = String(rawSub?.endpoint || '')
+    const endpoint: string = String(rawSub?.endpoint || '').trim().replace(/`/g, '')
     let keys: SubscriptionKeys | undefined = rawSub?.keys
     if (typeof keys === 'string') { try { keys = JSON.parse(keys) } catch { keys = undefined } }
     if ((!keys?.p256dh || !keys?.auth) && rawSub?.p256dh && rawSub?.auth) { keys = { p256dh: rawSub?.p256dh, auth: rawSub?.auth } }
+    if (keys && keys.p256dh && keys.auth) { keys = { p256dh: String(keys.p256dh).trim(), auth: String(keys.auth).trim() } }
 
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return jsonResponse({ error: 'invalid_subscription' }, 400, req)
