@@ -477,9 +477,9 @@ function setupActions() {
       if (!startBtn && !completeBtn) return;
       const id = (startBtn || completeBtn).getAttribute('data-id');
       if (startBtn) {
-        const updates = { status: 'En curso', accepted_at: new Date().toISOString() };
-        try { await supabaseConfig.updateOrder(id, updates); await updateLastStatus(id, 'En curso'); showInfo('Has iniciado el servicio.'); await notifyStatusChange(id, 'En curso'); } catch (e) { showWarning('Sin conexión. Guardado para sincronizar.'); queueOfflineUpdate(id, updates); }
-        persistActiveJob(id, 'En curso');
+        const updates = { status: 'En camino a recoger', accepted_at: new Date().toISOString() };
+        try { await supabaseConfig.updateOrder(id, updates); await updateLastStatus(id, 'En camino a recoger'); showInfo('Has iniciado el servicio.'); await notifyStatusChange(id, 'En camino a recoger'); } catch (e) { showWarning('Sin conexión. Guardado para sincronizar.'); queueOfflineUpdate(id, updates); }
+        persistActiveJob(id, 'En camino a recoger');
       }
       if (completeBtn) {
         const canFinish = await canFinalizeOrder(id);
@@ -528,9 +528,9 @@ function setupActions() {
   if (modalStart) modalStart.addEventListener('click', async (e) => {
     const id = modalStart.getAttribute('data-id');
     if (!id) return;
-    const updates = { status: 'En curso', accepted_at: new Date().toISOString() };
-    try { await supabaseConfig.updateOrder(id, updates); await updateLastStatus(id, 'En curso'); showInfo('Servicio iniciado.'); await notifyStatusChange(id, 'En curso'); } catch (err) { showWarning('No se pudo iniciar. Guardado para sincronizar.'); queueOfflineUpdate(id, updates); }
-    persistActiveJob(id, 'En curso');
+    const updates = { status: 'En camino a recoger', accepted_at: new Date().toISOString() };
+    try { await supabaseConfig.updateOrder(id, updates); await updateLastStatus(id, 'En camino a recoger'); showInfo('Servicio iniciado.'); await notifyStatusChange(id, 'En camino a recoger'); } catch (err) { showWarning('No se pudo iniciar. Guardado para sincronizar.'); queueOfflineUpdate(id, updates); }
+    persistActiveJob(id, 'En camino a recoger');
     closeOrderModal();
     await fetchAndRender();
     showActiveJobView(id);
