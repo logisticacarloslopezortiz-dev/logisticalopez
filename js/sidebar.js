@@ -1,6 +1,20 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const path = (location.pathname || '').toLowerCase();
-    const isAdminPage = path.endsWith('/inicio.html') || path.endsWith('inicio.html');
+
+    // Lista de páginas del panel de administrador
+    const adminPages = [
+        'inicio.html',
+        'servicios.html',
+        'ganancias.html',
+        'historial-solicitudes.html',
+        'mi-negocio.html',
+        'colaboradores.html',
+        'admin-register.html'
+    ];
+
+    // Verificar si la página actual es una de las páginas de administrador
+    const isAdminPage = adminPages.some(page => path.endsWith('/' + page) || path.endsWith(page));
+
     const loginHref = isAdminPage ? 'login.html' : 'login-colaborador.html';
 
     const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();

@@ -377,55 +377,6 @@ function updateResumen(){
   document.getElementById('urgentes').textContent = urgentOrders.length;
 }
 
-// Función para actualizar gráficos
-function updateCharts() {
-  const servicesChartEl = document.getElementById('servicesChart');
-  const vehiclesChartEl = document.getElementById('vehiclesChart');
-  if (servicesChartEl) {
-    const serviceStats = {};
-    allOrders.forEach(o => {
-      const serviceName = o.service?.name || 'Sin Servicio';
-      serviceStats[serviceName] = (serviceStats[serviceName] || 0) + 1;
-    });
-    servicesChartEl.innerHTML = '';
-    const maxService = Math.max(1, ...Object.values(serviceStats));
-    Object.entries(serviceStats).forEach(([service, count]) => {
-      const percentage = maxService > 0 ? (count / maxService) * 100 : 0;
-      servicesChartEl.innerHTML += `
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-medium text-gray-700">${service}</span>
-          <span class="text-sm text-gray-500">${count}</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
-          <div class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
-        </div>
-      `;
-    });
-  }
-
-  if (vehiclesChartEl) {
-    const vehicleStats = {};
-    allOrders.forEach(o => {
-      const vehicleName = o.vehicle?.name || 'Sin Vehículo';
-      vehicleStats[vehicleName] = (vehicleStats[vehicleName] || 0) + 1;
-    });
-    vehiclesChartEl.innerHTML = '';
-    const maxVehicle = Math.max(1, ...Object.values(vehicleStats));
-    Object.entries(vehicleStats).forEach(([vehicle, count]) => {
-      const percentage = maxVehicle > 0 ? (count / maxVehicle) * 100 : 0;
-      vehiclesChartEl.innerHTML += `
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-medium text-gray-700">${vehicle}</span>
-          <span class="text-sm text-gray-500">${count}</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
-          <div class="bg-red-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
-        </div>
-      `;
-    });
-  }
-}
-
 function updateAlerts() {
   const alertasEl = document.getElementById('alertasLista');
   if (!alertasEl) return;
