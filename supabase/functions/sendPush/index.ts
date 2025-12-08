@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleCors, jsonResponse } from '../cors-config.ts'
+import webpush from 'https://esm.sh/web-push@3.4.5'
 const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
 const absolutize = (u: string) => /^https?:\/\//i.test(String(u||'')) ? String(u) : SITE_BASE + (String(u||'').startsWith('/') ? '' : '/') + String(u||'')
 const supabase = createClient(
@@ -19,17 +20,15 @@ interface PushRequestBody {
 }
 
 async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
-  const webpush = await import('jsr:@negrel/webpush')
   const pub = Deno.env.get('VAPID_PUBLIC_KEY')
   const priv = Deno.env.get('VAPID_PRIVATE_KEY')
   const subject = Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com'
   if (!pub || !priv) throw new Error('VAPID keys not configured')
-  const vapidKeys = { publicKey: pub, privateKey: priv }
-  const appServer = await webpush.ApplicationServer.new({ contactInformation: subject, vapidKeys })
+  webpush.setVapidDetails(subject, pub, priv)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)
   try {
-    return await appServer.push(sub as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high', signal: controller.signal })
+    return await webpush.sendNotification(sub as any, JSON.stringify(payload), { TTL: 2592000 })
   } finally {
     clearTimeout(timeout)
   }

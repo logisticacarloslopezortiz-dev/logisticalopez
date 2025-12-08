@@ -124,16 +124,17 @@ function sortTable(column, element) {
     const icon = element.querySelector('i');
     icon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
     icon.classList.add('text-blue-600');
-    if (window.lucide) {
-      try {
-        document.querySelectorAll('[data-lucide]').forEach(function(el){
-          var name = el.getAttribute('data-lucide');
-          if (!name || !window.lucide.icons[name]) el.setAttribute('data-lucide', 'info');
-        });
-        window.lucide.createIcons();
-      } catch(_){ }
-    }
+    refreshLucide();
   }
+}
+
+function refreshLucide(){
+  try {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      const hasIcons = document.querySelector('[data-lucide]') !== null;
+      if (hasIcons) window.lucide.createIcons();
+    }
+  } catch(_) {}
 }
 
 // Función para renderizar pedidos
@@ -174,11 +175,7 @@ function renderOrders(){
       'Cancelada': 'bg-red-100 text-red-800'
     }[o.status] || 'bg-gray-100 text-gray-800';
 
-    const displayStatus = (
-      o.status === 'Aceptada' ? 'En proceso' :
-      o.status === 'Completada' ? 'Completado' :
-      o.status
-    );
+    const displayStatus = o.status;
 
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50 transition-colors';
@@ -210,7 +207,7 @@ function renderOrders(){
       <td class="px-6 py-4 whitespace-nowrap">
         <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">
           <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-          <option value="Aceptada" ${o.status === 'Aceptada' ? 'selected' : ''}>En Proceso</option>
+          <option value="Aceptada" ${o.status === 'Aceptada' ? 'selected' : ''}>Aceptada</option>
           <option value="En curso" ${o.status === 'En curso' ? 'selected' : ''}>En curso</option>
           <option value="Completada" ${o.status === 'Completada' ? 'selected' : ''}>Completada</option>
           <option value="Cancelada" ${o.status === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
@@ -240,11 +237,7 @@ function renderOrders(){
         'Completada': 'bg-green-100 text-green-800',
         'Cancelada': 'bg-red-100 text-red-800'
       }[o.status] || 'bg-gray-100 text-gray-800';
-      const displayStatusMobile = (
-        o.status === 'Aceptada' ? 'En proceso' :
-        o.status === 'Completada' ? 'Completada' :
-        o.status
-      );
+      const displayStatusMobile = o.status;
       const card = document.createElement('div');
       card.className = 'bg-white rounded-lg shadow p-4';
       card.innerHTML = `
@@ -275,16 +268,7 @@ function renderOrders(){
       cardContainer.appendChild(card);
     });
   }
-
-  if (window.lucide) {
-    try {
-      document.querySelectorAll('[data-lucide]').forEach(function(el){
-        var name = el.getAttribute('data-lucide');
-        if (!name || !window.lucide.icons[name]) el.setAttribute('data-lucide', 'info');
-      });
-      window.lucide.createIcons();
-    } catch(_){ }
-  }
+  refreshLucide();
 }
 
 // --- Menú de acciones eliminado ---
@@ -369,12 +353,12 @@ function updateResumen(){
     return diffHours > 0 && diffHours <= 24;
   });
 
-  document.getElementById('totalPedidos').textContent = allOrders.length;
-  document.getElementById('pedidosHoy').textContent = todayOrders.length;
-  document.getElementById('pedidosCompletados').textContent = completedOrders;
-  document.getElementById('porcentajeCompletados').textContent = allOrders.length > 0 ? Math.round((completedOrders / allOrders.length) * 100) : 0;
-  document.getElementById('pedidosPendientes').textContent = pendingOrders.length;
-  document.getElementById('urgentes').textContent = urgentOrders.length;
+  const totalEl = document.getElementById('totalPedidos'); if (totalEl) totalEl.textContent = allOrders.length;
+  const hoyEl = document.getElementById('pedidosHoy'); if (hoyEl) hoyEl.textContent = todayOrders.length;
+  const compEl = document.getElementById('pedidosCompletados'); if (compEl) compEl.textContent = completedOrders;
+  const pctEl = document.getElementById('porcentajeCompletados'); if (pctEl) pctEl.textContent = allOrders.length > 0 ? Math.round((completedOrders / allOrders.length) * 100) : 0;
+  const pendEl = document.getElementById('pedidosPendientes'); if (pendEl) pendEl.textContent = pendingOrders.length;
+  const urgEl = document.getElementById('urgentes'); if (urgEl) urgEl.textContent = urgentOrders.length;
 }
 
 // Función para actualizar gráficos
@@ -541,29 +525,7 @@ async function openAssignModal(orderId){
       }
     });
   }
-  if (copyRatingBtn) {
-    copyRatingBtn.replaceWith(copyRatingBtn.cloneNode(true));
-    document.getElementById('copyRatingLinkBtn').addEventListener('click', async () => {
-      const url = `https://logisticalopezortiz.com/calificar.html?pedido=${order.id}`;
-      try { await navigator.clipboard.writeText(url); } catch(_) {}
-      try {
-        let phone = (order.phone || '').replace(/[^0-9]/g, '');
-        if (phone.length === 10 && !phone.startsWith('1')) phone = '1809' + phone;
-        if (phone.length === 7) phone = '1809' + phone;
-        if (phone) {
-          const msg = `🙏 Hola, ${order.name || 'cliente'}. Gracias por confiar en nosotros. ¿Podrías dejarnos tu calificación? Tu opinión nos ayuda a mejorar.\n${url}\n\nTe toma menos de un minuto. ¡Gracias! ⭐`;
-          const wa = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-          window.open(wa, '_blank');
-          notifications.success('Enviado por WhatsApp: calificación');
-        } else {
-          window.open(url, '_blank');
-          notifications.warning('Número no disponible. Abriendo enlace de calificación');
-        }
-      } catch(_) {
-        window.open(url, '_blank');
-      }
-    });
-  }
+  
 
   // Doble clic para expandir el cuerpo del modal
   const modalBody = document.getElementById('assignModalBody');
@@ -574,98 +536,9 @@ async function openAssignModal(orderId){
     });
   }
 
-  const notifyClientBtn = document.getElementById('notifyClientBtn');
-  if (notifyClientBtn) {
-    notifyClientBtn.replaceWith(notifyClientBtn.cloneNode(true));
-    document.getElementById('notifyClientBtn').addEventListener('click', async () => {
-      try {
-        const { data, error } = await supabaseConfig.client.functions.invoke('notify-role', {
-          body: {
-            role: 'cliente',
-            orderId: order.id,
-            title: `Actualización de su orden #${order.short_id || order.id}`,
-            body: 'Su orden ha sido actualizada',
-            data: { url: `/seguimiento.html?orderId=${order.short_id || order.id}` }
-          }
-        });
-        if (error) throw error;
-        if (data?.success) notifications.success('Notificación enviada al cliente');
-        else notifications.warning(data?.message || 'Cliente sin suscripciones');
-      } catch (e) {
-        notifications.error('Error al notificar al cliente');
-      }
-    });
-  }
+  
 
-  const notifyCollabBtn = document.getElementById('notifyCollabBtn');
-  if (notifyCollabBtn) {
-    notifyCollabBtn.replaceWith(notifyCollabBtn.cloneNode(true));
-    document.getElementById('notifyCollabBtn').addEventListener('click', async () => {
-      try {
-        const { data, error } = await supabaseConfig.client.functions.invoke('notify-role', {
-          body: {
-            role: 'colaborador',
-            orderId: order.id,
-            title: `Orden #${order.short_id || order.id} actualizada`,
-            body: 'Revisa tu panel, se actualizó tu orden asignada',
-            data: { url: `/panel-colaborador.html?orderId=${order.short_id || order.id}` }
-          }
-        });
-        if (error) throw error;
-        const sent = (data && typeof data.sent === 'number') ? data.sent : null;
-        const total = (data && typeof data.total === 'number') ? data.total : null;
-        if (sent !== null && total !== null) {
-          notifications.success(`Notificación enviada al colaborador (${sent}/${total})`);
-        } else if (data?.success) {
-          notifications.success('Notificación enviada al colaborador');
-        } else {
-          notifications.warning(data?.message || 'No se enviaron notificaciones');
-        }
-      } catch (e) {
-        notifications.error('Error al notificar al colaborador');
-      }
-    });
-  }
-
-  const notifyAdminsBtn = document.getElementById('notifyAdminsBtn');
-  if (notifyAdminsBtn) {
-    notifyAdminsBtn.replaceWith(notifyAdminsBtn.cloneNode(true));
-    document.getElementById('notifyAdminsBtn').addEventListener('click', async () => {
-      try {
-        const { data, error } = await supabaseConfig.client.functions.invoke('notify-role', {
-          body: {
-            role: 'administrador',
-            orderId: order.id,
-            title: `Orden #${order.short_id || order.id} modificada`,
-            body: 'Se realizó una acción desde el panel del dueño',
-            data: { url: `/inicio.html?orderId=${order.short_id || order.id}` }
-          }
-        });
-        if (error) throw error;
-        const sent = (data && typeof data.sent === 'number') ? data.sent : null;
-        const total = (data && typeof data.total === 'number') ? data.total : null;
-        if (sent !== null && total !== null) {
-          notifications.success(`Notificación enviada a administradores (${sent}/${total})`);
-        } else if (data?.success) {
-          notifications.success('Notificación enviada a administradores');
-        } else {
-          notifications.warning(data?.message || 'No se enviaron notificaciones');
-        }
-      } catch (e) {
-        notifications.error('Error al notificar a administradores');
-      }
-    });
-  }
-
-  if (typeof lucide !== 'undefined') {
-    try {
-      document.querySelectorAll('[data-lucide]').forEach(function(el){
-        var name = el.getAttribute('data-lucide');
-        if (!name || !window.lucide.icons[name]) el.setAttribute('data-lucide', 'info');
-      });
-      window.lucide.createIcons();
-    } catch(_){ }
-  }
+  refreshLucide();
 }
 
 function closeAssignModal(){
@@ -694,7 +567,7 @@ async function assignSelectedCollaborator(){
   };
 
   // Usar OrderManager para centralizar lógica y tracking
-  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, 'en_camino_recoger', updateData);
+  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, 'En curso', updateData);
 
   if (!success) {
     notifications.error('Error de asignación', error?.message || 'No se pudo asignar el pedido.');
@@ -702,10 +575,10 @@ async function assignSelectedCollaborator(){
     // Actualizar el array local para reflejar el cambio inmediatamente
     const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
     if (orderIndex !== -1) {
-      allOrders[orderIndex] = { ...allOrders[orderIndex], ...updateData, status: 'Aceptada' };
+      allOrders[orderIndex] = { ...allOrders[orderIndex], ...updateData, status: 'En curso' };
     }
     filterOrders();
-    notifications.success(`Pedido asignado a ${col.name} y marcado como "En proceso".`);
+    notifications.success(`Pedido asignado a ${col.name} y marcado como "En curso".`);
   }
   
   closeAssignModal();
@@ -838,8 +711,9 @@ function handleRealtimeUpdate(payload) {
 
   switch (eventType) {
     case 'INSERT':
-      // Añadir la nueva orden al principio del array
-      allOrders.unshift(newRecord);
+      if (allOrders.findIndex(order => order.id === newRecord.id) === -1) {
+        allOrders.unshift(newRecord);
+      }
       // Volver a aplicar filtros y renderizar
       filterOrders();
       // Mostrar una notificación persistente con el ID para copiar
@@ -872,12 +746,21 @@ function handleRealtimeUpdate(payload) {
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
   // Modal listeners
-  document.getElementById('assignCancelBtn').addEventListener('click', closeAssignModal);
-  document.getElementById('assignConfirmBtn').addEventListener('click', assignSelectedCollaborator);
-  document.getElementById('deleteOrderBtn').addEventListener('click', deleteSelectedOrder);
+  try {
+    const assignCancel = document.getElementById('assignCancelBtn');
+    const assignConfirm = document.getElementById('assignConfirmBtn');
+    const deleteOrder = document.getElementById('deleteOrderBtn');
+    if (assignCancel) assignCancel.addEventListener('click', closeAssignModal);
+    if (assignConfirm) assignConfirm.addEventListener('click', assignSelectedCollaborator);
+    if (deleteOrder) deleteOrder.addEventListener('click', deleteSelectedOrder);
+  } catch(_) {}
   // Listeners para el modal de precio
-  document.getElementById('priceCancelBtn').addEventListener('click', closePriceModal);
-  document.getElementById('priceSaveBtn').addEventListener('click', savePriceData);
+  try {
+    const priceCancel = document.getElementById('priceCancelBtn');
+    const priceSave = document.getElementById('priceSaveBtn');
+    if (priceCancel) priceCancel.addEventListener('click', closePriceModal);
+    if (priceSave) priceSave.addEventListener('click', savePriceData);
+  } catch(_) {}
 
   // Función para hacer funciones globales
   window.sortTable = sortTable;
@@ -889,7 +772,8 @@ document.addEventListener('DOMContentLoaded', function() {
   window.openWhatsApp = openWhatsApp;
 
   // Suscribirse a los cambios en tiempo real de la tabla 'orders'
-  const ordersSubscription = supabaseConfig.client
+  try { if (window.__ordersSubscription) supabaseConfig.client.removeChannel(window.__ordersSubscription); } catch(_) {}
+  window.__ordersSubscription = supabaseConfig.client
     .channel('public:orders')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
     .subscribe();
@@ -897,16 +781,18 @@ document.addEventListener('DOMContentLoaded', function() {
   let selectedOrderIdForPrice = null;
 
   // --- Gestión del Modal de Precio ---
-  function openPriceModal(orderId) {
-    selectedOrderIdForPrice = orderId;
-    const order = allOrders.find(o => o.id == selectedOrderIdForPrice);
-    if (!order) {
-      notifications.error('Error', 'No se encontró la orden para actualizar el precio.');
-      return;
-    }
+function openPriceModal(orderId) {
+  selectedOrderIdForPrice = orderId;
+  const order = allOrders.find(o => o.id == selectedOrderIdForPrice);
+  if (!order) {
+    notifications.error('Error', 'No se encontró la orden para actualizar el precio.');
+    return;
+  }
 
-    document.getElementById('montoCobrado').value = order.monto_cobrado || '';
-    document.getElementById('metodoPago').value = order.metodo_pago || '';
+  const montoEl = document.getElementById('montoCobrado');
+  const metodoEl = document.getElementById('metodoPago');
+  if (montoEl) montoEl.value = order.monto_cobrado || '';
+  if (metodoEl) metodoEl.value = order.metodo_pago || '';
 
     const modal = document.getElementById('priceModal');
     modal.classList.remove('hidden');
@@ -920,16 +806,18 @@ document.addEventListener('DOMContentLoaded', function() {
     selectedOrderIdForPrice = null;
   }
 
-  async function savePriceData() {
-    const monto = document.getElementById('montoCobrado').value;
-    const metodo = document.getElementById('metodoPago').value;
+async function savePriceData() {
+  const montoEl = document.getElementById('montoCobrado');
+  const metodoEl = document.getElementById('metodoPago');
+  const monto = montoEl ? montoEl.value : '';
+  const metodo = metodoEl ? metodoEl.value : '';
 
     if (!monto) {
       notifications.warning('Dato requerido', 'Debes ingresar un monto.');
       return;
     }
     try {
-      // Preferir RPC para evitar errores de RLS/406
+      if (!selectedOrderIdForPrice) throw new Error('ID de orden no válido');
       const updated = await OrderManager.setOrderAmount(selectedOrderIdForPrice, monto, metodo);
       const orderIndex = allOrders.findIndex(o => o.id == selectedOrderIdForPrice);
       if (orderIndex !== -1 && updated) {
@@ -1009,5 +897,6 @@ function vapidToBytes(base64String) {
     checkVapidStatus();
   }
 
-  init();
+  try { init(); } catch(_) {}
+  refreshLucide();
 });

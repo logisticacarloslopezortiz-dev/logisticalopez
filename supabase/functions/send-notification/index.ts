@@ -1,6 +1,7 @@
 /// <reference path="../globals.d.ts" />
 import { handleCors, jsonResponse } from '../cors-config.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import webpush from 'https://esm.sh/web-push@3.4.5'
 
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
@@ -21,13 +22,11 @@ function absolutize(url: string): string {
 }
 
 async function push(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }, payload: unknown) {
-  const webpush = await import('jsr:@negrel/webpush')
-  const vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY }
-  const appServer = await webpush.ApplicationServer.new({ contactInformation: VAPID_SUBJECT, vapidKeys })
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)
   try {
-    return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high', signal: controller.signal })
+    return await webpush.sendNotification(subscription as any, JSON.stringify(payload), { TTL: 2592000 })
   } finally {
     clearTimeout(timeout)
   }

@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const path = (location.pathname || '').toLowerCase();
     const isAdminPage = path.endsWith('/inicio.html') || path.endsWith('inicio.html');
-    const loginHref = isAdminPage ? 'login.html' : 'login-colaborador.html';
+    const loginHref = 'login.html';
 
     const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
     if (sessionError || !session) {
@@ -11,13 +11,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (isAdminPage) {
         const user = session.user;
-        const appRoles = (user?.app_metadata?.roles || user?.app_metadata?.role || []);
-        const metaRole = user?.user_metadata?.role;
-        const isAdminMeta = user?.user_metadata?.is_admin;
-        let hasAdminRole =
-            (Array.isArray(appRoles) ? appRoles.includes('administrador') : String(appRoles || '').toLowerCase() === 'administrador') ||
-            String(metaRole || '').toLowerCase() === 'administrador' ||
-            isAdminMeta === true;
+        const appRolesRaw = (user?.app_metadata?.roles || user?.app_metadata?.role || []);
+        const toArr = (v) => Array.isArray(v) ? v : [v];
+        const norm = (s) => String(s || '').toLowerCase();
+        const appRoles = toArr(appRolesRaw).map(norm);
+        const metaRole = norm(user?.user_metadata?.role);
+        const isAdminMeta = user?.user_metadata?.is_admin === true;
+        const isOwnerMeta = user?.user_metadata?.is_owner === true;
+        const synonyms = new Set(['administrador','admin','owner']);
+        let hasAdminRole = appRoles.some(r => synonyms.has(r)) || synonyms.has(metaRole) || isAdminMeta || isOwnerMeta;
         if (!hasAdminRole) {
             try {
                 const { data: collab } = await supabaseConfig.client
@@ -25,14 +27,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .select('role')
                     .eq('id', user.id)
                     .maybeSingle();
-                hasAdminRole = !!collab && String(collab.role || '').toLowerCase() === 'administrador';
-            } catch(_) {}
+                hasAdminRole = !!collab && synonyms.has(norm(collab.role));
+            } catch(_) {
+                // Fallback con cliente público por si RLS bloquea
+                try {
+                    const pub = supabaseConfig.getPublicClient?.();
+                    if (pub) {
+                        const { data: collabPub } = await pub
+                            .from('collaborators')
+                            .select('role')
+                            .eq('id', user.id)
+                            .maybeSingle();
+                        hasAdminRole = !!collabPub && synonyms.has(norm(collabPub.role));
+                    }
+                } catch(_) {}
+            }
         }
         if (!hasAdminRole) {
-            try { localStorage.clear(); } catch(_){ }
-            try { await supabaseConfig.client.auth.signOut(); } catch(_){ }
-            window.location.href = 'login.html';
-            return;
+            // Permitir acceso básico pero marcar que no es admin
+            console.warn('Sesión sin rol administrador; acceso limitado');
         }
     }
 

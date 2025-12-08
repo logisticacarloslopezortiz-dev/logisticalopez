@@ -292,21 +292,11 @@
               <button id="generateInvoiceBtn" class="px-4 py-2 rounded-lg bg-blue-100 text-blue-800 hover:bg-blue-200 font-medium flex items-center justify-center gap-2">
                 <i data-lucide="file-text" class="w-5 h-5"></i><span>Factura</span>
               </button>
-              <button id="notifyClientBtn" class="px-4 py-2 rounded-lg bg-yellow-100 text-yellow-800 hover:bg-yellow-200 font-medium flex items-center justify-center gap-2">
-                <i data-lucide="bell" class="w-5 h-5"></i><span>Notificar Cliente</span>
-              </button>
-              <button id="notifyCollabBtn" class="px-4 py-2 rounded-lg bg-purple-100 text-purple-800 hover:bg-purple-200 font-medium flex items-center justify-center gap-2">
-                <i data-lucide="user-check" class="w-5 h-5"></i><span>Notificar Colaborador</span>
-              </button>
-              <button id="notifyAdminsBtn" class="px-4 py-2 rounded-lg bg-red-100 text-red-800 hover:bg-red-200 font-medium flex items-center justify-center gap-2">
-                <i data-lucide="shield-alert" class="w-5 h-5"></i><span>Notificar Admins</span>
-              </button>
+              
               <button id="copyTrackingLinkBtn" class="px-4 py-2 rounded-lg bg-emerald-100 text-emerald-800 hover:bg-emerald-200 font-medium flex items-center justify-center gap-2">
                 <i data-lucide="map" class="w-5 h-5"></i><span>Enlace Seguimiento</span>
               </button>
-              <button id="copyRatingLinkBtn" class="px-4 py-2 rounded-lg bg-orange-100 text-orange-800 hover:bg-orange-200 font-medium flex items-center justify-center gap-2">
-                <i data-lucide="star" class="w-5 h-5"></i><span>Enlace Calificación</span>
-              </button>
+              
             </div>
             <div id="invoiceLink" class="mt-2 text-sm">
               <a id="invoiceLinkAnchor" href="#" class="text-blue-600 hover:underline" target="_blank" rel="noopener">Ver factura</a>
@@ -356,7 +346,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> <!-- 1. Librería de Supabase -->
   <script src="js/supabase-config.js?v=20251204"></script> <!-- 2. Configuración de Supabase -->
-  <script src="js/push-notifications.js?v=20251204"></script>
+  
   <script src="js/notifications.js?v=20251204"></script> <!-- 3. Scripts de notificaciones -->
   
   <!-- Scripts de UI y PWA -->
@@ -368,34 +358,7 @@
 
   <!-- Lógica principal de la página de inicio -->
   <script src="js/inicio.js?v=20251204"></script>
-  <script>
-    (function(){
-      function updatePushUI(){
-        var permEl = document.getElementById('pushStatusPerm');
-        var subEl = document.getElementById('pushStatusSub');
-        if (!permEl || !subEl || !window.pushNotifications) return;
-        var perm = window.pushNotifications.permission;
-        var isSub = window.pushNotifications.isEnabled ? 'Activa' : 'Inactiva';
-        permEl.textContent = 'Permiso: ' + (perm || '—');
-        subEl.textContent = 'Suscripción: ' + isSub;
-      }
-      function wire(){
-        var en = document.getElementById('pushEnableBtn');
-        var dis = document.getElementById('pushDisableBtn');
-        var tst = document.getElementById('pushTestBtn');
-        if (en) en.addEventListener('click', async function(){ try { await window.pushNotifications.enable(); notifications.success('Push activado'); } catch(e){ notifications.error('No se pudo activar push'); } finally { updatePushUI(); }});
-        if (dis) dis.addEventListener('click', async function(){ try { await window.pushNotifications.disable(); notifications.info('Push desactivado'); } catch(e){ notifications.error('No se pudo desactivar push'); } finally { updatePushUI(); }});
-        if (tst) tst.addEventListener('click', async function(){ try { await window.pushNotifications.sendTest(); notifications.success('Enviado'); } catch(e){ notifications.error('No se pudo enviar prueba'); } finally { updatePushUI(); }});
-        updatePushUI();
-      }
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
-    })();
-  </script>
-
+  
 </body>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (window.lucide) try { lucide.createIcons(); } catch(_) {}
-    });
-  </script>
 </html>
+
