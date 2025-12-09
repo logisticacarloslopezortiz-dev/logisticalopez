@@ -86,6 +86,14 @@ async function getPushSubscription() {
   }
 }
 
+// Coordenadas que definen un rectángulo aproximado alrededor de la RD.
+const dominicanRepublicBounds = [
+  [17.3, -72.2], // Esquina Suroeste (Sudoeste)
+  [20.0, -68.1]  // Esquina Noreste (Nordeste)
+];
+const mapMaxBounds = L.latLngBounds(dominicanRepublicBounds);
+
+
 // Variables para el mapa
 let map;
 let originMarker;
@@ -653,7 +661,12 @@ async function initMap() {
   const loaderText = document.getElementById('map-loader-text');
   loader.style.display = 'flex';
 
-  map = L.map(mapElement).setView([18.4273, -70.0976], 13);
+  map = L.map(mapElement, {
+    maxBounds: mapMaxBounds, // <-- MEJORA 3: Restringe la navegación del mapa
+    maxZoom: 18,
+    minZoom: 8
+  }).setView([18.7357, -70.1627], 8);
+
   if (map && typeof map.invalidateSize === 'function') { setTimeout(() => map.invalidateSize(), 100); }
   mapElement.style.background = '#eef2ff';
   mapElement.style.position = 'relative';
@@ -845,9 +858,27 @@ async function initMap() {
   }
 
   if (window.GeoSearch) {
-    map.on('geosearch/showlocation', (result) => {
-      lastLatLng = { lat: result.location.y, lng: result.location.x };
-      updateMarkerAndAddress({ lat: result.location.y, lng: result.location.x }, result.location.label);
+    map.on('geosearch/showlocation', (data) => {
+      const locationLatLng = L.latLng(data.location.y, data.location.x);
+
+      // MEJORA: Valida si el resultado de la búsqueda está dentro de los límites
+      if (!mapMaxBounds.contains(locationLatLng)) {
+          notifications.error(
+              'Dirección no válida',
+              'La dirección seleccionada está fuera de la República Dominicana. Por favor, elige una ubicación válida.'
+          );
+
+          // Limpia el input de búsqueda para evitar confusión
+          const searchInput = document.querySelector('.leaflet-geosearch-bar > form > input.search') || document.getElementById('address-search-input');
+          if (searchInput) {
+            searchInput.value = '';
+          }
+          return; // Detiene la ejecución para no colocar el marcador
+      }
+
+      // Si es válido, procede a actualizar el marcador
+      lastLatLng = { lat: data.location.y, lng: data.location.x };
+      updateMarkerAndAddress({ lat: data.location.y, lng: data.location.x }, data.location.label);
     });
   }
 
@@ -961,6 +992,12 @@ async function initMap() {
 
   // Lógica principal para actualizar marcadores
 async function updateMarkerAndAddress(latlng, label = null) {
+  // MEJORA: Validar si el punto está dentro de RD
+  if (!mapMaxBounds.contains(latlng)) {
+    notifications.error('Ubicación no válida', 'Solo puedes seleccionar puntos dentro de la República Dominicana.');
+    return;
+  }
+
   let currentMarker, currentInput, currentIcon;
 
   if (!isOriginSet) {
