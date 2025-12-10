@@ -7,6 +7,14 @@
   <meta name="description" content="Seguimiento de solicitud - TLC" />
   <title>Seguimiento de Solicitud </title>
 
+  <style>
+    html { text-size-adjust: 100%; }
+    :root{
+      --color-primario-oscuro: #117D8B;
+      --color-primario-turquesa: #14b8a6;
+    }
+  </style>
+
   <!-- PWA Support -->
   <link rel="manifest" href="manifest.json" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -24,7 +32,7 @@
 
   <!-- Leaflet (para el mapa) -->
   <link rel="stylesheet" href="vendor/leaflet.css" />
-  <script src="vendor/leaflet.js"></script>
+  <script src="vendor/leaflet.js" defer></script>
 
   <!-- Lucide Icons (CDN unificado) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
@@ -191,8 +199,11 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/seguimiento.js?v=1.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2?v=20251208" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+  <script src="js/supabase-config.js?v=20251208" defer></script>
+  <script src="js/logging.js?v=20251208" defer></script>
+  <script src="js/notifications.js?v=20251208" defer></script>
+  <script src="js/seguimiento.js?v=20251208" defer></script>
+  <script>try{if(window.lucide&&lucide.createIcons){lucide.createIcons();}}catch(_){}</script>
 </body>
 </html>

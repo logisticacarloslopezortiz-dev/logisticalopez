@@ -90,6 +90,7 @@ async function getPushSubscription() {
 let map;
 let originMarker;
 let destinationMarker;
+let previewMarker;
 let pickupInput;
 let deliveryInput;
 let isOriginSet = false; // Controla si el origen ya fue establecido
@@ -652,8 +653,18 @@ async function initMap() {
   const loader = document.getElementById('map-loader');
   const loaderText = document.getElementById('map-loader-text');
   loader.style.display = 'flex';
+  
+  const sanCristobalBounds = L.latLngBounds(
+    L.latLng(18.25, -70.25),
+    L.latLng(18.55, -69.95)
+  );
 
-  map = L.map(mapElement).setView([18.4273, -70.0976], 13);
+  map = L.map(mapElement, {
+    maxBounds: sanCristobalBounds,
+    maxBoundsViscosity: 1.0,
+    minZoom: 10
+  }).setView([18.416, -70.112], 12);
+
   if (map && typeof map.invalidateSize === 'function') { setTimeout(() => map.invalidateSize(), 100); }
   mapElement.style.background = '#eef2ff';
   mapElement.style.position = 'relative';
@@ -670,7 +681,7 @@ async function initMap() {
 
   if (pickupInput) { pickupInput.classList.remove('hidden'); pickupInput.disabled = false; pickupInput.placeholder = 'Escribe o selecciona en el mapa'; }
   if (deliveryInput) { deliveryInput.classList.remove('hidden'); deliveryInput.disabled = true; deliveryInput.placeholder = 'Escribe o selecciona en el mapa'; }
-  let lastLatLng = { lat: 18.4273, lng: -70.0976 };
+  let lastLatLng = { lat: 18.416, lng: -70.112 };
 
   let layersControl = null;
   let layersHidden = false;
@@ -718,6 +729,7 @@ async function initMap() {
   if (window.GeoSearch && GeoSearch.OpenStreetMapProvider) {
     providerRD = new GeoSearch.OpenStreetMapProvider({ params: { countrycodes: 'do', "accept-language": 'es', addressdetails: 1 } });
   }
+  const geoSearchProvider = providerRD;
 
   async function forwardGeocode(q){
     try{
@@ -755,11 +767,20 @@ async function initMap() {
     shadowSize: [41, 41]
   });
 
+  const previewIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+
   // --- Búsqueda de direcciones ---
   let searchControl = null;
   let searchAdded = false;
   if (providerRD && window.GeoSearch && GeoSearch.GeoSearchControl && map && typeof map.addControl === 'function') {
-    searchControl = new GeoSearch.GeoSearchControl({ provider: providerRD, style: 'bar', showMarker: false, autoClose: false });
+    searchControl = new GeoSearch.GeoSearchControl({ provider: geoSearchProvider, style: 'bar', showMarker: false, autoClose: false });
     map.addControl(searchControl);
     searchAdded = true;
   } else {
@@ -776,12 +797,20 @@ async function initMap() {
     const input = document.createElement('input');
     input.type = 'text';
     input.id = 'address-search-input';
-    input.placeholder = 'Buscar dirección';
+    input.placeholder = 'Buscar sector o territorio en San Cristóbal';
     input.style.width = '180px';
     input.style.border = '1px solid #e5e7eb';
     input.style.borderRadius = '6px';
     input.style.padding = '6px 8px';
     container.appendChild(input);
+    const suggestions = document.createElement('ul');
+    suggestions.style.marginTop = '6px';
+    suggestions.style.maxHeight = '180px';
+    suggestions.style.overflowY = 'auto';
+    suggestions.style.borderTop = '1px solid #e5e7eb';
+    suggestions.style.listStyle = 'none';
+    suggestions.style.padding = '0';
+    container.appendChild(suggestions);
     container.style.pointerEvents = 'auto';
     mapElement.appendChild(container);
     if (window.L && L.DomEvent && typeof L.DomEvent.disableClickPropagation === 'function') {
@@ -792,8 +821,54 @@ async function initMap() {
       container.addEventListener(evt, (e) => { e.stopPropagation(); });
       input.addEventListener(evt, (e) => { e.stopPropagation(); });
     });
+    const sectors = [
+      { label: 'San Cristóbal Centro', lat: 18.416, lng: -70.112 },
+      { label: 'Madre Vieja Norte', lat: 18.417, lng: -70.103 },
+      { label: 'Madre Vieja Sur', lat: 18.405, lng: -70.110 },
+      { label: 'Cambita Garabitos', lat: 18.462, lng: -70.223 },
+      { label: 'San Gregorio de Nigua', lat: 18.390, lng: -70.087 },
+      { label: 'Yaguate', lat: 18.335, lng: -70.180 },
+      { label: 'Sabana Grande de Palenque', lat: 18.252, lng: -70.100 },
+      { label: 'Haina', lat: 18.414, lng: -70.035 },
+      { label: 'Villa Altagracia', lat: 18.649, lng: -70.171 },
+      { label: 'Los Cacaos', lat: 18.750, lng: -70.350 }
+    ];
+    function renderSuggestions(list){
+      suggestions.innerHTML = '';
+      list.slice(0,8).forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item.label;
+        li.style.padding = '6px 8px';
+        li.style.cursor = 'pointer';
+        li.addEventListener('mouseenter', () => {
+          const p = { lat: item.lat, lng: item.lng };
+          if (sanCristobalBounds.contains(p)){
+            map.setView([p.lat, p.lng], 15);
+            if (!previewMarker) {
+              previewMarker = L.marker([p.lat, p.lng], { icon: previewIcon, opacity: 0.6 }).addTo(map);
+            } else {
+              previewMarker.setLatLng([p.lat, p.lng]);
+            }
+          }
+        });
+        li.addEventListener('click', () => {
+          const p = { lat: item.lat, lng: item.lng };
+          if (!sanCristobalBounds.contains(p)) return;
+          input.value = item.label;
+          map.setView([p.lat, p.lng], 16);
+          lastLatLng = { lat: p.lat, lng: p.lng };
+          updateMarkerAndAddress(p, item.label);
+          if (previewMarker) { try { map.removeLayer(previewMarker); } catch(_){} previewMarker = null; }
+          suggestions.innerHTML = '';
+        });
+        suggestions.appendChild(li);
+      });
+    }
     input.addEventListener('input', () => {
       const mode = (mapStep === 'awaiting_origin') ? 'origin' : 'destination';
+      const q = input.value.trim().toLowerCase();
+      const filtered = q.length >= 2 ? sectors.filter(s => s.label.toLowerCase().includes(q)) : [];
+      renderSuggestions(filtered);
       debouncedSearch(input, mode);
     });
     input.addEventListener('keydown', async function(e){
@@ -804,10 +879,15 @@ async function initMap() {
         let placed = false;
         const fg = await forwardGeocode(q);
         if (fg) {
-          map.setView([fg.lat, fg.lng], 15);
-          lastLatLng = { lat: fg.lat, lng: fg.lng };
-          updateMarkerAndAddress({ lat: fg.lat, lng: fg.lng }, fg.label);
-          placed = true;
+          const p = { lat: fg.lat, lng: fg.lng };
+          if (!sanCristobalBounds.contains(p)) { notifications.error('Resultado fuera de San Cristóbal'); }
+          else {
+            map.setView([p.lat, p.lng], 15);
+            lastLatLng = { lat: p.lat, lng: p.lng };
+            updateMarkerAndAddress(p, fg.label);
+            if (previewMarker) { try { map.removeLayer(previewMarker); } catch(_){} previewMarker = null; }
+            placed = true;
+          }
         }
         if (!placed) {
           const photonUrl = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&lang=es';
@@ -819,10 +899,15 @@ async function initMap() {
               const lat = f.geometry.coordinates[1];
               const lon = f.geometry.coordinates[0];
               const label = f.properties && (f.properties.label || f.properties.name || '') || q;
-              map.setView([lat, lon], 15);
-              lastLatLng = { lat, lng: lon };
-              updateMarkerAndAddress({ lat, lng: lon }, label);
-              placed = true;
+              const p = { lat, lng: lon };
+              if (!sanCristobalBounds.contains(p)) { notifications.error('Resultado fuera de San Cristóbal'); }
+              else {
+                map.setView([lat, lon], 15);
+                lastLatLng = { lat, lng: lon };
+                updateMarkerAndAddress(p, label);
+                if (previewMarker) { try { map.removeLayer(previewMarker); } catch(_){} previewMarker = null; }
+                placed = true;
+              }
             }
           } catch(_) { }
         }
@@ -834,9 +919,14 @@ async function initMap() {
             const best = results[0];
             const lat = parseFloat(best.lat);
             const lon = parseFloat(best.lon);
-            map.setView([lat, lon], 15);
-            lastLatLng = { lat, lng: lon };
-            updateMarkerAndAddress({ lat, lng: lon }, best.display_name);
+            const p = { lat, lng: lon };
+            if (!sanCristobalBounds.contains(p)) { notifications.error('Resultado fuera de San Cristóbal'); }
+            else {
+              map.setView([lat, lon], 15);
+              lastLatLng = { lat, lng: lon };
+              updateMarkerAndAddress(p, best.display_name);
+              if (previewMarker) { try { map.removeLayer(previewMarker); } catch(_){} previewMarker = null; }
+            }
           }
         }
       } catch(_){ }
@@ -919,11 +1009,12 @@ async function initMap() {
           } catch(_) { /* noop */ }
         }
         if (latlng) {
+          if (!sanCristobalBounds.contains(latlng)) { notifications.error('Resultado fuera de San Cristóbal'); return; }
           map.setView([latlng.lat, latlng.lng], 16);
-          if (mode === 'origin' && mapStep === 'awaiting_origin') {
-            updateMarkerAndAddress(latlng, label);
-          } else if (mode === 'destination' && mapStep !== 'awaiting_origin') {
-            updateMarkerAndAddress(latlng, label);
+          if (!previewMarker) {
+            previewMarker = L.marker([latlng.lat, latlng.lng], { icon: previewIcon, opacity: 0.6 }).addTo(map);
+          } else {
+            previewMarker.setLatLng([latlng.lat, latlng.lng]);
           }
         }
       } catch(_){ }
@@ -961,6 +1052,12 @@ async function initMap() {
 
   // Lógica principal para actualizar marcadores
 async function updateMarkerAndAddress(latlng, label = null) {
+  if (previewMarker) { try { map.removeLayer(previewMarker); } catch(_){} previewMarker = null; }
+  if (!sanCristobalBounds.contains(latlng)) {
+    notifications.error('La ubicación seleccionada está fuera de San Cristóbal.', { title: 'Ubicación Inválida' });
+    return;
+  }
+
   let currentMarker, currentInput, currentIcon;
 
   if (!isOriginSet) {

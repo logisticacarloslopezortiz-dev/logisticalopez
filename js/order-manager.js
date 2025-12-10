@@ -109,7 +109,7 @@ const OrderManager = {
           code: error.code
         });
         this._toast(`RPC error: ${error.message || 'falló'}. Aplicando fallback…`, 'warning');
-        return await this.actualizarEstadoPedido(orderId, 'en_camino_recoger', additionalData);
+        return await this.actualizarEstadoPedido(orderId, 'Aceptada', additionalData);
       }
 
       console.log('[OrderManager] RPC accept_order OK', data);
@@ -118,7 +118,7 @@ const OrderManager = {
     } catch (error) {
       console.error('[OrderManager] Exception en RPC accept_order:', error);
       this._toast(`Error inesperado: ${error.message || 'falló'}. Aplicando fallback…`, 'warning');
-      return await this.actualizarEstadoPedido(orderId, 'en_camino_recoger', additionalData);
+      return await this.actualizarEstadoPedido(orderId, 'Aceptada', additionalData);
     }
   },
 
@@ -447,3 +447,8 @@ const OrderManager = {
     }
   }
 };
+
+// Exportar a entorno global para consumo desde panel-colaborador
+try { if (typeof window !== 'undefined') { window.OrderManager = OrderManager; } } catch (_) {}
+try { if (typeof globalThis !== 'undefined') { globalThis.OrderManager = OrderManager; } } catch (_) {}
+try { if (typeof module === 'object' && module && module.exports) { module.exports = OrderManager; } } catch (_) {}

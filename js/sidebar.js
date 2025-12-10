@@ -22,26 +22,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         let hasAdminRole = appRoles.some(r => synonyms.has(r)) || synonyms.has(metaRole) || isAdminMeta || isOwnerMeta;
         if (!hasAdminRole) {
             try {
-                const { data: collab } = await supabaseConfig.client
-                    .from('collaborators')
-                    .select('role')
-                    .eq('id', user.id)
-                    .maybeSingle();
-                hasAdminRole = !!collab && synonyms.has(norm(collab.role));
-            } catch(_) {
-                // Fallback con cliente público por si RLS bloquea
-                try {
-                    const pub = supabaseConfig.getPublicClient?.();
-                    if (pub) {
-                        const { data: collabPub } = await pub
+                const uid = user.id;
+                const cli = supabaseConfig.client;
+                const normRole = (r) => synonyms.has(norm(r));
+                let roleFound = null;
+                const tryCol = async (col) => {
+                    try {
+                        const { data } = await cli
                             .from('collaborators')
                             .select('role')
-                            .eq('id', user.id)
+                            .eq(col, uid)
                             .maybeSingle();
-                        hasAdminRole = !!collabPub && synonyms.has(norm(collabPub.role));
-                    }
-                } catch(_) {}
-            }
+                        if (data && data.role) roleFound = data.role;
+                    } catch(_) {}
+                };
+                await tryCol('id');
+                if (!roleFound) await tryCol('auth_id');
+                if (!roleFound) await tryCol('uid');
+                if (!roleFound) await tryCol('user_id');
+                if (!roleFound) await tryCol('colaborador_id');
+                if (!roleFound) {
+                    try {
+                        const pub = supabaseConfig.getPublicClient?.();
+                        if (pub) {
+                            const tryColPub = async (col) => {
+                                try {
+                                    const { data } = await pub
+                                        .from('collaborators')
+                                        .select('role')
+                                        .eq(col, uid)
+                                        .maybeSingle();
+                                    if (data && data.role) roleFound = data.role;
+                                } catch(_) {}
+                            };
+                            await tryColPub('id');
+                            if (!roleFound) await tryColPub('auth_id');
+                            if (!roleFound) await tryColPub('uid');
+                            if (!roleFound) await tryColPub('user_id');
+                            if (!roleFound) await tryColPub('colaborador_id');
+                        }
+                    } catch(_) {}
+                }
+                hasAdminRole = !!roleFound && normRole(roleFound);
+            } catch(_) {}
         }
         if (!hasAdminRole) {
             // Permitir acceso básico pero marcar que no es admin
@@ -91,12 +114,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (toggleIcon) toggleIcon.setAttribute('data-lucide', 'panel-left-close');
             }
         }
-
-        // Actualizar íconos de Lucide
-        if (window.lucide) {
-            lucide.createIcons();
-        }
     };
+
+    function refreshLucide() {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            try { window.lucide.createIcons(); } catch (_) {}
+        }
+    }
 
     // Función para manejar el sidebar en móvil
     const toggleMobileSidebar = () => {
@@ -145,6 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Aplicar estado guardado al cargar la página
     applyState(localStorage.getItem('sidebarCollapsed') === 'true');
+    refreshLucide();
     
     // Ajustar el contenido principal en móvil
     const adjustMainContent = () => {
@@ -165,7 +190,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Ajustar al cargar y al cambiar tamaño
     adjustMainContent();
-    window.addEventListener('resize', adjustMainContent);
+    if (!window.__SIDEBAR_RESIZE__) {
+        window.__SIDEBAR_RESIZE__ = true;
+        window.addEventListener('resize', adjustMainContent);
+    }
     // --- FIN: Lógica de Sidebar Mejorada ---
 
     // --- INICIO: Lógica de Logout ---

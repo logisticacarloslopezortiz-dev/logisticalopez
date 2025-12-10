@@ -530,14 +530,15 @@
 
   <!-- Modal Mudanza (Optimizado) -->
   <div id="modal-mudanza" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
-    <div class="flex items-center justify-center min-h-screen p-4 overscroll-contain">
-      <div class="bg-white rounded-lg max-w-2xl w-full">
-        <div class="w-full max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white rounded-lg max-w-2xl w-full flex flex-col max-h-[90vh]">
+        <!-- Encabezado Fijo -->
           <div class="px-6 py-4 flex justify-between items-center border-b">
             <h3 class="text-xl font-bold text-azulOscuro">🏠 Servicio de Mudanza</h3>
             <button type="button" class="close-modal text-gray-500 hover:text-gray-700 text-2xl" aria-label="Cerrar">&times;</button>
           </div>
-          <div class="flex-1 overflow-y-auto px-6 py-4">
+          <!-- Contenido con Scroll -->
+          <div class="flex-1 overflow-y-auto p-6">
             <form id="form-mudanza" class="space-y-6">
             <div class="bg-blue-50 border border-blue-200 text-blue-900 text-sm p-3 rounded">
               <i class="fa-solid fa-info-circle mr-1"></i>
@@ -725,11 +726,11 @@
 
             </form>
           </div>
+          <!-- Pie Fijo -->
           <div class="px-6 py-4 border-t flex justify-end gap-2">
             <button type="button" class="close-modal px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancelar</button>
             <button type="submit" form="form-mudanza" class="px-4 py-2 bg-azulClaro text-white rounded hover:bg-azulOscuro">Guardar y Continuar</button>
           </div>
-        </div>
       </div>
     </div>
   </div>

@@ -52,18 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       closePdfModal();
     };
 
-    // Configurar botón de Calificar
-    const ratingBtn = document.getElementById('openRatingBtn');
-    if (ratingBtn) {
-      const idForRating = order.short_id || order.id;
-      const ratingLink = `https://logisticalopezortiz.com/calificar.html?pedido=${encodeURIComponent(String(idForRating))}`;
-      let phone = String(order.phone || '').replace(/[^0-9]/g, '');
-      if (phone.length === 10 && !phone.startsWith('1')) phone = '1' + phone;
-      const msg = `🙏 Hola, ${order.name || 'cliente'}. Gracias por confiar en nosotros. ¿Podrías dejarnos tu calificación? Tu opinión nos ayuda a mejorar.\n${ratingLink}`;
-      const wa = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : ratingLink;
-      ratingBtn.setAttribute('href', wa);
-      ratingBtn.onclick = (e) => { e.preventDefault(); window.open(wa, '_blank'); };
-    }
+    // Botón de calificación eliminado a petición: no se configura ni se muestra
 
     // Configurar botón de cancelar
     document.getElementById('cancelPdfBtn').onclick = closePdfModal;
@@ -98,7 +87,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     evidenceGallery.innerHTML = order.evidence_photos.map(item => {
-      const url = typeof item === 'string' ? item : (item && item.url ? item.url : '');
+      let url = typeof item === 'string' ? item : (item && item.url ? item.url : '');
+      if (!url && item && item.path && supabaseConfig && supabaseConfig.client && supabaseConfig.client.storage) {
+        try {
+          const b = supabaseConfig.getEvidenceBucket ? supabaseConfig.getEvidenceBucket() : (supabaseConfig.buckets && supabaseConfig.buckets.evidence) ? supabaseConfig.buckets.evidence : 'order-evidence';
+          const pub = supabaseConfig.client.storage.from(b).getPublicUrl(item.path);
+          url = (pub && pub.data && pub.data.publicUrl) ? pub.data.publicUrl : '';
+        } catch (_) { url = ''; }
+      }
       if (!url) return '';
       return `
         <a href="${url}" target="_blank" rel="noopener noreferrer" class="block group">
@@ -434,35 +430,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       console.log('[Historial] Iniciando carga de solicitudes...');
       try { await supabaseConfig.ensureFreshSession(); } catch(_){ }
-      const client = supabaseConfig.client || supabaseConfig.getPublicClient();
       const publicClient = supabaseConfig.getPublicClient();
+      const client = supabaseConfig.client;
 
       // Obtener órdenes Completadas y Canceladas, con columnas necesarias
-      let { data: orders, error: ordersError } = await client
+      let { data: orders, error: ordersError } = await publicClient
         .from('orders')
         .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions')
-        .or('status.eq.Completada,status.eq.Cancelada')
+        .in('status', ['Completada','Cancelada'])
         .order('completed_at', { ascending: false });
 
       if (ordersError) {
-        const msg = String(ordersError.message || '').toLowerCase();
-        const isAuth = ordersError.status === 401 || /jwt expired|invalid jwt/i.test(msg) || ordersError.code === 'PGRST303';
-        if (isAuth) {
-          console.warn('[Historial] JWT expirado/no autorizado. Reintentando con cliente público...');
-          const resp = await publicClient
-            .from('orders')
-            .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions')
-            .or('status.eq.Completada,status.eq.Cancelada')
-            .order('completed_at', { ascending: false });
-          if (resp.error) {
-            console.error('[Historial] Error (anon) al cargar órdenes:', resp.error);
-            throw new Error(`Error al obtener órdenes: ${resp.error.message}`);
-          }
-          orders = resp.data || [];
-        } else {
-          console.error('[Historial] Error al cargar órdenes:', ordersError);
-          throw new Error(`Error al obtener órdenes: ${ordersError.message}`);
+        console.warn('[Historial] Error con cliente público. Reintentando con cliente autenticado...');
+        const resp = await client
+          .from('orders')
+          .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions')
+          .in('status', ['Completada','Cancelada'])
+          .order('completed_at', { ascending: false });
+        if (resp.error) {
+          console.error('[Historial] Error (auth) al cargar órdenes:', resp.error);
+          throw new Error(`Error al obtener órdenes: ${resp.error.message}`);
         }
+        orders = resp.data || [];
       }
        if (!orders || orders.length === 0) {
         console.log('[Historial] No se encontraron órdenes en el historial.');

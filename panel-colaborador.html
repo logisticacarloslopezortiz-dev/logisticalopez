@@ -21,31 +21,41 @@
 
   <style>
     body{background:linear-gradient(180deg,#f3f6f8 0%,#eef2f5 100%)}
-    :root{--azul:#1E405A;--turquesa:#1E8A95;--azul-claro:#3B82F6;--blanco:#ffffff;--accent:#FBBF24}
-    :root{--action-pickup: linear-gradient(90deg,var(--turquesa),#06b6d4); --action-loading: linear-gradient(90deg,#f97316,#fb923c); --action-deliver: linear-gradient(90deg,#10b981,#34d399); --action-finish: linear-gradient(90deg,#7c3aed,#8b5cf6);} 
+    html{ text-size-adjust: 100%; }
+    :root{
+      --azul:#1E405A;--turquesa:#1E8A95;--azul-claro:#3B82F6;--blanco:#ffffff;--accent:#FBBF24;
+      --action-pickup: linear-gradient(90deg,var(--turquesa),#06b6d4);
+      --action-loading: linear-gradient(90deg,#f97316,#fb923c);
+      --action-deliver: linear-gradient(90deg,#10b981,#34d399);
+      --action-finish: linear-gradient(90deg,#7c3aed,#8b5cf6);
+      --action-delay: linear-gradient(90deg,#F97316,#FB923C);
+      --map-origin: linear-gradient(90deg,#06b6d4,#0ea5a6);
+      --map-dest: linear-gradient(90deg,#ef4444,#fb7185);
+      --map-route: linear-gradient(90deg,#3b82f6,#06b6d4);
+    }
     .stat-card{color:#fff}
     .card{background:#fff;border:1px solid #e5e7eb;border-radius:0.75rem}
     .table-header{padding:0.75rem 1rem;text-align:left;font-weight:600;color:#374151;background:#f9fafb}
     /* Action buttons */
     .btn-action{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border-radius:.75rem;color:#fff;font-weight:600;border:none;cursor:pointer;box-shadow:0 6px 18px rgba(2,6,23,0.08);transition:transform .08s ease,opacity .12s ease}
     .btn-action:active{transform:translateY(1px)}
-    .btn-pickup{background:linear-gradient(90deg,#1E405A,#2D5A7B);color:#fff}
-    .btn-loading{background:linear-gradient(90deg,#FBBF24,#FCD34D);color:#1E405A;font-weight:700}
-    .btn-deliver{background:linear-gradient(90deg,#7C3AED,#A78BFA);color:#fff}
-    .btn-finish{background:linear-gradient(90deg,#10B981,#34D399);color:#fff}
-    .btn-retraso{background:linear-gradient(90deg,#F97316,#FB923C);color:#fff}
+    .btn-pickup{background:var(--action-pickup);color:#fff}
+    .btn-loading{background:var(--action-loading);color:var(--azul);font-weight:700}
+    .btn-deliver{background:var(--action-deliver);color:#fff}
+    .btn-finish{background:var(--action-finish);color:#fff}
+    .btn-retraso{background:var(--action-delay);color:#fff}
     /* Map buttons vivid */
     .map-btn-vivid{padding:.5rem .75rem;border-radius:.5rem;font-weight:600;color:#fff;box-shadow:0 6px 14px rgba(2,6,23,0.06)}
-    .map-btn-origin{background:linear-gradient(90deg,#06b6d4,#0ea5a6)}
-    .map-btn-dest{background:linear-gradient(90deg,#ef4444,#fb7185)}
-    .map-btn-route{background:linear-gradient(90deg,#3b82f6,#06b6d4);color:#fff}
+    .map-btn-origin{background:var(--map-origin)}
+    .map-btn-dest{background:var(--map-dest)}
+    .map-btn-route{background:var(--map-route);color:#fff}
     /* Active job card polish */
     #activeJobSection .bg-white{background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%)}
     /* Palette accent adjustments */
     .accent-text { color: var(--accent); }
     .header-gradient { background: linear-gradient(90deg,var(--azul),var(--turquesa)); }
     #activeJobInfo h4{color:var(--azul)}
-      .underline-accent { text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    .underline-accent { text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
     @keyframes pulse { 0%, 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.6); } 50% { box-shadow: 0 0 30px rgba(251, 191, 36, 0.9); } }
     /* Sidebar refinements */
     aside#sidebar { box-shadow: 0 8px 24px rgba(2,6,23,0.06); border-right: 1px solid rgba(15,23,42,0.04); }
@@ -86,26 +96,19 @@
       </div>
     </div>
 
-    <div id="roleWarning" class="mb-4 hidden">
-      <div class="p-4 rounded-lg bg-yellow-100 text-yellow-800 border border-yellow-200">
-        <div class="flex items-center gap-2">
-          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
-          <span>Tu rol no es colaborador. Acceso limitado.</span>
-        </div>
-      </div>
-    </div>
     <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
       <a href="panel-colaborador.html" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50 active"><i data-lucide="user" class="w-5 h-5"></i> <span class="sidebar-text">Mi Panel</span></a>
       <a href="rendimiento.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="bar-chart-3" class="w-5 h-5"></i> <span class="sidebar-text">Rendimiento</span></a>
+      <div class="flex-grow"></div> <!-- Empuja el botón de logout hacia abajo -->
+      <button id="logout-button" class="w-full flex items-center justify-start gap-3 px-4 py-3 rounded-lg mt-2 text-sm text-white hover:bg-red-500/20 hover:text-red-300 border border-white/10 hover:border-red-500/30 transition-colors">
+        <i data-lucide="log-out" class="w-5 h-5"></i>
+        <span class="sidebar-text font-medium">Cerrar Sesión</span>
+      </button>
     </nav>
     <div class="sidebar-footer p-4" style="background:var(--azul)">
       <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm border">
         <i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i>
         <span class="sidebar-text font-medium">Colapsar</span>
-      </button>
-      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm border">
-        <i data-lucide="log-out" class="w-5 h-5"></i>
-        <span class="sidebar-text font-medium">Cerrar Sesión</span>
       </button>
     </div>
   </aside>
@@ -318,7 +321,7 @@
     <div class="bg-white rounded-xl w-full max-w-2xl overflow-hidden">
       <div class="flex items-center justify-between p-4 border-b">
         <h3 id="orderModalTitle" class="font-bold text-lg">Detalle de la Orden</h3>
-        <button id="orderModalClose" class="p-2 rounded hover:bg-gray-100"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <button id="orderModalClose" class="p-2 rounded hover:bg-gray-100" aria-label="Cerrar" title="Cerrar"><i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i></button>
       </div>
       <div id="orderModalBody" class="p-4 text-sm text-gray-700"></div>
       <div class="p-4 border-t flex justify-end gap-2">
@@ -332,7 +335,7 @@
     <div class="bg-white rounded-xl w-full max-w-xl overflow-hidden">
       <div class="flex items-center justify-between p-4 border-b">
         <h3 class="font-bold text-lg">Confirmar aceptación</h3>
-        <button id="acceptModalClose" class="p-2 rounded hover:bg-gray-100"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <button id="acceptModalClose" class="p-2 rounded hover:bg-gray-100" aria-label="Cerrar" title="Cerrar"><i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i></button>
       </div>
       <div id="acceptModalBody" class="p-4 text-sm text-gray-700"></div>
       <div class="p-4 border-t flex justify-end gap-2">
@@ -346,21 +349,23 @@
     <div class="bg-white rounded-xl w-full max-w-xl overflow-hidden">
       <div class="flex items-center justify-between p-4 border-b">
         <h3 class="font-bold text-lg">Comentario del Cliente</h3>
-        <button id="closeCustomerComment" class="p-2 rounded hover:bg-gray-100"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <button id="closeCustomerComment" class="p-2 rounded hover:bg-gray-100" aria-label="Cerrar" title="Cerrar"><i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i></button>
       </div>
       <div id="customerCommentBody" class="p-4 text-sm text-gray-700 max-h-[65vh] overflow-y-auto"></div>
     </div>
   </div>
 
-  <script src="vendor/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="js/notifications.js"></script>
-  <script src="js/sidebar.js"></script>
-  <script src="js/order-manager.js"></script>
-  <script src="js/panel-colaborador.js"></script>
-  <script>if(window.lucide&&lucide.createIcons){lucide.createIcons();}</script>
+  <script src="vendor/leaflet.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2?v=20251208" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+  <script src="js/supabase-config.js?v=20251208" defer></script>
+  <script src="js/logging.js?v=20251208" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js?v=20251208" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js?v=20251208" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+  <script src="js/notifications.js?v=20251208" defer></script>
+  <script src="js/sidebar.js?v=20251208" defer></script>
+  <script src="js/order-manager.js?v=20251208" defer></script>
+  <script src="js/status-flow.js?v=20251208" defer></script>
+  <script src="js/panel-colaborador.js?v=20251208" defer></script>
+  <script>try{if(window.lucide&&lucide.createIcons){lucide.createIcons();}}catch(_){}</script>
 </body>
 </html>

@@ -77,6 +77,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupOfflineSync();
 });
 
+ 
+async function secureUpdateStatus(orderId, statusLabel){
+  try {
+    const { error } = await supabaseConfig.client.rpc('update_order_status', { order_id: orderId, new_status: statusLabel });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+function revertUI(orderId, previousOrder){
+  try { persistActiveJob(orderId, previousOrder.status || null); } catch(_){ }
+  try { updateNotifyIndicator(previousOrder.status || ''); } catch(_){ }
+  renderActiveJob(orderId, previousOrder).then(() => { try { generateActiveJobButtons(orderId, previousOrder); } catch(_){ } });
+}
+
 function collabDisplayName(email) {
   if (!email) return 'Usuario';
   const base = String(email).split('@')[0].replace(/[._-]+/g, ' ').trim();
@@ -633,24 +649,7 @@ function setupActiveJob() {
       const status = btn.getAttribute('data-status');
       const id = getPersistedActiveJob();
       if (!id) return;
-      if (status === 'Completada') {
-        const ok = await canFinalizeOrder(id);
-        if (!ok) { showWarning('Debes subir al menos 1 foto antes de finalizar.'); return; }
-        const updates = { status: 'Completada', completed_at: new Date().toISOString() };
-        try { await supabaseConfig.updateOrder(id, updates); await notifyStatusChange(id, 'Completada'); showSuccess('Has finalizado el servicio.'); updateNotifyIndicator('Completada'); } catch (err) { showWarning('Sin conexión. Guardado para sincronizar.'); queueOfflineUpdate(id, updates); }
-        const stEl = document.getElementById('activeJobStatus');
-        if (stEl) stEl.textContent = 'Completada';
-      } else {
-        try {
-          await updateLastStatus(id, status);
-          await notifyStatusChange(id, status);
-          showInfo(`Estado actualizado: ${status}`);
-          updateNotifyIndicator(status);
-        } catch (err) {
-          queueOfflineUpdate(id, { last_collab_status: status });
-          showWarning('Sin conexión. Guardado para sincronizar.');
-        }
-      }
+      await updateOrderStatus(id, status);
     });
   }
 
@@ -760,18 +759,17 @@ async function renderActiveJob(orderId, orderData) {
   if (statusEl) statusEl.textContent = String(order?.status || 'Asignada').toUpperCase();
   // Ajustar estilo del badge según estado
   if (statusEl) {
-    const st = String(order?.status || '').toLowerCase();
+    const flowHist = Array.isArray(order?.tracking_data) ? order.tracking_data : [];
+    const lastFlow = flowHist.length > 0 ? flowHist[flowHist.length - 1] : null;
+    const stNorm = normalizeStatus((lastFlow && (lastFlow.status || lastFlow.new_status || lastFlow.label)) || (order?.status || ''));
     statusEl.className = 'px-4 py-2 text-xs font-bold rounded-full shadow-lg';
-    if (st.includes('recoger') || st.includes('camino')) {
-      statusEl.style.background = 'var(--turquesa)'; statusEl.style.color = '#fff';
-    } else if (st.includes('cargando')) {
-      statusEl.style.background = 'linear-gradient(90deg,#f97316,#fb923c)'; statusEl.style.color = '#fff';
-    } else if (st.includes('entregar') || st.includes('completada')) {
-      statusEl.style.background = 'linear-gradient(90deg,#10b981,#34d399)'; statusEl.style.color = '#fff';
-    } else if (st.includes('retraso') || st.includes('tapon')) {
-      statusEl.style.background = 'linear-gradient(90deg,#f59e0b,#f97316)'; statusEl.style.color = '#fff';
+    const g = (window.STATUS_GRADIENT || {})[stNorm];
+    if (g) {
+      statusEl.style.background = g.bg;
+      statusEl.style.color = g.color;
     } else {
-      statusEl.style.background = '#ffffff'; statusEl.style.color = 'var(--azul)';
+      statusEl.style.background = '#ffffff';
+      statusEl.style.color = 'var(--azul)';
     }
   }
   if (summaryEl) {
@@ -829,171 +827,82 @@ async function renderActiveJob(orderId, orderData) {
 
 // Generar botones de acción con colores vibrantes
 function generateActiveJobButtons(orderId, order) {
-  const container = document.getElementById('activeJobActionButtons');
-  if (!container) return;
+    const container = document.getElementById('activeJobActionButtons');
+    if (!container) return;
 
-  const status = String(order?.status || '').toLowerCase();
-  
-  // Definir botones disponibles según el estado actual
-  const buttons = [
-    {
-      id: 'btn-pickup',
-      label: 'En camino a recoger',
-      icon: 'arrow-right',
-      class: 'btn-action btn-pickup',
-      status: 'en camino a recoger',
-      show: !['en camino a recoger', 'completada', 'cancelada'].includes(status)
-    },
-    {
-      id: 'btn-loading',
-      label: 'Cargando',
-      icon: 'package',
-      class: 'btn-action btn-loading',
-      status: 'cargando',
-      show: !['cargando', 'completada', 'cancelada'].includes(status)
-    },
-    {
-      id: 'btn-deliver',
-      label: 'En camino a entregar',
-      icon: 'truck',
-      class: 'btn-action btn-deliver',
-      status: 'en camino a entregar',
-      show: !['en camino a entregar', 'completada', 'cancelada'].includes(status)
-    },
-    {
-      id: 'btn-retraso',
-      label: 'Retraso por tapón',
-      icon: 'alert-circle',
-      class: 'btn-action btn-retraso',
-      status: 'retraso por tapon',
-      show: !['retraso por tapon', 'completada', 'cancelada'].includes(status)
-    },
-    {
-      id: 'btn-finish',
-      label: 'Finalizar',
-      icon: 'check-circle',
-      class: 'btn-action btn-finish',
-      status: 'completada',
-      show: !['completada', 'cancelada'].includes(status)
-    }
-  ];
+    const flowHist = Array.isArray(order?.tracking_data) ? order.tracking_data : [];
+    const lastFlow = flowHist.length > 0 ? flowHist[flowHist.length - 1] : null;
+    const currentStatus = normalizeStatus((lastFlow && (lastFlow.status || lastFlow.new_status || lastFlow.label)) || (order?.status || ''));
+    const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
+    const gradient = window.STATUS_GRADIENT || {};
 
-  const gradient = {
-    'en camino a recoger': { bg: 'linear-gradient(90deg,#1E405A,#2D5A7B)', color: '#ffffff' },
-    'cargando': { bg: 'linear-gradient(90deg,#FBBF24,#FCD34D)', color: '#1F2937' },
-    'en camino a entregar': { bg: 'linear-gradient(90deg,#7C3AED,#A78BFA)', color: '#ffffff' },
-    'retraso por tapon': { bg: 'linear-gradient(90deg,#F97316,#FB923C)', color: '#ffffff' },
-    'completada': { bg: 'linear-gradient(90deg,#10B981,#34D399)', color: '#ffffff' }
-  };
+    const next = (typeof siguienteEstado === 'function') ? siguienteEstado(currentStatus) : null;
+    const primary = next ? { status: next, label: next === 'completada' ? 'Finalizar' : (
+      next === 'en camino a recoger' ? 'Confirmar y salir a recoger' : (
+      next === 'cargando' ? 'Llegué al cliente' : (
+      next === 'en camino a entregar' ? 'Ir a entregar' : next))) , icon: (
+      next === 'en camino a recoger' ? 'navigation' :
+      next === 'cargando' ? 'package' :
+      next === 'en camino a entregar' ? 'truck' : 'check-circle') } : null;
 
-  // Determinar secuencia y habilitación
-  const baseFlow = ['en camino a recoger','cargando','en camino a entregar'];
-  function idxOf(st){
-    switch(st){
-      case 'en camino a recoger': return 0;
-      case 'cargando': return 1;
-      case 'en camino a entregar': return 2;
-      case 'completada': return 3;
-      default: return -1;
-    }
-  }
-  const currIdx = idxOf(status);
-  const nextAllowed = currIdx === -1 ? 'en camino a recoger' : (currIdx < 2 ? baseFlow[currIdx+1] : null);
-  const canDelay = true;
-  const canFinalize = currIdx >= 2;
+    const secondary = { status: 'retraso por tapon', label: 'Retraso por tapón', icon: 'alert-circle' };
 
-  // Renderizar botones con habilitación, resaltando el siguiente paso
-  container.innerHTML = buttons
-    .filter(b => b.show)
-    .map(b => {
-      const isNext = b.status === nextAllowed;
-      const enabled = (b.status === nextAllowed) || (b.status === 'retraso por tapon' && canDelay) || (b.status === 'completada' && canFinalize);
-      const disabledCls = enabled ? '' : 'opacity-60 cursor-not-allowed';
-      const highlight = isNext ? 'ring-2 ring-[var(--acento)]' : '';
+    const actions = [];
+    if (primary) actions.push(primary);
+    actions.push(secondary);
+
+    const buttonsHtml = actions.map(action => {
+      const isAllowed = isStatusChangeAllowed(currentStatus, action.status, hasEvidence);
+      const g = gradient[action.status] || { bg: '#374151', color: '#ffffff' };
+      const enabledClass = isAllowed ? 'cursor-pointer hover:shadow-lg transform hover:scale-105 active:scale-95' : 'opacity-50 cursor-not-allowed';
+      const highlightClass = isAllowed ? 'ring-2 ring-offset-2 ring-yellow-400' : '';
       return `
-        <button data-status="${b.status}" class="${b.class} ${disabledCls} ${highlight} hover:shadow-lg transform hover:scale-105 active:scale-95 transition-all" title="${b.label}" style="padding: 0.6rem 1rem; border-radius: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; border: none; cursor: pointer; box-shadow: 0 6px 18px rgba(2,6,23,0.1); background:${gradient[b.status].bg}; color:${gradient[b.status].color};">
-          <i data-lucide="${b.icon}" class="w-4 h-4"></i>
-          <span>${b.label}</span>
+        <button 
+          data-status="${action.status}" 
+          class="btn-action ${enabledClass} ${highlightClass} transition-all" 
+          title="${action.label}" 
+          style="padding: 0.6rem 1rem; border-radius: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background:${g.bg}; color:${g.color};"
+          ${!isAllowed ? 'disabled' : ''}
+        >
+          <i data-lucide="${action.icon}" class="w-4 h-4"></i>
+          <span>${action.label}</span>
         </button>
       `;
-    })
-    .join('');
-
-  // Actualizar iconos de Lucide
-  if (window.lucide) lucide.createIcons();
-
-  // Renderizar stepper de progreso
-  const stepper = document.getElementById('activeJobStepper');
-  if (stepper) {
-    const steps = [
-      { key: 'en camino a recoger', label: 'Recoger' },
-      { key: 'cargando', label: 'Carga' },
-      { key: 'en camino a entregar', label: 'Entrega' },
-      { key: 'completada', label: 'Finalizar' }
-    ];
-    const currentIndex = Math.max(0, idxOf(status));
-    const htmlStepper = steps.map((stp, i) => {
-      const isDone = i < currentIndex || status === 'completada';
-      const isActive = i === currentIndex && status !== 'completada';
-      const chipClass = isDone ? 'bg-emerald-100 text-emerald-700' : (isActive ? 'ring-2 ring-[var(--acento)] bg-white text-gray-800' : 'bg-gray-100 text-gray-500');
-      const icon = isDone ? 'check' : (isActive ? 'circle' : 'dot');
-      return `
-        <div class="flex items-center gap-2">
-          <div class="px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 ${chipClass}">
-            <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>
-            <span>${stp.label}</span>
-          </div>
-          ${i < steps.length - 1 ? '<div class="w-8 h-px bg-gray-300"></div>' : ''}
-        </div>
-      `;
     }).join('');
-    stepper.innerHTML = htmlStepper;
-    if (window.lucide) lucide.createIcons();
-  }
 
-  // Agregar listeners de click
-  container.querySelectorAll('[data-status]').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (btn.classList.contains('cursor-not-allowed')) return;
-      const newStatus = btn.getAttribute('data-status');
-      console.log('Button clicked, updating status to:', newStatus);
-      await updateOrderStatus(orderId, newStatus);
-    });
-  });
+    container.innerHTML = buttonsHtml;
+
+    if (window.lucide) lucide.createIcons();
+
+    if (!container._delegateAttached) {
+      container.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.btn-action');
+        if (!btn) return;
+        const status = btn.getAttribute('data-status');
+        if (!status) return;
+        if (btn.disabled || btn.getAttribute('data-busy') === '1') return;
+        btn.setAttribute('data-busy', '1');
+        try {
+          await updateOrderStatus(orderId, status);
+        } catch (_) {
+          try { btn.removeAttribute('data-busy'); } catch(_){}
+        }
+      });
+      container._delegateAttached = true;
+    }
 }
 
 // Actualizar estado de la orden y UI
 async function updateOrderStatus(orderId, newStatus) {
   try {
     const current = await supabaseConfig.getOrderById(orderId);
-    const currentStatus = String(current?.status || '').toLowerCase();
-    const baseFlow = ['en camino a recoger','cargando','en camino a entregar'];
-    function idxOf(st){
-      switch(st){
-        case 'en camino a recoger': return 0;
-        case 'cargando': return 1;
-        case 'en camino a entregar': return 2;
-        case 'completada': return 3;
-        default: return -1;
-      }
-    }
-    const isDelay = String(newStatus).toLowerCase() === 'retraso por tapon';
-    const isFinalize = String(newStatus).toLowerCase() === 'completada';
-    const currIdx = idxOf(currentStatus);
-    const targetIdx = idxOf(String(newStatus).toLowerCase());
-    let allowed = false;
-    if (isDelay) {
-      allowed = true;
-    } else if (isFinalize) {
-      // Requiere evidencia fotográfica
-      const ok = await canFinalizeOrder(orderId);
-      if (!ok) { showWarning('Debes subir evidencia fotográfica antes de finalizar.'); return; }
-      allowed = currIdx >= 2;
-    } else {
-      allowed = (currIdx === -1 && targetIdx === 0) || (targetIdx === currIdx + 1);
-    }
+    const flowHist = Array.isArray(current?.tracking_data) ? current.tracking_data : [];
+    const lastFlow = flowHist.length > 0 ? flowHist[flowHist.length - 1] : null;
+    const currentStatus = normalizeStatus((lastFlow && (lastFlow.status || lastFlow.new_status || lastFlow.label)) || (current?.status || ''));
+    const nextLower = String(newStatus).toLowerCase();
+    const hasEvidence = nextLower === 'completada' ? await canFinalizeOrder(orderId) : true;
+    if (nextLower === 'completada' && !hasEvidence) { showWarning('Debes subir evidencia fotográfica antes de finalizar.'); return; }
+    const allowed = isStatusChangeAllowed(currentStatus, nextLower, hasEvidence);
     if (!allowed) { showWarning('Acción no permitida: respeta la secuencia'); return; }
     // Crear etiqueta legible: "en camino a recoger" -> "En camino a recoger"
     const statusLabel = String(newStatus)
@@ -1003,16 +912,23 @@ async function updateOrderStatus(orderId, newStatus) {
 
     console.log('Updating order status:', { orderId, newStatus, statusLabel });
     
+    const previousOrder = { ...current };
     // UI optimista: reflejar cambios antes de confirmar en BD
     persistActiveJob(orderId, statusLabel);
     updateNotifyIndicator(statusLabel);
-    await renderActiveJob(orderId, { ...current, status: statusLabel });
-    generateActiveJobButtons(orderId, { ...current, status: statusLabel });
+    const optimisticTracking = Array.isArray(current?.tracking_data) ? current.tracking_data : [];
+    const optimisticOrder = { ...current, status: statusLabel, tracking_data: [...optimisticTracking, { status: newStatus, date: new Date().toISOString() }] };
+    await renderActiveJob(orderId, optimisticOrder);
 
-    // Actualizar en BD en segundo plano
-    const updates = { status: statusLabel, updated_at: new Date().toISOString() };
-    await supabaseConfig.updateOrder(orderId, updates);
-    await updateLastStatus(orderId, statusLabel);
+    // Actualizar en BD con RPC seguro
+    // REFACTOR: Usar OrderManager para centralizar la lógica de actualización.
+    // Esto soluciona el error 404 del RPC al usar el método correcto.
+    const managerStatus = (typeof statusToManagerToken === 'function') ? statusToManagerToken(newStatus) : newStatus;
+    const result = await window.OrderManager.actualizarEstadoPedido(orderId, managerStatus);
+    if (!result || !result.success) {
+      throw new Error(result?.error || 'OrderManager update failed');
+    }
+
     showSuccess(`✓ Estado actualizado a: ${statusLabel}`);
     await notifyStatusChange(orderId, statusLabel);
     
@@ -1029,12 +945,13 @@ async function updateOrderStatus(orderId, newStatus) {
       if (assignedWrapper) assignedWrapper.classList.remove('hidden');
     } else {
       await renderActiveJob(orderId, updated);
-      generateActiveJobButtons(orderId, updated);
+      // No se necesita llamar a generateActiveJobButtons de nuevo, renderActiveJob ya lo hace.
     }
   } catch (e) {
     console.error('Error actualizando estado:', e);
     showError('❌ No se pudo actualizar el estado. Intenta más tarde.');
-    queueOfflineUpdate(orderId, { status: newStatus });
+    try { revertUI(orderId, await supabaseConfig.getOrderById(orderId)); } catch(_){ }
+    queueOfflineUpdate(orderId, { status: String(newStatus).split(' ').map((w,i)=> i===0? w.charAt(0).toUpperCase()+w.slice(1): w).join(' ') });
   }
 }
 
@@ -1116,7 +1033,10 @@ function openAcceptModal(orderId) {
   function close() { modal.classList.add('hidden'); }
   if (closeBtn) closeBtn.onclick = close;
   if (cancelBtn) cancelBtn.onclick = close;
-  if (confirmBtn) confirmBtn.onclick = async () => { await CollabOrderActions.acceptOrder(orderId); close(); };
+  if (confirmBtn) confirmBtn.onclick = async () => { 
+    await CollabOrderActions.acceptOrder(orderId); 
+    close();
+  };
 }
 
 function initActiveMap(order) {
@@ -1208,6 +1128,7 @@ async function applyOrderPatch(order){
     // Determinar si pertenece al colaborador actual
     let collabId = null;
     try { const { data: { session } } = await supabaseConfig.client.auth.getSession(); collabId = session?.user?.id || null; } catch(_){ try { collabId = localStorage.getItem('collaboratorId') || null; } catch(_){}}
+    collabId = collabId || null;
 
     const st = String(order.status || '').toLowerCase();
     const isMine = collabId && order.assigned_to === collabId;
@@ -1274,7 +1195,8 @@ function queueOfflineUpdate(orderId, updates) {
   try {
     const q = JSON.parse(localStorage.getItem('tlc_offline_updates') || '[]');
     q.push({ orderId, updates, timestamp: new Date().toISOString(), synced: false });
-    localStorage.setItem('tlc_offline_updates', JSON.stringify(q));
+    const capped = Array.isArray(q) && q.length > 20 ? q.slice(q.length - 20) : q;
+    localStorage.setItem('tlc_offline_updates', JSON.stringify(capped));
   } catch (_) {}
 }
 

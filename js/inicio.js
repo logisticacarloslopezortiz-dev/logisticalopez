@@ -292,7 +292,7 @@ async function updateOrderStatus(orderId, newStatus) {
     // Redirigir al historial cuando se marca como completada
     if (newStatus === 'Completada' || newStatus === 'Completado') {
       try {
-        window.location.href = 'historial.html';
+        window.location.href = 'historial-solicitudes.html';
       } catch (_) {}
     }
 
@@ -488,7 +488,6 @@ async function openAssignModal(orderId){
   const cancelBtn = document.getElementById('assignCancelBtn');
   const deleteBtn = document.getElementById('deleteOrderBtn');
   const copyTrackBtn = document.getElementById('copyTrackingLinkBtn');
-  const copyRatingBtn = document.getElementById('copyRatingLinkBtn');
 
   // ✅ CORRECCIÓN: Asignar evento con addEventListener para mayor fiabilidad.
   if (whatsappBtn) {
@@ -501,7 +500,7 @@ async function openAssignModal(orderId){
   if (cancelBtn) cancelBtn.onclick = () => closeAssignModal();
   if (deleteBtn) deleteBtn.onclick = () => deleteSelectedOrder();
 
-  // Copiar enlaces directos (seguimiento y calificación)
+  // Copiar enlace directo de seguimiento
   if (copyTrackBtn) {
     copyTrackBtn.replaceWith(copyTrackBtn.cloneNode(true));
     document.getElementById('copyTrackingLinkBtn').addEventListener('click', async () => {
