@@ -1,74 +1,38 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const path = (location.pathname || '').toLowerCase();
-    const isAdminPage = path.endsWith('/inicio.html') || path.endsWith('inicio.html');
+    const endsWith = (p) => path.endsWith('/' + p) || path.endsWith(p);
+    const adminPages = ['inicio.html','servicios.html','ganancias.html','historial-solicitudes.html','mi-negocio.html','colaboradores.html'];
+    const isAdminPage = adminPages.some(endsWith);
+    const isPublicPage = false;
     const loginHref = 'login.html';
-
+    try { if (supabaseConfig.ensureFreshSession) await supabaseConfig.ensureFreshSession(); } catch(_) {}
     const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
-    if (sessionError || !session) {
+    const now = Math.floor(Date.now() / 1000);
+    const exp = session?.expires_at || 0;
+    const isExpired = !session || exp <= now;
+    if ((sessionError || isExpired) && !isPublicPage) {
         window.location.href = loginHref;
         return;
     }
 
     if (isAdminPage) {
         const user = session.user;
-        const appRolesRaw = (user?.app_metadata?.roles || user?.app_metadata?.role || []);
-        const toArr = (v) => Array.isArray(v) ? v : [v];
-        const norm = (s) => String(s || '').toLowerCase();
-        const appRoles = toArr(appRolesRaw).map(norm);
-        const metaRole = norm(user?.user_metadata?.role);
-        const isAdminMeta = user?.user_metadata?.is_admin === true;
-        const isOwnerMeta = user?.user_metadata?.is_owner === true;
-        const synonyms = new Set(['administrador','admin','owner']);
-        let hasAdminRole = appRoles.some(r => synonyms.has(r)) || synonyms.has(metaRole) || isAdminMeta || isOwnerMeta;
+        let hasAdminRole = false;
+        try {
+            const { data: collab } = await supabaseConfig.client
+                .from('collaborators')
+                .select('role,status')
+                .eq('id', user.id)
+                .maybeSingle();
+            const norm = (s) => String(s || '').toLowerCase().trim();
+            const role = norm(collab?.role);
+            const status = norm(collab?.status);
+            hasAdminRole = !!collab && status === 'activo' && role === 'administrador';
+        } catch(_) {}
         if (!hasAdminRole) {
-            try {
-                const uid = user.id;
-                const cli = supabaseConfig.client;
-                const normRole = (r) => synonyms.has(norm(r));
-                let roleFound = null;
-                const tryCol = async (col) => {
-                    try {
-                        const { data } = await cli
-                            .from('collaborators')
-                            .select('role')
-                            .eq(col, uid)
-                            .maybeSingle();
-                        if (data && data.role) roleFound = data.role;
-                    } catch(_) {}
-                };
-                await tryCol('id');
-                if (!roleFound) await tryCol('auth_id');
-                if (!roleFound) await tryCol('uid');
-                if (!roleFound) await tryCol('user_id');
-                if (!roleFound) await tryCol('colaborador_id');
-                if (!roleFound) {
-                    try {
-                        const pub = supabaseConfig.getPublicClient?.();
-                        if (pub) {
-                            const tryColPub = async (col) => {
-                                try {
-                                    const { data } = await pub
-                                        .from('collaborators')
-                                        .select('role')
-                                        .eq(col, uid)
-                                        .maybeSingle();
-                                    if (data && data.role) roleFound = data.role;
-                                } catch(_) {}
-                            };
-                            await tryColPub('id');
-                            if (!roleFound) await tryColPub('auth_id');
-                            if (!roleFound) await tryColPub('uid');
-                            if (!roleFound) await tryColPub('user_id');
-                            if (!roleFound) await tryColPub('colaborador_id');
-                        }
-                    } catch(_) {}
-                }
-                hasAdminRole = !!roleFound && normRole(roleFound);
-            } catch(_) {}
-        }
-        if (!hasAdminRole) {
-            // Permitir acceso básico pero marcar que no es admin
-            console.warn('Sesión sin rol administrador; acceso limitado');
+            try { console.warn('Sesión sin rol administrador; redirigiendo a login'); } catch(_){}
+            window.location.href = loginHref;
+            return;
         }
     }
 

@@ -34,41 +34,39 @@ async function loadCollaborators() {
 // Función para cargar y mostrar información del administrador
 async function loadAdminInfo() {
   try {
-    const { data: { user }, error } = await supabaseConfig.client.auth.getUser();
-    
-    if (error) {
-      console.error('Error al obtener información del usuario:', error);
-      return;
-    }
-
-    if (user) {
-      const adminNameElement = document.getElementById('adminName');
-      const adminAvatarElement = document.getElementById('adminAvatar');
-      
-      // Obtener el nombre del administrador
-      let adminName = 'Administrador';
+    try { if (supabaseConfig.ensureFreshSession) await supabaseConfig.ensureFreshSession(); } catch(_) {}
+    const { data: { session } } = await supabaseConfig.client.auth.getSession();
+    if (!session) return;
+    const user = session.user;
+    const adminNameElement = document.getElementById('adminName');
+    const adminAvatarElement = document.getElementById('adminAvatar');
+    let adminName = '';
+    try {
+      const { data: collab } = await supabaseConfig.client
+        .from('collaborators')
+        .select('name')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (collab && collab.name) adminName = String(collab.name).trim();
+    } catch(_) {}
+    if (!adminName) {
       if (user.user_metadata?.full_name) {
-        adminName = user.user_metadata.full_name;
+        adminName = String(user.user_metadata.full_name).trim();
       } else if (user.email) {
-        // Si no hay nombre completo, usar la parte antes del @ del email
-        adminName = user.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        adminName = String(user.email).split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      } else {
+        adminName = '';
       }
-      
-      // Actualizar el nombre en el DOM
-      if (adminNameElement) {
-        adminNameElement.textContent = adminName;
-      }
-      
-      // Generar avatar con iniciales
-      if (adminAvatarElement) {
-        const initials = adminName.split(' ').map(word => word.charAt(0).toUpperCase()).join('').substring(0, 2);
-        adminAvatarElement.textContent = initials;
-        
-        // Generar color basado en el nombre
-        const colors = ['bg-blue-600', 'bg-green-600', 'bg-purple-600', 'bg-red-600', 'bg-yellow-600', 'bg-indigo-600'];
-        const colorIndex = adminName.length % colors.length;
-        adminAvatarElement.className = adminAvatarElement.className.replace(/bg-\w+-\d+/, colors[colorIndex]);
-      }
+    }
+    if (adminNameElement) {
+      adminNameElement.textContent = adminName || 'Usuario no encontrado';
+    }
+    if (adminAvatarElement) {
+      const initials = (adminName || '').split(' ').map(word => word.charAt(0).toUpperCase()).join('').substring(0, 2) || '?';
+      adminAvatarElement.textContent = initials;
+      const colors = ['bg-blue-600', 'bg-green-600', 'bg-purple-600', 'bg-red-600', 'bg-yellow-600', 'bg-indigo-600'];
+      const colorIndex = adminName.length % colors.length;
+      adminAvatarElement.className = adminAvatarElement.className.replace(/bg-\w+-\d+/, colors[colorIndex]);
     }
   } catch (error) {
     console.error('Error al cargar información del administrador:', error);
@@ -613,7 +611,7 @@ async function generateAndSendInvoice(orderId) {
     return;
   }
 
-  notifications.info('Generando factura y abriendo Gmail...', 'Espera un momento.');
+  notifications.info('Generando factura y enviando enlace por correo...', 'Espera un momento.');
 
   try {
     // 1. Invocar una Edge Function para generar el PDF y obtener su URL
@@ -639,24 +637,24 @@ async function generateAndSendInvoice(orderId) {
       }
     } catch(_) { }
 
-    const { data: emailResp } = await supabaseConfig.client.functions.invoke('send-invoice', {
-      body: { orderId: order.id, email: clientEmail }
-    });
-    const emailSent = !!(emailResp && emailResp.success && emailResp.data && emailResp.data.emailSent);
-
-    // 2. Preparar el contenido para el enlace mailto de Gmail
-    const subject = `Factura de su orden #${order.short_id || order.id} con Logística López Ortiz`;
-    const body = `¡Hola, ${order.client_name || order.name}!\n\nAdjunto le enviamos los detalles y la factura correspondiente a su orden de servicio con nosotros.\n\n- Servicio: ${order.service?.name || 'N/A'}\n- Ruta: ${order.pickup} → ${order.delivery}\n- Fecha: ${order.date}\n\nPuede ver y descargar su factura desde el siguiente enlace seguro:\n${pdfUrl}\n\nSi tiene alguna pregunta, no dude en contactarnos.\n\n¡Gracias por confiar en Logística López Ortiz!`;
-
-    // 3. Crear y abrir el enlace de Gmail
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(clientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-    window.open(gmailUrl, '_blank');
+    let emailSent = false;
+    try {
+      const { data: emailResp } = await supabaseConfig.client.functions.invoke('send-invoice', {
+        body: { orderId: order.id, email: clientEmail }
+      });
+      emailSent = !!(emailResp && emailResp.success && emailResp.data && emailResp.data.emailSent);
+    } catch (_) {
+      emailSent = false;
+    }
 
     if (emailSent) {
-      notifications.success('Correo enviado', 'Se envió la factura al cliente y se abrió Gmail como respaldo.');
+      notifications.success('Factura enviada', 'El cliente recibió el enlace de su factura.');
     } else {
-      notifications.success('Gmail Abierto', 'Se abrió Gmail con el borrador para enviar la factura.');
+      const subject = `Factura de su orden #${order.short_id || order.id} con Logística López Ortiz`;
+      const body = `¡Hola, ${order.client_name || order.name}!\n\nAdjunto le enviamos los detalles y la factura correspondiente a su orden de servicio con nosotros.\n\n- Servicio: ${order.service?.name || 'N/A'}\n- Ruta: ${order.pickup} → ${order.delivery}\n- Fecha: ${order.date}\n\nPuede ver y descargar su factura desde el siguiente enlace seguro:\n${pdfUrl}\n\nSi tiene alguna pregunta, no dude en contactarnos.\n\n¡Gracias por confiar en Logística López Ortiz!`;
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(clientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(gmailUrl, '_blank');
+      notifications.warning('Envío por correo no disponible', 'Se abrió Gmail con el borrador para enviar la factura.');
     }
 
   } catch (error) {
@@ -892,10 +890,14 @@ function vapidToBytes(base64String) {
   // Inicialización
   function init() {
     loadOrders();
-    loadAdminInfo();
     checkVapidStatus();
   }
 
   try { init(); } catch(_) {}
+  try {
+    window.addEventListener('admin-session-ready', () => {
+      try { loadAdminInfo(); } catch(_) {}
+    });
+  } catch(_) {}
   refreshLucide();
 });

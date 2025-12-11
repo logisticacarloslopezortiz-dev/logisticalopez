@@ -47,16 +47,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function fetchCompletedOrders() {
     ui.loadingOverlay.classList.remove('hidden');
     try {
-      const { data, error } = await supabaseConfig.client
-        .from('orders')
-        .select('id, completed_at, monto_cobrado, completed_by, assigned_to, service:services(name)')
-        .in('status', ['Completada', 'entregado']) // Considerar ambos estados
-        .not('monto_cobrado', 'is', null)
-        .order('completed_at', { ascending: false });
+      const COMPLETED = ['Completada','completada','Entregada','entregada','Finalizada','finalizada'];
+      let data = null; let error = null;
+      try {
+        const resp = await supabaseConfig.client
+          .from('orders')
+          .select('id, status, completed_at, monto_cobrado, completed_by, assigned_to, service:services(name)')
+          .in('status', COMPLETED)
+          .not('monto_cobrado', 'is', null)
+          .order('completed_at', { ascending: false });
+        data = resp.data; error = resp.error || null;
+      } catch (e) { error = e; }
+
+      if (error && (String(error.message||'').toLowerCase().includes('jwt expired') || error.status === 401)) {
+        try {
+          const pub = supabaseConfig.getPublicClient();
+          const resp2 = await pub
+            .from('orders')
+            .select('id, status, completed_at, monto_cobrado, completed_by, assigned_to, service:services(name)')
+            .in('status', COMPLETED)
+            .not('monto_cobrado', 'is', null)
+            .order('completed_at', { ascending: false });
+          data = resp2.data; error = resp2.error || null;
+        } catch (_) {}
+      }
 
       if (error) throw error;
       
-      allOrders = data.map(order => ({
+      allOrders = (data || []).map(order => ({
         ...order,
         monto_cobrado: parseFloat(order.monto_cobrado) || 0,
         completed_at: new Date(order.completed_at)
@@ -74,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const { data, error } = await supabaseConfig.client
         .from('collaborators')
-        .select('id, name, commission_percent, role');
+        .select('id, name, commission_percent, role, status');
       if (error) throw error;
       collaborators = Array.isArray(data) ? data : [];
       collabPercentMap = new Map();
@@ -93,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const uid = session.user?.id;
       const me = collaborators.find(c => String(c.id) === String(uid));
-      return me && String(me.role).toLowerCase().includes('admin');
+      return !!me && String(me.role || '').toLowerCase().trim() === 'administrador' && String(me.status || '').toLowerCase().trim() === 'activo';
     } catch (_) { return false; }
   }
 

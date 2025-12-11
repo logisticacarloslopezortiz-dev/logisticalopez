@@ -1,4 +1,14 @@
 // js/historial.js
+const PUBLIC_CLIENT = (() => {
+  try {
+    const cfg = window.supabaseConfig;
+    if (!cfg) return null;
+    if (typeof cfg.getPublicClient === 'function') {
+      return cfg.getPublicClient();
+    }
+    return cfg.client || null;
+  } catch (_) { return null; }
+})();
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Inicializar elementos del DOM
@@ -373,6 +383,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </button>` :
                 '<span class="text-gray-400">No hay</span>'}
             </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+              <button onclick="window.showPDFModal(${order.id})" class="p-2 rounded-full hover:bg-blue-100 text-blue-600 transition-colors" title="Descargar reporte PDF">
+                <i data-lucide="file-down" class="w-5 h-5"></i>
+              </button>
+            </td>
           </tr>
         `;
       }).join('');
@@ -430,28 +445,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       console.log('[Historial] Iniciando carga de solicitudes...');
       try { await supabaseConfig.ensureFreshSession(); } catch(_){ }
-      const publicClient = supabaseConfig.getPublicClient();
+      
       const client = supabaseConfig.client;
+      const publicClient = PUBLIC_CLIENT;
+      if (!publicClient && !client) {
+        if (tableBody) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="7" class="text-center py-10 text-red-600">
+                No se pudo inicializar Supabase. Verifique que supabase-config.js esté cargado.
+              </td>
+            </tr>`;
+        }
+        return;
+      }
 
-      // Obtener órdenes Completadas y Canceladas, con columnas necesarias
-      let { data: orders, error: ordersError } = await publicClient
-        .from('orders')
-        .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions')
-        .in('status', ['Completada','Cancelada'])
-        .order('completed_at', { ascending: false });
+      let orders = [];
+      let ordersError = null;
+      const COMPLETED_STATUSES = ['Completada','completada','Completado','completado','Finalizada','finalizada','Entregada','entregada'];
+      const CANCELLED_STATUSES = ['Cancelada','cancelada','Cancelado','cancelado'];
+      const ALL_STATUSES = [...COMPLETED_STATUSES, ...CANCELLED_STATUSES];
+      const selectCols = 'id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions';
+      
+      const uniqueById = (arr) => {
+        const map = new Map();
+        for (const o of arr) { if (o && o.id != null && !map.has(o.id)) map.set(o.id, o); }
+        return Array.from(map.values());
+      };
+
+      // ✅ CORRECCIÓN: Priorizar el cliente autenticado para evitar problemas con RLS.
+      try {
+        const { data, error } = await client
+          .from('orders')
+          .select(selectCols)
+          .in('status', ALL_STATUSES)
+          .order('completed_at', { ascending: false });
+        
+        if (error) { ordersError = error; }
+        else { orders = data || []; }
+      } catch (e) { ordersError = e; }
 
       if (ordersError) {
-        console.warn('[Historial] Error con cliente público. Reintentando con cliente autenticado...');
-        const resp = await client
-          .from('orders')
-          .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions')
-          .in('status', ['Completada','Cancelada'])
-          .order('completed_at', { ascending: false });
-        if (resp.error) {
-          console.error('[Historial] Error (auth) al cargar órdenes:', resp.error);
-          throw new Error(`Error al obtener órdenes: ${resp.error.message}`);
-        }
-        orders = resp.data || [];
+        console.error('[Historial] Error al cargar con cliente autenticado:', ordersError);
       }
        if (!orders || orders.length === 0) {
         console.log('[Historial] No se encontraron órdenes en el historial.');
@@ -471,32 +506,35 @@ document.addEventListener('DOMContentLoaded', async () => {
       let collaborators = [];
       let services = [];
 
-      if (collaboratorIds.length > 0) {
-        const { data: collabData, error: collabError } = await publicClient
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', collaboratorIds);
-        if (collabError) console.warn('[Historial] Error al cargar colaboradores:', collabError);
-        else collaborators = collabData;
-      }
+      try {
+        if (collaboratorIds.length > 0) {
+          const { data: collabData, error: collabError } = await client
+            .from('profiles')
+            .select('id, full_name');
+          if (collabError) console.warn('[Historial] Error al cargar colaboradores:', collabError);
+          else collaborators = collabData || [];
+        }
+      } catch (_) {}
 
-      if (serviceIds.length > 0) {
-        const { data: serviceData, error: serviceError } = await client
-          .from('services')
-          .select('id, name')
-          .in('id', serviceIds);
-        if (serviceError) console.warn('[Historial] Error al cargar servicios:', serviceError);
-        else services = serviceData;
-      }
+      try {
+        if (serviceIds.length > 0) {
+          const { data: serviceData, error: serviceError } = await client
+            .from('services')
+            .select('id, name');
+          if (serviceError) console.warn('[Historial] Error al cargar servicios:', serviceError);
+          else services = serviceData || [];
+        }
+      } catch (_) {}
       let vehicles = [];
-      if (vehicleIds.length > 0) {
-        const { data: vehicleData, error: vehicleError } = await client
-          .from('vehicles')
-          .select('id, name')
-          .in('id', vehicleIds);
-        if (vehicleError) console.warn('[Historial] Error al cargar vehículos:', vehicleError);
-        else vehicles = vehicleData;
-      }
+      try {
+        if (vehicleIds.length > 0) {
+          const { data: vehicleData, error: vehicleError } = await client
+            .from('vehicles')
+            .select('id, name');
+          if (vehicleError) console.warn('[Historial] Error al cargar vehículos:', vehicleError);
+          else vehicles = vehicleData || [];
+        }
+      } catch (_) {}
 
       // Mapear para búsqueda rápida
       const collaboratorsMap = new Map(collaborators.map(c => [c.id, c.full_name]));
@@ -541,86 +579,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Configurar suscripción en tiempo real para órdenes completadas
   const setupRealtimeSubscription = () => {
-    const channel = supabaseConfig.client.channel('historial-updates');
-    
-    channel
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'orders',
-          filter: 'status=in.(Completada,Cancelada)'
-        }, 
-        (payload) => {
-          console.log('[Historial] Cambio en tiempo real detectado:', payload);
-          
-          // Solo procesar si el cambio es en estados completados o cancelados
-          if (payload.new && ['Completada', 'Cancelada'].includes(payload.new.status)) {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              // Si es una nueva orden completada o una actualización a completado
-              const existingIndex = allHistoryOrders.findIndex(o => o.id === payload.new.id);
-              
-              if (existingIndex === -1) {
-                // Es una nueva orden completada, añadirla al principio
-                console.log('[Historial] Nueva orden completada/cancelada detectada:', payload.new.id);
-                // Cargar la orden completa con sus relaciones
-                loadOrderDetails(payload.new.id);
-              } else {
-                // Actualizar la orden existente
-                allHistoryOrders[existingIndex] = { 
-                  ...allHistoryOrders[existingIndex], 
-                  ...payload.new 
-                };
-                filterAndRender();
-              }
+    const cli = supabaseConfig.client;
+    try {
+      if (cli && typeof cli.channel === 'function') {
+        const channel = cli.channel('historial-updates');
+        channel
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: 'status=in.(Completada,Cancelada)' }, (payload) => {
+            console.log('[Historial] Cambio en tiempo real detectado:', payload);
+            if (payload?.new && ['Completada','Cancelada'].includes(payload.new.status)) {
+              const idx = allHistoryOrders.findIndex(o => o.id === payload.new.id);
+              if (idx === -1) loadOrderDetails(payload.new.id); else { allHistoryOrders[idx] = { ...allHistoryOrders[idx], ...payload.new }; filterAndRender(); }
             }
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[Historial] Estado de suscripción en tiempo real:', status);
-        if (status === 'CHANNEL_ERROR') {
-          try { channel.unsubscribe(); } catch(_){ }
-          console.warn('[Historial] Reintentando suscripción en modo público por error de canal...');
-          try {
-            const pubCh = supabaseConfig.getPublicClient().channel('historial-updates-public');
-            pubCh
-              .on('postgres_changes', 
-                { event: '*', schema: 'public', table: 'orders', filter: 'status=in.(Completada,Cancelada)' },
-                (payload) => {
-                  console.log('[Historial] [Public] Cambio en tiempo real:', payload);
-                  if (payload.new && ['Completada','Cancelada'].includes(payload.new.status)) {
-                    const idx = allHistoryOrders.findIndex(o => o.id === payload.new.id);
-                    if (idx === -1) loadOrderDetails(payload.new.id); else { allHistoryOrders[idx] = { ...allHistoryOrders[idx], ...payload.new }; filterAndRender(); }
-                  }
-                }
-              )
-              .subscribe((st) => console.log('[Historial] Estado suscripción pública:', st));
-          } catch (e) {
-            console.warn('[Historial] No se pudo suscribir con cliente público:', e?.message || e);
-          }
-        }
-      });
+          })
+          .subscribe((status) => console.log('[Historial] Estado suscripción:', status));
+        return;
+      }
+      // No intentar API v1 .from().on() en entornos sin soporte
+      console.warn('[Historial] Realtime no disponible; activando refresco periódico');
+      if (!window.__histRefresh__) {
+        window.__histRefresh__ = setInterval(() => {
+          try { loadHistory(); } catch(_) {}
+        }, 60000);
+      }
+    } catch (e) {
+      console.warn('[Historial] Error configurando realtime:', e?.message || e);
+    }
   };
 
   // Función para cargar los detalles completos de una orden
   const loadOrderDetails = async (orderId) => {
     try {
-      // Intentar primero con cliente público
-      const publicClient = supabaseConfig.getPublicClient();
-      let { data, error } = await publicClient
-        .from('orders')
-        .select(`
-          *,
-          service:services(name),
-          profiles:profiles!orders_completed_by_fkey(full_name)
-        `)
-        .eq('id', orderId)
-        .single();
-
-      // Si falla, intentar con cliente autenticado
-      if (error && (error.status === 401 || error.code === 'PGRST303')) {
-        const authResult = await supabaseConfig.client
+      let data = null;
+      let error = null;
+      try {
+        const resp = await supabaseConfig.client
           .from('orders')
           .select(`
             *,
@@ -628,10 +620,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             profiles:profiles!orders_completed_by_fkey(full_name)
           `)
           .eq('id', orderId)
-          .single();
-        
-        data = authResult.data;
-        error = authResult.error;
+          .maybeSingle();
+        data = resp.data;
+        error = resp.error || null;
+      } catch (e) {
+        error = e;
+      }
+
+      if (error && (String(error.message || '').toLowerCase().includes('jwt expired') || (error.status === 401))) {
+        try {
+          const pub = PUBLIC_CLIENT || supabaseConfig.getPublicClient?.() || supabaseConfig.client;
+          const resp2 = await pub
+            .from('orders')
+            .select(`
+              *,
+              service:services(name),
+              profiles:profiles!orders_completed_by_fkey(full_name)
+            `)
+            .eq('id', orderId)
+            .maybeSingle();
+          data = resp2.data;
+          error = resp2.error || null;
+        } catch (_) {}
       }
 
       if (error) {
@@ -640,7 +650,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       if (data) {
-        // Añadir al principio del array para que aparezca primero
         allHistoryOrders.unshift(data);
         filterAndRender();
       }

@@ -832,11 +832,18 @@ function generateActiveJobButtons(orderId, order) {
 
     const flowHist = Array.isArray(order?.tracking_data) ? order.tracking_data : [];
     const lastFlow = flowHist.length > 0 ? flowHist[flowHist.length - 1] : null;
-    const currentStatus = normalizeStatus((lastFlow && (lastFlow.status || lastFlow.new_status || lastFlow.label)) || (order?.status || ''));
+    const stCanon = normalizeStatus((lastFlow && (lastFlow.status || lastFlow.new_status || lastFlow.label)) || (order?.status || ''));
+    let baseStatus = stCanon;
+    if (stCanon === (window.ESTADOS ? window.ESTADOS.retraso : 'retraso por tapon')) {
+      for (let i = flowHist.length - 1; i >= 0; i--) {
+        const s = normalizeStatus(flowHist[i].status || flowHist[i].new_status || flowHist[i].label || '');
+        if (s && s !== (window.ESTADOS ? window.ESTADOS.retraso : 'retraso por tapon')) { baseStatus = s; break; }
+      }
+    }
     const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
     const gradient = window.STATUS_GRADIENT || {};
 
-    const next = (typeof siguienteEstado === 'function') ? siguienteEstado(currentStatus) : null;
+    const next = (typeof siguienteEstado === 'function') ? siguienteEstado(baseStatus) : null;
     const primary = next ? { status: next, label: next === 'completada' ? 'Finalizar' : (
       next === 'en camino a recoger' ? 'Confirmar y salir a recoger' : (
       next === 'cargando' ? 'Llegué al cliente' : (
@@ -849,10 +856,11 @@ function generateActiveJobButtons(orderId, order) {
 
     const actions = [];
     if (primary) actions.push(primary);
-    actions.push(secondary);
+    // Si ya estamos en retraso, no mostrar el botón de retraso nuevamente
+    if (stCanon !== (window.ESTADOS ? window.ESTADOS.retraso : 'retraso por tapon')) actions.push(secondary);
 
     const buttonsHtml = actions.map(action => {
-      const isAllowed = isStatusChangeAllowed(currentStatus, action.status, hasEvidence);
+      const isAllowed = isStatusChangeAllowed(baseStatus, action.status, hasEvidence);
       const g = gradient[action.status] || { bg: '#374151', color: '#ffffff' };
       const enabledClass = isAllowed ? 'cursor-pointer hover:shadow-lg transform hover:scale-105 active:scale-95' : 'opacity-50 cursor-not-allowed';
       const highlightClass = isAllowed ? 'ring-2 ring-offset-2 ring-yellow-400' : '';
@@ -898,11 +906,18 @@ async function updateOrderStatus(orderId, newStatus) {
     const current = await supabaseConfig.getOrderById(orderId);
     const flowHist = Array.isArray(current?.tracking_data) ? current.tracking_data : [];
     const lastFlow = flowHist.length > 0 ? flowHist[flowHist.length - 1] : null;
-    const currentStatus = normalizeStatus((lastFlow && (lastFlow.status || lastFlow.new_status || lastFlow.label)) || (current?.status || ''));
+    const stCanon = normalizeStatus((lastFlow && (lastFlow.status || lastFlow.new_status || lastFlow.label)) || (current?.status || ''));
+    let baseStatus = stCanon;
+    if (stCanon === (window.ESTADOS ? window.ESTADOS.retraso : 'retraso por tapon')) {
+      for (let i = flowHist.length - 1; i >= 0; i--) {
+        const s = normalizeStatus(flowHist[i].status || flowHist[i].new_status || flowHist[i].label || '');
+        if (s && s !== (window.ESTADOS ? window.ESTADOS.retraso : 'retraso por tapon')) { baseStatus = s; break; }
+      }
+    }
     const nextLower = String(newStatus).toLowerCase();
     const hasEvidence = nextLower === 'completada' ? await canFinalizeOrder(orderId) : true;
     if (nextLower === 'completada' && !hasEvidence) { showWarning('Debes subir evidencia fotográfica antes de finalizar.'); return; }
-    const allowed = isStatusChangeAllowed(currentStatus, nextLower, hasEvidence);
+    const allowed = isStatusChangeAllowed(baseStatus, nextLower, hasEvidence);
     if (!allowed) { showWarning('Acción no permitida: respeta la secuencia'); return; }
     // Crear etiqueta legible: "en camino a recoger" -> "En camino a recoger"
     const statusLabel = String(newStatus)

@@ -12,7 +12,7 @@
 <body class="bg-gray-100">
 
   <!-- Botón de menú móvil -->
-  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden">
+  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden" aria-label="Abrir menú" title="Abrir menú">
     <i data-lucide="menu" class="w-6 h-6 text-gray-800"></i>
   </button>
 
@@ -77,6 +77,7 @@
               <th class="table-header">Completado por</th>
               <th class="table-header">Precio</th>
               <th class="table-header">Evidencia</th>
+              <th class="table-header">Acciones</th>
             </tr>
           </thead>
           <tbody id="historyTableBody" class="bg-white divide-y divide-gray-200">
@@ -101,7 +102,7 @@
     <div class="bg-white rounded-lg shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
       <div class="flex items-center justify-between border-b px-6 py-4">
         <h4 class="text-lg font-semibold">Evidencia de la solicitud</h4>
-        <button id="closeEvidenceModal" class="text-gray-500 hover:text-gray-700 p-1">
+        <button id="closeEvidenceModal" class="text-gray-500 hover:text-gray-700 p-1" aria-label="Cerrar" title="Cerrar">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -116,7 +117,7 @@
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
       <div class="flex items-center justify-between border-b px-6 py-4">
         <h4 class="text-lg font-semibold text-gray-900">Descargar Reporte PDF</h4>
-        <button id="closePdfModal" class="text-gray-500 hover:text-gray-700 p-1">
+        <button id="closePdfModal" class="text-gray-500 hover:text-gray-700 p-1" aria-label="Cerrar" title="Cerrar">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>

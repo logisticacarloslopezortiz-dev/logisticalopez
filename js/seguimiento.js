@@ -106,9 +106,15 @@ document.addEventListener('DOMContentLoaded', () => {
       renderTrackingInfo(order);
       loginScreen.classList.add('hidden');
       trackingScreen.classList.remove('hidden');
+      try { localStorage.setItem('tlc_tracking_order_id', id); } catch(_) {}
 
       // Inicializar el mapa con las coordenadas de la orden
       initializeMap(order);
+      try {
+        const isNumericId2 = /^\d+$/.test(id);
+        const idForSub2 = isNumericId2 ? Number(id) : null;
+        if (idForSub2) subscribeToOrderUpdates(idForSub2);
+      } catch(_) {}
 
     } catch (error) {
       console.error('Error al buscar la orden:', error);
@@ -372,6 +378,39 @@ document.addEventListener('DOMContentLoaded', () => {
   let orderSubscription = null;
   let pollingTimer = null;
   let lastOrderIdSubscribed = null;
+  async function refreshOrderData() {
+    try {
+      const stored = (localStorage.getItem('tlc_tracking_order_id') || '').trim();
+      const candidate = lastOrderIdSubscribed ? String(lastOrderIdSubscribed) : (orderIdInput.value || stored);
+      if (!candidate) return;
+      try { await supabaseConfig.ensureFreshSession(); } catch(_) {}
+      const isNumericId = /^\d+$/.test(candidate);
+      const columnName = isNumericId ? 'id' : 'short_id';
+      let order = null; let error = null;
+      try {
+        const r = await supabaseConfig.client
+          .from('orders')
+          .select('*, service:services(name), vehicle:vehicles(name)')
+          .eq(columnName, isNumericId ? Number(candidate) : candidate)
+          .maybeSingle();
+        order = r.data; error = r.error || null;
+      } catch(e) { error = e; }
+      if (error && (String(error.message || '').toLowerCase().includes('jwt expired') || (error.status === 401))) {
+        const publicClient = supabaseConfig.getPublicClient();
+        const r2 = await publicClient
+          .from('orders')
+          .select('*, service:services(name), vehicle:vehicles(name)')
+          .eq(columnName, isNumericId ? Number(candidate) : candidate)
+          .maybeSingle();
+        order = r2.data; error = r2.error || null;
+      }
+      if (order) {
+        renderTrackingInfo(order);
+        initializeMap(order);
+        try { updateTimelineRealtimeIndicator(); } catch(_) {}
+      }
+    } catch(_) {}
+  }
   async function subscribeToOrderUpdates(orderId) {
     try {
       if (orderSubscription) {
@@ -511,7 +550,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = Date.now();
     const diff = now - last;
     if (document.visibilityState === 'visible' && diff >= 30000) {
-      location.reload();
+      last = now;
+      refreshOrderData();
     }
   }
   setInterval(tick, 5000);
