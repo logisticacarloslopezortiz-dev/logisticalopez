@@ -363,7 +363,7 @@ function updateResumen(){
 function updateCharts() {
   const servicesChartEl = document.getElementById('servicesChart');
   const vehiclesChartEl = document.getElementById('vehiclesChart');
-  if (servicesChartEl) {
+  if (servicesChartEl) { // ✅ Verificación de existencia
     const serviceStats = {};
     allOrders.forEach(o => {
       const serviceName = o.service?.name || 'Sin Servicio';
@@ -385,7 +385,7 @@ function updateCharts() {
     });
   }
 
-  if (vehiclesChartEl) {
+  if (vehiclesChartEl) { // ✅ Verificación de existencia
     const vehicleStats = {};
     allOrders.forEach(o => {
       const vehicleName = o.vehicle?.name || 'Sin Vehículo';
@@ -741,7 +741,7 @@ function handleRealtimeUpdate(payload) {
 }
 
 // Event listeners
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('admin-session-ready', function() {
   // Modal listeners
   try {
     const assignCancel = document.getElementById('assignCancelBtn');

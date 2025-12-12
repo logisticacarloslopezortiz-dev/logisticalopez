@@ -218,7 +218,9 @@ returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from public.collaborators c
-    where c.id = uid and lower(coalesce(c.role,'colaborador')) = 'administrador'
+    where c.id = uid
+      and lower(coalesce(c.role,'colaborador')) = 'administrador'
+      and lower(coalesce(c.status,'inactivo')) = 'activo'
   );
 $$;
 

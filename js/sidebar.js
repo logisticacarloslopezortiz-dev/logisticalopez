@@ -19,18 +19,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const user = session.user;
         let hasAdminRole = false;
         try {
-            const { data: collab } = await supabaseConfig.client
-                .from('collaborators')
-                .select('role,status')
-                .eq('id', user.id)
-                .maybeSingle();
-            const norm = (s) => String(s || '').toLowerCase().trim();
-            const role = norm(collab?.role);
-            const status = norm(collab?.status);
-            hasAdminRole = !!collab && status === 'activo' && role === 'administrador';
-        } catch(_) {}
+            // Llamada a la función RPC segura en el servidor
+            const { data, error } = await supabaseConfig.client.rpc('is_admin', { uid: user.id });
+            if (error) throw error;
+            hasAdminRole = data;
+        } catch(e) {
+            console.error('Error al verificar el rol de administrador:', e);
+            hasAdminRole = false;
+        }
+
         if (!hasAdminRole) {
-            try { console.warn('Sesión sin rol administrador; redirigiendo a login'); } catch(_){}
+            try { console.warn('Sesión sin rol de administrador verificado; redirigiendo a login'); } catch(_){}
+            localStorage.clear();
+            await supabaseConfig.client.auth.signOut();
             window.location.href = loginHref;
             return;
         }

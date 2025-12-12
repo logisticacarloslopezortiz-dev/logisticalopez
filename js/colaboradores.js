@@ -1,6 +1,6 @@
 // js/colaboradores.js
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('admin-session-ready', async () => {
   // --- ELEMENTOS DEL DOM ---
   const tableBody = document.getElementById('colaboradoresTableBody');
   const form = document.getElementById('colaboradorForm');
