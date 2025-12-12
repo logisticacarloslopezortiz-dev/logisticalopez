@@ -1,20 +1,7 @@
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('admin-session-ready', async () => {
   'use strict';
 
-  // 1. --- Verificación de Sesión ---
-  if (!window.supabaseConfig || !supabaseConfig.client) {
-    console.error('Cliente de Supabase no inicializado.');
-    window.location.href = 'login.html';
-    return;
-  }
-  const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
-  if (sessionError || !session) {
-    console.warn('Sesión no encontrada, redirigiendo al login.');
-    window.location.href = 'login.html';
-    return;
-  }
-
-  // 2. --- Referencias a Elementos del DOM ---
+  // 1. --- Referencias a Elementos del DOM ---
   const ui = {
     totalEarnings: document.getElementById('totalEarnings'),
     todayEarnings: document.getElementById('todayEarnings'),

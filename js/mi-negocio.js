@@ -47,10 +47,10 @@ async function loadSettings() {
 }
 
 // Cargar datos al iniciar
-document.addEventListener('DOMContentLoaded', loadSettings);
+document.addEventListener('admin-session-ready', loadSettings);
 
 // Búsqueda rápida por ID/short_id
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('admin-session-ready', () => {
   const input = document.getElementById('businessOrderSearchInput');
   const btn = document.getElementById('businessOrderSearchBtn');
   const result = document.getElementById('businessOrderSearchResult');

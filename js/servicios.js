@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('admin-session-ready', () => {
     // Inicializar iconos
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
@@ -329,21 +329,6 @@ document.addEventListener('DOMContentLoaded', () => {
     serviceList.addEventListener('click', handleDelete);
     vehicleList.addEventListener('click', handleDelete);
 
-    // Evitar doble carga
-    let initialDataLoaded = false;
-    function safeLoadInitialData() {
-        if (initialDataLoaded) return;
-        initialDataLoaded = true;
-        loadInitialData();
-    }
-
-    // Carga inicial condicionada a sesión admin
-    window.addEventListener('admin-session-ready', () => {
-        safeLoadInitialData();
-    });
-    supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
-        if (session && localStorage.getItem('userRole') === 'administrador') {
-            safeLoadInitialData();
-        }
-    }).catch(() => {});
+    // Carga inicial
+    loadInitialData();
 });

@@ -10,7 +10,7 @@ const PUBLIC_CLIENT = (() => {
   } catch (_) { return null; }
 })();
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('admin-session-ready', async () => {
   // Inicializar elementos del DOM
   const tableBody = document.getElementById('historyTableBody');
   const showingCountEl = document.getElementById('showingCount');
