@@ -85,11 +85,18 @@
     document.addEventListener('DOMContentLoaded', () => {
       // --- INICIO: Verificación de sesión con Supabase ---
       // En lugar de usar localStorage, verificamos la sesión real de Supabase.
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirectTo = urlParams.get('redirect') || 'inicio.html';
+
       supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
         if (session) {
-          // Si hay una sesión activa, redirigir al panel.
-          console.log('Sesión activa encontrada, redirigiendo a inicio.html');
-          window.location.href = 'inicio.html';
+          // Si hay una sesión activa, verificar si es admin antes de redirigir.
+          supabaseConfig.client.rpc('is_admin').then(({ data: isAdmin }) => {
+            if (isAdmin) {
+              console.log(`Sesión activa de admin encontrada, redirigiendo a: ${redirectTo}`);
+              window.location.href = redirectTo;
+            }
+          });
         }
       }).catch(error => {
         console.error('Error al verificar la sesión en la página de login:', error);

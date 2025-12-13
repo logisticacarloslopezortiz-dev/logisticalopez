@@ -182,8 +182,8 @@ function renderOrders(){
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-sm font-medium text-gray-900">${o.name || 'N/A'}</div>
-        <div class="text-sm text-gray-500">${o.client_phone || o.phone || ''}</div>
-        ${o.client_email || o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.client_email || o.email}">${o.client_email || o.email}</div>` : ''}
+        <div class="text-sm text-gray-500">${o.phone || ''}</div>
+        ${o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.email}">${o.email}</div>` : ''}
         ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block" title="Empresa: ${o.empresa || 'N/A'}">RNC: ${o.rnc}</div>` : ''}
       </td>
       <td class="px-6 py-4 whitespace-nowrap">

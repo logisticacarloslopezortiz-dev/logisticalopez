@@ -122,9 +122,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function isAdmin(session) {
     try {
-      const uid = session.user?.id;
+      const uid = session?.user?.id;
       const me = collaborators.find(c => String(c.id) === String(uid));
-      return !!me && String(me.role || '').toLowerCase().trim() === 'administrador' && String(me.status || '').toLowerCase().trim() === 'activo';
+      return me && ['admin', 'administrador', 'superadmin'].includes(String(me.role).toLowerCase().trim());
     } catch (_) { return false; }
   }
 
@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const monthEarnings = allOrders
       .filter(order => order.completed_at >= monthStart)
       .reduce((sum, order) => sum + order.monto_cobrado, 0);
-    const avgOrderValue = allOrders.length > 0 ? totalEarnings / allOrders.length : 0;
+    const avgOrderValue = totalEarnings > 0 && allOrders.length > 0 ? totalEarnings / allOrders.length : 0;
 
     const formatCurrency = (value) => `RD$ ${Number(value||0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -513,5 +513,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  document.addEventListener('admin-session-ready', initialize);
+  // ✅ CARGA CONDICIONAL: Esperar la "luz verde" del sidebar.
+  document.addEventListener('admin-session-ready', initialize, { once: true });
   });

@@ -1,37 +1,55 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    const path = (location.pathname || '').toLowerCase();
-    const endsWith = (p) => path.endsWith('/' + p) || path.endsWith(p);
-    const adminPages = ['inicio.html','servicios.html','ganancias.html','mi-negocio.html','colaboradores.html'];
-    const isAdminPage = adminPages.some(endsWith);
-    const isPublicPage = endsWith('historial-solicitudes.html');
-    const loginHref = 'login.html';
-    try { if (supabaseConfig.ensureFreshSession) await supabaseConfig.ensureFreshSession(); } catch(_) {}
-    const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
-    const now = Math.floor(Date.now() / 1000);
-    const exp = session?.expires_at || 0;
-    const isExpired = !session || exp <= now;
-    if ((sessionError || isExpired) && !isPublicPage) {
-        window.location.href = loginHref;
-        return;
-    }
+  // ✅ CORRECCIÓN ARQUITECTURAL: Centralizar la validación y emitir un evento único.
+  const path = location.pathname.split('/').pop() || '';
+  const currentPage = path.split('?')[0].toLowerCase(); // Ignorar parámetros de la URL
+  const adminPages = new Set([
+    'inicio.html',
+    'servicios.html',
+    'ganancias.html',
+    'mi-negocio.html',
+    'colaboradores.html',
+    'historial-solicitudes.html'
+  ]);
 
-    if (isAdminPage) {
-        let hasAdminRole = false;
-        try {
-            const { data: isAdmin, error: rpcError } = await supabaseConfig.client.rpc('is_admin');
-            if (rpcError) { try { console.error('Error RPC is_admin:', rpcError); } catch(_) {} }
-            hasAdminRole = !!isAdmin;
-        } catch(_) {}
-        if (!hasAdminRole) {
-            try { console.warn('Sesión sin rol administrador; redirigiendo a login'); } catch(_){}
-            window.location.href = loginHref;
-            return;
-        }
-        window.dispatchEvent(new Event('admin-session-ready'));
-    } else {
-        window.dispatchEvent(new Event('session-ready'));
-    }
+  const loginHref = 'login.html';
+  const isAdminPage = adminPages.has(currentPage);
 
+  let adminReady = false;
+
+  if (isAdminPage) {
+    try {
+      await supabaseConfig.ensureFreshSession?.();
+
+      const { data: { session } } = await supabaseConfig.client.auth.getSession();
+      const now = Math.floor(Date.now() / 1000);
+
+      if (!session || session.expires_at <= now) {
+        window.location.replace(`${loginHref}?redirect=${encodeURIComponent(currentPage)}`);
+        return; // Detener ejecución para que no se emita el evento
+      }
+
+      const { data: isAdmin, error } = await supabaseConfig.client.rpc('is_admin');
+      if (error || !isAdmin) {
+        window.location.replace(`${loginHref}?redirect=${encodeURIComponent(currentPage)}`);
+        return; // Detener ejecución
+      }
+
+      adminReady = true;
+    } catch (err) {
+      console.error('[Sidebar] Error validando sesión admin:', err);
+      window.location.replace(loginHref);
+      return; // Detener ejecución
+    }
+  }
+
+  // ✅ EVENTO GLOBAL – SE EMITE UNA SOLA VEZ, con el estado de la sesión.
+  document.dispatchEvent(
+    new CustomEvent('admin-session-ready', {
+      detail: { isAdmin: adminReady }
+    })
+  );
+
+    // --- El resto de la lógica de UI del sidebar continúa aquí ---
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('main-content');
     const toggleButton = document.getElementById('sidebar-toggle');
