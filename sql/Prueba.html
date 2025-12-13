@@ -1,153 +1,688 @@
-
-                        <!DOCTYPE html>
-                        <html lang="en">
-                        <head>
-                            <meta charset="UTF-8">
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                body {
-                  background-color: white; /* Ensure the iframe has a white background */
-                }
-
-
-              </style>
-                        </head>
-                        <body>
-                            <div id="assignedOrdersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 mb-8 w-full">
-
-<div id="requestsTableContainer" class="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
-
-
-
-              <script>
-                              // ✅ MEJORA: Toggle de sidebar en móvil y escritorio
-function setupSidebarToggle() {
-  const sidebar = document.getElementById('collabSidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  const mobileBtn = document.getElementById('mobileMenuBtn');
-  const desktopBtn = document.getElementById('desktopSidebarToggle');
-  const mainContent = document.getElementById('mainContent');
-
-  if (!sidebar || !overlay || !mobileBtn || !mainContent) return;
-
-  const closeSidebar = () => {
-    sidebar.classList.add('-translate-x-full');
-    overlay.classList.add('hidden');
-    localStorage.setItem('sidebarCollapsed', 'true');
-    mainContent.classList.remove('md:ml-72');
-    if (desktopBtn) {
-      desktopBtn.querySelector('i').setAttribute('data-lucide', 'panel-left-close');
+// js/historial.js
+const PUBLIC_CLIENT = (() => {
+  try {
+    const cfg = window.supabaseConfig;
+    if (!cfg) return null;
+    if (typeof cfg.getPublicClient === 'function') {
+      return cfg.getPublicClient();
     }
-  };
+    return cfg.client || null;
+  } catch (_) { return null; }
+})();
 
-  const openSidebar = () => {
-    sidebar.classList.remove('-translate-x-full');
-    overlay.classList.remove('hidden');
-    localStorage.setItem('sidebarCollapsed', 'false');
-    mainContent.classList.add('md:ml-72');
-    if (desktopBtn) {
-      desktopBtn.querySelector('i').setAttribute('data-lucide', 'panel-right-close');
+document.addEventListener('DOMContentLoaded', async () => {
+  // Inicializar elementos del DOM
+  const tableBody = document.getElementById('historyTableBody');
+  const showingCountEl = document.getElementById('showingCount');
+  const totalCountEl = document.getElementById('totalCount');
+
+  let allHistoryOrders = [];
+  let filteredOrders = [];
+  const histPageState = { currentPage: 1, pageSize: 15, totalPages: 1 };
+
+  // --- MODAL DE EVIDENCIA ---
+  const evidenceModal = document.getElementById('evidenceModal');
+  const closeEvidenceModalBtn = document.getElementById('closeEvidenceModal');
+  const evidenceGallery = document.getElementById('evidenceGallery');
+
+  // --- MODAL DE PDF ---
+  const pdfModal = document.getElementById('pdfModal');
+  const closePdfModalBtn = document.getElementById('closePdfModal');
+  const pdfOrderInfo = document.getElementById('pdfOrderInfo');
+  const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+
+  // Función para mostrar el modal de PDF
+  window.showPDFModal = (orderId) => {
+    const order = filteredOrders.find(o => o.id === orderId);
+    if (!order) {
+      alert('Orden no encontrada');
+      return;
     }
-  };
 
-  // Mobile
-  mobileBtn.addEventListener('click', () => {
-    sidebar.classList.contains('-translate-x-full') ? openSidebar() : closeSidebar();
-  });
-  overlay.addEventListener('click', closeSidebar);
-
-  // Desktop
-  if (desktopBtn) {
-    desktopBtn.addEventListener('click', () => {
-      if (sidebar.classList.contains('-translate-x-full')) {
-        openSidebar();
-      } else {
-        closeSidebar();
-      }
-      lucide.createIcons(); // Actualizar ícono
-      setTimeout(() => activeJobMap?.invalidateSize(), 350);
-    });
-  }
-
-  // Estado persistente
-  if (localStorage.getItem('sidebarCollapsed') === 'true') {
-    closeSidebar();
-  } else {
-    openSidebar();
-  }
-}
-
-function renderDesktopAssignedCards(orders) {
-  const container = document.getElementById('assignedOrdersContainer');
-  if (!container) return;
-
-  const myId = state.collabSession?.user?.id;
-  const assigned = (orders || []).filter(o =>
-    o.assigned_to === myId && o.status !== 'Completado'
-  );
-
-  if (assigned.length === 0) {
-    container.classList.add('hidden');
-    return;
-  }
-
-  container.classList.remove('hidden');
-
-  container.innerHTML = assigned.map(o => {
-    const statusKey = o.last_collab_status || (o.status === 'En proceso' ? 'en_camino_recoger' : o.status);
-    const status = STATUS_MAP[statusKey] || { label: statusKey, badge: 'bg-gray-100 text-gray-800' };
-
-    return `
-      <div class="order-card bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
-           onclick="openAcceptModal({
-             id: ${o.id},
-             name: '${o.name.replace(/'/g, "\\'")}',
-             phone: '${o.phone}',
-             service: '${(o.service || '').replace(/'/g, "\\'")}',
-             vehicle: '${(o.vehicle || '').replace(/'/g, "\\'")}',
-             pickup: '${(o.pickup || '').replace(/'/g, "\\'")}',
-             delivery: '${(o.delivery || '').replace(/'/g, "\\'")}',
-             date: '${o.date}',
-             time: '${o.time}'
-           })">
-        <div class="p-4">
-          <!-- Encabezado con ID y estado -->
-          <div class="flex justify-between items-start mb-3">
-            <span class="px-2.5 py-1 text-xs font-bold rounded bg-blue-100 text-blue-800">ID: ${o.id}</span>
-            <span class="px-2 py-1 text-xs font-semibold rounded-full ${status.badge}">${status.label}</span>
-          </div>
-
-          <!-- Cliente -->
-          <h3 class="font-semibold text-gray-900 text-base mb-1 truncate">${o.name}</h3>
-          <p class="text-sm text-gray-600 mb-3">${o.phone}</p>
-
-          <!-- Servicio -->
-          <div class="mb-2">
-            <p class="text-sm font-medium text-gray-800">${o.service || '—'}</p>
-            ${o.vehicle ? `<p class="text-xs text-gray-500">${o.vehicle}</p>` : ''}
-          </div>
-
-          <!-- Ruta -->
-          <div class="text-xs text-gray-600 mb-2">
-            <span class="font-medium">Ruta:</span>
-            <span class="block truncate" title="${o.pickup} → ${o.delivery}">
-              ${o.pickup} → ${o.delivery}
-            </span>
-          </div>
-
-          <!-- Fecha/Hora -->
-          <div class="text-xs text-gray-600">
-            <span class="font-medium">Fecha:</span> ${o.date} • ${o.time}
-          </div>
-        </div>
+    // Mostrar información de la orden en el modal
+    const completadoPorNombre = order.colaborador?.name || order.completed_by_name || 'No disponible';
+    const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleDateString('es-ES') : 'No disponible';
+    
+    // Actualizar el contenido del modal
+    document.getElementById('selectedOrderDetails').innerHTML = `
+      <div class="space-y-2">
+        <p><strong>Orden #:</strong> ${order.id}</p>
+        <p><strong>Cliente:</strong> ${order.name || 'N/A'}</p>
+        <p><strong>Servicio:</strong> ${order.service?.name || order.service_name || 'N/A'}</p>
+        <p><strong>Estado:</strong> ${order.status}</p>
+        <p><strong>Completado por:</strong> ${completadoPorNombre}</p>
+        <p><strong>Fecha:</strong> ${fechaCompletado}</p>
+        <p><strong>Monto:</strong> ${order.monto_cobrado ? `$${order.monto_cobrado}` : 'N/A'}</p>
       </div>
     `;
-  }).join('');
 
-  if (window.lucide) lucide.createIcons();
-}
+    // Configurar el botón de descarga
+    downloadPdfBtn.onclick = () => {
+      generatePDF(order);
+      closePdfModal();
+    };
+
+    // Botón de calificación eliminado a petición: no se configura ni se muestra
+
+    // Configurar botón de cancelar
+    document.getElementById('cancelPdfBtn').onclick = closePdfModal;
+
+    // Mostrar el modal
+    pdfModal.classList.remove('hidden');
+    pdfModal.classList.add('flex');
+    
+    // Actualizar iconos de Lucide
+    if (window.lucide) lucide.createIcons();
+  };
+
+  // Función para cerrar el modal de PDF
+  const closePdfModal = () => {
+    pdfModal.classList.add('hidden');
+    pdfModal.classList.remove('flex');
+  };
+
+  closePdfModalBtn.addEventListener('click', closePdfModal);
+  pdfModal.addEventListener('click', (e) => {
+    if (e.target === pdfModal) {
+      closePdfModal();
+    }
+  });
+
+  // Función para abrir el modal de evidencia
+  window.showEvidence = (orderId) => {
+    const order = filteredOrders.find(o => o.id === orderId);
+    if (!order || !order.evidence_photos || order.evidence_photos.length === 0) {
+      alert('Esta solicitud no tiene fotos de evidencia.');
+      return;
+    }
+
+    evidenceGallery.innerHTML = order.evidence_photos.map(item => {
+      let url = typeof item === 'string' ? item : (item && item.url ? item.url : '');
+      if (!url && item && item.path && supabaseConfig && supabaseConfig.client && supabaseConfig.client.storage) {
+        try {
+          const b = supabaseConfig.getEvidenceBucket ? supabaseConfig.getEvidenceBucket() : (supabaseConfig.buckets && supabaseConfig.buckets.evidence) ? supabaseConfig.buckets.evidence : 'order-evidence';
+          const pub = supabaseConfig.client.storage.from(b).getPublicUrl(item.path);
+          url = (pub && pub.data && pub.data.publicUrl) ? pub.data.publicUrl : '';
+        } catch (_) { url = ''; }
+      }
+      if (!url) return '';
+      return `
+        <a href="${url}" target="_blank" rel="noopener noreferrer" class="block group">
+          <img src="${url}" alt="Evidencia" class="w-full h-48 object-cover rounded-lg shadow-md group-hover:opacity-80 transition-opacity">
+        </a>
+      `;
+    }).join('');
+
+    evidenceModal.classList.remove('hidden');
+    evidenceModal.classList.add('flex');
+    if (window.lucide) lucide.createIcons();
+  };
+
+  // Función para cerrar el modal
+  const closeEvidenceModal = () => {
+    evidenceModal.classList.add('hidden');
+    evidenceModal.classList.remove('flex');
+  };
+
+  closeEvidenceModalBtn.addEventListener('click', closeEvidenceModal);
+  // Cerrar al hacer clic fuera
+  evidenceModal.addEventListener('click', (e) => {
+    if (e.target === evidenceModal) {
+      closeEvidenceModal();
+    }
+  });
 
 
-              </script>
-                        </body>
-                        </html>
+  // --- FUNCIONES PARA GENERAR PDF ---
+  
+  // Función para formatear fecha
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Función para generar y descargar PDF
+  const generatePDF = async (order) => {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - margin * 2;
+      let y = margin;
+
+      const brandDark = { r: 30, g: 64, b: 90 };
+      const brandTurq = { r: 30, g: 138, b: 149 };
+
+      const toDataURL = async (url) => {
+        try {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (_) { return null; }
+      };
+
+      const drawHeader = async () => {
+        doc.setFillColor(brandDark.r, brandDark.g, brandDark.b);
+        doc.rect(0, 0, pageWidth, 28, 'F');
+        doc.setFillColor(brandTurq.r, brandTurq.g, brandTurq.b);
+        doc.rect(pageWidth - 60, 0, 60, 28, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text('Logística López Ortiz', margin, 18);
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'normal');
+        doc.text('RNC: 133139413', margin, 25);
+        const logo = await toDataURL('img/1horizontal (1).png');
+        if (logo) {
+          try { doc.addImage(logo, 'PNG', pageWidth - 22, 6, 14, 14); } catch (_) {}
+        }
+        doc.setTextColor(0, 0, 0);
+        y = 40;
+      };
+
+      const ensureSpace = async (needed = 12) => {
+        if (y + needed > pageHeight - margin) {
+          doc.addPage();
+          await drawHeader();
+        }
+      };
+
+      const textBlock = async (text, opts = {}) => {
+        const { x = margin, width = contentWidth, lineHeight = 6, style = 'normal', size = 11 } = opts;
+        const lines = doc.splitTextToSize(String(text || ''), width);
+        const h = Math.max(lineHeight, lines.length * lineHeight);
+        await ensureSpace(h + 2);
+        doc.setFont(undefined, style);
+        doc.setFontSize(size);
+        doc.text(lines, x, y);
+        y += h;
+      };
+
+      const labelValue = async (label, value, labelW = 38) => {
+        const leftX = margin;
+        const rightX = margin + labelW;
+        const maxW = contentWidth - labelW;
+        const vLines = doc.splitTextToSize(String(value || 'N/A'), maxW);
+        const h = Math.max(8, vLines.length * 6);
+        await ensureSpace(h + 2);
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(11);
+        doc.text(String(label || ''), leftX, y);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(11);
+        doc.text(vLines, rightX, y);
+        y += h;
+      };
+
+      await drawHeader();
+
+      doc.setFontSize(15);
+      doc.setFont(undefined, 'bold');
+      await textBlock('Reporte de Orden de Servicio', { x: pageWidth / 2, width: contentWidth, lineHeight: 6, style: 'bold', size: 15 });
+      const titleYAdj = y;
+      y = titleYAdj;
+      doc.text(`Número de Orden: #${order.id}`, pageWidth / 2, y, { align: 'center' });
+      y += 10;
+
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      await textBlock('Datos del Cliente', { size: 13, style: 'bold' });
+      doc.setFont(undefined, 'normal');
+      if (order.name) await labelValue('Nombre:', order.name);
+      if (order.phone) await labelValue('Teléfono:', order.phone);
+      if (order.email) await labelValue('Email:', order.email);
+      if (order.empresa) await labelValue('Empresa:', order.empresa);
+      if (order.rnc) await labelValue('RNC:', order.rnc);
+
+      y += 6;
+      doc.setFont(undefined, 'bold');
+      await textBlock('Resumen del Servicio', { size: 13, style: 'bold' });
+      doc.setFont(undefined, 'normal');
+      const serviceName = order.service?.name || order.service_name || null;
+      const vehicleName = order.vehicle?.name || order.vehicle_name || null;
+      if (serviceName) await labelValue('Servicio:', serviceName);
+      if (vehicleName) await labelValue('Vehículo:', vehicleName);
+      await labelValue('Fecha solicitud:', formatDate(order.created_at));
+      if (order.date) await labelValue('Fecha servicio:', `${order.date} ${order.time || ''}`);
+      if (order.status) await labelValue('Estado:', order.status);
+      if (order.monto_cobrado) await labelValue('Monto cobrado:', `$${Number(order.monto_cobrado).toLocaleString('es-DO')}`);
+
+      if (order.pickup || order.delivery) {
+        y += 6;
+        doc.setFont(undefined, 'bold');
+        await textBlock('Ruta', { size: 13, style: 'bold' });
+        doc.setFont(undefined, 'normal');
+        if (order.pickup) await labelValue('Recogida:', order.pickup);
+        if (order.delivery) await labelValue('Entrega:', order.delivery);
+      }
+
+      if (order.service_questions && Object.keys(order.service_questions).length > 0) {
+        y += 6;
+        doc.setFont(undefined, 'bold');
+        await textBlock('Detalles adicionales', { size: 13, style: 'bold' });
+        doc.setFont(undefined, 'normal');
+        try {
+          const qs = typeof order.service_questions === 'string' ? JSON.parse(order.service_questions) : order.service_questions;
+          for (const [k, v] of Object.entries(qs)) {
+            const label = String(k).replace(/_/g, ' ').replace(/\b\w/g, s => s.toUpperCase());
+            if (v !== undefined && v !== null && String(v).trim() !== '') {
+              await labelValue(`${label}:`, String(v));
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (order.evidence_photos && order.evidence_photos.length > 0) {
+        y += 6;
+        doc.setFont(undefined, 'bold');
+        await textBlock(`Evidencia fotográfica: ${order.evidence_photos.length} foto(s) adjunta(s)`, { size: 12, style: 'bold' });
+        doc.setFont(undefined, 'italic');
+        await textBlock('(Las fotos están disponibles en el sistema)', { size: 9, style: 'italic' });
+      }
+
+      doc.addPage();
+      await drawHeader();
+      doc.setFont(undefined, 'bold');
+      await textBlock('Información de finalización', { size: 14, style: 'bold' });
+      doc.setFont(undefined, 'normal');
+      const collaboratorName = order.colaborador?.name || order.completed_by_name || 'No asignado';
+      const completedDate = formatDate(order.completed_at);
+      await labelValue('ID de Orden:', String(order.id));
+      await labelValue('Completado por:', collaboratorName);
+      await labelValue('Fecha de finalización:', completedDate);
+      if (order.metodo_pago) await labelValue('Método de pago:', order.metodo_pago);
+      if (order.monto_cobrado) await labelValue('Monto final:', `$${Number(order.monto_cobrado).toLocaleString('es-DO')}`);
+
+      if (order.assigned_at || order.accepted_at) {
+        y += 6;
+        doc.setFont(undefined, 'bold');
+        await textBlock('Historial de asignaciones', { size: 13, style: 'bold' });
+        doc.setFont(undefined, 'normal');
+        if (order.assigned_at) await labelValue('Asignado el:', formatDate(order.assigned_at));
+        if (order.accepted_at) await labelValue('Aceptado el:', formatDate(order.accepted_at));
+      }
+
+      const footer = () => {
+        const footerY = pageHeight - 16;
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Generado el: ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, margin, footerY);
+        doc.text('Sistema de Gestión - Logística López Ortiz', pageWidth - margin, footerY, { align: 'right' });
+      };
+      footer();
+
+      const fileName = `orden_${order.id}_${order.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'cliente'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+    } catch (error) {
+      alert('Error al generar el PDF. Intente nuevamente.');
+    }
+  };
+
+  // --- CARGA Y RENDERIZADO DE DATOS ---
+
+  // Función para renderizar las filas de la tabla
+  const renderTable = () => {
+    if (!tableBody) return;
+
+    const total = filteredOrders.length;
+    histPageState.totalPages = Math.max(1, Math.ceil(total / histPageState.pageSize));
+    if (histPageState.currentPage > histPageState.totalPages) histPageState.currentPage = histPageState.totalPages;
+    const start = total === 0 ? 0 : (histPageState.currentPage - 1) * histPageState.pageSize;
+    const end = total === 0 ? 0 : Math.min(start + histPageState.pageSize, total);
+
+    if (total === 0) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center py-10 text-gray-500">
+            No se encontraron solicitudes que coincidan con los filtros.
+          </td>
+        </tr>
+      `;
+    } else {
+      const pageSlice = filteredOrders.slice(start, end);
+      tableBody.innerHTML = pageSlice.map(order => {
+        const completadoPorNombre = order.colaborador?.name || order.completed_by_name || 'No disponible';
+        const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleDateString('es-ES', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }) : 'No disponible';
+        const rowClass = order.status === 'Cancelada' ? 'hover:bg-red-50 bg-red-50/30' : 'hover:bg-green-50';
+        return `
+          <tr class="${rowClass} cursor-pointer hover:shadow-md transition-all duration-200" 
+              ondblclick="showPDFModal(${order.id})" 
+              title="Doble clic para descargar PDF">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.name || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service?.name || order.service_name || 'N/A'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${fechaCompletado}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${completadoPorNombre}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${order.status === 'Cancelada' ? 'text-red-600' : 'text-green-700'}">
+              ${order.monto_cobrado ? `$${typeof order.monto_cobrado === 'string' ? parseFloat(order.monto_cobrado).toLocaleString('es-DO') : order.monto_cobrado.toLocaleString('es-DO')}` : 'N/A'}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              ${(order.evidence_photos && order.evidence_photos.length > 0) ?
+                `<button onclick="showEvidence(${order.id})" class="text-blue-600 hover:underline flex items-center gap-1">
+                  <i data-lucide="image" class="w-4 h-4"></i> Ver (${order.evidence_photos.length})
+                </button>` :
+                '<span class="text-gray-400">No hay</span>'}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+              <button onclick="window.showPDFModal(${order.id})" class="p-2 rounded-full hover:bg-blue-100 text-blue-600 transition-colors" title="Descargar reporte PDF">
+                <i data-lucide="file-down" class="w-5 h-5"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    const rangeStart = total === 0 ? 0 : start + 1;
+    const rangeEnd = total === 0 ? 0 : end;
+    showingCountEl.textContent = `${rangeStart}–${rangeEnd}`;
+    totalCountEl.textContent = allHistoryOrders.length;
+    if (window.lucide) lucide.createIcons();
+    renderPagination();
+  };
+
+  // Función de filtrado
+  const filterAndRender = () => {
+    filteredOrders = allHistoryOrders;
+    histPageState.totalPages = Math.max(1, Math.ceil(filteredOrders.length / histPageState.pageSize));
+    histPageState.currentPage = 1;
+    renderTable();
+  };
+
+  function renderPagination() {
+    const pagesEl = document.getElementById('histPages');
+    const prev = document.getElementById('histPrev');
+    const next = document.getElementById('histNext');
+    const first = document.getElementById('histFirst');
+    const last = document.getElementById('histLast');
+    if (!pagesEl || !prev || !next || !first || !last) return;
+    const total = histPageState.totalPages;
+    const current = histPageState.currentPage;
+    prev.disabled = current <= 1;
+    first.disabled = current <= 1;
+    next.disabled = current >= total;
+    last.disabled = current >= total;
+    const windowSize = 5;
+    let start = Math.max(1, current - Math.floor(windowSize/2));
+    let end = Math.min(total, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    pagesEl.innerHTML = '';
+    for (let p = start; p <= end; p++) {
+      const btn = document.createElement('button');
+      btn.textContent = String(p);
+      btn.className = `px-3 py-2 rounded text-sm ${p===current? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`;
+      btn.addEventListener('click', () => { histPageState.currentPage = p; renderTable(); });
+      pagesEl.appendChild(btn);
+    }
+    prev.onclick = () => { if (histPageState.currentPage>1) { histPageState.currentPage--; renderTable(); } };
+    next.onclick = () => { if (histPageState.currentPage<total) { histPageState.currentPage++; renderTable(); } };
+    first.onclick = () => { histPageState.currentPage = 1; renderTable(); };
+    last.onclick = () => { histPageState.currentPage = total; renderTable(); };
+  }
+
+  // Carga inicial de datos
+  const loadHistory = async () => {
+    try {
+      console.log('[Historial] Iniciando carga de solicitudes...');
+      try { await supabaseConfig.ensureFreshSession(); } catch(_){ }
+      
+      const client = supabaseConfig.client;
+      const publicClient = PUBLIC_CLIENT;
+      if (!publicClient && !client) {
+        if (tableBody) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="7" class="text-center py-10 text-red-600">
+                No se pudo inicializar Supabase. Verifique que supabase-config.js esté cargado.
+              </td>
+            </tr>`;
+        }
+        return;
+      }
+
+      let orders = [];
+      let ordersError = null;
+      const COMPLETED_STATUSES = ['Completada','completada','Completado','completado','Finalizada','finalizada','Entregada','entregada'];
+      const CANCELLED_STATUSES = ['Cancelada','cancelada','Cancelado','cancelado'];
+      const ALL_STATUSES = [...COMPLETED_STATUSES, ...CANCELLED_STATUSES];
+      const selectCols = 'id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions';
+      
+      const uniqueById = (arr) => {
+        const map = new Map();
+        for (const o of arr) { if (o && o.id != null && !map.has(o.id)) map.set(o.id, o); }
+        return Array.from(map.values());
+      };
+
+      // Filtro de estados usando .in
+
+      // ✅ CORRECCIÓN: Priorizar el cliente autenticado para evitar problemas con RLS.
+      try {
+        const { data, error } = await client
+          .from('orders')
+          .select(selectCols)
+          .in('status', ['Completada','Cancelada'])
+          .order('completed_at', { ascending: false });
+        if (error) { ordersError = error; }
+        else { orders = data || []; }
+      } catch (e) { ordersError = e; }
+
+      if (ordersError) {
+        console.error('[Historial] Error al cargar con cliente autenticado:', ordersError);
+      }
+      // Fallback público si no hay resultados o hay error
+      if ((ordersError || !orders || orders.length === 0) && publicClient) {
+        try {
+          const { data: pubData, error: pubErr } = await publicClient
+            .from('orders')
+            .select(selectCols)
+            .in('status', ['Completada','Cancelada'])
+            .order('completed_at', { ascending: false });
+          if (!pubErr) { orders = pubData || []; ordersError = null; }
+        } catch (_) {}
+      }
+       if (!orders || orders.length === 0) {
+        console.log('[Historial] No se encontraron órdenes en el historial.');
+        allHistoryOrders = [];
+        filterAndRender();
+        return;
+      }
+
+      console.log(`[Historial] Órdenes cargadas: ${orders.length}`);
+
+      // Paso 2: Recolectar IDs de servicios y vehículos
+      const serviceIds = [...new Set(orders.map(o => o.service_id).filter(id => id))];
+      const vehicleIds = [...new Set(orders.map(o => o.vehicle_id).filter(id => id))];
+
+      // Paso 3: Obtener datos de colaboradores y servicios en paralelo
+      let collaborators = [];
+      let services = [];
+
+      try {
+        const { data: collabData, error: collabError } = await client
+          .from('collaborators')
+          .select('id, name, role');
+        if (collabError) console.warn('[Historial] Error al cargar colaboradores:', collabError);
+        else collaborators = collabData || [];
+      } catch (_) {}
+
+      try {
+        if (serviceIds.length > 0) {
+          const { data: serviceData, error: serviceError } = await client
+            .from('services')
+            .select('id, name');
+          if (serviceError) console.warn('[Historial] Error al cargar servicios:', serviceError);
+          else services = serviceData || [];
+        }
+      } catch (_) {}
+      let vehicles = [];
+      try {
+        if (vehicleIds.length > 0) {
+          const { data: vehicleData, error: vehicleError } = await client
+            .from('vehicles')
+            .select('id, name');
+          if (vehicleError) console.warn('[Historial] Error al cargar vehículos:', vehicleError);
+          else vehicles = vehicleData || [];
+        }
+      } catch (_) {}
+
+      // Mapear para búsqueda rápida
+      const collaboratorsMap = new Map(collaborators.map(c => [c.id, { name: c.name, role: c.role }]));
+      const servicesMap = new Map(services.map(s => [s.id, s.name]));
+      const vehiclesMap = new Map(vehicles.map(v => [v.id, v.name]));
+
+      // Paso 4: Combinar los datos
+      allHistoryOrders = orders.map(order => {
+        const coll = collaboratorsMap.get(order.completed_by) || null;
+        return {
+          ...order,
+          colaborador: coll ? { name: coll.name || null, role: coll.role || null } : { name: null, role: null },
+          service: {
+            name: servicesMap.get(order.service_id) || null
+          },
+          vehicle: {
+            name: vehiclesMap.get(order.vehicle_id) || null
+          }
+        };
+      });
+
+      console.log(`[Historial] Datos combinados. Total: ${allHistoryOrders.length}`);
+      filterAndRender();
+
+    } catch (error) {
+      console.error('[Historial] Error crítico al cargar el historial:', error);
+      if (tableBody) {
+        tableBody.innerHTML = `
+          <tr>
+            <td colspan="7" class="text-center py-10 text-red-600">
+              <b>Error al cargar el historial:</b> ${error.message || 'Error desconocido'}.
+              <br>Por favor, revise la consola para más detalles y contacte a soporte si el problema persiste.
+            </td>
+          </tr>
+        `;
+      }
+    }
+  };
+
+  // Configurar suscripción en tiempo real para órdenes completadas
+  const setupRealtimeSubscription = () => {
+    const cli = supabaseConfig.client;
+    try {
+      if (cli && typeof cli.channel === 'function') {
+        const channel = cli.channel('historial-updates');
+        channel
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: 'status=in.(Completada,Cancelada)' }, (payload) => {
+            console.log('[Historial] Cambio en tiempo real detectado:', payload);
+            if (payload?.new && ['Completada','Cancelada'].includes(payload.new.status)) {
+              const idx = allHistoryOrders.findIndex(o => o.id === payload.new.id);
+              if (idx === -1) loadOrderDetails(payload.new.id); else { allHistoryOrders[idx] = { ...allHistoryOrders[idx], ...payload.new }; filterAndRender(); }
+            }
+          })
+          .subscribe((status) => console.log('[Historial] Estado suscripción:', status));
+        return;
+      }
+      // No intentar API v1 .from().on() en entornos sin soporte
+      console.warn('[Historial] Realtime no disponible; activando refresco periódico');
+      if (!window.__histRefresh__) {
+        window.__histRefresh__ = setInterval(() => {
+          try { loadHistory(); } catch(_) {}
+        }, 60000);
+      }
+    } catch (e) {
+      console.warn('[Historial] Error configurando realtime:', e?.message || e);
+    }
+  };
+
+  // Función para cargar los detalles completos de una orden
+  const loadOrderDetails = async (orderId) => {
+    try {
+      let data = null;
+      let error = null;
+      try {
+        const resp = await supabaseConfig.client
+          .from('orders')
+          .select(`
+            *,
+            service:services(name)
+          `)
+          .eq('id', orderId)
+          .maybeSingle();
+        data = resp.data;
+        error = resp.error || null;
+      } catch (e) {
+        error = e;
+      }
+
+      if (error && (String(error.message || '').toLowerCase().includes('jwt expired') || (error.status === 401))) {
+        try {
+          const pub = PUBLIC_CLIENT || supabaseConfig.getPublicClient?.() || supabaseConfig.client;
+          const resp2 = await pub
+            .from('orders')
+            .select(`
+              *,
+              service:services(name)
+            `)
+            .eq('id', orderId)
+            .maybeSingle();
+          data = resp2.data;
+          error = resp2.error || null;
+        } catch (_) {}
+      }
+
+      if (error) {
+        console.error(`Error al cargar detalles de la orden #${orderId}:`, error);
+        return;
+      }
+
+      if (data) {
+        try {
+          if (data.completed_by) {
+            const { data: coll, error: collErr } = await (PUBLIC_CLIENT || supabaseConfig.client)
+              .from('collaborators')
+              .select('id,name,role')
+              .eq('id', data.completed_by)
+              .maybeSingle();
+            if (!collErr && coll) {
+              data.colaborador = { name: coll.name || null, role: coll.role || null };
+            }
+          }
+        } catch (_) {}
+        allHistoryOrders.unshift(data);
+        filterAndRender();
+      }
+    } catch (error) {
+      console.error(`Error al cargar detalles de la orden #${orderId}:`, error);
+    }
+  };
+
+  // Inicialización segura
+  let __histInitialized = false;
+  const safeInit = async () => {
+    if (__histInitialized) return;
+    __histInitialized = true;
+    await loadHistory();
+    setupRealtimeSubscription();
+  };
+  try { document.addEventListener('session-ready', safeInit); } catch(_) {}
+  try { document.addEventListener('admin-session-ready', safeInit); } catch(_) {}
+  try { safeInit(); } catch(_) {}
+});

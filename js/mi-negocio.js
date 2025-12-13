@@ -46,8 +46,8 @@ async function loadSettings() {
   }
 }
 
-// Cargar datos al iniciar
-document.addEventListener('DOMContentLoaded', loadSettings);
+// Cargar datos solo cuando el servidor confirma sesión admin
+document.addEventListener('admin-session-ready', loadSettings);
 
 // Búsqueda rápida por ID/short_id
 document.addEventListener('DOMContentLoaded', () => {

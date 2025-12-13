@@ -337,13 +337,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loadInitialData();
     }
 
-    // Carga inicial condicionada a sesión admin
+    // Carga inicial condicionada solo a sesión admin confirmada por servidor
     window.addEventListener('admin-session-ready', () => {
         safeLoadInitialData();
     });
-    supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
-        if (session && localStorage.getItem('userRole') === 'administrador') {
-            safeLoadInitialData();
-        }
-    }).catch(() => {});
 });

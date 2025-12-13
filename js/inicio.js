@@ -175,9 +175,10 @@ function renderOrders(){
 
     const displayStatus = o.status;
 
-    const tr = document.createElement('tr');
-    tr.className = 'hover:bg-gray-50 transition-colors';
-    tr.innerHTML = /*html*/`
+  const tr = document.createElement('tr');
+  tr.className = 'hover:bg-gray-50 transition-colors';
+  tr.setAttribute('data-order-id', String(o.id));
+  tr.innerHTML = /*html*/`
       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-sm font-medium text-gray-900">${o.name || 'N/A'}</div>
@@ -236,8 +237,9 @@ function renderOrders(){
         'Cancelada': 'bg-red-100 text-red-800'
       }[o.status] || 'bg-gray-100 text-gray-800';
       const displayStatusMobile = o.status;
-      const card = document.createElement('div');
-      card.className = 'bg-white rounded-lg shadow p-4';
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-lg shadow p-4';
+    card.setAttribute('data-order-id', String(o.id));
       card.innerHTML = `
         <div class="flex justify-between items-start mb-2">
           <div>
@@ -360,52 +362,13 @@ function updateResumen(){
 }
 
 // Función para actualizar gráficos
-function updateCharts() {
-  const servicesChartEl = document.getElementById('servicesChart');
-  const vehiclesChartEl = document.getElementById('vehiclesChart');
-  if (servicesChartEl) {
-    const serviceStats = {};
-    allOrders.forEach(o => {
-      const serviceName = o.service?.name || 'Sin Servicio';
-      serviceStats[serviceName] = (serviceStats[serviceName] || 0) + 1;
-    });
-    servicesChartEl.innerHTML = '';
-    const maxService = Math.max(1, ...Object.values(serviceStats));
-    Object.entries(serviceStats).forEach(([service, count]) => {
-      const percentage = maxService > 0 ? (count / maxService) * 100 : 0;
-      servicesChartEl.innerHTML += `
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-medium text-gray-700">${service}</span>
-          <span class="text-sm text-gray-500">${count}</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
-          <div class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
-        </div>
-      `;
-    });
-  }
-
-  if (vehiclesChartEl) {
-    const vehicleStats = {};
-    allOrders.forEach(o => {
-      const vehicleName = o.vehicle?.name || 'Sin Vehículo';
-      vehicleStats[vehicleName] = (vehicleStats[vehicleName] || 0) + 1;
-    });
-    vehiclesChartEl.innerHTML = '';
-    const maxVehicle = Math.max(1, ...Object.values(vehicleStats));
-    Object.entries(vehicleStats).forEach(([vehicle, count]) => {
-      const percentage = maxVehicle > 0 ? (count / maxVehicle) * 100 : 0;
-      vehiclesChartEl.innerHTML += `
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-medium text-gray-700">${vehicle}</span>
-          <span class="text-sm text-gray-500">${count}</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
-          <div class="bg-red-600 h-2 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
-        </div>
-      `;
-    });
-  }
+function updateDashboardPanels(){
+  const showingCount = document.getElementById('showingCount');
+  const totalCount = document.getElementById('totalCount');
+  if (showingCount) showingCount.textContent = filteredOrders.length;
+  if (totalCount) totalCount.textContent = allOrders.length;
+  updateResumen();
+  updateAlerts();
 }
 
 function updateAlerts() {
@@ -672,71 +635,223 @@ function notifyCollaborator(order, collaborator) {
   // En una implementación real, aquí se enviaría una notificación push, SMS o correo
 }
 
-// Función para alternar menú de acciones
-function toggleActionsMenu(orderId, event) {
-  event.stopPropagation();
-  
-  // Cerrar otros menús abiertos
-  document.querySelectorAll('.actions-menu').forEach(menu => {
-    if (menu.id !== `actions-menu-${orderId}`) {
-      menu.classList.add('hidden');
-    }
-  });
-  
-  // Alternar el menú actual
-  const menu = document.getElementById(`actions-menu-${orderId}`);
-  if (menu) {
-    menu.classList.toggle('hidden');
-  }
+ 
+
+function renderRowHtml(o){
+  const statusColor = {
+    'Pendiente': 'bg-yellow-100 text-yellow-800',
+    'Aceptada': 'bg-blue-100 text-blue-800',
+    'En curso': 'bg-purple-100 text-purple-800',
+    'Completada': 'bg-green-100 text-green-800',
+    'Cancelada': 'bg-red-100 text-red-800'
+  }[o.status] || 'bg-gray-100 text-gray-800';
+  return `
+    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
+    <td class="px-6 py-4 whitespace-nowrap">
+      <div class="text-sm font-medium text-gray-900">${o.name || 'N/A'}</div>
+      <div class="text-sm text-gray-500">${o.client_phone || o.phone || ''}</div>
+      ${o.client_email || o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.client_email || o.email}">${o.client_email || o.email}</div>` : ''}
+      ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block" title="Empresa: ${o.empresa || 'N/A'}">RNC: ${o.rnc}</div>` : ''}
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap">
+      <div class="text-sm text-gray-900">${o.service?.name || 'N/A'}</div>
+      ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
+        `<button onclick="showServiceDetails(${o.id})" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">\n            <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>Ver detalles\n          </button>`
+        : ''
+      }
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle?.name || 'N/A'}</td>
+    <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><div>${o.date}</div><div class="text-gray-500">${o.time}</div></td>
+    <td class="px-6 py-4 whitespace-nowrap">
+      <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">\n        <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>\n        <option value="Aceptada" ${o.status === 'Aceptada' ? 'selected' : ''}>Aceptada</option>\n        <option value="En curso" ${o.status === 'En curso' ? 'selected' : ''}>En curso</option>\n        <option value="Completada" ${o.status === 'Completada' ? 'selected' : ''}>Completada</option>\n        <option value="Cancelada" ${o.status === 'Cancelada' ? 'selected' : ''}>Cancelada</option>\n      </select>
+      ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+      <button onclick="openPriceModal('${o.id}')" class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 transition-colors">\n        <span class="font-semibold text-green-700">${o.monto_cobrado ? `$${Number(o.monto_cobrado).toLocaleString('es-DO')}` : 'Confirmar'}</span>\n        <div class="text-xs text-gray-500">${o.metodo_pago || 'No especificado'}</div>\n      </button>
+    </td>
+  `;
 }
 
-// Cerrar menús al hacer clic fuera
-document.addEventListener('click', function(event) {
-  if (!event.target.closest('.actions-menu') && !event.target.closest('[onclick*="toggleActionsMenu"]')) {
-    document.querySelectorAll('.actions-menu').forEach(menu => {
-      menu.classList.add('hidden');
-    });
+function compareOrders(a, b){
+  let aVal = a[sortColumn] || '';
+  let bVal = b[sortColumn] || '';
+  if (sortColumn === 'date') {
+    aVal = new Date(`${a.date}T${a.time}`);
+    bVal = new Date(`${b.date}T${b.time}`);
   }
-});
+  if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+  if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+  return 0;
+}
+
+function findInsertIndex(list, order){
+  for (let i = 0; i < list.length; i++) {
+    if (compareOrders(order, list[i]) < 0) return i;
+  }
+  return list.length;
+}
+
+function insertRow(o){
+  const tbl = document.getElementById('ordersTableBody');
+  const cards = document.getElementById('ordersCardContainer');
+  if (!tbl) return;
+  const idx = findInsertIndex(filteredOrders, o);
+  filteredOrders.splice(idx, 0, o);
+  const tr = document.createElement('tr');
+  tr.className = 'hover:bg-gray-50 transition-colors';
+  tr.setAttribute('data-order-id', String(o.id));
+  tr.innerHTML = renderRowHtml(o);
+  tr.addEventListener('dblclick', () => openAssignModal(o.id));
+  const ref = tbl.children[idx] || null;
+  tbl.insertBefore(tr, ref);
+  if (cards) {
+    const badge = {
+      'Pendiente': 'bg-yellow-100 text-yellow-800',
+      'Aceptada': 'bg-blue-100 text-blue-800',
+      'En curso': 'bg-purple-100 text-purple-800',
+      'Completada': 'bg-green-100 text-green-800',
+      'Cancelada': 'bg-red-100 text-red-800'
+    }[o.status] || 'bg-gray-100 text-gray-800';
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-lg shadow p-4';
+    card.setAttribute('data-order-id', String(o.id));
+    card.innerHTML = `
+      <div class="flex justify-between items-start mb-2">
+        <div>
+          <div class="text-sm text-gray-500">#${o.id}</div>
+          <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
+          <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
+        </div>
+        <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-3 text-sm mb-3">
+        <div>
+          <p class="text-gray-500">Cliente</p>
+          <p class="text-gray-900">${o.name || 'N/A'}</p>
+        </div>
+        <div>
+          <p class="text-gray-500">Fecha</p>
+          <p class="text-gray-900">${o.date} ${o.time || ''}</p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2">
+        ${o.service_questions && Object.keys(o.service_questions).length > 0 ? `<button class="px-3 py-1 rounded bg-gray-100 text-gray-700 text-xs" onclick="showServiceDetails('${o.id}')">Detalles</button>` : ''}
+        <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs" onclick="openAssignModal('${o.id}')">Gestionar</button>
+      </div>
+    `;
+    const refCard = cards.children[idx] || null;
+    cards.insertBefore(card, refCard);
+  }
+  updateDashboardPanels();
+  refreshLucide();
+}
+
+function updateRow(o){
+  const tr = document.querySelector(`tbody#ordersTableBody tr[data-order-id="${String(o.id)}"]`);
+  if (tr) {
+    tr.innerHTML = renderRowHtml(o);
+  }
+  const cards = document.getElementById('ordersCardContainer');
+  if (cards) {
+    const card = cards.querySelector(`div[data-order-id="${String(o.id)}"]`);
+    if (card) {
+      const badge = {
+        'Pendiente': 'bg-yellow-100 text-yellow-800',
+        'Aceptada': 'bg-blue-100 text-blue-800',
+        'En curso': 'bg-purple-100 text-purple-800',
+        'Completada': 'bg-green-100 text-green-800',
+        'Cancelada': 'bg-red-100 text-red-800'
+      }[o.status] || 'bg-gray-100 text-gray-800';
+      card.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <div class="text-sm text-gray-500">#${o.id}</div>
+            <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
+            <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
+          </div>
+          <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm mb-3">
+          <div>
+            <p class="text-gray-500">Cliente</p>
+            <p class="text-gray-900">${o.name || 'N/A'}</p>
+          </div>
+          <div>
+            <p class="text-gray-500">Fecha</p>
+            <p class="text-gray-900">${o.date} ${o.time || ''}</p>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          ${o.service_questions && Object.keys(o.service_questions).length > 0 ? `<button class="px-3 py-1 rounded bg-gray-100 text-gray-700 text-xs" onclick="showServiceDetails('${o.id}')">Detalles</button>` : ''}
+          <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs" onclick="openAssignModal('${o.id}')">Gestionar</button>
+        </div>
+      `;
+    }
+  }
+  updateDashboardPanels();
+  refreshLucide();
+}
+
+function removeRow(orderId){
+  const tbl = document.getElementById('ordersTableBody');
+  const cards = document.getElementById('ordersCardContainer');
+  const tr = document.querySelector(`tbody#ordersTableBody tr[data-order-id="${String(orderId)}"]`);
+  if (tr && tbl) tbl.removeChild(tr);
+  if (cards) {
+    const card = cards.querySelector(`div[data-order-id="${String(orderId)}"]`);
+    if (card) cards.removeChild(card);
+  }
+  const idx = filteredOrders.findIndex(o => String(o.id) === String(orderId));
+  if (idx !== -1) filteredOrders.splice(idx, 1);
+  allOrders = allOrders.filter(o => String(o.id) !== String(orderId));
+  updateDashboardPanels();
+}
 
 // --- Lógica de Tiempo Real con Supabase ---
 
-function handleRealtimeUpdate(payload) {
+async function handleRealtimeUpdate(payload) {
   const { eventType, new: newRecord, old: oldRecord, table } = payload;
-
   if (table !== 'orders') return;
-
-  switch (eventType) {
-    case 'INSERT':
-      if (allOrders.findIndex(order => order.id === newRecord.id) === -1) {
-        allOrders.unshift(newRecord);
-      }
-      // Volver a aplicar filtros y renderizar
-      filterOrders();
-      // Mostrar una notificación persistente con el ID para copiar
-      if (window.notifications) {
-        notifications.info( // La data relacionada (service.name) no viene en el payload de realtime, por eso no se muestra
-          `Cliente: ${newRecord.name}.`,
-          { title: `Nueva Solicitud #${newRecord.id}`, duration: 10000 }
-        );
-      }
-      break;
-    case 'UPDATE':
-      // Encontrar y actualizar la orden en el array
-      const indexToUpdate = allOrders.findIndex(order => order.id === newRecord.id);
-      if (indexToUpdate !== -1) {
-        // Actualizar la orden en el array
-        allOrders[indexToUpdate] = { ...allOrders[indexToUpdate], ...newRecord };
-        
-        // Reaplicar los filtros
-        filterOrders();
-      }
-      break;
-    case 'DELETE':
-      // Eliminar la orden del array
-      allOrders = allOrders.filter(order => order.id !== oldRecord.id);
-      filterOrders();
-      break;
+  if (eventType === 'INSERT') {
+    let full = null;
+    try { full = await supabaseConfig.getOrderById(newRecord.id); } catch(_) {}
+    const orderObj = full || newRecord;
+    if (allOrders.findIndex(o => o.id === orderObj.id) === -1) {
+      allOrders.unshift(orderObj);
+    } else {
+      const idxAll = allOrders.findIndex(o => o.id === orderObj.id);
+      if (idxAll !== -1) allOrders[idxAll] = { ...allOrders[idxAll], ...orderObj };
+    }
+    if (!['Completada','Cancelada'].includes(orderObj.status)) insertRow(orderObj);
+    if (window.notifications) {
+      notifications.info(`Cliente: ${orderObj.name}.`, { title: `Nueva Solicitud #${orderObj.id}`, duration: 10000 });
+    }
+    return;
+  }
+  if (eventType === 'UPDATE') {
+    let full = null;
+    try { full = await supabaseConfig.getOrderById(newRecord.id); } catch(_) {}
+    const orderObj = full || newRecord;
+    const idxAll = allOrders.findIndex(o => o.id === orderObj.id);
+    if (idxAll !== -1) allOrders[idxAll] = { ...allOrders[idxAll], ...orderObj }; else allOrders.unshift(orderObj);
+    const wasVisibleIdx = filteredOrders.findIndex(o => o.id === orderObj.id);
+    const shouldShow = !['Completada','Cancelada'].includes(orderObj.status);
+    if (wasVisibleIdx !== -1 && shouldShow) {
+      filteredOrders[wasVisibleIdx] = { ...filteredOrders[wasVisibleIdx], ...orderObj };
+      updateRow(orderObj);
+    } else if (wasVisibleIdx !== -1 && !shouldShow) {
+      removeRow(orderObj.id);
+    } else if (wasVisibleIdx === -1 && shouldShow) {
+      insertRow(orderObj);
+    }
+    return;
+  }
+  if (eventType === 'DELETE') {
+    const id = oldRecord?.id;
+    if (!id) return;
+    removeRow(id);
+    return;
   }
 }
 
@@ -764,7 +879,6 @@ document.addEventListener('DOMContentLoaded', function() {
   window.updateOrderStatus = updateOrderStatus;
   window.openAssignModal = openAssignModal;
   window.generateAndSendInvoice = generateAndSendInvoice;
-  window.toggleActionsMenu = toggleActionsMenu;
   window.showServiceDetails = showServiceDetails;
   window.openWhatsApp = openWhatsApp;
 
@@ -888,16 +1002,14 @@ function vapidToBytes(base64String) {
 }
 
   // Inicialización
-  function init() {
+  async function init() {
     loadOrders();
     checkVapidStatus();
   }
 
-  try { init(); } catch(_) {}
   try {
-    window.addEventListener('admin-session-ready', () => {
-      try { loadAdminInfo(); } catch(_) {}
-    });
+    document.addEventListener('admin-session-ready', init);
+    document.addEventListener('admin-session-ready', loadAdminInfo);
   } catch(_) {}
   refreshLucide();
 });

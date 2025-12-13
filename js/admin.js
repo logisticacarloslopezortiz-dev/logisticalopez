@@ -397,9 +397,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   // --- FIN: Verificación de Sesión Obligatoria ---
   
-  // ✅ MEJORA: La lógica de roles ahora se maneja con RLS de Supabase.
-  // El `admin.js` es solo para administradores, por lo que siempre cargamos todo.
-  loadOrders();
+  // Esperar confirmación del rol admin por servidor
+  document.addEventListener('admin-session-ready', () => {
+    loadOrders();
+    // Inicializar Lucide Icons tras carga
+    try { lucide.createIcons(); } catch(_) {}
+  });
     
     // Listeners para filtros
     document.getElementById('searchInput')?.addEventListener('input', filterAndRender);
@@ -421,6 +424,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Los listeners de whatsapp y factura se asignan dinámicamente en openAssignModal
 
 
-    // Inicializar Lucide Icons
-    lucide.createIcons();
+    // Lucide se inicializa después de admin-session-ready
 });

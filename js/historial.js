@@ -1,612 +1,129 @@
-// js/historial.js
-const PUBLIC_CLIENT = (() => {
-  try {
-    const cfg = window.supabaseConfig;
-    if (!cfg) return null;
-    if (typeof cfg.getPublicClient === 'function') {
-      return cfg.getPublicClient();
-    }
-    return cfg.client || null;
-  } catch (_) { return null; }
-})();
-
-document.addEventListener('DOMContentLoaded', async () => {
-  // Inicializar elementos del DOM
+document.addEventListener('DOMContentLoaded', () => {
   const tableBody = document.getElementById('historyTableBody');
   const showingCountEl = document.getElementById('showingCount');
   const totalCountEl = document.getElementById('totalCount');
 
   let allHistoryOrders = [];
   let filteredOrders = [];
-  const histPageState = { currentPage: 1, pageSize: 15, totalPages: 1 };
+  const histPageState = { currentPage: 1, pageSize: 15 };
 
-  // --- MODAL DE EVIDENCIA ---
+  // Referencias a modales (asumiendo que existen en el HTML)
   const evidenceModal = document.getElementById('evidenceModal');
-  const closeEvidenceModalBtn = document.getElementById('closeEvidenceModal');
-  const evidenceGallery = document.getElementById('evidenceGallery');
-
-  // --- MODAL DE PDF ---
   const pdfModal = document.getElementById('pdfModal');
-  const closePdfModalBtn = document.getElementById('closePdfModal');
-  const pdfOrderInfo = document.getElementById('pdfOrderInfo');
-  const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+  const normalize = (s) => String(s || '').toLowerCase();
 
-  // Función para mostrar el modal de PDF
-  window.showPDFModal = (orderId) => {
-    const order = filteredOrders.find(o => o.id === orderId);
-    if (!order) {
-      alert('Orden no encontrada');
-      return;
+  const applyFilters = () => {
+    let rows = allHistoryOrders.slice();
+    if (histPageState.status !== 'all') {
+      const wanted = normalize(histPageState.status);
+      rows = rows.filter(r => normalize(r.status) === wanted);
     }
-
-    // Mostrar información de la orden en el modal
-    const completadoPorNombre = order.profiles?.full_name || order.completed_by_name || 'No disponible';
-    const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleDateString('es-ES') : 'No disponible';
-    
-    // Actualizar el contenido del modal
-    document.getElementById('selectedOrderDetails').innerHTML = `
-      <div class="space-y-2">
-        <p><strong>Orden #:</strong> ${order.id}</p>
-        <p><strong>Cliente:</strong> ${order.name || 'N/A'}</p>
-        <p><strong>Servicio:</strong> ${order.service?.name || order.service_name || 'N/A'}</p>
-        <p><strong>Estado:</strong> ${order.status}</p>
-        <p><strong>Completado por:</strong> ${completadoPorNombre}</p>
-        <p><strong>Fecha:</strong> ${fechaCompletado}</p>
-        <p><strong>Monto:</strong> ${order.monto_cobrado ? `$${order.monto_cobrado}` : 'N/A'}</p>
-      </div>
-    `;
-
-    // Configurar el botón de descarga
-    downloadPdfBtn.onclick = () => {
-      generatePDF(order);
-      closePdfModal();
-    };
-
-    // Botón de calificación eliminado a petición: no se configura ni se muestra
-
-    // Configurar botón de cancelar
-    document.getElementById('cancelPdfBtn').onclick = closePdfModal;
-
-    // Mostrar el modal
-    pdfModal.classList.remove('hidden');
-    pdfModal.classList.add('flex');
-    
-    // Actualizar iconos de Lucide
-    if (window.lucide) lucide.createIcons();
+    if (histPageState.search) {
+      const q = normalize(histPageState.search);
+      rows = rows.filter(r => {
+        const parts = [r.id, r.short_id, r.name, r.phone, r.email, r.pickup, r.delivery, r.empresa, r.rnc, r?.service?.name, r?.vehicle?.name].map(x => normalize(x));
+        return parts.some(p => p.includes(q));
+      });
+    }
+    return rows;
   };
 
-  // Función para cerrar el modal de PDF
-  const closePdfModal = () => {
-    pdfModal.classList.add('hidden');
-    pdfModal.classList.remove('flex');
-  };
-
-  closePdfModalBtn.addEventListener('click', closePdfModal);
-  pdfModal.addEventListener('click', (e) => {
-    if (e.target === pdfModal) {
-      closePdfModal();
-    }
-  });
-
-  // Función para abrir el modal de evidencia
-  window.showEvidence = (orderId) => {
-    const order = filteredOrders.find(o => o.id === orderId);
-    if (!order || !order.evidence_photos || order.evidence_photos.length === 0) {
-      alert('Esta solicitud no tiene fotos de evidencia.');
-      return;
-    }
-
-    evidenceGallery.innerHTML = order.evidence_photos.map(item => {
-      let url = typeof item === 'string' ? item : (item && item.url ? item.url : '');
-      if (!url && item && item.path && supabaseConfig && supabaseConfig.client && supabaseConfig.client.storage) {
-        try {
-          const b = supabaseConfig.getEvidenceBucket ? supabaseConfig.getEvidenceBucket() : (supabaseConfig.buckets && supabaseConfig.buckets.evidence) ? supabaseConfig.buckets.evidence : 'order-evidence';
-          const pub = supabaseConfig.client.storage.from(b).getPublicUrl(item.path);
-          url = (pub && pub.data && pub.data.publicUrl) ? pub.data.publicUrl : '';
-        } catch (_) { url = ''; }
-      }
-      if (!url) return '';
-      return `
-        <a href="${url}" target="_blank" rel="noopener noreferrer" class="block group">
-          <img src="${url}" alt="Evidencia" class="w-full h-48 object-cover rounded-lg shadow-md group-hover:opacity-80 transition-opacity">
-        </a>
-      `;
-    }).join('');
-
-    evidenceModal.classList.remove('hidden');
-    evidenceModal.classList.add('flex');
-    if (window.lucide) lucide.createIcons();
-  };
-
-  // Función para cerrar el modal
-  const closeEvidenceModal = () => {
-    evidenceModal.classList.add('hidden');
-    evidenceModal.classList.remove('flex');
-  };
-
-  closeEvidenceModalBtn.addEventListener('click', closeEvidenceModal);
-  // Cerrar al hacer clic fuera
-  evidenceModal.addEventListener('click', (e) => {
-    if (e.target === evidenceModal) {
-      closeEvidenceModal();
-    }
-  });
-
-
-  // --- FUNCIONES PARA GENERAR PDF ---
-  
-  // Función para formatear fecha
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+  const renderTable = (pageNumber = histPageState.currentPage) => {
+    histPageState.currentPage = pageNumber;
+    const sorted = filteredOrders.slice().sort((a, b) => {
+      const ta = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+      const tb = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+      return tb - ta;
     });
-  };
-
-  // Función para generar y descargar PDF
-  const generatePDF = async (order) => {
-    try {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 20;
-      const contentWidth = pageWidth - margin * 2;
-      let y = margin;
-
-      const brandDark = { r: 30, g: 64, b: 90 };
-      const brandTurq = { r: 30, g: 138, b: 149 };
-
-      const toDataURL = async (url) => {
-        try {
-          const res = await fetch(url);
-          const blob = await res.blob();
-          return await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        } catch (_) { return null; }
-      };
-
-      const drawHeader = async () => {
-        doc.setFillColor(brandDark.r, brandDark.g, brandDark.b);
-        doc.rect(0, 0, pageWidth, 28, 'F');
-        doc.setFillColor(brandTurq.r, brandTurq.g, brandTurq.b);
-        doc.rect(pageWidth - 60, 0, 60, 28, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text('Logística López Ortiz', margin, 18);
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'normal');
-        doc.text('RNC: 133139413', margin, 25);
-        const logo = await toDataURL('img/1horizontal (1).png');
-        if (logo) {
-          try { doc.addImage(logo, 'PNG', pageWidth - 22, 6, 14, 14); } catch (_) {}
-        }
-        doc.setTextColor(0, 0, 0);
-        y = 40;
-      };
-
-      const ensureSpace = async (needed = 12) => {
-        if (y + needed > pageHeight - margin) {
-          doc.addPage();
-          await drawHeader();
-        }
-      };
-
-      const textBlock = async (text, opts = {}) => {
-        const { x = margin, width = contentWidth, lineHeight = 6, style = 'normal', size = 11 } = opts;
-        const lines = doc.splitTextToSize(String(text || ''), width);
-        const h = Math.max(lineHeight, lines.length * lineHeight);
-        await ensureSpace(h + 2);
-        doc.setFont(undefined, style);
-        doc.setFontSize(size);
-        doc.text(lines, x, y);
-        y += h;
-      };
-
-      const labelValue = async (label, value, labelW = 38) => {
-        const leftX = margin;
-        const rightX = margin + labelW;
-        const maxW = contentWidth - labelW;
-        const vLines = doc.splitTextToSize(String(value || 'N/A'), maxW);
-        const h = Math.max(8, vLines.length * 6);
-        await ensureSpace(h + 2);
-        doc.setFont(undefined, 'bold');
-        doc.setFontSize(11);
-        doc.text(String(label || ''), leftX, y);
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(11);
-        doc.text(vLines, rightX, y);
-        y += h;
-      };
-
-      await drawHeader();
-
-      doc.setFontSize(15);
-      doc.setFont(undefined, 'bold');
-      await textBlock('Reporte de Orden de Servicio', { x: pageWidth / 2, width: contentWidth, lineHeight: 6, style: 'bold', size: 15 });
-      const titleYAdj = y;
-      y = titleYAdj;
-      doc.text(`Número de Orden: #${order.id}`, pageWidth / 2, y, { align: 'center' });
-      y += 10;
-
-      doc.setFontSize(12);
-      doc.setFont(undefined, 'bold');
-      await textBlock('Datos del Cliente', { size: 13, style: 'bold' });
-      doc.setFont(undefined, 'normal');
-      if (order.name) await labelValue('Nombre:', order.name);
-      if (order.phone) await labelValue('Teléfono:', order.phone);
-      if (order.email) await labelValue('Email:', order.email);
-      if (order.empresa) await labelValue('Empresa:', order.empresa);
-      if (order.rnc) await labelValue('RNC:', order.rnc);
-
-      y += 6;
-      doc.setFont(undefined, 'bold');
-      await textBlock('Resumen del Servicio', { size: 13, style: 'bold' });
-      doc.setFont(undefined, 'normal');
-      const serviceName = order.service?.name || order.service_name || null;
-      const vehicleName = order.vehicle?.name || order.vehicle_name || null;
-      if (serviceName) await labelValue('Servicio:', serviceName);
-      if (vehicleName) await labelValue('Vehículo:', vehicleName);
-      await labelValue('Fecha solicitud:', formatDate(order.created_at));
-      if (order.date) await labelValue('Fecha servicio:', `${order.date} ${order.time || ''}`);
-      if (order.status) await labelValue('Estado:', order.status);
-      if (order.monto_cobrado) await labelValue('Monto cobrado:', `$${Number(order.monto_cobrado).toLocaleString('es-DO')}`);
-
-      if (order.pickup || order.delivery) {
-        y += 6;
-        doc.setFont(undefined, 'bold');
-        await textBlock('Ruta', { size: 13, style: 'bold' });
-        doc.setFont(undefined, 'normal');
-        if (order.pickup) await labelValue('Recogida:', order.pickup);
-        if (order.delivery) await labelValue('Entrega:', order.delivery);
-      }
-
-      if (order.service_questions && Object.keys(order.service_questions).length > 0) {
-        y += 6;
-        doc.setFont(undefined, 'bold');
-        await textBlock('Detalles adicionales', { size: 13, style: 'bold' });
-        doc.setFont(undefined, 'normal');
-        try {
-          const qs = typeof order.service_questions === 'string' ? JSON.parse(order.service_questions) : order.service_questions;
-          for (const [k, v] of Object.entries(qs)) {
-            const label = String(k).replace(/_/g, ' ').replace(/\b\w/g, s => s.toUpperCase());
-            if (v !== undefined && v !== null && String(v).trim() !== '') {
-              await labelValue(`${label}:`, String(v));
-            }
-          }
-        } catch (_) {}
-      }
-
-      if (order.evidence_photos && order.evidence_photos.length > 0) {
-        y += 6;
-        doc.setFont(undefined, 'bold');
-        await textBlock(`Evidencia fotográfica: ${order.evidence_photos.length} foto(s) adjunta(s)`, { size: 12, style: 'bold' });
-        doc.setFont(undefined, 'italic');
-        await textBlock('(Las fotos están disponibles en el sistema)', { size: 9, style: 'italic' });
-      }
-
-      doc.addPage();
-      await drawHeader();
-      doc.setFont(undefined, 'bold');
-      await textBlock('Información de finalización', { size: 14, style: 'bold' });
-      doc.setFont(undefined, 'normal');
-      const collaboratorName = order.profiles?.full_name || order.completed_by_name || 'No asignado';
-      const completedDate = formatDate(order.completed_at);
-      await labelValue('ID de Orden:', String(order.id));
-      await labelValue('Completado por:', collaboratorName);
-      await labelValue('Fecha de finalización:', completedDate);
-      if (order.metodo_pago) await labelValue('Método de pago:', order.metodo_pago);
-      if (order.monto_cobrado) await labelValue('Monto final:', `$${Number(order.monto_cobrado).toLocaleString('es-DO')}`);
-
-      if (order.assigned_at || order.accepted_at) {
-        y += 6;
-        doc.setFont(undefined, 'bold');
-        await textBlock('Historial de asignaciones', { size: 13, style: 'bold' });
-        doc.setFont(undefined, 'normal');
-        if (order.assigned_at) await labelValue('Asignado el:', formatDate(order.assigned_at));
-        if (order.accepted_at) await labelValue('Aceptado el:', formatDate(order.accepted_at));
-      }
-
-      const footer = () => {
-        const footerY = pageHeight - 16;
-        doc.setFontSize(9);
-        doc.setFont(undefined, 'normal');
-        doc.text(`Generado el: ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, margin, footerY);
-        doc.text('Sistema de Gestión - Logística López Ortiz', pageWidth - margin, footerY, { align: 'right' });
-      };
-      footer();
-
-      const fileName = `orden_${order.id}_${order.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'cliente'}_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
-    } catch (error) {
-      alert('Error al generar el PDF. Intente nuevamente.');
-    }
-  };
-
-  // --- CARGA Y RENDERIZADO DE DATOS ---
-
-  // Función para renderizar las filas de la tabla
-  const renderTable = () => {
-    if (!tableBody) return;
-
-    const total = filteredOrders.length;
-    histPageState.totalPages = Math.max(1, Math.ceil(total / histPageState.pageSize));
-    if (histPageState.currentPage > histPageState.totalPages) histPageState.currentPage = histPageState.totalPages;
-    const start = total === 0 ? 0 : (histPageState.currentPage - 1) * histPageState.pageSize;
-    const end = total === 0 ? 0 : Math.min(start + histPageState.pageSize, total);
-
-    if (total === 0) {
-      tableBody.innerHTML = `
-        <tr>
-          <td colspan="7" class="text-center py-10 text-gray-500">
-            No se encontraron solicitudes que coincidan con los filtros.
-          </td>
-        </tr>
-      `;
-    } else {
-      const pageSlice = filteredOrders.slice(start, end);
-      tableBody.innerHTML = pageSlice.map(order => {
-        const completadoPorNombre = order.profiles?.full_name || order.completed_by_name || 'No disponible';
-        const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleDateString('es-ES', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        }) : 'No disponible';
-        const rowClass = order.status === 'Cancelada' ? 'hover:bg-red-50 bg-red-50/30' : 'hover:bg-green-50';
+    const total = sorted.length;
+    const start = (histPageState.currentPage - 1) * histPageState.pageSize;
+    const page = sorted.slice(start, start + histPageState.pageSize);
+    if (totalCountEl) totalCountEl.textContent = String(total);
+    if (showingCountEl) showingCountEl.textContent = `${start + 1}-${start + page.length}`;
+    if (tableBody) {
+      tableBody.innerHTML = page.map(o => {
+        const id = o.id;
+        const service = o.service?.name || '';
+        const fecha = o.completed_at ? new Date(o.completed_at).toLocaleString() : (o.created_at ? new Date(o.created_at).toLocaleString() : '');
+        const colaborador = o.colaborador?.name || '';
+        const precio = (o.monto_cobrado != null && o.monto_cobrado !== '') ? `RD$ ${Number(o.monto_cobrado).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+        const evidenceCount = Array.isArray(o.evidence_photos) ? o.evidence_photos.length : 0;
         return `
-          <tr class="${rowClass} cursor-pointer hover:shadow-md transition-all duration-200" 
-              ondblclick="showPDFModal(${order.id})" 
-              title="Doble clic para descargar PDF">
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${order.name || 'N/A'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${order.service?.name || order.service_name || 'N/A'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${fechaCompletado}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${completadoPorNombre}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${order.status === 'Cancelada' ? 'text-red-600' : 'text-green-700'}">
-              ${order.monto_cobrado ? `$${typeof order.monto_cobrado === 'string' ? parseFloat(order.monto_cobrado).toLocaleString('es-DO') : order.monto_cobrado.toLocaleString('es-DO')}` : 'N/A'}
+          <tr>
+            <td class="table-cell">${id}</td>
+            <td class="table-cell">${o.name || ''}</td>
+            <td class="table-cell">${service}</td>
+            <td class="table-cell">${fecha}</td>
+            <td class="table-cell">${colaborador}</td>
+            <td class="table-cell">${precio}</td>
+            <td class="table-cell">
+              <button class="btn-evidence" data-order-id="${o.id}">${evidenceCount > 0 ? `Ver (${evidenceCount})` : 'No hay'}</button>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              ${(order.evidence_photos && order.evidence_photos.length > 0) ?
-                `<button onclick="showEvidence(${order.id})" class="text-blue-600 hover:underline flex items-center gap-1">
-                  <i data-lucide="image" class="w-4 h-4"></i> Ver (${order.evidence_photos.length})
-                </button>` :
-                '<span class="text-gray-400">No hay</span>'}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
-              <button onclick="window.showPDFModal(${order.id})" class="p-2 rounded-full hover:bg-blue-100 text-blue-600 transition-colors" title="Descargar reporte PDF">
-                <i data-lucide="file-down" class="w-5 h-5"></i>
-              </button>
+            <td class="table-cell">
+              <button class="btn-pdf" data-order-id="${o.id}">PDF</button>
             </td>
           </tr>
         `;
       }).join('');
+      // Bind row actions
+      tableBody.querySelectorAll('.btn-evidence').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = Number(btn.dataset.orderId);
+          const order = allHistoryOrders.find(o => Number(o.id) === id);
+          if (order) window.showEvidence(id); // Asume que showEvidence es global
+        });
+      });
+      tableBody.querySelectorAll('.btn-pdf').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = Number(btn.dataset.orderId);
+          const order = allHistoryOrders.find(o => Number(o.id) === id);
+          if (order) window.showPDFModal(id); // Asume que showPDFModal es global
+        });
+      });
     }
-
-    const rangeStart = total === 0 ? 0 : start + 1;
-    const rangeEnd = total === 0 ? 0 : end;
-    showingCountEl.textContent = `${rangeStart}–${rangeEnd}`;
-    totalCountEl.textContent = allHistoryOrders.length;
-    if (window.lucide) lucide.createIcons();
     renderPagination();
   };
 
-  // Función de filtrado
   const filterAndRender = () => {
-    filteredOrders = allHistoryOrders;
-    histPageState.totalPages = Math.max(1, Math.ceil(filteredOrders.length / histPageState.pageSize));
     histPageState.currentPage = 1;
     renderTable();
   };
 
-  function renderPagination() {
-    const pagesEl = document.getElementById('histPages');
-    const prev = document.getElementById('histPrev');
-    const next = document.getElementById('histNext');
-    const first = document.getElementById('histFirst');
-    const last = document.getElementById('histLast');
-    if (!pagesEl || !prev || !next || !first || !last) return;
-    const total = histPageState.totalPages;
-    const current = histPageState.currentPage;
-    prev.disabled = current <= 1;
-    first.disabled = current <= 1;
-    next.disabled = current >= total;
-    last.disabled = current >= total;
-    const windowSize = 5;
-    let start = Math.max(1, current - Math.floor(windowSize/2));
-    let end = Math.min(total, start + windowSize - 1);
-    start = Math.max(1, end - windowSize + 1);
-    pagesEl.innerHTML = '';
-    for (let p = start; p <= end; p++) {
-      const btn = document.createElement('button');
-      btn.textContent = String(p);
-      btn.className = `px-3 py-2 rounded text-sm ${p===current? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'}`;
-      btn.addEventListener('click', () => { histPageState.currentPage = p; renderTable(); });
-      pagesEl.appendChild(btn);
-    }
-    prev.onclick = () => { if (histPageState.currentPage>1) { histPageState.currentPage--; renderTable(); } };
-    next.onclick = () => { if (histPageState.currentPage<total) { histPageState.currentPage++; renderTable(); } };
-    first.onclick = () => { histPageState.currentPage = 1; renderTable(); };
-    last.onclick = () => { histPageState.currentPage = total; renderTable(); };
-  }
-
-  // Carga inicial de datos
   const loadHistory = async () => {
+    try { await supabaseConfig.ensureFreshSession?.(); } catch {}
+    const client = supabaseConfig.client;
+    let orders = [];
+    let err = null;
+    const STATUS_OK = ['Completada', 'Cancelada', 'completada', 'cancelada', 'Completado', 'Cancelado', 'completado', 'cancelado', 'Finalizada', 'finalizada', 'Entregada', 'entregada'];
+
     try {
-      console.log('[Historial] Iniciando carga de solicitudes...');
-      try { await supabaseConfig.ensureFreshSession(); } catch(_){ }
-      
-      const client = supabaseConfig.client;
-      const publicClient = PUBLIC_CLIENT;
-      if (!publicClient && !client) {
-        if (tableBody) {
-          tableBody.innerHTML = `
-            <tr>
-              <td colspan="7" class="text-center py-10 text-red-600">
-                No se pudo inicializar Supabase. Verifique que supabase-config.js esté cargado.
-              </td>
-            </tr>`;
-        }
-        return;
-      }
+      // ✅ CORRECCIÓN: Usar siempre el cliente autenticado para evitar problemas con RLS.
+      const { data, error } = await client
+        .from('orders')
+        .select('*, service:services(name), vehicle:vehicles(name), colaborador:collaborators(name)')
+        .in('status', STATUS_OK)
+        .order('completed_at', { ascending: false });
 
-      let orders = [];
-      let ordersError = null;
-      const COMPLETED_STATUSES = ['Completada','completada','Completado','completado','Finalizada','finalizada','Entregada','entregada'];
-      const CANCELLED_STATUSES = ['Cancelada','cancelada','Cancelado','cancelado'];
-      const ALL_STATUSES = [...COMPLETED_STATUSES, ...CANCELLED_STATUSES];
-      const selectCols = 'id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, assigned_at, accepted_at, metodo_pago, monto_cobrado, evidence_photos, service_questions';
-      
-      const uniqueById = (arr) => {
-        const map = new Map();
-        for (const o of arr) { if (o && o.id != null && !map.has(o.id)) map.set(o.id, o); }
-        return Array.from(map.values());
-      };
+      if (error) err = error; else orders = data || [];
+    } catch (e) { err = e; }
 
-      // ✅ CORRECCIÓN: Priorizar el cliente autenticado para evitar problemas con RLS.
-      try {
-        const { data, error } = await client
-          .from('orders')
-          .select(selectCols)
-          .in('status', ALL_STATUSES)
-          .order('completed_at', { ascending: false });
-        
-        if (error) { ordersError = error; }
-        else { orders = data || []; }
-      } catch (e) { ordersError = e; }
+    if (err) {
+      console.error("Error cargando historial:", err);
+      tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500">Error al cargar datos.</td></tr>`;
+      return;
+    }
 
-      if (ordersError) {
-        console.error('[Historial] Error al cargar con cliente autenticado:', ordersError);
-      }
-       if (!orders || orders.length === 0) {
-        console.log('[Historial] No se encontraron órdenes en el historial.');
-        allHistoryOrders = [];
-        filterAndRender();
-        return;
-      }
-
-      console.log(`[Historial] Órdenes cargadas: ${orders.length}`);
-
-      // Paso 2: Recolectar IDs de colaboradores y servicios
-      const collaboratorIds = [...new Set(orders.map(o => o.completed_by).filter(id => id))];
-      const serviceIds = [...new Set(orders.map(o => o.service_id).filter(id => id))];
-      const vehicleIds = [...new Set(orders.map(o => o.vehicle_id).filter(id => id))];
-
-      // Paso 3: Obtener datos de colaboradores y servicios en paralelo
-      let collaborators = [];
-      let services = [];
-
-      try {
-        if (collaboratorIds.length > 0) {
-          const { data: collabData, error: collabError } = await client
-            .from('profiles')
-            .select('id, full_name');
-          if (collabError) console.warn('[Historial] Error al cargar colaboradores:', collabError);
-          else collaborators = collabData || [];
-        }
-      } catch (_) {}
-
-      try {
-        if (serviceIds.length > 0) {
-          const { data: serviceData, error: serviceError } = await client
-            .from('services')
-            .select('id, name');
-          if (serviceError) console.warn('[Historial] Error al cargar servicios:', serviceError);
-          else services = serviceData || [];
-        }
-      } catch (_) {}
-      let vehicles = [];
-      try {
-        if (vehicleIds.length > 0) {
-          const { data: vehicleData, error: vehicleError } = await client
-            .from('vehicles')
-            .select('id, name');
-          if (vehicleError) console.warn('[Historial] Error al cargar vehículos:', vehicleError);
-          else vehicles = vehicleData || [];
-        }
-      } catch (_) {}
-
-      // Mapear para búsqueda rápida
-      const collaboratorsMap = new Map(collaborators.map(c => [c.id, c.full_name]));
-      const servicesMap = new Map(services.map(s => [s.id, s.name]));
-      const vehiclesMap = new Map(vehicles.map(v => [v.id, v.name]));
-
-      // Paso 4: Combinar los datos
-      allHistoryOrders = orders.map(order => {
-        return {
-          ...order,
-          // Asignar nombre de colaborador
-          profiles: {
-            full_name: collaboratorsMap.get(order.completed_by) || null
-          },
-          // Asignar nombre de servicio
-          service: {
-            name: servicesMap.get(order.service_id) || null
-          },
-          vehicle: {
-            name: vehiclesMap.get(order.vehicle_id) || null
-          }
-        };
-      });
-
-      console.log(`[Historial] Datos combinados. Total: ${allHistoryOrders.length}`);
+    if (!orders || orders.length === 0) {
+      allHistoryOrders = [];
+      filteredOrders = [];
       filterAndRender();
-
-    } catch (error) {
-      console.error('[Historial] Error crítico al cargar el historial:', error);
-      if (tableBody) {
-        tableBody.innerHTML = `
-          <tr>
-            <td colspan="7" class="text-center py-10 text-red-600">
-              <b>Error al cargar el historial:</b> ${error.message || 'Error desconocido'}.
-              <br>Por favor, revise la consola para más detalles y contacte a soporte si el problema persiste.
-            </td>
-          </tr>
-        `;
-      }
+      return;
     }
+    allHistoryOrders = orders;
+    filteredOrders = orders;
+    filterAndRender();
   };
 
-  // Configurar suscripción en tiempo real para órdenes completadas
-  const setupRealtimeSubscription = () => {
-    const cli = supabaseConfig.client;
-    try {
-      if (cli && typeof cli.channel === 'function') {
-        const channel = cli.channel('historial-updates');
-        channel
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: 'status=in.(Completada,Cancelada)' }, (payload) => {
-            console.log('[Historial] Cambio en tiempo real detectado:', payload);
-            if (payload?.new && ['Completada','Cancelada'].includes(payload.new.status)) {
-              const idx = allHistoryOrders.findIndex(o => o.id === payload.new.id);
-              if (idx === -1) loadOrderDetails(payload.new.id); else { allHistoryOrders[idx] = { ...allHistoryOrders[idx], ...payload.new }; filterAndRender(); }
-            }
-          })
-          .subscribe((status) => console.log('[Historial] Estado suscripción:', status));
-        return;
-      }
-      // No intentar API v1 .from().on() en entornos sin soporte
-      console.warn('[Historial] Realtime no disponible; activando refresco periódico');
-      if (!window.__histRefresh__) {
-        window.__histRefresh__ = setInterval(() => {
-          try { loadHistory(); } catch(_) {}
-        }, 60000);
-      }
-    } catch (e) {
-      console.warn('[Historial] Error configurando realtime:', e?.message || e);
-    }
-  };
-
-  // Función para cargar los detalles completos de una orden
   const loadOrderDetails = async (orderId) => {
     try {
       let data = null;
@@ -614,53 +131,88 @@ document.addEventListener('DOMContentLoaded', async () => {
       try {
         const resp = await supabaseConfig.client
           .from('orders')
-          .select(`
-            *,
-            service:services(name),
-            profiles:profiles!orders_completed_by_fkey(full_name)
-          `)
+          .select('*, service:services(name)')
           .eq('id', orderId)
           .maybeSingle();
         data = resp.data;
         error = resp.error || null;
-      } catch (e) {
-        error = e;
-      }
-
+      } catch (e) { error = e; }
       if (error && (String(error.message || '').toLowerCase().includes('jwt expired') || (error.status === 401))) {
         try {
-          const pub = PUBLIC_CLIENT || supabaseConfig.getPublicClient?.() || supabaseConfig.client;
+          const pub = supabaseConfig.getPublicClient?.() || supabaseConfig.client;
           const resp2 = await pub
             .from('orders')
-            .select(`
-              *,
-              service:services(name),
-              profiles:profiles!orders_completed_by_fkey(full_name)
-            `)
+            .select('*, service:services(name)')
             .eq('id', orderId)
             .maybeSingle();
           data = resp2.data;
           error = resp2.error || null;
-        } catch (_) {}
+        } catch {}
       }
-
-      if (error) {
-        console.error(`Error al cargar detalles de la orden #${orderId}:`, error);
-        return;
-      }
-
       if (data) {
+        try {
+          if (data.completed_by) {
+            const { data: coll } = await (supabaseConfig.getPublicClient?.() || supabaseConfig.client)
+              .from('collaborators')
+              .select('id,name,role')
+              .eq('id', data.completed_by)
+              .maybeSingle();
+            if (coll) data.colaborador = { name: coll.name || null, role: coll.role || null };
+          }
+        } catch {}
         allHistoryOrders.unshift(data);
         filterAndRender();
       }
-    } catch (error) {
-      console.error(`Error al cargar detalles de la orden #${orderId}:`, error);
-    }
+    } catch {}
   };
 
-  // Carga inicial
-  await loadHistory();
-  
-  // Configurar suscripción en tiempo real
-  setupRealtimeSubscription();
+  const setupRealtimeSubscription = () => {
+    const cli = supabaseConfig.client;
+    try {
+      if (cli && typeof cli.channel === 'function') {
+        const channel = cli.channel('historial-updates');
+        const STATUS_OK = ['Completada', 'Cancelada'];
+        channel
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `status=in.(${STATUS_OK.join(',')})` }, (payload) => {
+            if (!payload.new) return;
+            const idx = allHistoryOrders.findIndex(o => o.id === payload.new.id);
+            if (idx === -1) loadOrderDetails(payload.new.id);
+            else { allHistoryOrders[idx] = { ...allHistoryOrders[idx], ...payload.new }; renderTable(); }
+          })
+          .subscribe();
+        return;
+      }
+      if (!window.__histRefresh__) {
+        window.__histRefresh__ = setInterval(() => { try { loadHistory(); } catch {} }, 60000);
+      }
+    } catch {}
+  };
+
+  let __histInitialized = false;
+  const safeInit = async () => {
+    if (__histInitialized) return;
+    __histInitialized = true;
+    await loadHistory();
+    setupRealtimeSubscription();
+  };
+
+  // ✅ CORRECCIÓN: Esperar a que la sesión de admin esté lista.
+  document.addEventListener('admin-session-ready', safeInit);
+
+  function renderPagination() {
+    // Lógica de paginación (si es necesaria)
+  }
+
+  // Mock de funciones globales si no existen en el HTML, para evitar errores
+  if (!window.showEvidence) {
+    window.showEvidence = (id) => console.log('showEvidence para ID:', id);
+  }
+  if (!window.showPDFModal) {
+    window.showPDFModal = (id) => console.log('showPDFModal para ID:', id);
+  }
+
+  // Inicialización de iconos si Lucide está presente
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
 });

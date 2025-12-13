@@ -1,9 +1,9 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const path = (location.pathname || '').toLowerCase();
     const endsWith = (p) => path.endsWith('/' + p) || path.endsWith(p);
-    const adminPages = ['inicio.html','servicios.html','ganancias.html','historial-solicitudes.html','mi-negocio.html','colaboradores.html'];
+    const adminPages = ['inicio.html','servicios.html','ganancias.html','mi-negocio.html','colaboradores.html'];
     const isAdminPage = adminPages.some(endsWith);
-    const isPublicPage = false;
+    const isPublicPage = endsWith('historial-solicitudes.html');
     const loginHref = 'login.html';
     try { if (supabaseConfig.ensureFreshSession) await supabaseConfig.ensureFreshSession(); } catch(_) {}
     const { data: { session }, error: sessionError } = await supabaseConfig.client.auth.getSession();
@@ -16,27 +16,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (isAdminPage) {
-        const user = session.user;
         let hasAdminRole = false;
         try {
-            const { data: collab } = await supabaseConfig.client
-                .from('collaborators')
-                .select('role,status')
-                .eq('id', user.id)
-                .maybeSingle();
-            const norm = (s) => String(s || '').toLowerCase().trim();
-            const role = norm(collab?.role);
-            const status = norm(collab?.status);
-            hasAdminRole = !!collab && status === 'activo' && role === 'administrador';
+            const { data: isAdmin, error: rpcError } = await supabaseConfig.client.rpc('is_admin');
+            if (rpcError) { try { console.error('Error RPC is_admin:', rpcError); } catch(_) {} }
+            hasAdminRole = !!isAdmin;
         } catch(_) {}
         if (!hasAdminRole) {
             try { console.warn('Sesión sin rol administrador; redirigiendo a login'); } catch(_){}
             window.location.href = loginHref;
             return;
         }
+        window.dispatchEvent(new Event('admin-session-ready'));
+    } else {
+        window.dispatchEvent(new Event('session-ready'));
     }
-
-    window.dispatchEvent(new Event(isAdminPage ? 'admin-session-ready' : 'session-ready'));
 
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.getElementById('main-content');

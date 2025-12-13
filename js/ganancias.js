@@ -59,6 +59,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         data = resp.data; error = resp.error || null;
       } catch (e) { error = e; }
 
+      // Fallback si el cliente no soporta Query Builder completo
+      if (error && /is not a function/i.test(String(error.message||''))) {
+        try {
+          const { data: fallback } = await supabaseConfig.client
+            .from('orders')
+            .select('id, status, completed_at, monto_cobrado, completed_by, assigned_to, service:services(name)');
+          data = (fallback || []).filter(o => COMPLETED.includes(String(o.status||'')))
+            .filter(o => o.monto_cobrado != null)
+            .sort((a,b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime());
+          error = null;
+        } catch (_) {}
+      }
+
       if (error && (String(error.message||'').toLowerCase().includes('jwt expired') || error.status === 401)) {
         try {
           const pub = supabaseConfig.getPublicClient();
@@ -500,5 +513,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  initialize();
+  document.addEventListener('admin-session-ready', initialize);
   });

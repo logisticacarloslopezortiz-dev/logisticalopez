@@ -124,32 +124,24 @@
           if (authData.user) {
             const user = authData.user;
             const appRoles = (user?.app_metadata?.roles || user?.app_metadata?.role || []);
-            const metaRole = user?.user_metadata?.role;
-            const isAdminMeta = (Array.isArray(appRoles) ? appRoles.includes('administrador') : String(appRoles || '').toLowerCase() === 'administrador') || String(metaRole || '').toLowerCase() === 'administrador' || user?.user_metadata?.is_admin === true;
+            const isServiceRole = appRoles.includes('service_role');
 
-            if (isAdminMeta) {
+            // Usar RPC para una verificación de rol segura en el backend.
+            const { data: isAdmin, error: rpcError } = await supabaseConfig.client.rpc('is_admin');
+
+            if (rpcError) {
+              console.error('Error en RPC is_admin:', rpcError);
+              throw new Error('No se pudo verificar el rol del usuario.');
+            }
+
+            if (isAdmin || isServiceRole) {
               window.location.href = 'inicio.html';
             } else {
-              const { data: collaboratorProfile, error: profileError } = await supabaseConfig.client
-                .from('collaborators')
-                .select('role')
-                .eq('id', user.id)
-                .maybeSingle();
-              if (profileError) {
-                await supabaseConfig.client.auth.signOut();
-                throw new Error('Perfil de colaborador no encontrado.');
-              }
-              if (!collaboratorProfile || String(collaboratorProfile.role || '').toLowerCase() !== 'administrador') {
-                await supabaseConfig.client.auth.signOut();
-                throw new Error('Acceso denegado. Esta área es solo para administradores.');
-              }
-              localStorage.setItem('userRole', collaboratorProfile.role);
-              window.location.href = 'inicio.html';
+              await supabaseConfig.client.auth.signOut();
+              throw new Error('Acceso denegado. Esta área es solo para administradores.');
             }
           } else {
-            // Esto no debería ocurrir si no hay error, pero es una salvaguarda.
-            errorMsg.textContent = 'Usuario o contraseña incorrectos.';
-            errorMsg.classList.remove('hidden');
+            throw new Error('No se recibieron datos de usuario tras el login.');
           }
         } catch (error) {
           console.error('Error de inicio de sesión:', error);
