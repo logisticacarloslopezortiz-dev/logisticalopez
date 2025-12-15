@@ -859,11 +859,22 @@ $$ language plpgsql;
 
 
 -- Collaborators
-create policy collaborator_self_manage on public.collaborators
-for all using (auth.uid() = id or public.is_owner(auth.uid()) or public.is_admin(auth.uid()))
-with check (auth.uid() = id or public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
-create policy admin_manage_collaborators on public.collaborators
-for all using (public.is_admin(auth.uid()) or public.is_owner(auth.uid()))
+-- Limpieza de políticas antiguas
+drop policy if exists collaborator_self_manage on public.collaborators;
+drop policy if exists admin_manage_collaborators on public.collaborators;
+-- Regla #1: Un colaborador autenticado puede leer sus propios datos. (Soluciona el login del colaborador)
+create policy "Allow collaborators to select their own record"
+on public.collaborators for select
+using ( auth.uid() = id );
+-- Regla #2: Un administrador puede leer los datos de TODOS los colaboradores. (Soluciona el JOIN del historial)
+create policy "Allow admins to select all collaborator records"
+on public.collaborators for select
+using ( public.is_admin(auth.uid()) );
+-- Mantener permisos de escritura para administradores y para que un colaborador edite su perfil
+create policy "Allow collaborators to update their own record" on public.collaborators
+for update using (auth.uid() = id) with check (auth.uid() = id);
+create policy "Allow admins to manage collaborators" on public.collaborators
+for insert, update, delete using (public.is_admin(auth.uid()) or public.is_owner(auth.uid()))
 with check (public.is_admin(auth.uid()) or public.is_owner(auth.uid()));
 
 
@@ -919,34 +930,38 @@ after update of status on public.orders
 for each row execute function public.create_completion_receipt_on_order_complete();
 
 -- Orders: RLS clave
--- Insert público/cliente autenticado en estado Pendiente sin assigned_to
-create policy public_insert_pending_orders on public.orders
+-- Limpieza de políticas antiguas
+drop policy if exists public_insert_pending_orders on public.orders;
+drop policy if exists public_read_pending_orders on public.orders;
+drop policy if exists collaborator_all_on_own_orders on public.orders;
+drop policy if exists admin_all_orders on public.orders;
+-- Regla #1: Clientes/público pueden crear órdenes en estado 'Pendiente'.
+create policy "Allow public to insert pending orders" on public.orders
 for insert with check (
-  status = 'Pendiente' and (client_id is null or client_id = auth.uid()) and assigned_to is null
+  status = 'Pendiente' and assigned_to is null
 );
--- Lectura de órdenes pendientes (colaboradores activos), propias (cliente) y asignadas (colaborador)
-create policy public_read_pending_orders on public.orders
-for select using (
-  (status = 'Pendiente' and exists (
-    select 1 from public.collaborators c where c.id = auth.uid() and c.status = 'activo'
-  ))
-  or client_id = auth.uid()
-  or assigned_to = auth.uid()
-  or public.is_owner(auth.uid())
-  or public.is_admin(auth.uid())
+-- Regla #2: Un colaborador puede ver las órdenes que tiene asignadas Y las que están pendientes de asignar.
+create policy "Allow collaborators to select assigned or pending orders"
+on public.orders for select
+using (
+  (assigned_to = auth.uid() and status <> 'Cancelada') OR (status = 'Pendiente')
 );
--- Colaborador activo puede operar sobre pendientes o asignadas a él
-create policy collaborator_all_on_own_orders on public.orders
-for all using (
-  exists (select 1 from public.collaborators c where c.id = auth.uid() and c.status = 'activo') and
-  (assigned_to = auth.uid() or status = 'Pendiente')
+-- Regla #3: Un colaborador puede actualizar las órdenes que tiene asignadas.
+create policy "Allow collaborators to update their assigned orders" on public.orders
+for update using (
+  assigned_to = auth.uid()
 ) with check (
-  exists (select 1 from public.collaborators c where c.id = auth.uid() and c.status = 'activo')
+  assigned_to = auth.uid()
 );
--- Admin/owner full
-create policy admin_all_orders on public.orders
-for all using (public.is_owner(auth.uid()) or public.is_admin(auth.uid()))
-with check (public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
+-- Regla #4: Un administrador puede leer TODAS las órdenes sin restricción. (Soluciona la carga de datos del historial)
+create policy "Allow admins to select all orders"
+on public.orders for select
+using ( public.is_admin(auth.uid()) );
+-- Regla #5: Los administradores tienen acceso total para gestionar (actualizar/borrar) todas las órdenes.
+create policy "Allow admins to manage all orders" on public.orders
+for update, delete using (
+  public.is_admin(auth.uid()) or public.is_owner(auth.uid())
+);
 
 -- 10) MÉTRICAS DE COLABORADOR
 create table if not exists public.collaborator_performance (
