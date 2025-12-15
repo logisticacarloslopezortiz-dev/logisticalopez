@@ -216,9 +216,24 @@ $$;
 create or replace function public.is_admin(uid uuid)
 returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (
-    select 1 from public.collaborators c
-    where c.id = uid and lower(coalesce(c.role,'colaborador')) = 'administrador'
+  select coalesce(
+    (
+      auth.uid() = uid
+      and (
+        (current_setting('request.jwt.claims', true)::json ->> 'role') = 'admin'
+        or exists (
+          select 1
+          from json_array_elements_text(
+            coalesce(
+              current_setting('request.jwt.claims', true)::json -> 'app_metadata' -> 'roles',
+              '[]'::json
+            )
+          ) as r(value)
+          where r.value = 'admin'
+        )
+      )
+    ),
+    false
   );
 $$;
 
@@ -1596,3 +1611,24 @@ DO $$ BEGIN
   END IF;
 END $$;
 select pg_notify('pgrst', 'reload schema');
+DO $$
+DECLARE pol record;
+BEGIN
+  FOR pol IN SELECT policyname FROM pg_policies WHERE schemaname='public' AND tablename='collaborators' LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.collaborators', pol.policyname);
+  END LOOP;
+  FOR pol IN SELECT policyname FROM pg_policies WHERE schemaname='public' AND tablename='orders' LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.orders', pol.policyname);
+  END LOOP;
+END $$;
+alter table if exists public.collaborators enable row level security;
+alter table if exists public.orders enable row level security;
+create policy collab_self_select on public.collaborators
+  for select to authenticated
+  using (
+    auth.uid() = id
+    or lower(coalesce(email,'')) = lower(coalesce(current_setting('request.jwt.claims', true)::json ->> 'email',''))
+  );
+create policy admin_select_all_collaborators on public.collaborators for select to authenticated using (coalesce(public.is_admin(auth.uid()), false));
+create policy collaborator_select_assigned_or_pending on public.orders for select to authenticated using ((assigned_to = auth.uid()) OR assigned_to IS NULL);
+create policy admin_select_all_orders on public.orders for select to authenticated using (coalesce(public.is_admin(auth.uid()), false));

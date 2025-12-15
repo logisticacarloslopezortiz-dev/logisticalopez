@@ -42,22 +42,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Vinculación server-side del dispositivo para reforzar seguridad
                 try {
-                  const { data: bindData, error: bindErr } = await supabaseConfig.client.functions.invoke('bind-device', {
-                    body: { device_id: deviceId }
-                  });
-                  if (bindErr) throw bindErr;
-                  if (bindData && bindData.error === 'device_bound') {
-                    await supabaseConfig.client.auth.signOut();
-                    errorMsg.textContent = 'Este dispositivo ya está vinculado a otro usuario. Contacta al administrador para desvincularlo.';
-                    errorMsg.classList.remove('hidden');
-                    return;
+                  const isDevOrigin = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
+                  if (!isDevOrigin) {
+                    const { data: bindData, error: bindErr } = await supabaseConfig.client.functions.invoke('bind-device', {
+                      body: { device_id: deviceId },
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                    if (bindErr) throw bindErr;
+                    if (bindData && bindData.error === 'device_bound') {
+                      await supabaseConfig.client.auth.signOut();
+                      errorMsg.textContent = 'Este dispositivo ya está vinculado a otro usuario. Contacta al administrador para desvincularlo.';
+                      errorMsg.classList.remove('hidden');
+                      return;
+                    }
+                  } else {
+                    console.warn('Omitiendo bind-device en desarrollo por CORS.');
                   }
                 } catch (e) {
                   console.warn('No se pudo vincular servidor-side el dispositivo:', e?.message || e);
                   // Continuar si el cliente ya está vinculado localmente; el admin puede revisar luego
                 }
 
+                try {
+                  const v = await supabaseConfig.validateActiveCollaborator(data.user.id);
+                  if (!v?.isValid) {
+                    await supabaseConfig.client.auth.signOut();
+                    const msg = v?.error === 'Collaborator is not active'
+                      ? 'Tu cuenta ha sido desactivada. Contacta al administrador.'
+                      : v?.error === 'Invalid role for this panel'
+                        ? 'No tienes permisos de colaborador para este panel.'
+                        : 'No estás registrado como colaborador.';
+                    errorMsg.textContent = msg;
+                    errorMsg.classList.remove('hidden');
+                    return;
+                  }
+                } catch (e) {
+                  console.error('Error validando colaborador:', e?.message || e);
+                }
+
                 try { localStorage.setItem('userRole','colaborador'); } catch(_){ }
+                try {
+                  await supabaseConfig.ensureFreshSession?.();
+                  const { data: { session } } = await supabaseConfig.client.auth.getSession();
+                  if (!session) {
+                    await new Promise(r => setTimeout(r, 400));
+                  }
+                } catch(_){ }
                 window.location.href = 'panel-colaborador.html';
             }
         } catch (error) {

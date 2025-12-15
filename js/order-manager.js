@@ -6,6 +6,13 @@
  * para asegurar consistencia en las actualizaciones de la base de datos y en las notificaciones.
  */
 
+const STATUS_MAP = {
+  cargando: 'En curso',
+  en_camino_recoger: 'Aceptada',
+  en_camino_entregar: 'En curso',
+  entregado: 'Completada'
+};
+
 const OrderManager = {
   // Función helper para normalizar IDs de orden
   _normalizeOrderId(orderId) {
@@ -130,6 +137,14 @@ const OrderManager = {
     try {
       if (!supabaseConfig?.client) throw new Error('Supabase client no configurado');
       await supabaseConfig.ensureFreshSession?.();
+      const { data: ord } = await supabaseConfig.client
+        .from('orders')
+        .select('status')
+        .eq('id', Number(orderId))
+        .maybeSingle();
+      if (['Cancelada','Completada'].includes(String(ord?.status || '').trim())) {
+        throw new Error('No se puede modificar el monto en este estado');
+      }
       const rpcPayload = {
         order_id: Number(orderId),
         amount: Number(amount),
@@ -160,20 +175,7 @@ const OrderManager = {
    async cancelActiveJob(orderId) {
      console.log(`[OrderManager] Cancelando trabajo activo #${orderId}`);
      
-     try {
-       const { error } = await supabaseConfig.client
-         .from('orders')
-         .update({ status: 'Cancelada' })
-         .eq('id', orderId);
-       
-       if (error) throw error;
-       
-       console.log(`[OrderManager] Trabajo #${orderId} cancelado exitosamente`);
-       return { success: true, error: null };
-     } catch (error) {
-       console.error(`[OrderManager] Error al cancelar trabajo #${orderId}:`, error);
-       return { success: false, error: error.message };
-     }
+     return await this.actualizarEstadoPedido(orderId, 'Cancelada');
    },
 
    /**
@@ -239,41 +241,32 @@ const OrderManager = {
 
     // Lógica de negocio centralizada:
     // Mapear estados de acciones del colaborador
-    if (newStatus === 'entregado') {
+    if (STATUS_MAP[newStatus]) {
+      const db = STATUS_MAP[newStatus];
+      updatePayload.status = db;
+      if (db === 'Completada') updatePayload.completed_at = new Date().toISOString();
+      if (db === 'Aceptada') updatePayload.assigned_at = new Date().toISOString();
+    } else if (['Completada','completada'].includes(newStatus)) {
       updatePayload.status = 'Completada';
       updatePayload.completed_at = new Date().toISOString();
-    }
-    else if (newStatus === 'en_camino_recoger') {
+    } else if (['Aceptada','aceptada'].includes(newStatus)) {
       updatePayload.status = 'Aceptada';
       updatePayload.assigned_at = new Date().toISOString();
-    }
-    else if (['cargando', 'en_camino_entregar'].includes(newStatus)) {
+    } else if (['En curso','en curso'].includes(newStatus)) {
       updatePayload.status = 'En curso';
-    }
-    // Mapear estados cuando la UI del dueño usa valores finales
-    else if (['Completada', 'completada'].includes(newStatus)) {
-      updatePayload.status = 'Completada';
-      updatePayload.completed_at = new Date().toISOString();
-    }
-    else if (['Aceptada', 'aceptada'].includes(newStatus)) {
-      updatePayload.status = 'Aceptada';
-      updatePayload.assigned_at = new Date().toISOString();
-    }
-    else if (['En curso', 'en curso'].includes(newStatus)) {
-      updatePayload.status = 'En curso';
-    }
-    else if (['Cancelado', 'cancelado', 'Cancelada', 'cancelada'].includes(newStatus)) {
+    } else if (['Cancelado','cancelado','Cancelada','cancelada'].includes(newStatus)) {
       updatePayload.status = 'Cancelada';
-    }
-    else if (['Pendiente', 'pendiente'].includes(newStatus)) {
+    } else if (['Pendiente','pendiente'].includes(newStatus)) {
       updatePayload.status = 'Pendiente';
     }
 
     // Intentar primero vía RPC para evitar problemas de RLS en SELECT/UPDATE
     try {
       const normalizedId = this._normalizeOrderId(orderId);
+      const dbStatus = STATUS_MAP[newStatus] || newStatus;
       const rpcTrackingEntry = {
-        status: newStatus,
+        ui_status: newStatus,
+        db_status: dbStatus,
         date: new Date().toISOString(),
         description: newStatus === 'en_camino_recoger'
           ? 'Orden aceptada, en camino a recoger'
@@ -345,17 +338,22 @@ const OrderManager = {
 
       // Si no se encontró con los candidatos principales, intentar búsqueda más amplia
       if (!currentOrder && candidates.length > 0) {
-        console.log('[OrderManager] Intentando búsqueda amplia para orderId:', orderId);
-        const { data, error } = await supabaseConfig.client
-          .from('orders')
-          .select('tracking_data, id, short_id')
-          .or(`id.eq.${normalizedId},short_id.eq.${orderId}`)
-          .maybeSingle();
-
-        if (data && !error) {
-          currentOrder = data;
-          usedFilter = { col: 'id', val: data.id }; // Usar el ID real encontrado
-          console.log('[OrderManager] Orden encontrada con búsqueda amplia:', data);
+        const nId = this._normalizeOrderId(orderId);
+        if (Number.isFinite(nId)) {
+          const { data } = await supabaseConfig.client
+            .from('orders')
+            .select('tracking_data, id, short_id')
+            .eq('id', nId)
+            .maybeSingle();
+          if (data) { currentOrder = data; usedFilter = { col: 'id', val: data.id }; }
+        }
+        if (!currentOrder && typeof orderId === 'string') {
+          const { data } = await supabaseConfig.client
+            .from('orders')
+            .select('tracking_data, id, short_id')
+            .eq('short_id', orderId)
+            .maybeSingle();
+          if (data) { currentOrder = data; usedFilter = { col: 'id', val: data.id }; }
         }
       }
 
@@ -364,8 +362,10 @@ const OrderManager = {
         throw new Error(`No se encontró la orden con ID "${orderId}". Verifica que la orden existe y tienes permisos para accederla.`);
       }
 
+      const dbStatus2 = STATUS_MAP[newStatus] || newStatus;
       const newTrackingEntry = { 
-        status: newStatus, 
+        ui_status: newStatus, 
+        db_status: dbStatus2,
         date: new Date().toISOString(),
         description: newStatus === 'en_camino_recoger'
           ? 'Orden aceptada, en camino a recoger'

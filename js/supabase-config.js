@@ -147,17 +147,8 @@ if (!window.supabaseConfig) {
     }
     await this.ensureFreshSession();
     let { data, error } = await this.client.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
-
     if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
-      console.warn('JWT expirado o no autorizado para obtener orders. Reintentando con cliente anon...');
-      try {
-        const publicClient = this.getPublicClient();
-        const resp = await publicClient.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
-        if (resp.error) console.error('Error fetching orders (anon):', resp.error);
-        return resp.data || [];
-      } catch (e) {
-        console.error('Error fetching orders with anon client:', e);
-      }
+      return [];
     }
 
     if (error) console.error('Error fetching orders:', error);
@@ -172,16 +163,7 @@ if (!window.supabaseConfig) {
       .eq('id', orderId)
       .maybeSingle();
     if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
-      try {
-        const publicClient = this.getPublicClient();
-        const resp = await publicClient
-          .from('orders')
-          .select('*, service:services(name), vehicle:vehicles(name)')
-          .eq('id', orderId)
-          .maybeSingle();
-        data = resp.data;
-        error = resp.error;
-      } catch (e) {}
+      return null;
     }
     if (error) return null;
     return data || null;
@@ -201,19 +183,23 @@ if (!window.supabaseConfig) {
       }
     } catch(_) {}
 
-    let data = [];
+    let assigned = [];
+    let pending = [];
     let error = null;
     try {
-      const resp = await this.client
-        .from('orders')
-        .select('id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),assigned_to')
-        .eq('assigned_to', collaboratorId);
-      data = resp.data || [];
-      error = resp.error || null;
+      const sel = 'id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),assigned_to';
+      const [respAssigned, respPending] = await Promise.all([
+        this.client.from('orders').select(sel).eq('assigned_to', collaboratorId),
+        this.client.from('orders').select(sel).is('assigned_to', null)
+      ]);
+      assigned = respAssigned?.data || [];
+      pending = respPending?.data || [];
+      error = respAssigned?.error || respPending?.error || null;
     } catch (e) { error = e; }
 
     const EXCLUDE = new Set(['Completada','Cancelada','completada','cancelada']);
-    const filtered = (data || []).filter(o => !EXCLUDE.has(String(o.status || '').trim()));
+    const merged = [...assigned, ...pending];
+    const filtered = merged.filter(o => !EXCLUDE.has(String(o.status || '').trim()));
     if (error) console.error(`Error fetching orders for collaborator ${collaboratorId}:`, error);
     return filtered;
   },
@@ -264,96 +250,8 @@ if (!window.supabaseConfig) {
    * @param {object} updates - Los campos a actualizar.
    * @returns {Promise<object>} Los datos actualizados de la orden.
    */
-  async updateOrder(orderId, updates) {
-    console.log('updateOrder called with:', { orderId, updates });
-    
-    // Primero verificar si la orden existe
-    const { data: existingOrder, error: checkError } = await this.client
-      .from('orders')
-      .select('id')
-      .eq('id', orderId)
-      .maybeSingle();
-    
-    if (checkError) {
-      console.error('Error checking order existence:', checkError);
-      throw checkError;
-    }
-    
-    if (!existingOrder) {
-      const notFoundError = new Error(`Orden con ID ${orderId} no encontrada`);
-      notFoundError.code = 'ORDER_NOT_FOUND';
-      throw notFoundError;
-    }
-    
-    // Sanea payload: elimina campos que no existen en el esquema conocidas y reintenta si la BD rechaza columnas
-    let safeUpdates = { ...updates };
-    if ('tracking' in safeUpdates) {
-      delete safeUpdates.tracking;
-    }
-
-    // Intentaremos la actualización; si falla por columna desconocida, quitamos la(s) columna(s) problemática(s) y reintentos.
-    let attempt = 0;
-    let data, error;
-    const maxAttempts = 2;
-
-    while (attempt < maxAttempts) {
-      attempt += 1;
-      try {
-        const resp = await this.client
-          .from('orders')
-          .update(safeUpdates)
-          .eq('id', orderId)
-          .select()
-          .maybeSingle();
-        data = resp.data;
-        error = resp.error;
-      } catch (e) {
-        // Algunas versiones retornan error como excepción
-        error = e;
-      }
-
-      if (!error) break; // éxito
-
-      const msgRaw = String(error.message || error.error || '');
-      const msg = msgRaw.toLowerCase();
-      const colsToCheck = ['tracking', 'tracking_data', 'lastCollabStatus', 'collaborator_name'];
-      let removed = false;
-      for (const col of colsToCheck) {
-        if (msg.includes(`column "${col.toLowerCase()}"`) || msg.includes(`column ${col.toLowerCase()}`)) {
-          if (Object.prototype.hasOwnProperty.call(safeUpdates, col)) {
-            delete safeUpdates[col];
-            removed = true;
-          }
-        }
-      }
-      if (!removed) {
-        const m = msgRaw.match(/Could not find the '([^']+)' column/i);
-        if (m && m[1] && Object.prototype.hasOwnProperty.call(safeUpdates, m[1])) {
-          delete safeUpdates[m[1]];
-          removed = true;
-        }
-      }
-
-      // Si no se removió nada, no tiene sentido reintentar
-      if (!removed) break;
-    }
-
-    if (error) {
-      console.error('updateOrder error:', error);
-      console.log('=== SUPABASE ERROR DETAILS ===');
-      console.log('Error type:', typeof error);
-      console.log('Error keys:', error ? Object.keys(error) : 'null');
-      try {
-        console.log('Error JSON:', JSON.stringify(error, null, 2));
-      } catch (jsonErr) {
-        console.log('Cannot stringify error:', jsonErr.message);
-      }
-      console.log('=== END SUPABASE ERROR ===');
-      throw error;
-    }
-    
-    console.log('updateOrder success:', data);
-    return data;
+  async updateOrder() {
+    throw new Error('updateOrder está deprecado. Usa OrderManager.actualizarEstadoPedido()');
   },
 
   /**
@@ -450,8 +348,11 @@ if (!window.supabaseConfig) {
       if (!userId) {
         return { isValid: false, collaborator: null, error: 'User ID is empty' };
       }
+      try { await this.ensureFreshSession(); } catch(_){ }
       
-      // Consultar tabla collaborators
+      const { data: { session } } = await this.client.auth.getSession();
+      const emailClaim = session?.user?.email || null;
+
       const { data: collaborator, error } = await this.client
         .from('collaborators')
         .select('*')
@@ -463,24 +364,37 @@ if (!window.supabaseConfig) {
         return { isValid: false, collaborator: null, error: error.message };
       }
       
-      if (!collaborator) {
-        console.warn(`Collaborator with ID ${userId} not found in database`);
+      let collab = collaborator;
+      if (!collab && emailClaim) {
+        const { data: byEmail, error: e2 } = await this.client
+          .from('collaborators')
+          .select('*')
+          .eq('email', emailClaim)
+          .maybeSingle();
+        if (e2) {
+          console.error('Error validating collaborator by email:', e2);
+          return { isValid: false, collaborator: null, error: e2.message };
+        }
+        collab = byEmail || null;
+      }
+      if (!collab) {
+        console.warn(`Collaborator not found for user ${userId}`);
         return { isValid: false, collaborator: null, error: 'Collaborator not found' };
       }
       
       // Validar que el status sea 'activo'
-      if (String(collaborator.status || '').toLowerCase() !== 'activo') {
-        console.warn(`Collaborator ${userId} has status: ${collaborator.status}`);
-        return { isValid: false, collaborator, error: 'Collaborator is not active' };
+      if (String(collab.status || '').toLowerCase() !== 'activo') {
+        console.warn(`Collaborator ${userId} has status: ${collab.status}`);
+        return { isValid: false, collaborator: collab, error: 'Collaborator is not active' };
       }
       
       // Validar que el role sea 'colaborador'
-      if (String(collaborator.role || '').toLowerCase() !== 'colaborador') {
-        console.warn(`Collaborator ${userId} has role: ${collaborator.role}`);
-        return { isValid: false, collaborator, error: 'Invalid role for this panel' };
+      if (String(collab.role || '').toLowerCase() !== 'colaborador') {
+        console.warn(`Collaborator ${userId} has role: ${collab.role}`);
+        return { isValid: false, collaborator: collab, error: 'Invalid role for this panel' };
       }
       
-      return { isValid: true, collaborator, error: null };
+      return { isValid: true, collaborator: collab, error: null };
     } catch (e) {
       console.error('Unexpected error in validateActiveCollaborator:', e);
       return { isValid: false, collaborator: null, error: e.message };
@@ -491,4 +405,5 @@ if (!window.supabaseConfig) {
 
 // Exportar referencia (por compatibilidad con scripts que ya lo usan)
 const supabaseConfig = window.supabaseConfig;
+try { Object.freeze(window.supabaseConfig); } catch(_) {}
 // Nota: evitar `export {}` para que funcione en navegadores sin módulos

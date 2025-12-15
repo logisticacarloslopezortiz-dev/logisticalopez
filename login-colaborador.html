@@ -15,7 +15,7 @@
   <meta name="theme-color" content="#1E405A" />
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/admin-panel-styles.css">
+  <link rel="stylesheet" href="css/admin-panel-styles.css?v=20251215">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -24,19 +24,19 @@
     <div class="flex flex-col items-center mb-6">
       <img src="img/1vertical.png" alt="Logo de la empresa" class="w-24 h-24 object-contain mb-3">
       <div class="flex items-center gap-2">
-        <i data-lucide="truck" class="w-6 h-6" style="color: #1E405A;"></i>
-        <h1 class="text-xl font-bold" style="color: #1E405A;">Acceso Colaborador</h1>
+        <i data-lucide="truck" class="w-6 h-6 text-azulOscuro"></i>
+        <h1 class="text-xl font-bold text-azulOscuro">Acceso Colaborador</h1>
       </div>
     </div>
 
     <form id="collabLoginForm" class="space-y-4">
       <div>
-        <label for="email" class="block text-sm font-medium" style="color: #1E405A;">Correo</label>
-        <input id="email" type="email" required class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="colaborador@tlc.com">
+        <label for="email" class="block text-sm font-medium text-azulOscuro">Correo</label>
+        <input id="email" name="username" type="email" inputmode="email" autocomplete="username" required class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="colaborador@tlc.com">
       </div>
       <div>
-        <label for="password" class="block text-sm font-medium" style="color: #1E405A;">Contraseña</label>
-        <input id="password" type="password" required class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="••••••••">
+        <label for="password" class="block text-sm font-medium text-azulOscuro">Contraseña</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent" placeholder="••••••••">
       </div>
       <button type="submit" class="w-full btn-login">Ingresar</button>
     </form>
@@ -44,7 +44,7 @@
     <div id="loginError" class="hidden mt-4 text-sm text-red-500"></div>
 
     <div class="mt-6 text-center text-sm hidden">
-      <a href="login.html" class="hover:underline" style="color: #1E8A95;">¿Eres el dueño? Inicia sesión aquí</a>
+      <a href="login.html" class="hover:underline text-azulClaro">¿Eres el dueño? Inicia sesión aquí</a>
     </div>
 
     <!-- Botón de Instalación PWA -->
@@ -79,8 +79,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/login-colaborador.js"></script>
-  <script src="js/pwa.js"></script>
+  <script src="js/supabase-config.js?v=20251215"></script>
+  <script src="js/login-colaborador.js?v=20251215"></script>
+  <script src="js/pwa.js?v=20251215"></script>
 </body>
 </html>

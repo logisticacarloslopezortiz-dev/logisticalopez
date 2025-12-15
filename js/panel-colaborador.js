@@ -26,7 +26,15 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = 'login-colaborador.html';
         return false;
       }
-      const { data: { session } } = await supabaseConfig.client.auth.getSession();
+      let tries = 0;
+      let session = null;
+      while (tries < 10) {
+        const { data } = await supabaseConfig.client.auth.getSession();
+        session = data?.session || null;
+        if (session) break;
+        await new Promise(r => setTimeout(r, 150));
+        tries++;
+      }
       if (!session) {
         window.location.href = 'login-colaborador.html';
         return false;
@@ -70,15 +78,35 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = 'login-colaborador.html';
         return;
       }
+      try {
+        const v = await supabaseConfig.validateActiveCollaborator(uid);
+        if (!v?.isValid) {
+          await supabaseConfig.client.auth.signOut();
+          const msg = v?.error === 'Collaborator is not active'
+            ? 'Tu cuenta ha sido desactivada. Contacta al administrador.'
+            : v?.error === 'Invalid role for this panel'
+              ? 'No tienes permisos de colaborador para este panel.'
+              : 'No estás registrado como colaborador.';
+          notifications?.error?.(msg);
+          window.location.href = 'login-colaborador.html';
+          return;
+        }
+      } catch (e) {
+        console.error('Error validando colaborador:', e?.message || e);
+      }
       let list = [];
       try {
         list = await supabaseConfig.getOrdersForCollaborator(uid);
       } catch (_) {
-        const { data } = await supabaseConfig.client
-          .from('orders')
-          .select('id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name)')
-          .eq('assigned_to', uid);
-        list = data || [];
+        const sel = 'id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),assigned_to';
+        const [a, p] = await Promise.all([
+          supabaseConfig.client.from('orders').select(sel).eq('assigned_to', uid),
+          supabaseConfig.client.from('orders').select(sel).is('assigned_to', null)
+        ]);
+        const assigned = a?.data || [];
+        const pending = p?.data || [];
+        const EXCLUDE = new Set(['Completada','Cancelada','completada','cancelada']);
+        list = [...assigned, ...pending].filter(o => !EXCLUDE.has(String(o.status || '').trim()));
       }
       orders = Array.isArray(list) ? list : [];
       renderOrders();
@@ -96,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (showingEl) showingEl.textContent = String(total);
     if (!grid) return;
     if (orders.length === 0) {
-      grid.innerHTML = '<div class="col-span-full bg-white rounded-xl border p-6 text-center text-gray-600">No hay solicitudes asignadas por ahora.</div>';
+      grid.innerHTML = '<div class="col-span-full bg-white rounded-xl border p-6 text-center text-gray-600">No hay solicitudes pendientes o asignadas por ahora.</div>';
       try {
         if (window.lucide && typeof window.lucide.createIcons === 'function') {
           if (__iconsTimer) clearTimeout(__iconsTimer);
@@ -156,42 +184,42 @@ document.addEventListener('DOMContentLoaded', () => {
         const o = orders.find(x => Number(x.id) === id);
         if (!o) return;
         try {
-          const q = supabaseConfig.client.from('orders').update({ status: 'Completada', completed_at: new Date().toISOString(), completed_by: (await supabaseConfig.client.auth.getUser()).data?.user?.id || null }).eq('id', o.id).select('id').maybeSingle();
-          await q;
+          b.setAttribute('disabled', 'true');
+          const { data: { user } } = await supabaseConfig.client.auth.getUser();
+          const res = await OrderManager.actualizarEstadoPedido(o, 'entregado', { collaborator_id: user?.id || null });
+          if (!res?.success) throw new Error(res?.error || 'Error');
           notifications?.success?.('Solicitud completada.');
           await fetchOrdersForCollaborator();
         } catch (_) {
           notifications?.error?.('No se pudo completar la solicitud.');
+        } finally {
+          b.removeAttribute('disabled');
         }
       });
     });
   }
 
   if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
-  if (markCompletedBtn) markCompletedBtn.addEventListener('click', async () => {
+  async function updateCurrentOrder(status) {
     if (!currentOrder) return;
     try {
-      const q = supabaseConfig.client.from('orders').update({ status: 'Completada', completed_at: new Date().toISOString(), completed_by: (await supabaseConfig.client.auth.getUser()).data?.user?.id || null }).eq('id', currentOrder.id).select('id').maybeSingle();
-      await q;
-      notifications?.success?.('Solicitud completada.');
+      markCompletedBtn?.setAttribute('disabled', 'true');
+      markCancelledBtn?.setAttribute('disabled', 'true');
+      const { data: { user } } = await supabaseConfig.client.auth.getUser();
+      const res = await OrderManager.actualizarEstadoPedido(currentOrder, status, { collaborator_id: user?.id || null });
+      if (!res?.success) throw new Error(res?.error || 'Error');
+      notifications?.success?.(status === 'entregado' ? 'Solicitud completada.' : 'Solicitud cancelada.');
       closeModal();
       await fetchOrdersForCollaborator();
     } catch (_) {
-      notifications?.error?.('No se pudo completar la solicitud.');
+      notifications?.error?.('No se pudo actualizar la solicitud.');
+    } finally {
+      markCompletedBtn?.removeAttribute('disabled');
+      markCancelledBtn?.removeAttribute('disabled');
     }
-  });
-  if (markCancelledBtn) markCancelledBtn.addEventListener('click', async () => {
-    if (!currentOrder) return;
-    try {
-      const q = supabaseConfig.client.from('orders').update({ status: 'Cancelada' }).eq('id', currentOrder.id).select('id').maybeSingle();
-      await q;
-      notifications?.success?.('Solicitud cancelada.');
-      closeModal();
-      await fetchOrdersForCollaborator();
-    } catch (_) {
-      notifications?.error?.('No se pudo cancelar la solicitud.');
-    }
-  });
+  }
+  if (markCompletedBtn) markCompletedBtn.addEventListener('click', () => { updateCurrentOrder('entregado'); });
+  if (markCancelledBtn) markCancelledBtn.addEventListener('click', () => { updateCurrentOrder('cancelada'); });
 
   const init = async () => {
     const ok = await ensureAuthOrRedirect();
