@@ -874,7 +874,7 @@ using ( public.is_admin(auth.uid()) );
 create policy "Allow collaborators to update their own record" on public.collaborators
 for update using (auth.uid() = id) with check (auth.uid() = id);
 create policy "Allow admins to manage collaborators" on public.collaborators
-for insert, update, delete using (public.is_admin(auth.uid()) or public.is_owner(auth.uid()))
+for all using (public.is_admin(auth.uid()) or public.is_owner(auth.uid()))
 with check (public.is_admin(auth.uid()) or public.is_owner(auth.uid()));
 
 
