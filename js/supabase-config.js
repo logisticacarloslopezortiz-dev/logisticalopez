@@ -194,13 +194,28 @@ if (!window.supabaseConfig) {
    */
   async getOrdersForCollaborator(collaboratorId) {
     if (!this.client) return [];
-    const { data, error } = await this.client
-      .from('orders')
-      .select('*')
-      .eq('assigned_to', collaboratorId)
-      .not('status','in', ['Completada','Cancelada']);
+    try {
+      if (!collaboratorId) {
+        const { data: u } = await this.client.auth.getUser();
+        collaboratorId = u?.user?.id || null;
+      }
+    } catch(_) {}
+
+    let data = [];
+    let error = null;
+    try {
+      const resp = await this.client
+        .from('orders')
+        .select('id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),assigned_to')
+        .eq('assigned_to', collaboratorId);
+      data = resp.data || [];
+      error = resp.error || null;
+    } catch (e) { error = e; }
+
+    const EXCLUDE = new Set(['Completada','Cancelada','completada','cancelada']);
+    const filtered = (data || []).filter(o => !EXCLUDE.has(String(o.status || '').trim()));
     if (error) console.error(`Error fetching orders for collaborator ${collaboratorId}:`, error);
-    return data || [];
+    return filtered;
   },
 
   /**

@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- El resto de la lógica de UI del sidebar continúa aquí ---
     const sidebar = document.getElementById('sidebar');
-    const mainContent = document.getElementById('main-content');
+    const mainContent = document.getElementById('main-content') || document.querySelector('main');
     const toggleButton = document.getElementById('sidebar-toggle');
     const logoutButton = document.getElementById('logout-button');
     const logoutMobile = document.getElementById('logout-button-mobile');
@@ -59,7 +59,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sidebarOverlay = document.getElementById('sidebarOverlay');
     
     if (!sidebar || !mainContent) {
-        console.warn('Algunos elementos del sidebar no fueron encontrados. La funcionalidad podría ser limitada.');
         return;
     }
 

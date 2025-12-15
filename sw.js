@@ -1,27 +1,13 @@
 // sw.js
 
 // COMENTARIO: Se añade versionado de caché para forzar la actualización de archivos.
-const CACHE_NAME = 'tlc-cache-v6';
+const CACHE_NAME = 'tlc-cache-v7';
 const urlsToCache = [
-  '/',
-  '/index.html',
   '/offline.html',
-  '/cliente.html',
-  '/login.html',
-  '/inicio.html',
-  '/panel-colaborador.html',
-  '/seguimiento.html',
-  '/historial-solicitudes.html',
   '/css/styles.css',
   '/css/animations.css',
   '/css/tailwind.min.css',
   '/css/custom-styles.css',
-  '/js/cliente.js',
-  '/js/inicio.js',
-  '/js/index.js',
-  '/js/panel-colaborador.js',
-  '/js/seguimiento.js',
-  '/js/historial.js',
   '/js/order-manager.js',
   '/js/supabase-config.js',
   '/js/notifications.js',

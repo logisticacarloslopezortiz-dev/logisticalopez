@@ -1,9 +1,31 @@
+(() => {
+'use strict';
 // Variables globales
 let allOrders = [];
 let filteredOrders = [];
-let sortColumn = 'created_at'; // ✅ MEJORA: Ordenar por defecto por fecha de creación
+let sortColumn = 'date';
 let sortDirection = 'desc';
 let selectedOrderIdForAssign = null; // Guardará el ID del pedido a asignar
+let __initialized = false;
+let selectedOrderIdForPrice = null;
+let __lucideTimer = null;
+
+function getOrderDate(o) {
+  if (!o || !o.date) return null;
+  try { return new Date(`${o.date}T${o.time || '00:00'}`); } catch(_) { return null; }
+}
+
+function isVisibleStatus(status) {
+  return !['Completada', 'Cancelada'].includes(status);
+}
+
+function normalizePhoneDR(phone) {
+  let p = String(phone || '').replace(/[^0-9]/g, '');
+  if (p.length === 10 && !p.startsWith('1')) p = '1' + p;
+  if (p.length === 7) p = '1809' + p;
+  if (!/^1\d{10}$/.test(p)) return null;
+  return p;
+}
 
 // --- INICIO: Carga y Filtrado de Datos ---
 
@@ -76,11 +98,7 @@ async function loadAdminInfo() {
 // Función para filtrar pedidos
 function filterOrders() {
   // YA NO HAY FILTROS EN LA UI. Se aplica el filtro por defecto de no mostrar completados/cancelados.
-  filteredOrders = (allOrders || []).filter(order => {
-    // Usar estados canónicos: Cancelada en lugar de Cancelado
-    const matchesStatus = !['Completada', 'Cancelada'].includes(order.status);
-    return matchesStatus;
-  });
+  filteredOrders = (allOrders || []).filter(order => isVisibleStatus(order.status));
 
   sortTable(sortColumn, null, true); // Re-aplicar ordenamiento sin cambiar dirección
   renderOrders();
@@ -102,8 +120,8 @@ function sortTable(column, element) {
     let bVal = b[column] || '';
 
     if (column === 'date') {
-      aVal = new Date(`${a.date}T${a.time}`);
-      bVal = new Date(`${b.date}T${b.time}`);
+      aVal = getOrderDate(a) || new Date(0);
+      bVal = getOrderDate(b) || new Date(0);
     }
 
     if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
@@ -129,8 +147,11 @@ function sortTable(column, element) {
 function refreshLucide(){
   try {
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      const hasIcons = document.querySelector('[data-lucide]') !== null;
-      if (hasIcons) window.lucide.createIcons();
+      if (__lucideTimer) { clearTimeout(__lucideTimer); }
+      __lucideTimer = setTimeout(() => {
+        const hasIcons = document.querySelector('[data-lucide]') !== null;
+        if (hasIcons) window.lucide.createIcons();
+      }, 100);
     }
   } catch(_) {}
 }
@@ -284,16 +305,26 @@ async function updateOrderStatus(orderId, newStatus) {
 
   if (success) {
     notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
+    const idxAll = allOrders.findIndex(o => String(o.id) === String(orderId));
+    if (idxAll !== -1) {
+      allOrders[idxAll] = { ...allOrders[idxAll], status: newStatus };
+    }
+    const idxVis = filteredOrders.findIndex(o => String(o.id) === String(orderId));
+    const visible = isVisibleStatus(newStatus);
+    if (idxVis !== -1 && visible) {
+      filteredOrders[idxVis] = { ...filteredOrders[idxVis], status: newStatus };
+      updateRow(filteredOrders[idxVis]);
+    } else if (idxVis !== -1 && !visible) {
+      removeRow(orderId);
+    } else if (idxVis === -1 && visible) {
+      const obj = allOrders.find(o => String(o.id) === String(orderId));
+      if (obj) insertRow(obj);
+    }
+    updateDashboardPanels();
+    refreshLucide();
 
-    // Si el estado se cambia a 'Completado', el filtro se encargará de ocultarlo.
-    // Forzamos la recarga para asegurar que la vista esté 100% sincronizada.
-    await loadOrders();
-
-    // Redirigir al historial cuando se marca como completada
-    if (newStatus === 'Completada' || newStatus === 'Completado') {
-      try {
-        window.location.href = 'historial-solicitudes.html';
-      } catch (_) {}
+    if (newStatus === 'Completada') {
+      try { window.location.href = 'historial-solicitudes.html'; } catch (_) {}
     }
 
   } else {
@@ -345,9 +376,9 @@ function updateResumen(){
   const today = new Date().toISOString().split('T')[0];
   const todayOrders = allOrders.filter(o => o.date === today);
   const completedOrders = allOrders.filter(o => o.status === 'Completada').length;
-  const pendingOrders = allOrders.filter(o => !['Completada', 'Cancelada'].includes(o.status));
+  const pendingOrders = allOrders.filter(o => isVisibleStatus(o.status));
   const urgentOrders = pendingOrders.filter(o => {
-    const serviceTime = new Date(`${o.date}T${o.time || '00:00'}`);
+    const serviceTime = getOrderDate(o) || new Date(8640000000000000);
     const now = new Date();
     const diffHours = (serviceTime - now) / (1000 * 60 * 60);
     return diffHours > 0 && diffHours <= 24;
@@ -377,7 +408,7 @@ function updateAlerts() {
   alertasEl.innerHTML = '';
   const now = new Date();
   const proximos = allOrders.filter(o => {
-    const serviceTime = new Date(`${o.date}T${o.time || '00:00'}`);
+    const serviceTime = getOrderDate(o) || new Date(8640000000000000);
     const diffMin = (serviceTime - now) / 60000;
     return diffMin > 0 && diffMin <= 60;
   });
@@ -452,25 +483,37 @@ async function openAssignModal(orderId){
 
   // ✅ CORRECCIÓN: Asignar evento con addEventListener para mayor fiabilidad.
   if (whatsappBtn) {
-    // Eliminar cualquier listener anterior para evitar duplicados
-    whatsappBtn.replaceWith(whatsappBtn.cloneNode(true));
-    document.getElementById('whatsappBtn').addEventListener('click', () => openWhatsApp(order));
+    const clone = whatsappBtn.cloneNode(true);
+    whatsappBtn.replaceWith(clone);
+    clone.addEventListener('click', () => openWhatsApp(order));
   }
 
-  if (invoiceBtn) invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
-  if (cancelBtn) cancelBtn.onclick = () => closeAssignModal();
-  if (deleteBtn) deleteBtn.onclick = () => deleteSelectedOrder();
+  if (invoiceBtn) {
+    const clone = invoiceBtn.cloneNode(true);
+    invoiceBtn.replaceWith(clone);
+    clone.addEventListener('click', () => generateAndSendInvoice(order.id));
+  }
+  if (cancelBtn) {
+    const clone = cancelBtn.cloneNode(true);
+    cancelBtn.replaceWith(clone);
+    clone.addEventListener('click', closeAssignModal);
+  }
+  if (deleteBtn) {
+    const clone = deleteBtn.cloneNode(true);
+    deleteBtn.replaceWith(clone);
+    clone.addEventListener('click', deleteSelectedOrder);
+  }
 
   // Copiar enlace directo de seguimiento
   if (copyTrackBtn) {
-    copyTrackBtn.replaceWith(copyTrackBtn.cloneNode(true));
-    document.getElementById('copyTrackingLinkBtn').addEventListener('click', async () => {
+    const clone = copyTrackBtn.cloneNode(true);
+    copyTrackBtn.replaceWith(clone);
+    clone.addEventListener('click', async () => {
       const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
-      try { await navigator.clipboard.writeText(url); } catch(_) {}
+      try { await navigator.clipboard.writeText(url); }
+      catch(_) { if (window.notifications) notifications.warning('No se pudo copiar al portapapeles'); }
       try {
-        let phone = (order.phone || '').replace(/[^0-9]/g, '');
-        if (phone.length === 10 && !phone.startsWith('1')) phone = '1809' + phone;
-        if (phone.length === 7) phone = '1809' + phone;
+        const phone = normalizePhoneDR(order.phone);
         if (phone) {
           const msg = `👋 Hola, ${order.name || 'cliente'}. Aquí puedes ver el estado de tu servicio en tiempo real:\n${url}\n\nSi necesitas ayuda, respóndenos por aquí. ¡Gracias por elegirnos! 🚛`;
           const wa = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
@@ -677,8 +720,8 @@ function compareOrders(a, b){
   let aVal = a[sortColumn] || '';
   let bVal = b[sortColumn] || '';
   if (sortColumn === 'date') {
-    aVal = new Date(`${a.date}T${a.time}`);
-    bVal = new Date(`${b.date}T${b.time}`);
+    aVal = getOrderDate(a) || new Date(0);
+    bVal = getOrderDate(b) || new Date(0);
   }
   if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
   if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
@@ -823,7 +866,7 @@ async function handleRealtimeUpdate(payload) {
       const idxAll = allOrders.findIndex(o => o.id === orderObj.id);
       if (idxAll !== -1) allOrders[idxAll] = { ...allOrders[idxAll], ...orderObj };
     }
-    if (!['Completada','Cancelada'].includes(orderObj.status)) insertRow(orderObj);
+    if (isVisibleStatus(orderObj.status)) insertRow(orderObj);
     if (window.notifications) {
       notifications.info(`Cliente: ${orderObj.name}.`, { title: `Nueva Solicitud #${orderObj.id}`, duration: 10000 });
     }
@@ -836,7 +879,7 @@ async function handleRealtimeUpdate(payload) {
     const idxAll = allOrders.findIndex(o => o.id === orderObj.id);
     if (idxAll !== -1) allOrders[idxAll] = { ...allOrders[idxAll], ...orderObj }; else allOrders.unshift(orderObj);
     const wasVisibleIdx = filteredOrders.findIndex(o => o.id === orderObj.id);
-    const shouldShow = !['Completada','Cancelada'].includes(orderObj.status);
+    const shouldShow = isVisibleStatus(orderObj.status);
     if (wasVisibleIdx !== -1 && shouldShow) {
       filteredOrders[wasVisibleIdx] = { ...filteredOrders[wasVisibleIdx], ...orderObj };
       updateRow(orderObj);
@@ -855,121 +898,70 @@ async function handleRealtimeUpdate(payload) {
   }
 }
 
-// Event listeners
-document.addEventListener('DOMContentLoaded', function() {
-  // Modal listeners
-  try {
-    const assignCancel = document.getElementById('assignCancelBtn');
-    const assignConfirm = document.getElementById('assignConfirmBtn');
-    const deleteOrder = document.getElementById('deleteOrderBtn');
-    if (assignCancel) assignCancel.addEventListener('click', closeAssignModal);
-    if (assignConfirm) assignConfirm.addEventListener('click', assignSelectedCollaborator);
-    if (deleteOrder) deleteOrder.addEventListener('click', deleteSelectedOrder);
-  } catch(_) {}
-  // Listeners para el modal de precio
-  try {
-    const priceCancel = document.getElementById('priceCancelBtn');
-    const priceSave = document.getElementById('priceSaveBtn');
-    if (priceCancel) priceCancel.addEventListener('click', closePriceModal);
-    if (priceSave) priceSave.addEventListener('click', savePriceData);
-  } catch(_) {}
-
-  // Función para hacer funciones globales
-  window.sortTable = sortTable;
-  window.updateOrderStatus = updateOrderStatus;
-  window.openAssignModal = openAssignModal;
-  window.generateAndSendInvoice = generateAndSendInvoice;
-  window.showServiceDetails = showServiceDetails;
-  window.openWhatsApp = openWhatsApp;
-
-  // Suscribirse a los cambios en tiempo real de la tabla 'orders'
+function setupRealtime() {
   try { if (window.__ordersSubscription) supabaseConfig.client.removeChannel(window.__ordersSubscription); } catch(_) {}
   window.__ordersSubscription = supabaseConfig.client
     .channel('public:orders')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeUpdate)
     .subscribe();
+}
 
-  let selectedOrderIdForPrice = null;
-
-  // --- Gestión del Modal de Precio ---
 function openPriceModal(orderId) {
   selectedOrderIdForPrice = orderId;
   const order = allOrders.find(o => o.id == selectedOrderIdForPrice);
-  if (!order) {
-    notifications.error('Error', 'No se encontró la orden para actualizar el precio.');
-    return;
-  }
-
+  if (!order) { notifications.error('Error', 'No se encontró la orden para actualizar el precio.'); return; }
   const montoEl = document.getElementById('montoCobrado');
   const metodoEl = document.getElementById('metodoPago');
   if (montoEl) montoEl.value = order.monto_cobrado || '';
   if (metodoEl) metodoEl.value = order.metodo_pago || '';
+  const modal = document.getElementById('priceModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
 
-    const modal = document.getElementById('priceModal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-  }
-
-  function closePriceModal() {
-    const modal = document.getElementById('priceModal');
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-    selectedOrderIdForPrice = null;
-  }
+function closePriceModal() {
+  const modal = document.getElementById('priceModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  selectedOrderIdForPrice = null;
+}
 
 async function savePriceData() {
   const montoEl = document.getElementById('montoCobrado');
   const metodoEl = document.getElementById('metodoPago');
   const monto = montoEl ? montoEl.value : '';
   const metodo = metodoEl ? metodoEl.value : '';
-
-    if (!monto) {
-      notifications.warning('Dato requerido', 'Debes ingresar un monto.');
-      return;
+  if (!monto) { notifications.warning('Dato requerido', 'Debes ingresar un monto.'); return; }
+  try {
+    if (!selectedOrderIdForPrice) throw new Error('ID de orden no válido');
+    const updated = await OrderManager.setOrderAmount(selectedOrderIdForPrice, monto, metodo);
+    const orderIndex = allOrders.findIndex(o => o.id == selectedOrderIdForPrice);
+    if (orderIndex !== -1 && updated) {
+      allOrders[orderIndex].monto_cobrado = updated.monto_cobrado ?? parseFloat(monto);
+      allOrders[orderIndex].metodo_pago = updated.metodo_pago ?? metodo;
     }
-    try {
-      if (!selectedOrderIdForPrice) throw new Error('ID de orden no válido');
-      const updated = await OrderManager.setOrderAmount(selectedOrderIdForPrice, monto, metodo);
-      const orderIndex = allOrders.findIndex(o => o.id == selectedOrderIdForPrice);
-      if (orderIndex !== -1 && updated) {
-        allOrders[orderIndex].monto_cobrado = updated.monto_cobrado ?? parseFloat(monto);
-        allOrders[orderIndex].metodo_pago = updated.metodo_pago ?? metodo;
-      }
-      renderOrders();
-      notifications.success('Éxito', 'El monto y método de pago han sido actualizados.');
-      closePriceModal();
-    } catch (error) {
-      console.error('[savePriceData] Error al guardar monto por RPC:', error);
-      notifications.error('Error al guardar', error.message || 'No se pudo guardar el monto');
-    }
+    const updatedOrder = allOrders.find(o => o.id == selectedOrderIdForPrice);
+    if (updatedOrder) updateRow(updatedOrder);
+    updateDashboardPanels();
+    refreshLucide();
+    notifications.success('Éxito', 'El monto y método de pago han sido actualizados.');
+    closePriceModal();
+  } catch (error) {
+    console.error('[savePriceData] Error al guardar monto por RPC:', error);
+    notifications.error('Error al guardar', error.message || 'No se pudo guardar el monto');
   }
+}
 
-  // Hacer funciones globales
-  window.openPriceModal = openPriceModal;
-  window.closeAssignModal = closeAssignModal; // Hacerla global para el botón de cierre
-
-  function openWhatsApp(order) {
-    // Verificar que existe el número de teléfono
-    if (!order.phone) {
-      notifications.error('Esta orden no tiene un número de teléfono registrado.');
-      return;
-    }
-    
-    // Limpiar y formatear el número de teléfono
-    let phone = order.phone.replace(/[^0-9]/g, '');
-    
-    // Si el número no tiene código de país, agregar el de República Dominicana (+1809)
-    if (phone.length === 10 && !phone.startsWith('1')) {
-      phone = '1809' + phone;
-    } else if (phone.length === 7) {
-      phone = '1809' + phone;
-    }
-    
-    // Crear mensaje personalizado con información de la orden
-    const message = `👋 ¡Hola, ${order.name}! Somos del equipo de Logística López Ortiz 🚛.\nQueríamos informarle que recibimos su solicitud y estamos revisando algunos detalles importantes antes de proceder.\nEn breve nos pondremos en contacto con más información.\n¡Gracias por elegirnos! 💼`;
-    
+function openWhatsApp(order) {
+  if (!order.phone) { notifications.error('Esta orden no tiene un número de teléfono registrado.'); return; }
+  const phone = normalizePhoneDR(order.phone);
+  const message = `👋 ¡Hola, ${order.name}! Somos del equipo de Logística López Ortiz 🚛.\nQueríamos informarle que recibimos su solicitud y estamos revisando algunos detalles importantes antes de proceder.\nEn breve nos pondremos en contacto con más información.\n¡Gracias por elegirnos! 💼`;
+  if (phone) {
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-  window.open(url, '_blank');
+    window.open(url, '_blank');
+  } else {
+    notifications.warning('Número inválido');
+  }
 }
 
 async function checkVapidStatus() {
@@ -977,16 +969,10 @@ async function checkVapidStatus() {
     const { data, error } = await supabaseConfig.client.functions.invoke('getVapidKey');
     if (error) return;
     const k = data && data.key;
-    if (!k || typeof k !== 'string') {
-      notifications.warning('Claves VAPID no configuradas', { title: 'Push deshabilitado' });
-      return;
-    }
+    if (!k || typeof k !== 'string') { notifications.warning('Claves VAPID no configuradas', { title: 'Push deshabilitado' }); return; }
     const raw = vapidToBytes(k);
-    if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
-      notifications.warning('Clave VAPID inválida', { title: 'Push deshabilitado' });
-    } else {
-      notifications.info('VAPID configurada correctamente');
-    }
+    if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) { notifications.warning('Clave VAPID inválida', { title: 'Push deshabilitado' }); }
+    else { notifications.info('VAPID configurada correctamente'); }
   } catch (_) {}
 }
 
@@ -1001,15 +987,40 @@ function vapidToBytes(base64String) {
   } catch (_) { return new Uint8Array(0); }
 }
 
-  // Inicialización
-  async function init() {
-    loadOrders();
-    checkVapidStatus();
-  }
-
-  try {
-    document.addEventListener('admin-session-ready', init);
-    document.addEventListener('admin-session-ready', loadAdminInfo);
-  } catch(_) {}
+async function initAdminOrdersPage() {
+  if (__initialized) return;
+  __initialized = true;
+  await loadOrders();
+  await loadAdminInfo();
+  checkVapidStatus();
+  setupRealtime();
   refreshLucide();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const assignCancel = document.getElementById('assignCancelBtn');
+    const assignConfirm = document.getElementById('assignConfirmBtn');
+    const deleteOrder = document.getElementById('deleteOrderBtn');
+    if (assignCancel) assignCancel.addEventListener('click', closeAssignModal);
+    if (assignConfirm) assignConfirm.addEventListener('click', assignSelectedCollaborator);
+    if (deleteOrder) deleteOrder.addEventListener('click', deleteSelectedOrder);
+  } catch (_) {}
+  window.sortTable = sortTable;
+  window.updateOrderStatus = updateOrderStatus;
+  window.openAssignModal = openAssignModal;
+  window.generateAndSendInvoice = generateAndSendInvoice;
+  window.showServiceDetails = showServiceDetails;
+  window.openWhatsApp = openWhatsApp;
+  window.openPriceModal = openPriceModal;
+  window.closeAssignModal = closeAssignModal;
+  window.closePriceModal = closePriceModal;
+  window.savePriceData = savePriceData;
 });
+
+document.addEventListener('admin-session-ready', (e) => {
+  if (!e.detail?.isAdmin) { return; }
+  initAdminOrdersPage();
+}, { once: true });
+
+})();

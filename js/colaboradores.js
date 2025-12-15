@@ -1,6 +1,10 @@
 // js/colaboradores.js
 
-document.addEventListener('DOMContentLoaded', async () => {
+(() => {
+  'use strict';
+  let __initialized = false;
+
+  document.addEventListener('DOMContentLoaded', () => {
   // --- ELEMENTOS DEL DOM ---
   const tableBody = document.getElementById('colaboradoresTableBody');
   const form = document.getElementById('colaboradorForm');
@@ -41,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4">Cargando colaboradores${retryCount > 0 ? ` (intento ${retryCount + 1}/${maxRetries + 1})` : ''}...</td></tr>`;
 
     try {
+      try { await supabaseConfig.ensureFreshSession?.(); } catch(_) {}
       const { data, error } = await supabaseConfig.client
         .from('collaborators')
         .select('*')
@@ -503,15 +508,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  // --- INICIALIZACIÓN ---
-  await loadCollaborators();
-  // Abrir modal de métricas desde sidebar
-  const openMetricsBtn = document.getElementById('openMetricsFromSidebar');
-  if (openMetricsBtn) openMetricsBtn.addEventListener('click', () => {
-    const first = allCollaborators[0];
-    if (first) viewMetrics(String(first.id));
-  });
-  
-  // Exponer función para reintentos manuales
+  // Exportaciones y wiring de UI básico
   window.loadCollaborators = loadCollaborators;
+
+  function initCollaboratorsAdminPage(){
+    if (__initialized) return;
+    __initialized = true;
+    loadCollaborators();
+    const openMetricsBtn = document.getElementById('openMetricsFromSidebar');
+    if (openMetricsBtn) openMetricsBtn.addEventListener('click', () => {
+      const first = allCollaborators[0];
+      if (first) viewMetrics(String(first.id));
+    });
+  }
+
+  document.addEventListener('admin-session-ready', (e) => {
+    if (!e.detail?.isAdmin) return;
+    initCollaboratorsAdminPage();
+  }, { once: true });
 });
+
+})();
