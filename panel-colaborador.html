@@ -5,12 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Panel del Colaborador</title>
   <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
-  <link rel="stylesheet" href="css/admin-panel-styles.css">
+  <link rel="stylesheet" href="css/admin-panel-styles.css?v=20251215">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <style>
+    body{background:linear-gradient(180deg,#f3f6f8 0%,#eef2f5 100%)}
+    :root{--azul:#0C375D;--turquesa:#117D8B;--azul-claro:#3B82F6;--blanco:#ffffff;--amarillo:#facc15}
+    .stat-card{color:#fff}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:0.75rem}
+    aside#sidebar{background:var(--azul)}
+    aside#sidebar .sidebar-header{background:var(--azul) !important}
+    aside#sidebar nav{background:var(--azul)}
+    aside#sidebar nav a{color:#fff}
+    aside#sidebar nav a:hover{background:#facc15;color:#0C375D}
+    aside#sidebar nav a.active{background:#facc15;color:#0C375D}
+    .sidebar-footer{background:var(--azul) !important}
+    .sidebar-footer button{background:#0C375D;color:#fff}
+    .sidebar-footer button:hover{background:#facc15;color:#0C375D}
+  </style>
 </head>
 <body class="bg-gray-100">
-  <main class="p-6 max-w-7xl mx-auto">
+  <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden" aria-label="Abrir menú" title="Abrir menú"><i data-lucide="menu" class="w-6 h-6 text-gray-800"></i></button>
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden md:hidden"></div>
+  <aside id="sidebar" class="fixed top-0 left-0 h-screen w-64 z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
+    <div class="sidebar-header flex items-center justify-center py-6 px-4">
+      <div class="sidebar-logo w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">LLO</div>
+      <h2 class="text-xl font-bold text-white ml-3 sidebar-text">Colaborador</h2>
+    </div>
+    <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
+      <a href="panel-colaborador.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="clipboard-list" class="w-5 h-5"></i> <span class="sidebar-text">Solicitudes</span></a>
+      <a href="rendimiento.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="bar-chart-3" class="w-5 h-5"></i> <span class="sidebar-text">Rendimiento</span></a>
+    </nav>
+    <div class="sidebar-footer p-4">
+      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm"><i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i><span class="sidebar-text font-medium">Colapsar</span></button>
+      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm"><i data-lucide="log-out" class="w-5 h-5"></i><span class="sidebar-text font-medium">Cerrar Sesión</span></button>
+    </div>
+  </aside>
+  <main id="main-content" class="main-content p-6 max-w-7xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-gray-900">Solicitudes Asignadas</h1>
       <div class="flex items-center gap-2 text-sm text-gray-600">
@@ -19,6 +52,11 @@
         <span>de</span>
         <span id="collabTotal" class="font-semibold">0</span>
       </div>
+    </div>
+
+    <div id="continueActiveBanner" class="hidden mb-4 rounded-lg border bg-yellow-50 text-[var(--azul)] p-4 flex items-center justify-between">
+      <div class="text-sm font-semibold">Tienes un trabajo activo</div>
+      <button id="continueActiveBtn" class="px-3 py-2 bg-[var(--azul)] text-white rounded-lg">Continuar orden</button>
     </div>
 
     <div id="ordersGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
@@ -30,6 +68,82 @@
       </div>
     </div>
   </main>
+
+  <section id="activeJobView" class="hidden p-6 max-w-7xl mx-auto">
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div class="px-6 py-6 border-b bg-[var(--azul)] text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl md:text-3xl font-extrabold tracking-wide">TRABAJO ACTIVO</h2>
+            <p class="mt-2 inline-flex items-center gap-2 text-sm bg-[var(--amarillo)] text-[var(--azul)] px-3 py-1 rounded-full font-semibold"><span id="activeJobId">#</span><span id="activeJobService"></span></p>
+            <p id="activeJobStatus" class="mt-1 text-xs opacity-90"></p>
+            <div class="w-full bg-gray-200 rounded-full h-2 mt-4">
+              <div id="jobProgressBar" class="h-2 rounded-full bg-green-500 transition-all" style="width:0%"></div>
+            </div>
+          </div>
+          <button id="backToListBtn" class="p-2 rounded-lg bg-white/10 hover:bg-white/20" aria-label="Volver"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
+        </div>
+      </div>
+      <div class="p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="md:col-span-2 space-y-6">
+            <div class="rounded-xl border shadow-sm">
+              <div class="px-4 py-3 bg-[var(--turquesa)] text-white font-semibold rounded-t-xl">Acciones</div>
+              <div class="px-4 py-4 flex flex-wrap gap-3">
+                <button id="btnGoPickup" class="px-4 py-2 rounded-lg text-white" style="background: var(--azul-claro)">En camino a recoger</button>
+                <button id="btnLoading" class="px-4 py-2 rounded-lg text-white" style="background: var(--turquesa)">Cargando</button>
+                <button id="btnGoDeliver" class="px-4 py-2 rounded-lg text-white" style="background: var(--azul)">En camino a entregar</button>
+                <button id="btnComplete" class="px-4 py-2 rounded-lg text-white" style="background: #16a34a">Completar</button>
+                <button id="btnCancel" class="px-4 py-2 rounded-lg text-white" style="background: #dc2626">Cancelar</button>
+              </div>
+            </div>
+
+            <div class="rounded-xl border shadow-sm">
+              <div class="px-4 py-3 bg-[var(--turquesa)] text-white font-semibold rounded-t-xl">Datos</div>
+              <div class="px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p class="text-xs text-gray-500">Colaborador</p>
+                  <p id="activeCollaborator" class="text-sm text-gray-800"></p>
+                </div>
+                <div>
+                  <p class="text-xs text-gray-500">Cliente / Teléfono</p>
+                  <p id="activeJobClient" class="text-sm text-gray-800"></p>
+                </div>
+                <div>
+                  <p class="text-xs text-gray-500">Dirección</p>
+                  <p id="activeJobPickup" class="text-sm text-gray-800 break-words"></p>
+                </div>
+                <div>
+                  <p class="text-xs text-gray-500">Vehículo</p>
+                  <p id="activeJobVehicle" class="text-sm text-gray-800"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="md:col-span-1 space-y-3">
+            <div class="rounded-xl border shadow-sm overflow-hidden">
+              <div id="activeMap" class="h-96 md:h-[28rem]" style="background:#eef2ff"></div>
+            </div>
+            <div class="flex items-center gap-3">
+              <button id="btnVerOrigen" class="px-3 py-2 rounded-lg text-[var(--azul)]" style="background: var(--amarillo)">Ruta origen</button>
+              <button id="btnVerDestino" class="px-3 py-2 rounded-lg text-white" style="background: var(--turquesa)">Ruta destino</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl border shadow-sm">
+          <div class="px-4 py-3 bg-[var(--azul)] text-white font-semibold rounded-t-xl">Evidencia</div>
+          <div class="p-4">
+            <div class="flex items-center gap-3 mb-3">
+              <input type="file" id="evidenceInput" accept="image/*" multiple class="block w-full text-sm text-gray-700" />
+            </div>
+            <div id="evidencePreview" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+            <div id="activeEvidence" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <div id="orderModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
@@ -64,6 +178,10 @@
             <p id="modalDelivery" class="text-sm text-gray-800 break-words"></p>
           </div>
         </div>
+        <div class="rounded-lg border p-3">
+          <p class="text-xs text-gray-500">Preguntas del servicio</p>
+          <div id="modalQuestions" class="text-sm text-gray-800"></div>
+        </div>
       </div>
       <div class="px-6 py-4 border-t flex items-center justify-end gap-3">
         <button id="markCompletedBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Marcar como completada</button>
@@ -72,26 +190,44 @@
     </div>
   </div>
 
-  <script>
-    (function(){
-      var OrigWS = window.WebSocket;
-      try {
-        window.WebSocket = function(url, protocols){
-          try {
-            if (typeof url === 'string' && /127\.0\.0\.1:5507\/.*\/ws$/i.test(url)) {
-              return { close:function(){}, addEventListener:function(){}, removeEventListener:function(){}, send:function(){}, readyState: 3 };
-            }
-          } catch(_) {}
-          return new OrigWS(url, protocols);
-        };
-        window.WebSocket.prototype = OrigWS.prototype;
-      } catch(_) {}
-    })();
-  </script>
-  <script src="vendor/supabase.umd.js"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/notifications.js"></script>
-  <script src="js/order-manager.js"></script>
-  <script src="js/panel-colaborador.js"></script>
+  <div id="continueActiveModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b">
+        <div class="flex items-center gap-3">
+          <span class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-600 text-white font-bold" id="continueOrderId">#</span>
+          <div>
+            <p id="continueService" class="text-lg font-semibold text-gray-900"></p>
+            <p id="continueStatus" class="text-sm text-gray-500"></p>
+          </div>
+        </div>
+        <button id="closeContinueModal" class="p-2 text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-6 space-y-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="rounded-lg border p-3">
+            <p class="text-xs text-gray-500">Cliente</p>
+            <p id="continueClient" class="text-sm text-gray-800"></p>
+          </div>
+          <div class="rounded-lg border p-3">
+            <p class="text-xs text-gray-500">Ruta</p>
+            <p id="continueRoute" class="text-sm text-gray-800 break-words"></p>
+          </div>
+        </div>
+        <p class="text-sm text-gray-600">Al continuar se abrirá el mapa con la ruta.</p>
+      </div>
+      <div class="px-6 py-4 border-t flex items-center justify-end gap-3">
+        <button id="confirmContinueBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Continuar</button>
+        <button id="cancelContinueBtn" class="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js?v=20251215"></script>
+  <script src="js/sidebar.js?v=20251215"></script>
+  <script src="js/notifications.js?v=20251215"></script>
+  <script src="js/order-manager.js?v=20251215"></script>
+  <script src="js/panel-colaborador.js?v=20251215"></script>
 </body>
 </html>

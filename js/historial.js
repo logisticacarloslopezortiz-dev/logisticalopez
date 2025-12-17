@@ -13,9 +13,10 @@
 
     if (!tableBody) return; // Si no estamos en la página correcta, no hacer nada.
 
-    let allHistoryOrders = [];
-    let filteredOrders = [];
-    const histPageState = { currentPage: 1, pageSize: 15 };
+  let allHistoryOrders = [];
+  let filteredOrders = [];
+  const filters = { search: '', status: '', collaboratorId: '', dateFrom: '', dateTo: '', service: '', vehicle: '' };
+  const histPageState = { currentPage: 1, pageSize: 15 };
 
     const normalize = (s) => String(s || '').toLowerCase();
 
@@ -32,11 +33,19 @@
       if (totalCountEl) totalCountEl.textContent = String(total);
       if (showingCountEl) showingCountEl.textContent = page.length > 0 ? `${start + 1}-${start + page.length}` : '0';
       
+      if (total === 0) {
+        tableBody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-gray-500">No se encontraron órdenes con esos criterios.</td></tr>`;
+        renderPagination();
+        return;
+      }
+
       tableBody.innerHTML = page.map(o => {
         const id = o.id;
         const service = o.service?.name || '';
         const fecha = o.completed_at ? new Date(o.completed_at).toLocaleString() : (o.created_at ? new Date(o.created_at).toLocaleString() : '');
-        const colaborador = o.colaborador?.name || '';
+        const colaboradorAsignado = o.colaborador?.name || '';
+        const completadoPor = o.completed_by_name || '';
+        const colaborador = completadoPor && completadoPor !== colaboradorAsignado ? `${colaboradorAsignado} → ${completadoPor}` : colaboradorAsignado;
         const precio = (o.monto_cobrado != null && o.monto_cobrado !== '') ? `RD$ ${Number(o.monto_cobrado).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
         const evidenceCount = Array.isArray(o.evidence_photos) ? o.evidence_photos.length : 0;
         return `
@@ -48,10 +57,13 @@
             <td class="table-cell">${colaborador}</td>
             <td class="table-cell">${precio}</td>
             <td class="table-cell">
-              <button class="btn-evidence" data-order-id="${o.id}">${evidenceCount > 0 ? `Ver (${evidenceCount})` : 'No hay'}</button>
+              <button class="btn-evidence" data-order-id="${o.id}" title="Ver evidencia" aria-label="Ver evidencia" role="button">${evidenceCount > 0 ? `Ver (${evidenceCount})` : 'No hay'}</button>
             </td>
             <td class="table-cell">
-              <button class="btn-pdf" data-order-id="${o.id}">PDF</button>
+              <button class="btn-pdf" data-order-id="${o.id}" title="Descargar comprobante PDF" aria-label="Descargar comprobante PDF" role="button">PDF</button>
+            </td>
+            <td class="table-cell">
+              <button class="btn-rate" data-order-id="${o.id}" title="Enviar enlace de calificación" aria-label="Enviar enlace de calificación" role="button">Calificar</button>
             </td>
           </tr>
         `;
@@ -67,14 +79,60 @@
           if (window.showPDFModal) window.showPDFModal(Number(btn.dataset.orderId));
         });
       });
+      tableBody.querySelectorAll('.btn-rate').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = Number(btn.dataset.orderId);
+          const order = filteredOrders.find(o => o.id === id);
+          if (!order) return;
+          sendRatingLink(order);
+        });
+      });
       renderPagination();
+    };
+
+    const applyFilters = () => {
+      const df = filters.dateFrom ? new Date(filters.dateFrom).getTime() : null;
+      const dt = filters.dateTo ? new Date(filters.dateTo).getTime() : null;
+      const st = normalize(filters.status);
+      const colId = String(filters.collaboratorId || '').trim();
+      const svc = normalize(filters.service);
+      const veh = normalize(filters.vehicle);
+      const q = normalize(filters.search);
+      filteredOrders = allHistoryOrders.filter(o => {
+        const okStatus = !st || normalize(o.status) === st || normalize(o.status) === (st === 'completadas' ? 'completada' : st);
+        const compAt = o.completed_at ? new Date(o.completed_at).getTime() : null;
+        const okDate = (!df || (compAt && compAt >= df)) && (!dt || (compAt && compAt <= dt));
+        const okCollab = !colId || String(o.assigned_to || o.completed_by || '') === colId;
+        const okSvc = !svc || normalize(o.service?.name) === svc || normalize(o.service?.name).includes(svc);
+        const okVeh = !veh || normalize(o.vehicle?.name) === veh || normalize(o.vehicle?.name).includes(veh);
+        const hay = q
+          ? (
+            normalize(o.name).includes(q) ||
+            String(o.id).includes(q) ||
+            normalize(o.phone).includes(q) ||
+            normalize(o.empresa).includes(q) ||
+            normalize(o.service?.name).includes(q) ||
+            normalize(o.vehicle?.name).includes(q) ||
+            normalize(o.colaborador?.name).includes(q)
+          )
+          : true;
+        return okStatus && okDate && okCollab && okSvc && okVeh && hay;
+      });
     };
 
     const filterAndRender = () => {
       histPageState.currentPage = 1;
-      // Aquí iría la lógica de filtrado si se añade un campo de búsqueda.
-      filteredOrders = allHistoryOrders;
+      applyFilters();
+      try { window.filteredOrders = filteredOrders.slice(); } catch(_) {}
       renderTable();
+    };
+
+    const setLoading = (isLoading) => {
+      const el = document.getElementById('historyLoading');
+      if (el) el.classList.toggle('hidden', !isLoading);
+      if (isLoading && tableBody) {
+        tableBody.innerHTML = `<tr><td colspan="9" class="text-center py-6">Cargando…</td></tr>`;
+      }
     };
 
     const loadHistory = async () => {
@@ -84,22 +142,70 @@
       const STATUS_OK = ['Completada', 'Cancelada', 'completada', 'cancelada', 'Completado', 'Cancelado', 'completado', 'cancelado', 'Finalizada', 'finalizada', 'Entregada', 'entregada'];
 
       try {
-        const { data, error } = await client
+        setLoading(true);
+        const sp = new URLSearchParams(location.search);
+        const page = Number(sp.get('page') || histPageState.currentPage);
+        const size = Number(sp.get('size') || histPageState.pageSize);
+        histPageState.currentPage = page > 0 ? page : 1;
+        histPageState.pageSize = size > 0 ? size : 15;
+        const start = (histPageState.currentPage - 1) * histPageState.pageSize;
+        const end = start + histPageState.pageSize - 1;
+        const sel = 'id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to, service:services(name), vehicle:vehicles(name)';
+        const { data, count, error } = await client
           .from('orders')
-          .select('id, name, phone, email, empresa, rnc, service_id, vehicle_id, status, created_at, date, time, pickup, delivery, completed_at, completed_by, monto_cobrado, evidence_photos, service:services(name), vehicle:vehicles(name), colaborador:collaborators(name)')
+          .select(sel, { count: 'exact' })
           .in('status', STATUS_OK)
-          .order('completed_at', { ascending: false });
-        if (error) err = error; else orders = data || [];
+          .order('completed_at', { ascending: false })
+          .range(start, end);
+        if (error) err = error; else { orders = data || []; histPageState.totalCount = count || orders.length; }
       } catch (e) { err = e; }
+
+      if (err && /is not a function/i.test(String(err.message || ''))) {
+        try {
+          const { data } = await client
+            .from('orders')
+            .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to, service:services(name), vehicle:vehicles(name)');
+          const filtered = (data || []).filter(o => STATUS_OK.includes(String(o.status || '')));
+          orders = filtered.sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime());
+          err = null;
+        } catch (e2) { err = e2; }
+      }
 
       if (err) {
         console.error("Error cargando historial:", err);
         tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500">Error al cargar datos.</td></tr>`;
+        setLoading(false);
         return;
       }
 
-      allHistoryOrders = orders;
+      let collaborators = {};
+      let collabCacheKey = 'tlc_collab_cache_v1';
+      try {
+        const ids = [...new Set((orders || []).flatMap(o => [o.assigned_to, o.completed_by]).filter(Boolean))];
+        try {
+          const cache = JSON.parse(localStorage.getItem(collabCacheKey) || '{}');
+          Object.assign(collaborators, cache || {});
+        } catch(_){ }
+        if (ids.length > 0) {
+          const { data } = await client.from('collaborators').select('id,name').in('id', ids);
+          (data || []).forEach(c => { collaborators[c.id] = c.name; });
+          try { localStorage.setItem(collabCacheKey, JSON.stringify(collaborators)); } catch(_){ }
+        }
+      } catch (_) {}
+
+      allHistoryOrders = (orders || []).map(o => ({ 
+        ...o, 
+        colaborador: { name: collaborators[o.assigned_to] || '' },
+        completed_by_name: collaborators[o.completed_by] || ''
+      }));
       filterAndRender();
+      try {
+        const sp = new URLSearchParams(location.search);
+        sp.set('page', String(histPageState.currentPage));
+        sp.set('size', String(histPageState.pageSize));
+        history.replaceState({}, '', `${location.pathname}?${sp.toString()}`);
+      } catch (_) {}
+      setLoading(false);
     };
 
     const loadOrderDetails = async (orderId) => {
@@ -131,7 +237,27 @@
     };
 
     function renderPagination() {
-      // Lógica de paginación
+      const total = histPageState.totalCount || filteredOrders.length;
+      const pages = Math.max(1, Math.ceil(total / histPageState.pageSize));
+      const container = document.getElementById('historyPagination');
+      if (!container) return;
+      container.innerHTML = '';
+      const mk = (n, label) => {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.disabled = n === histPageState.currentPage;
+        b.className = 'px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm m-1';
+        b.addEventListener('click', () => {
+          histPageState.currentPage = n;
+          const sp = new URLSearchParams(location.search);
+          sp.set('page', String(n));
+          history.replaceState({}, '', `${location.pathname}?${sp.toString()}`);
+          renderTable(n);
+        });
+        return b;
+      };
+      container.appendChild(mk(Math.max(1, histPageState.currentPage - 1), 'Anterior'));
+      container.appendChild(mk(Math.min(pages, histPageState.currentPage + 1), 'Siguiente'));
     }
 
     // Mock de funciones globales si no existen en el HTML, para evitar errores
@@ -143,11 +269,56 @@
     }
 
     // --- Ejecución de la inicialización ---
+    await ensureModals();
     await loadHistory();
     setupRealtimeSubscription();
     if (window.lucide) {
       window.lucide.createIcons();
     }
+
+    const deb = (fn, ms = 300) => {
+      let t = null;
+      return (...args) => { if (t) clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    };
+
+    const bindFilters = () => {
+      const fSearch = document.getElementById('filterSearch');
+      const fStatus = document.getElementById('filterStatus');
+      const fCollab = document.getElementById('filterCollaborator');
+      const fDF = document.getElementById('filterDateFrom');
+      const fDT = document.getElementById('filterDateTo');
+      const fSvc = document.getElementById('filterService');
+      const fVeh = document.getElementById('filterVehicle');
+      const updateUrl = () => {
+        try {
+          const sp = new URLSearchParams(location.search);
+          Object.entries(filters).forEach(([k,v]) => { if (v) sp.set(k, String(v)); else sp.delete(k); });
+          history.replaceState({}, '', `${location.pathname}?${sp.toString()}`);
+        } catch(_){ }
+      };
+      const onChange = () => { updateUrl(); filterAndRender(); };
+      if (fSearch) fSearch.addEventListener('input', deb(() => { filters.search = fSearch.value || ''; onChange(); }, 300));
+      if (fStatus) fStatus.addEventListener('change', () => { filters.status = fStatus.value || ''; onChange(); });
+      if (fCollab) fCollab.addEventListener('change', () => { filters.collaboratorId = fCollab.value || ''; onChange(); });
+      if (fDF) fDF.addEventListener('change', () => { filters.dateFrom = fDF.value || ''; onChange(); });
+      if (fDT) fDT.addEventListener('change', () => { filters.dateTo = fDT.value || ''; onChange(); });
+      if (fSvc) fSvc.addEventListener('change', () => { filters.service = fSvc.value || ''; onChange(); });
+      if (fVeh) fVeh.addEventListener('change', () => { filters.vehicle = fVeh.value || ''; onChange(); });
+
+      try {
+        const sp = new URLSearchParams(location.search);
+        filters.search = sp.get('search') || '';
+        filters.status = sp.get('status') || '';
+        filters.collaboratorId = sp.get('collaboratorId') || '';
+        filters.dateFrom = sp.get('dateFrom') || '';
+        filters.dateTo = sp.get('dateTo') || '';
+        filters.service = sp.get('service') || '';
+        filters.vehicle = sp.get('vehicle') || '';
+      } catch(_){ }
+      filterAndRender();
+    };
+
+    bindFilters();
   };
 
   // ✅ GATEKEEPER: Escuchar el evento del guardián.
@@ -162,3 +333,165 @@
   }, { once: true });
 
 })();
+
+async function ensureModals(){
+  let evidenceModal = document.getElementById('evidenceModal');
+  if (!evidenceModal) {
+    evidenceModal = document.createElement('div');
+    evidenceModal.id = 'evidenceModal';
+    evidenceModal.className = 'fixed inset-0 bg-black/50 hidden items-center justify-center z-50';
+    evidenceModal.innerHTML = `
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b">
+          <p class="text-lg font-semibold">Evidencia</p>
+          <button id="closeEvidenceModal" class="p-2 text-gray-500 hover:text-gray-700">Cerrar</button>
+        </div>
+        <div id="evidenceGallery" class="p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+      </div>`;
+    document.body.appendChild(evidenceModal);
+  }
+  let pdfModal = document.getElementById('pdfModal');
+  if (!pdfModal) {
+    pdfModal = document.createElement('div');
+    pdfModal.id = 'pdfModal';
+    pdfModal.className = 'fixed inset-0 bg-black/50 hidden items-center justify-center z-50';
+    pdfModal.innerHTML = `
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b">
+          <p class="text-lg font-semibold">Comprobante PDF</p>
+          <button id="closePdfModal" class="p-2 text-gray-500 hover:text-gray-700">Cerrar</button>
+        </div>
+        <div id="pdfOrderInfo" class="p-6 space-y-2"></div>
+        <div class="px-6 py-4 border-t flex items-center justify-end gap-3">
+          <button id="downloadPdfBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Descargar</button>
+          <button id="cancelPdfBtn" class="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg">Cancelar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(pdfModal);
+  }
+  const closeEvidenceModalBtn = document.getElementById('closeEvidenceModal');
+  const evidenceGallery = document.getElementById('evidenceGallery');
+  const closePdfModalBtn = document.getElementById('closePdfModal');
+  const pdfOrderInfo = document.getElementById('pdfOrderInfo');
+  const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+  window.showEvidence = (orderId) => {
+    const order = window.filteredOrders ? window.filteredOrders.find(o => o.id === orderId) : null;
+    const list = order ? order.evidence_photos || [] : [];
+    evidenceGallery.innerHTML = list.map(p => {
+      const url = typeof p === 'string' ? p : (p?.url || p?.public_url || '');
+      return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer"><img src="${url}" class="w-full h-48 object-cover rounded-lg"/></a>` : '';
+    }).join('');
+    const modal = document.getElementById('evidenceModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  };
+  const closeEvidenceModal = () => {
+    const modal = document.getElementById('evidenceModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  };
+  closeEvidenceModalBtn.onclick = closeEvidenceModal;
+  evidenceModal.onclick = (e) => { if (e.target === evidenceModal) closeEvidenceModal(); };
+
+  window.showPDFModal = (orderId) => {
+    const order = (window.filteredOrders || []).find(o => o.id === orderId);
+    if (!order) return;
+    const compBy = order.completed_by || order.assigned_to || '';
+    const fecha = order.completed_at ? new Date(order.completed_at).toLocaleString('es-DO') : '';
+    pdfOrderInfo.innerHTML = `
+      <div class="space-y-2">
+        <p><strong>Orden #:</strong> ${order.id}</p>
+        <p><strong>Cliente:</strong> ${order.name || ''}</p>
+        <p><strong>Servicio:</strong> ${order.service?.name || ''}</p>
+        <p><strong>Estado:</strong> ${order.status}</p>
+        <p><strong>Completado por:</strong> ${compBy}</p>
+        <p><strong>Fecha:</strong> ${fecha}</p>
+        <p><strong>Monto:</strong> ${order.monto_cobrado != null ? `RD$ ${Number(order.monto_cobrado).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : '-'}</p>
+      </div>`;
+    const modal = document.getElementById('pdfModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    downloadPdfBtn.onclick = async () => { await generatePDF(order); closePdfModal(); };
+    document.getElementById('cancelPdfBtn').onclick = closePdfModal;
+  };
+  const closePdfModal = () => {
+    const modal = document.getElementById('pdfModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  };
+  closePdfModalBtn.onclick = closePdfModal;
+  pdfModal.onclick = (e) => { if (e.target === pdfModal) closePdfModal(); };
+}
+
+async function generatePDF(order){
+  try {
+    if (!window.jspdf) {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+      document.head.appendChild(s);
+      await new Promise(r => { s.onload = r; });
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    doc.setFontSize(14);
+    doc.text('Comprobante de Orden', 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Orden #${order.id}`, 40, 60);
+    doc.text(`Cliente: ${order.name || ''}`, 40, 75);
+    doc.text(`Servicio: ${order.service?.name || ''}`, 40, 90);
+    doc.text(`Estado: ${order.status || ''}`, 40, 105);
+    const fecha = order.completed_at ? new Date(order.completed_at).toLocaleString('es-DO') : '';
+    doc.text(`Completado: ${fecha}`, 40, 120);
+    doc.text(`Completado por: ${order.completed_by || order.assigned_to || ''}`, 40, 135);
+    doc.text(`Monto: ${order.monto_cobrado != null ? `RD$ ${Number(order.monto_cobrado).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : '-'}`, 40, 150);
+    doc.save(`orden_${order.id}.pdf`);
+  } catch (_) {}
+}
+
+async function sendRatingLink(order){
+  const link = 'https://logisticalopezortiz.com/calificar.html';
+  const phone = String(order.phone || '').replace(/\D/g, '');
+  const hasPhone = phone.length >= 8;
+  const email = order.client_email || order.email || '';
+  if (hasPhone) {
+    const msg = encodeURIComponent(`Hola ${order.name || ''}, por favor califica nuestro servicio: ${link}`);
+    const wa = `https://wa.me/${phone}?text=${msg}`;
+    window.open(wa, '_blank');
+  } else if (email) {
+    const subj = encodeURIComponent('Califica nuestro servicio');
+    const body = encodeURIComponent(`Hola ${order.name || ''}, por favor califica nuestro servicio: ${link}`);
+    window.location.href = `mailto:${email}?subject=${subj}&body=${body}`;
+  } else {
+    try { await navigator.clipboard.writeText(link); } catch(_) {}
+    alert('Enlace de calificación copiado');
+  }
+  try {
+    await supabaseConfig.client.from('orders').update({ rating_sent_at: new Date().toISOString() }).eq('id', order.id);
+  } catch(_) {}
+}
+
+// Exportación CSV del historial filtrado
+window.exportHistoryCSV = () => {
+  try {
+    const rows = (window.filteredOrders || []).map(o => ({
+      id: o.id,
+      cliente: o.name || '',
+      servicio: o.service?.name || '',
+      estado: o.status || '',
+      colaborador: o.colaborador?.name || '',
+      completado_por: o.completed_by_name || '',
+      fecha: o.completed_at || o.created_at || '',
+      monto: o.monto_cobrado != null ? Number(o.monto_cobrado) : ''
+    }));
+    const header = Object.keys(rows[0] || { id: '', cliente: '', servicio: '', estado: '', colaborador: '', completado_por: '', fecha: '', monto: '' });
+    const csv = [header.join(','), ...rows.map(r => header.map(k => String(r[k]).replace(/[\n\r,]/g, ' ').trim()).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `historial_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 300);
+  } catch(_) {}
+};

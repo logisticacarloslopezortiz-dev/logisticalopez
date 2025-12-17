@@ -666,6 +666,12 @@ create or replace function public.accept_order(order_id bigint)
 returns void language plpgsql security definer set search_path = public as $$
 declare _now timestamptz := now();
 begin
+  if not exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(coalesce(c.status,'inactive')) = 'activo'
+  ) then
+    raise exception 'No autorizado: colaborador inactivo' using errcode = '42501';
+  end if;
   update public.orders
   set
     status = 'En curso',
@@ -675,7 +681,9 @@ begin
     assigned_at = coalesce(assigned_at, _now),
     tracking_data = coalesce(tracking_data, '[]'::jsonb) || jsonb_build_array(
       jsonb_build_object('status','cargando','date',_now,'description','Orden aceptada, en proceso'))
-  where id = order_id or short_id = order_id::text;
+  where (id = order_id or short_id = order_id::text)
+    and status = 'Pendiente'
+    and assigned_to is null;
 end;
 $$;
 
@@ -691,6 +699,12 @@ create or replace function public.update_order_status(
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare updated jsonb;
 begin
+  if not exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(coalesce(c.status,'inactive')) = 'activo'
+  ) then
+    raise exception 'No autorizado: colaborador inactivo' using errcode = '42501';
+  end if;
   update public.orders o
   set
     status = case
@@ -710,6 +724,7 @@ begin
       -- permitir si está asignada al colaborador o aún sin asignar
       o.assigned_to = collaborator_id or o.assigned_to is null
     )
+    and lower(coalesce(o.status,'')) not in ('cancelada','completada')
   returning to_jsonb(o) into updated;
 
   if updated is null then
@@ -1297,9 +1312,15 @@ BEGIN
   END IF;
 
   IF auth.uid() IS NULL THEN
-    IF o.created_at < now() - interval '30 days' THEN
-      RETURN NULL;
-    END IF;
+    RETURN jsonb_build_object(
+      'id', o.id,
+      'short_id', o.short_id,
+      'created_at', o.created_at,
+      'status', o.status,
+      'tracking_data', o.tracking_data,
+      'service', jsonb_build_object('name', o.service_name),
+      'vehicle', jsonb_build_object('name', o.vehicle_name)
+    );
   END IF;
 
   res := jsonb_build_object(
@@ -1526,6 +1547,9 @@ declare v_url text := coalesce(current_setting('app.settings.process_outbox_url'
 declare v_token text := coalesce(current_setting('app.settings.service_role_token', true), '');
 declare v_headers jsonb := case when v_token <> '' then jsonb_build_object('Content-Type','application/json','Authorization','Bearer ' || v_token) else jsonb_build_object('Content-Type','application/json') end;
 begin
+  if not (public.is_admin(auth.uid()) or public.is_owner(auth.uid())) then
+    raise exception 'No autorizado' using errcode = '42501';
+  end if;
   begin
     select net.http_post(
       url := v_url,
@@ -1585,13 +1609,26 @@ $$;
 -- Tabla: calificaciones
 CREATE TABLE IF NOT EXISTS public.calificaciones (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id uuid NOT NULL,
+  order_id bigint NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
   collaborator_id uuid,
   calificacion_servicio integer CHECK (calificacion_servicio BETWEEN 1 AND 5),
   calificacion_colaborador integer CHECK (calificacion_colaborador BETWEEN 1 AND 5),
   comentario text,
   fecha_creacion timestamptz NOT NULL DEFAULT now()
 );
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='calificaciones' AND column_name='order_id'
+      AND data_type IN ('uuid')
+  ) THEN
+    BEGIN
+      ALTER TABLE public.calificaciones ALTER COLUMN order_id TYPE bigint USING order_id::text::bigint;
+      ALTER TABLE public.calificaciones DROP CONSTRAINT IF EXISTS calificaciones_order_id_fkey;
+      ALTER TABLE public.calificaciones ADD CONSTRAINT calificaciones_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id) ON DELETE CASCADE;
+    EXCEPTION WHEN others THEN NULL; END;
+  END IF;
+END $$;
 
 ALTER TABLE public.calificaciones ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
@@ -1611,24 +1648,25 @@ DO $$ BEGIN
   END IF;
 END $$;
 select pg_notify('pgrst', 'reload schema');
-DO $$
-DECLARE pol record;
-BEGIN
-  FOR pol IN SELECT policyname FROM pg_policies WHERE schemaname='public' AND tablename='collaborators' LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.collaborators', pol.policyname);
-  END LOOP;
-  FOR pol IN SELECT policyname FROM pg_policies WHERE schemaname='public' AND tablename='orders' LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.orders', pol.policyname);
-  END LOOP;
+-- Nota: Las políticas definitivas se declaran más arriba en el archivo.
+-- Evitar eliminar políticas al final para no sobrescribir reglas granulares.
+
+-- Índices para rendimiento
+DO $$ BEGIN
+  BEGIN CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status); EXCEPTION WHEN others THEN NULL; END;
+  BEGIN CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON public.orders(assigned_to); EXCEPTION WHEN others THEN NULL; END;
+  BEGIN CREATE INDEX IF NOT EXISTS idx_orders_client_contact_id ON public.orders(client_contact_id); EXCEPTION WHEN others THEN NULL; END;
+  BEGIN CREATE INDEX IF NOT EXISTS idx_collab_perf_date ON public.collaborator_performance(metric_date); EXCEPTION WHEN others THEN NULL; END;
 END $$;
-alter table if exists public.collaborators enable row level security;
-alter table if exists public.orders enable row level security;
-create policy collab_self_select on public.collaborators
-  for select to authenticated
-  using (
-    auth.uid() = id
-    or lower(coalesce(email,'')) = lower(coalesce(current_setting('request.jwt.claims', true)::json ->> 'email',''))
-  );
-create policy admin_select_all_collaborators on public.collaborators for select to authenticated using (coalesce(public.is_admin(auth.uid()), false));
-create policy collaborator_select_assigned_or_pending on public.orders for select to authenticated using ((assigned_to = auth.uid()) OR assigned_to IS NULL);
-create policy admin_select_all_orders on public.orders for select to authenticated using (coalesce(public.is_admin(auth.uid()), false));
+
+-- RLS para notification_outbox (solo admin/owner)
+ALTER TABLE IF EXISTS public.notification_outbox ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='notification_outbox' AND policyname='notif_admin_all'
+  ) THEN
+    CREATE POLICY notif_admin_all ON public.notification_outbox
+      FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()))
+      WITH CHECK (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+  END IF;
+END $$;

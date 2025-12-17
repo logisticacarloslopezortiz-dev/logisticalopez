@@ -22,23 +22,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const { data: { session } } = await supabaseConfig.client.auth.getSession();
       const now = Math.floor(Date.now() / 1000);
+      const uid = session?.user?.id || null;
 
-      if (!session || session.expires_at <= now) {
+      if (!session || session.expires_at <= now || !uid) {
         window.location.replace(`${loginHref}?redirect=${encodeURIComponent(currentPage)}`);
-        return; // Detener ejecución para que no se emita el evento
+        return;
       }
 
-      const { data: isAdmin, error } = await supabaseConfig.client.rpc('is_admin');
-      if (error || !isAdmin) {
+      const [admRes, ownRes] = await Promise.all([
+        supabaseConfig.client.rpc('is_admin', { uid }),
+        supabaseConfig.client.rpc('is_owner', { uid })
+      ]);
+      const isAdmin = !!admRes?.data;
+      const isOwner = !!ownRes?.data;
+      if (!(isAdmin || isOwner)) {
         window.location.replace(`${loginHref}?redirect=${encodeURIComponent(currentPage)}`);
-        return; // Detener ejecución
+        return;
       }
 
       adminReady = true;
     } catch (err) {
-      console.error('[Sidebar] Error validando sesión admin:', err);
+      console.error('[Sidebar] Error validando sesión admin/owner:', err);
       window.location.replace(loginHref);
-      return; // Detener ejecución
+      return;
     }
   }
 

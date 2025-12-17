@@ -6,11 +6,22 @@
  * para asegurar consistencia en las actualizaciones de la base de datos y en las notificaciones.
  */
 
-const STATUS_MAP = {
+const UI_TO_DB_STATUS = {
+  pendiente: 'Pendiente',
+  aceptada: 'Aceptada',
+  en_camino_recoger: 'En curso',
   cargando: 'En curso',
-  en_camino_recoger: 'Aceptada',
   en_camino_entregar: 'En curso',
-  entregado: 'Completada'
+  entregada: 'Completada',
+  cancelada: 'Cancelada'
+};
+
+const STATE_FLOW = {
+  pendiente: ['aceptada'],
+  aceptada: ['en_camino_recoger'],
+  en_camino_recoger: ['cargando'],
+  cargando: ['en_camino_entregar'],
+  en_camino_entregar: ['entregada']
 };
 
 const OrderManager = {
@@ -99,7 +110,7 @@ const OrderManager = {
     if (!Number.isFinite(normalizedId)) {
       console.warn('[OrderManager] ID inválido para RPC accept_order; aplicando fallback...');
       this._toast('ID inválido para RPC. Aplicando fallback…', 'warning');
-      return await this.actualizarEstadoPedido(orderId, 'cargando', additionalData);
+      return await this.actualizarEstadoPedido(orderId, 'aceptada', additionalData);
     }
 
     const rpcPayload = { order_id: normalizedId };
@@ -116,7 +127,7 @@ const OrderManager = {
           code: error.code
         });
         this._toast(`RPC error: ${error.message || 'falló'}. Aplicando fallback…`, 'warning');
-        return await this.actualizarEstadoPedido(orderId, 'Aceptada', additionalData);
+        return await this.actualizarEstadoPedido(orderId, 'aceptada', additionalData);
       }
 
       console.log('[OrderManager] RPC accept_order OK', data);
@@ -125,7 +136,7 @@ const OrderManager = {
     } catch (error) {
       console.error('[OrderManager] Exception en RPC accept_order:', error);
       this._toast(`Error inesperado: ${error.message || 'falló'}. Aplicando fallback…`, 'warning');
-      return await this.actualizarEstadoPedido(orderId, 'Aceptada', additionalData);
+      return await this.actualizarEstadoPedido(orderId, 'aceptada', additionalData);
     }
   },
 
@@ -230,7 +241,7 @@ const OrderManager = {
 
     // Mapear collaborator_id a campos correctos según el estado
     if (additionalData.collaborator_id) {
-      if (newStatus === 'entregado') {
+      if (String(newStatus || '').toLowerCase() === 'entregada') {
         sanitizedData.completed_by = additionalData.collaborator_id;
       } else {
         sanitizedData.assigned_to = additionalData.collaborator_id;
@@ -241,40 +252,42 @@ const OrderManager = {
 
     // Lógica de negocio centralizada:
     // Mapear estados de acciones del colaborador
-    if (STATUS_MAP[newStatus]) {
-      const db = STATUS_MAP[newStatus];
+    const ns = String(newStatus || '').toLowerCase();
+    if (UI_TO_DB_STATUS[ns]) {
+      const db = UI_TO_DB_STATUS[ns];
       updatePayload.status = db;
       if (db === 'Completada') updatePayload.completed_at = new Date().toISOString();
       if (db === 'Aceptada') updatePayload.assigned_at = new Date().toISOString();
-    } else if (['Completada','completada'].includes(newStatus)) {
+    } else if (['completada'].includes(ns)) {
       updatePayload.status = 'Completada';
       updatePayload.completed_at = new Date().toISOString();
-    } else if (['Aceptada','aceptada'].includes(newStatus)) {
+    } else if (['aceptada'].includes(ns)) {
       updatePayload.status = 'Aceptada';
       updatePayload.assigned_at = new Date().toISOString();
-    } else if (['En curso','en curso'].includes(newStatus)) {
+    } else if (['en curso'].includes(ns)) {
       updatePayload.status = 'En curso';
-    } else if (['Cancelado','cancelado','Cancelada','cancelada'].includes(newStatus)) {
+    } else if (['cancelada','cancelado'].includes(ns)) {
       updatePayload.status = 'Cancelada';
-    } else if (['Pendiente','pendiente'].includes(newStatus)) {
+    } else if (['pendiente'].includes(ns)) {
       updatePayload.status = 'Pendiente';
     }
+    updatePayload.last_collab_status = ns;
 
     // Intentar primero vía RPC para evitar problemas de RLS en SELECT/UPDATE
     try {
       const normalizedId = this._normalizeOrderId(orderId);
-      const dbStatus = STATUS_MAP[newStatus] || newStatus;
+      const dbStatus = UI_TO_DB_STATUS[ns] || newStatus;
       const rpcTrackingEntry = {
-        ui_status: newStatus,
+        ui_status: ns,
         db_status: dbStatus,
         date: new Date().toISOString(),
-        description: newStatus === 'en_camino_recoger'
+        description: ns === 'en_camino_recoger'
           ? 'Orden aceptada, en camino a recoger'
-          : newStatus === 'cargando'
+          : ns === 'cargando'
             ? 'Carga en proceso'
-            : newStatus === 'en_camino_entregar'
+            : ns === 'en_camino_entregar'
               ? 'En ruta hacia entrega'
-              : newStatus === 'entregado'
+              : ns === 'entregada'
                 ? 'Entrega completada'
                 : 'Actualización de estado'
       };
@@ -305,7 +318,7 @@ const OrderManager = {
     }
 
     try {
-      // Obtener tracking_data actual probando secuencialmente los candidatos
+      // Obtener datos actuales probando secuencialmente los candidatos
       let usedFilter = null;
       let currentOrder = null;
 
@@ -313,7 +326,7 @@ const OrderManager = {
         console.log('[OrderManager] Fetch intento con:', cand);
         const { data, error } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id')
+          .select('tracking_data, id, short_id, status, last_collab_status')
           .eq(cand.col, cand.val)
           .maybeSingle();
 
@@ -340,19 +353,19 @@ const OrderManager = {
       if (!currentOrder && candidates.length > 0) {
         const nId = this._normalizeOrderId(orderId);
         if (Number.isFinite(nId)) {
-          const { data } = await supabaseConfig.client
-            .from('orders')
-            .select('tracking_data, id, short_id')
-            .eq('id', nId)
-            .maybeSingle();
+        const { data } = await supabaseConfig.client
+          .from('orders')
+          .select('tracking_data, id, short_id, status, last_collab_status')
+          .eq('id', nId)
+          .maybeSingle();
           if (data) { currentOrder = data; usedFilter = { col: 'id', val: data.id }; }
         }
         if (!currentOrder && typeof orderId === 'string') {
-          const { data } = await supabaseConfig.client
-            .from('orders')
-            .select('tracking_data, id, short_id')
-            .eq('short_id', orderId)
-            .maybeSingle();
+        const { data } = await supabaseConfig.client
+          .from('orders')
+          .select('tracking_data, id, short_id, status, last_collab_status')
+          .eq('short_id', orderId)
+          .maybeSingle();
           if (data) { currentOrder = data; usedFilter = { col: 'id', val: data.id }; }
         }
       }
@@ -362,23 +375,50 @@ const OrderManager = {
         throw new Error(`No se encontró la orden con ID "${orderId}". Verifica que la orden existe y tienes permisos para accederla.`);
       }
 
-      const dbStatus2 = STATUS_MAP[newStatus] || newStatus;
+      // Validar transición de estado (máquina de estados)
+      const currentDbStatus = String(currentOrder.status || '').toLowerCase();
+      const currentPhase = (typeof currentOrder.last_collab_status === 'string' && currentOrder.last_collab_status)
+        ? String(currentOrder.last_collab_status).toLowerCase()
+        : (currentDbStatus === 'pendiente' ? 'pendiente'
+          : currentDbStatus === 'aceptada' ? 'en_camino_recoger'
+          : currentDbStatus === 'en curso' ? (Array.isArray(currentOrder.tracking_data) && currentOrder.tracking_data.length > 0
+              ? String(currentOrder.tracking_data[currentOrder.tracking_data.length - 1]?.ui_status || 'cargando').toLowerCase()
+              : 'cargando')
+          : currentDbStatus);
+      const nextAllowed = STATE_FLOW[currentPhase] || [];
+      if (ns !== 'cancelada' && ns !== 'entregada' && !nextAllowed.includes(ns)) {
+        throw new Error(`Transición no permitida desde "${currentPhase}" a "${ns}"`);
+      }
+
+      if (ns === 'entregada') {
+        const hasRoutePhase = currentPhase === 'en_camino_entregar' || (Array.isArray(currentOrder.tracking_data) && currentOrder.tracking_data.some(e => String(e?.ui_status || '').toLowerCase() === 'en_camino_entregar'));
+        const evidenceArr = Array.isArray(currentOrder.evidence_photos) ? currentOrder.evidence_photos : [];
+        if (!hasRoutePhase) {
+          throw new Error('No puedes completar sin pasar por "En camino a entregar"');
+        }
+        if (evidenceArr.length === 0) {
+          throw new Error('Debes subir al menos una evidencia para completar');
+        }
+      }
+
+      const dbStatus2 = UI_TO_DB_STATUS[ns] || newStatus;
       const newTrackingEntry = { 
-        ui_status: newStatus, 
+        ui_status: ns, 
         db_status: dbStatus2,
         date: new Date().toISOString(),
-        description: newStatus === 'en_camino_recoger'
+        description: ns === 'en_camino_recoger'
           ? 'Orden aceptada, en camino a recoger'
-          : newStatus === 'cargando'
+          : ns === 'cargando'
             ? 'Carga en proceso'
-            : newStatus === 'en_camino_entregar'
+            : ns === 'en_camino_entregar'
               ? 'En ruta hacia entrega'
-              : newStatus === 'entregado'
+              : ns === 'entregada'
                 ? 'Pedido entregado'
                 : undefined
       };
       const currentTracking = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
       updatePayload.tracking_data = [...currentTracking, newTrackingEntry];
+      updatePayload.last_collab_status = ns;
 
       console.log('[OrderManager] Update payload:', updatePayload);
 

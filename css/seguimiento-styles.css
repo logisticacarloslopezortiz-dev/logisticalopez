@@ -4,6 +4,11 @@
   --color-acento: #FBBF24;
 }
 
+.bg-primario { background-color: var(--color-primario); }
+.bg-secundario { background-color: var(--color-secundario); }
+.text-primario { color: var(--color-primario); }
+.text-secundario { color: var(--color-secundario); }
+
 .text-turquoise { color: var(--color-secundario); }
 .glass-effect { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.9); }
 
