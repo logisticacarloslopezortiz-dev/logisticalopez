@@ -305,6 +305,7 @@ const OrderManager = {
 
       if (!rpcError) {
         console.log('[OrderManager] RPC update_order_status OK', rpcData);
+        try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
         return { success: true, data: rpcData, error: null };
       }
 
@@ -439,6 +440,7 @@ const OrderManager = {
       }
 
       console.log(`[OrderManager] Orden #${orderId} actualizada exitosamente en la BD.`);
+      try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
 
       // 4. Enviar notificaciones push (cliente y roles)
       // Cliente: mantener notificación existente

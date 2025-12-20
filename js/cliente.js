@@ -1608,11 +1608,32 @@ window.handleAfterCopy = handleAfterCopy;
  * @param {string} text - El texto a copiar.
  */
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    showSuccess('ID copiado al portapapeles');
-  }).catch(err => {
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text).then(() => {
+        showSuccess('ID copiado al portapapeles');
+      }).catch(() => {
+        showError('No se pudo copiar el ID');
+      });
+      return;
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-1000px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) {
+      showSuccess('ID copiado al portapapeles');
+    } else {
+      showError('No se pudo copiar el ID');
+    }
+  } catch {
     showError('No se pudo copiar el ID');
-  });
+  }
 }
 
 // Inicialización cuando el DOM esté listo
@@ -1911,7 +1932,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const pushSubscription = await getPushSubscription();
         if (pushSubscription) {
           console.log('Suscripción push obtenida');
-          baseOrder.push_subscription = pushSubscription;
         }
 
         let userId = null;
@@ -1925,6 +1945,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const origin_coords2 = orderData.origin_coords;
         const destination_coords2 = orderData.destination_coords;
+
+        if (!orderData.service_id || !orderData.vehicle_id) {
+          notifications.error('Selecciona un servicio y un vehículo.', { title: 'Datos incompletos' });
+          return;
+        }
+        if (!origin_coords2 || !destination_coords2) {
+          notifications.error('Debes seleccionar origen y destino en el mapa.', { title: 'Ruta incompleta' });
+          return;
+        }
 
         const variantA = Object.assign({}, baseOrder, {
           service_id: orderData.service_id,

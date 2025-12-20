@@ -1016,6 +1016,22 @@ document.addEventListener('DOMContentLoaded', () => {
   window.closeAssignModal = closeAssignModal;
   window.closePriceModal = closePriceModal;
   window.savePriceData = savePriceData;
+
+  try {
+    const permEl = document.getElementById('pushStatusPerm');
+    const subEl = document.getElementById('pushStatusSub');
+    const enableBtn = document.getElementById('pushEnableBtn');
+    const disableBtn = document.getElementById('pushDisableBtn');
+    const testBtn = document.getElementById('pushTestBtn');
+    const refresh = () => {
+      try { if (permEl) permEl.textContent = `Permiso: ${window.pushNotifications?.permission || '—'}`; } catch(_){}
+      try { if (subEl) subEl.textContent = `Suscripción: ${window.pushNotifications?.isEnabled ? 'Sí' : 'No'}`; } catch(_){}
+    };
+    if (enableBtn) enableBtn.addEventListener('click', async () => { try { await window.pushNotifications?.enable(); } catch(_){} refresh(); });
+    if (disableBtn) disableBtn.addEventListener('click', async () => { try { await window.pushNotifications?.disable(); } catch(_){} refresh(); });
+    if (testBtn) testBtn.addEventListener('click', async () => { try { await window.pushNotifications?.sendTest(); notifications?.info?.('Notificación de prueba enviada'); } catch(e){ notifications?.error?.('Fallo al enviar prueba'); } });
+    refresh();
+  } catch(_){ }
 });
 
 document.addEventListener('admin-session-ready', (e) => {

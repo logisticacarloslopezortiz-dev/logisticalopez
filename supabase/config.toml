@@ -349,7 +349,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 
 [functions.delete-user]
-enabled = true
+enabled = false
 verify_jwt = true
 import_map = "./functions/delete-user/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
@@ -360,7 +360,7 @@ entrypoint = "./functions/delete-user/index.ts"
 # static_files = [ "./functions/delete-user/*.html" ]
 
 [functions.send-notification]
-enabled = true
+enabled = false
 verify_jwt = true
 import_map = "./functions/send-notification/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.

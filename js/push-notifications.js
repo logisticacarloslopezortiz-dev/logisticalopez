@@ -221,31 +221,36 @@ class PushNotificationManager {
     async syncSubscriptionWithServer(subscription) {
         try {
             const { data: { user } } = await supabaseConfig.client.auth.getUser();
-            
-            if (!user) return;
+            const contactId = (() => { try { return localStorage.getItem('tlc_client_contact_id'); } catch(_) { return null; } })();
 
-            // Verificar si la suscripción existe en el servidor
             const client = supabaseConfig?.client;
             if (!client || typeof client.from !== 'function') {
                 throw new Error('Supabase client no inicializado o inválido en syncSubscriptionWithServer');
             }
 
-            const { data: existingSubscription, error } = await client
-                .from('push_subscriptions')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('endpoint', subscription.endpoint)
-                .maybeSingle();
-
-            if (error && error.code !== 'PGRST116') {
-                throw error;
+            if (user && user.id) {
+                const { data: existingSubscription, error } = await client
+                    .from('push_subscriptions')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('endpoint', subscription.endpoint)
+                    .maybeSingle();
+                if (error && error.code !== 'PGRST116') throw error;
+                if (!existingSubscription) await this.saveSubscriptionToServer(subscription);
+                return;
             }
 
-            // Si no existe, guardarla
-            if (!existingSubscription) {
-                await this.saveSubscriptionToServer(subscription);
+            if (contactId) {
+                const { data: existingSubscription, error } = await client
+                    .from('push_subscriptions')
+                    .select('id')
+                    .eq('client_contact_id', contactId)
+                    .eq('endpoint', subscription.endpoint)
+                    .maybeSingle();
+                if (error && error.code !== 'PGRST116') throw error;
+                if (!existingSubscription) await this.saveSubscriptionToServer(subscription);
+                return;
             }
-            
         } catch (error) {
             console.error('Error syncing subscription with server:', error);
         }
@@ -254,24 +259,34 @@ class PushNotificationManager {
     async removeSubscriptionFromServer(subscription) {
         try {
             const { data: { user } } = await supabaseConfig.client.auth.getUser();
-            
-            if (!user) return;
+            const contactId = (() => { try { return localStorage.getItem('tlc_client_contact_id'); } catch(_) { return null; } })();
 
             const client = supabaseConfig?.client;
             if (!client || typeof client.from !== 'function') {
                 throw new Error('Supabase client no inicializado o inválido en removeSubscriptionFromServer');
             }
 
-            const { error } = await client
-                .from('push_subscriptions')
-                .delete()
-                .eq('user_id', user.id)
-                .eq('endpoint', subscription.endpoint);
+            if (user && user.id) {
+                const { error } = await client
+                    .from('push_subscriptions')
+                    .delete()
+                    .eq('user_id', user.id)
+                    .eq('endpoint', subscription.endpoint);
+                if (error) throw error;
+                console.log('Push subscription removed from server');
+                return;
+            }
 
-            if (error) throw error;
-            
-            console.log('Push subscription removed from server');
-            
+            if (contactId) {
+                const { error } = await client
+                    .from('push_subscriptions')
+                    .delete()
+                    .eq('client_contact_id', contactId)
+                    .eq('endpoint', subscription.endpoint);
+                if (error) throw error;
+                console.log('Push subscription removed from server');
+                return;
+            }
         } catch (error) {
             console.error('Error removing subscription from server:', error);
             throw error;

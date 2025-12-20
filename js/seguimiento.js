@@ -33,6 +33,95 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMessage.classList.remove('hidden');
   }
 
+  async function fetchOrderFlexible(identifier) {
+    const idStr = String(identifier || '').trim();
+    if (!idStr) return { order: null, error: null };
+    await supabaseConfig.ensureSupabaseReady();
+    const candidates = [];
+    const isNum = /^\d+$/.test(idStr);
+    if (isNum) candidates.push({ col: 'id', val: Number(idStr) });
+    candidates.push({ col: 'short_id', val: idStr });
+    if (idStr.startsWith('ORD-')) candidates.push({ col: 'short_id', val: idStr.replace(/^ORD\-/, '') });
+    candidates.push({ col: 'short_id', val: idStr.toUpperCase() });
+    candidates.push({ col: 'short_id', val: idStr.toLowerCase() });
+
+    let lastError = null;
+    for (const c of candidates) {
+      try {
+        let primary = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function') ? supabaseConfig.client : supabaseConfig.getPublicClient();
+        if (!primary || typeof primary.from !== 'function') {
+          await supabaseConfig.ensureSupabaseReady();
+          primary = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function') ? supabaseConfig.client : supabaseConfig.getPublicClient();
+        }
+        if (!primary || typeof primary.from !== 'function') {
+          lastError = new Error('client_unavailable');
+          // Fallback REST directo
+          try {
+            const { data } = await supabaseConfig.restGetOrderByAny(idStr);
+            if (data) return { order: data, error: null };
+          } catch(_) {}
+          continue;
+        }
+        const r = await primary
+          .from('orders')
+          .select('*, service:services(name), vehicle:vehicles(name)')
+          .eq(c.col, c.val)
+          .maybeSingle();
+        if (r.data) return { order: r.data, error: null };
+        lastError = r.error || null;
+        if (!r.error && !r.data) {
+          let secondary = supabaseConfig.getPublicClient();
+          if (!secondary || typeof secondary.from !== 'function') {
+            await supabaseConfig.ensureSupabaseReady();
+            secondary = supabaseConfig.getPublicClient();
+          }
+          if (!secondary || typeof secondary.from !== 'function') {
+            lastError = new Error('client_unavailable');
+            try {
+              const { data } = await supabaseConfig.restGetOrderByAny(idStr);
+              if (data) return { order: data, error: null };
+            } catch(_) {}
+          } else {
+            const r2 = await secondary
+              .from('orders')
+              .select('*, service:services(name), vehicle:vehicles(name)')
+              .eq(c.col, c.val)
+              .maybeSingle();
+            if (r2.data) return { order: r2.data, error: null };
+            lastError = r2.error || lastError;
+          }
+        }
+      } catch (e) {
+        lastError = e;
+        if (String(e?.message || '').toLowerCase().includes('jwt expired') || (e && e.status === 401)) {
+          try {
+            let secondary = supabaseConfig.getPublicClient();
+            if (!secondary || typeof secondary.from !== 'function') {
+              await supabaseConfig.ensureSupabaseReady();
+              secondary = supabaseConfig.getPublicClient();
+            }
+            if (!secondary || typeof secondary.from !== 'function') {
+              lastError = new Error('client_unavailable');
+              try {
+                const { data } = await supabaseConfig.restGetOrderByAny(idStr);
+                if (data) return { order: data, error: null };
+              } catch(_) {}
+            } else {
+              const r3 = await secondary
+              .from('orders')
+              .select('*, service:services(name), vehicle:vehicles(name)')
+              .eq(c.col, c.val)
+              .maybeSingle();
+              if (r3.data) return { order: r3.data, error: null };
+              lastError = r3.error || lastError;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+    return { order: null, error: lastError };
+  }
+
   // Función para buscar la orden
   async function trackOrder() {
     const id = orderIdInput.value.trim();
@@ -46,44 +135,10 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMessage.classList.add('hidden');
 
     try {
+      await supabaseConfig.ensureSupabaseReady();
       await supabaseConfig.ensureFreshSession();
-      // Determinar si el ID es secuencial (número) o UUID
-      const isNumericId = /^\d+$/.test(id);
-      const columnName = isNumericId ? 'id' : 'short_id';
-      let order = null;
-      let error = null;
-      try {
-        const r = await supabaseConfig.client
-          .from('orders')
-          .select(`
-            *,
-            service:services(name),
-            vehicle:vehicles(name)
-          `)
-          .eq(columnName, id)
-          .maybeSingle();
-        order = r.data;
-        error = r.error || null;
-      } catch (e) {
-        error = e;
-      }
-      if (error && (String(error.message || '').toLowerCase().includes('jwt expired') || (error.status === 401))) {
-        const publicClient = supabaseConfig.getPublicClient();
-        const r2 = await publicClient
-          .from('orders')
-          .select(`
-            *,
-            service:services(name),
-            vehicle:vehicles(name)
-          `)
-          .eq(columnName, id)
-          .maybeSingle();
-        order = r2.data;
-        error = r2.error || null;
-      }
-      if (error) {
-        throw new Error(error.message || String(error));
-      }
+      const { order, error } = await fetchOrderFlexible(id);
+      if (error) throw new Error(error.message || String(error));
 
       if (!order) {
         showLoginError('No se encontró ninguna orden con ese ID. Verifica la información e inténtalo de nuevo.');
@@ -93,12 +148,17 @@ document.addEventListener('DOMContentLoaded', () => {
       let collaboratorName = '';
       try {
         if (order.assigned_to) {
-          const { data: collab } = await supabaseConfig.client
-            .from('collaborators')
-            .select('name')
-            .eq('id', order.assigned_to)
-            .maybeSingle();
-          collaboratorName = collab?.name || '';
+          const clientToUse = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function')
+            ? supabaseConfig.client
+            : supabaseConfig.getPublicClient();
+          if (clientToUse && typeof clientToUse.from === 'function') {
+            const { data: collab } = await clientToUse
+              .from('collaborators')
+              .select('name')
+              .eq('id', order.assigned_to)
+              .maybeSingle();
+            collaboratorName = collab?.name || '';
+          }
         }
       } catch (_) {}
       order.collaborator_name = collaboratorName;
@@ -341,22 +401,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const bounds = [[pickupCoords.lat, pickupCoords.lng]];
 
     // Añadir marcador de destino si existe
+    async function drawRealRoute(pu, de){
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pu.lng},${pu.lat};${de.lng},${de.lat}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || !data.routes || !data.routes[0] || !data.routes[0].geometry) return null;
+        const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        const poly = L.polyline(coords, { color: '#2563eb', weight: 5 }).addTo(map);
+        const dur = data.routes[0].duration;
+        if (typeof dur === 'number' && dur > 0) {
+          const min = Math.round(dur / 60);
+          mapDetails.innerHTML += `<p><b>⏱ ETA:</b> ${min} min aprox.</p>`;
+        }
+        return poly;
+      } catch { return null; }
+    }
+
     if (deliveryCoords && deliveryCoords.lat && deliveryCoords.lng) {
       deliveryMarker = L.marker([deliveryCoords.lat, deliveryCoords.lng], { icon: destinationIcon })
         .addTo(map)
         .bindPopup(`<b>Destino:</b><br>${order.delivery}`);
-      
       mapDetails.innerHTML += `<p><b>🏁 Destino:</b> ${order.delivery}</p>`;
-      
       bounds.push([deliveryCoords.lat, deliveryCoords.lng]);
-
-      // Dibujar línea de ruta
-      routeLine = L.polyline(bounds, { color: '#2563eb', weight: 5 }).addTo(map);
+      drawRealRoute(pickupCoords, deliveryCoords).then(poly => {
+        routeLine = poly;
+        if (!routeLine) {
+          routeLine = L.polyline([[pickupCoords.lat, pickupCoords.lng],[deliveryCoords.lat, deliveryCoords.lng]], { color: '#2563eb', weight: 5 }).addTo(map);
+        }
+      }).catch(() => {
+        routeLine = L.polyline([[pickupCoords.lat, pickupCoords.lng],[deliveryCoords.lat, deliveryCoords.lng]], { color: '#2563eb', weight: 5 }).addTo(map);
+      });
+      if (!routeLine) {
+        routeLine = L.polyline([[pickupCoords.lat, pickupCoords.lng],[deliveryCoords.lat, deliveryCoords.lng]], { color: '#2563eb', weight: 5 }).addTo(map);
+      }
     }
 
     // Ajustar el zoom del mapa para mostrar todos los marcadores
     if (bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [50, 50] }); // Añade un padding de 50px
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
   }
 
@@ -384,26 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const candidate = lastOrderIdSubscribed ? String(lastOrderIdSubscribed) : (orderIdInput.value || stored);
       if (!candidate) return;
       try { await supabaseConfig.ensureFreshSession(); } catch(_) {}
-      const isNumericId = /^\d+$/.test(candidate);
-      const columnName = isNumericId ? 'id' : 'short_id';
-      let order = null; let error = null;
-      try {
-        const r = await supabaseConfig.client
-          .from('orders')
-          .select('*, service:services(name), vehicle:vehicles(name)')
-          .eq(columnName, isNumericId ? Number(candidate) : candidate)
-          .maybeSingle();
-        order = r.data; error = r.error || null;
-      } catch(e) { error = e; }
-      if (error && (String(error.message || '').toLowerCase().includes('jwt expired') || (error.status === 401))) {
-        const publicClient = supabaseConfig.getPublicClient();
-        const r2 = await publicClient
-          .from('orders')
-          .select('*, service:services(name), vehicle:vehicles(name)')
-          .eq(columnName, isNumericId ? Number(candidate) : candidate)
-          .maybeSingle();
-        order = r2.data; error = r2.error || null;
-      }
+      const { order } = await fetchOrderFlexible(candidate);
       if (order) {
         renderTrackingInfo(order);
         initializeMap(order);
@@ -411,6 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch(_) {}
   }
+  window.refreshOrderData = refreshOrderData;
   async function subscribeToOrderUpdates(orderId) {
     try {
       if (orderSubscription) {
@@ -551,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const diff = now - last;
     if (document.visibilityState === 'visible' && diff >= 30000) {
       last = now;
-      refreshOrderData();
+      if (window.refreshOrderData) window.refreshOrderData();
     }
   }
   setInterval(tick, 5000);

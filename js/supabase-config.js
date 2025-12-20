@@ -36,16 +36,14 @@ if (!window.supabaseConfig) {
     getEvidenceBucket() { return (this.buckets && this.buckets.evidence) ? this.buckets.evidence : 'evidence'; },
     async runProcessOutbox(){
       try {
+        const { data, error } = await this.client.functions.invoke('process-outbox', { body: {}, headers: { 'Content-Type': 'application/json' } });
+        if (!error && data) return data;
+      } catch(_) {}
+      try {
         const { data } = await this.client.rpc('invoke_process_outbox');
         return data || { success: true };
-      } catch (rpcErr) {
-        try {
-          const { data, error } = await this.client.functions.invoke('process-outbox', { body: {}, headers: { 'Content-Type': 'application/json' } });
-          if (error) return { success: false, error: String(error?.message || error) };
-          return data || { success: true };
-        } catch(e){
-          return { success:false, error: String(e?.message||e) };
-        }
+      } catch(e){
+        return { success:false, error: String(e?.message||e) };
       }
     },
     async triggerOutboxTestForContact(contactId){
@@ -73,6 +71,112 @@ if (!window.supabaseConfig) {
         }
       }
     } catch (_) { /* no-op */ }
+  },
+
+  // Garantiza que Supabase UMD esté cargado y clientes inicializados
+  ensureSupabaseReady: async function() {
+    try {
+      if (this.client && typeof this.client.from === 'function') return;
+      if (typeof supabase === 'undefined' || !supabase?.createClient) {
+        await new Promise((resolve) => {
+          const existing = document.querySelector('script[src*="supabase.umd.js"]');
+          if (existing) {
+            existing.addEventListener('load', () => resolve());
+            // Si ya está cargado, resolver inmediatamente
+            if (typeof supabase !== 'undefined') return resolve();
+            return;
+          }
+          const s = document.createElement('script');
+          s.src = 'vendor/supabase.umd.js';
+          s.async = false;
+          s.onload = () => resolve();
+          s.onerror = () => resolve();
+          document.head.appendChild(s);
+        });
+      }
+      if (!this.client && typeof supabase !== 'undefined' && supabase?.createClient) {
+        try {
+          this.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' }
+          });
+        } catch (e) { console.error('Error re-inicializando cliente principal de Supabase:', e); }
+      }
+      if (!this._publicClient && typeof supabase !== 'undefined' && supabase?.createClient) {
+        try {
+          this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+          });
+        } catch (e) { console.warn('No se pudo crear public client:', e); }
+      }
+      let retries = 0;
+      while (
+        !(this.client && typeof this.client.from === 'function') &&
+        !(this._publicClient && typeof this._publicClient.from === 'function') &&
+        retries < 20
+      ) {
+        await new Promise(r => setTimeout(r, 100));
+        retries++;
+        if (!this.client && typeof supabase !== 'undefined' && supabase?.createClient) {
+          try {
+            this.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+              auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' }
+            });
+          } catch (_) {}
+        }
+        if (!this._publicClient && typeof supabase !== 'undefined' && supabase?.createClient) {
+          try {
+            this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+              auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+            });
+          } catch (_) {}
+        }
+      }
+    } catch (_) { /* no-op */ }
+  },
+
+  // Fallback REST (PostgREST) para lecturas públicas cuando el cliente no está disponible
+  async restSelect(table, query) {
+    try {
+      const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+      Object.entries(query || {}).forEach(([k, v]) => url.searchParams.set(k, v));
+      // Forzar aceptación JSON y retorno plano
+      url.searchParams.set('select', query?.select || '*');
+      const resp = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Accept': 'application/json'
+        }
+      });
+      if (!resp.ok) {
+        return { data: null, error: new Error(`rest_error_${resp.status}`) };
+      }
+      const data = await resp.json();
+      return { data, error: null };
+    } catch (e) {
+      return { data: null, error: e };
+    }
+  },
+
+  async restGetOrderByAny(identifier) {
+    const idStr = String(identifier || '').trim();
+    if (!idStr) return { data: null, error: null };
+    const isNum = /^\d+$/.test(idStr);
+    const variants = [];
+    if (isNum) variants.push({ col: 'id', val: idStr });
+    variants.push({ col: 'short_id', val: idStr });
+    if (idStr.startsWith('ORD-')) variants.push({ col: 'short_id', val: idStr.replace(/^ORD\-/, '') });
+    variants.push({ col: 'short_id', val: idStr.toUpperCase() });
+    variants.push({ col: 'short_id', val: idStr.toLowerCase() });
+    const select = '*,service:services(name),vehicle:vehicles(name)';
+    for (const v of variants) {
+      const q = { select };
+      q[`${v.col}`] = `eq.${v.val}`;
+      const { data } = await this.restSelect('orders', q);
+      if (Array.isArray(data) && data.length) return { data: data[0], error: null };
+    }
+    return { data: null, error: new Error('not_found') };
   },
 
   // Crea un cliente público (anon) para consultas que no requieran la sesión del usuario
@@ -106,8 +210,14 @@ if (!window.supabaseConfig) {
       } catch { return []; }
     }
     try {
-      const publicClient = this.getPublicClient();
-      const resp = await publicClient.from('services').select('*').order('display_order', { ascending: true, nullsFirst: false });
+      await this.ensureSupabaseReady();
+      const pc = this.getPublicClient();
+      const clientToUse = (pc && typeof pc.from === 'function') ? pc : this.client;
+      if (!clientToUse || typeof clientToUse.from !== 'function') {
+        console.warn('Supabase client no disponible para servicios');
+        return [];
+      }
+      const resp = await clientToUse.from('services').select('*').order('display_order', { ascending: true, nullsFirst: false });
       if (resp.error) console.error('Error fetching services (anon):', resp.error);
       return resp.data || [];
     } catch (e) {
@@ -127,8 +237,14 @@ if (!window.supabaseConfig) {
       } catch { return []; }
     }
     try {
-      const publicClient = this.getPublicClient();
-      const resp = await publicClient.from('vehicles').select('*');
+      await this.ensureSupabaseReady();
+      const pc = this.getPublicClient();
+      const clientToUse = (pc && typeof pc.from === 'function') ? pc : this.client;
+      if (!clientToUse || typeof clientToUse.from !== 'function') {
+        console.warn('Supabase client no disponible para vehículos');
+        return [];
+      }
+      const resp = await clientToUse.from('vehicles').select('*');
       if (resp.error) console.error('Error fetching vehicles (anon):', resp.error);
       return resp.data || [];
     } catch (e) {
