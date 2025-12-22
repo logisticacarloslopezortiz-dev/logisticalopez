@@ -1145,45 +1145,64 @@ DECLARE
   client_payload jsonb;
   admin_payload jsonb;
 BEGIN
-  -- 1. Payload para el Cliente
+  -- =========================
+  -- CLIENTE
+  -- =========================
   IF NEW.client_id IS NOT NULL THEN
-    client_payload := jsonb_build_object('userId', NEW.client_id, 'orderId', NEW.id, 'title', '✅ Solicitud Recibida', 'body', 'Hemos recibido tu solicitud #' || NEW.short_id || '. Pronto será revisada.');
+    client_payload := jsonb_build_object(
+      'title', '✅ Solicitud Recibida',
+      'body', 'Hemos recibido tu solicitud #' || NEW.short_id,
+      'orderId', NEW.id
+    );
+
+    INSERT INTO public.notification_outbox(
+      order_id, new_status, target_role, target_user_id, payload
+    )
+    VALUES (
+      NEW.id, NEW.status, 'cliente', NEW.client_id, client_payload
+    );
+
   ELSIF NEW.client_contact_id IS NOT NULL THEN
-    client_payload := jsonb_build_object('contactId', NEW.client_contact_id, 'orderId', NEW.id, 'title', '✅ Solicitud Recibida', 'body', 'Hemos recibido tu solicitud #' || NEW.short_id || '. Pronto será revisada.');
-  ELSE
-    client_payload := null;
+    client_payload := jsonb_build_object(
+      'title', '✅ Solicitud Recibida',
+      'body', 'Hemos recibido tu solicitud #' || NEW.short_id,
+      'orderId', NEW.id
+    );
+
+    INSERT INTO public.notification_outbox(
+      order_id, new_status, target_role, target_contact_id, payload
+    )
+    VALUES (
+      NEW.id, NEW.status, 'cliente', NEW.client_contact_id, client_payload
+    );
   END IF;
 
-  -- 2. Payload para el Administrador
+  -- =========================
+  -- ADMINISTRADORES (UNO POR ADMIN)
+  -- =========================
   admin_payload := jsonb_build_object(
-    'role', 'administrador',
+    'title', '📢 Nueva Solicitud',
+    'body', 'Se creó la orden #' || NEW.short_id,
     'orderId', NEW.id,
-    'title', '📢 Nueva Solicitud Recibida',
-    'body', 'Se ha creado la solicitud #' || NEW.short_id || ' por ' || coalesce(NEW.name, 'No especificado') || '.',
-    'data', jsonb_build_object('url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text))
+    'url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || NEW.short_id
   );
-  IF client_payload IS NOT NULL THEN
-    IF NEW.client_id IS NOT NULL THEN
-      INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-      VALUES (NEW.id, NEW.status, 'cliente', NEW.client_id, client_payload);
-    ELSIF NEW.client_contact_id IS NOT NULL THEN
-      INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_contact_id, payload)
-      VALUES (NEW.id, NEW.status, 'cliente', NEW.client_contact_id, client_payload);
-    END IF;
-  END IF;
 
-  IF admin_payload IS NOT NULL THEN
-    INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-    VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
-  END IF;
+  INSERT INTO public.notification_outbox (
+    order_id, new_status, target_role, target_user_id, payload
+  )
+  SELECT
+    NEW.id,
+    NEW.status,
+    'administrador',
+    c.id,
+    admin_payload
+  FROM public.collaborators c
+  WHERE lower(c.role) = 'administrador' AND c.status = 'activo';
 
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 
-DROP TRIGGER IF EXISTS trg_orders_notify_status ON public.orders;
-
--- [NUEVO] Trigger para notificar al crear una orden
 DROP TRIGGER IF EXISTS trg_orders_notify_creation ON public.orders;
 CREATE TRIGGER trg_orders_notify_creation
 AFTER INSERT ON public.orders
@@ -1383,43 +1402,101 @@ DECLARE
   admin_payload jsonb;
 BEGIN
   IF (OLD.status IS DISTINCT FROM NEW.status) THEN
-    -- Cliente (usuario autenticado o contacto anónimo)
-    IF NEW.client_id IS NOT NULL THEN
-      client_payload := jsonb_build_object('userId', NEW.client_id, 'orderId', NEW.id, 'title', 'Tu orden ha sido actualizada', 'body', 'El estado de tu orden #' || NEW.short_id || ' ahora es: ' || NEW.status);
-    ELSIF NEW.client_contact_id IS NOT NULL THEN
-      client_payload := jsonb_build_object('contactId', NEW.client_contact_id, 'orderId', NEW.id, 'title', 'Tu orden ha sido actualizada', 'body', 'El estado de tu orden #' || NEW.short_id || ' ahora es: ' || NEW.status);
-    ELSE
-      client_payload := null;
-    END IF;
-    IF client_payload IS NOT NULL THEN
-      IF NEW.client_id IS NOT NULL THEN
-        INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
-        VALUES (NEW.id, NEW.status, 'cliente', NEW.client_id, client_payload);
-      ELSIF NEW.client_contact_id IS NOT NULL THEN
-        INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_contact_id, payload)
-        VALUES (NEW.id, NEW.status, 'cliente', NEW.client_contact_id, client_payload);
-      END IF;
+
+    -- ❌ Anti-duplicado (5 segundos)
+    IF EXISTS (
+      SELECT 1 FROM public.notification_outbox
+      WHERE order_id = NEW.id
+        AND new_status = NEW.status
+        AND created_at > now() - interval '5 seconds'
+    ) THEN
+      RETURN NEW;
     END IF;
 
-    -- Administrador
-    admin_payload := jsonb_build_object(
-      'role', 'administrador',
-      'orderId', NEW.id,
-      'title', 'Estado de orden actualizado',
-      'body', 'La orden #' || NEW.short_id || ' cambió a: ' || NEW.status,
-      'data', jsonb_build_object('url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text))
+    -- =========================
+    -- CLIENTE
+    -- =========================
+    client_payload := jsonb_build_object(
+      'title', 'Estado actualizado',
+      'body', 'Tu orden #' || NEW.short_id || ' ahora está: ' || NEW.status,
+      'orderId', NEW.id
     );
-    INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-    VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
+
+    IF NEW.client_id IS NOT NULL THEN
+      INSERT INTO public.notification_outbox
+      (order_id, new_status, target_role, target_user_id, payload)
+      VALUES
+      (NEW.id, NEW.status, 'cliente', NEW.client_id, client_payload);
+
+    ELSIF NEW.client_contact_id IS NOT NULL THEN
+      INSERT INTO public.notification_outbox
+      (order_id, new_status, target_role, target_contact_id, payload)
+      VALUES
+      (NEW.id, NEW.status, 'cliente', NEW.client_contact_id, client_payload);
+    END IF;
+
+    -- =========================
+    -- ADMINISTRADORES
+    -- =========================
+    admin_payload := jsonb_build_object(
+      'title', 'Estado actualizado',
+      'body', 'La orden #' || NEW.short_id || ' → ' || NEW.status,
+      'orderId', NEW.id
+    );
+
+    INSERT INTO public.notification_outbox
+    (order_id, new_status, target_role, target_user_id, payload)
+    SELECT
+      NEW.id,
+      NEW.status,
+      'administrador',
+      c.id,
+      admin_payload
+    FROM public.collaborators c
+    WHERE lower(c.role) = 'administrador' AND c.status = 'activo';
+
   END IF;
 
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 
+DROP TRIGGER IF EXISTS trg_orders_notify_status ON public.orders;
 CREATE TRIGGER trg_orders_notify_status
 AFTER UPDATE OF status ON public.orders
 FOR EACH ROW EXECUTE FUNCTION public.notify_order_status_change();
+
+CREATE OR REPLACE FUNCTION public.notify_assigned_collaborator()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.assigned_to IS NOT NULL
+     AND OLD.assigned_to IS DISTINCT FROM NEW.assigned_to THEN
+
+    INSERT INTO public.notification_outbox (
+      order_id, new_status, target_role, target_user_id, payload
+    )
+    VALUES (
+      NEW.id,
+      'Asignada',
+      'colaborador',
+      NEW.assigned_to,
+      jsonb_build_object(
+        'title', '🛠️ Orden asignada',
+        'body', 'Se te asignó la orden #' || NEW.short_id,
+        'orderId', NEW.id
+      )
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
+
+DROP TRIGGER IF EXISTS trg_notify_assigned_collaborator ON public.orders;
+CREATE TRIGGER trg_notify_assigned_collaborator
+AFTER UPDATE OF assigned_to ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.notify_assigned_collaborator();
+
 
 CREATE OR REPLACE FUNCTION public.notify_price_update()
 RETURNS trigger AS $$
@@ -1443,8 +1520,12 @@ BEGIN
       END IF;
     END IF;
     admin_payload := jsonb_build_object('role','administrador','orderId',NEW.id,'title','Precio estimado actualizado','body','La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' actualizó su precio estimado.');
-    INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-    VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
+    
+    -- [CORRECCIÓN 1] Fan-out Admin
+    INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+    SELECT NEW.id, NEW.status, 'administrador', c.id, admin_payload
+    FROM public.collaborators c
+    WHERE lower(c.role) = 'administrador' AND c.status = 'activo';
   END IF;
   RETURN NEW;
 END;
@@ -1472,8 +1553,12 @@ BEGIN
       END IF;
     END IF;
     admin_payload := jsonb_build_object('role','administrador','orderId',NEW.id,'title','Monto actualizado','body','La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' actualizó su monto cobrado.');
-    INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-    VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
+    
+    -- [CORRECCIÓN 1] Fan-out Admin
+    INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+    SELECT NEW.id, NEW.status, 'administrador', c.id, admin_payload
+    FROM public.collaborators c
+    WHERE lower(c.role) = 'administrador' AND c.status = 'activo';
   END IF;
   RETURN NEW;
 END;
@@ -1501,8 +1586,12 @@ BEGIN
       END IF;
     END IF;
     admin_payload := jsonb_build_object('role','administrador','orderId',NEW.id,'title','Nueva evidencia subida','body','La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' tiene nueva evidencia.');
-    INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-    VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
+    
+    -- [CORRECCIÓN 1] Fan-out Admin
+    INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+    SELECT NEW.id, NEW.status, 'administrador', c.id, admin_payload
+    FROM public.collaborators c
+    WHERE lower(c.role) = 'administrador' AND c.status = 'activo';
   END IF;
   RETURN NEW;
 END;
@@ -1530,8 +1619,12 @@ BEGIN
       END IF;
     END IF;
     admin_payload := jsonb_build_object('role','administrador','orderId',NEW.id,'title','Aviso importante','body','La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ': ' || NEW.last_collab_status);
-    INSERT INTO public.notification_outbox(order_id, new_status, target_role, payload)
-    VALUES (NEW.id, NEW.status, 'administrador', admin_payload);
+    
+    -- [CORRECCIÓN 1] Fan-out Admin
+    INSERT INTO public.notification_outbox(order_id, new_status, target_role, target_user_id, payload)
+    SELECT NEW.id, NEW.status, 'administrador', c.id, admin_payload
+    FROM public.collaborators c
+    WHERE lower(c.role) = 'administrador' AND c.status = 'activo';
   END IF;
   RETURN NEW;
 END;
@@ -1670,3 +1763,45 @@ DO $$ BEGIN
       WITH CHECK (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
   END IF;
 END $$;
+
+-- [CORRECCIÓN 4] Procesamiento seguro del Outbox
+DO $$ BEGIN
+  BEGIN
+    ALTER TABLE public.notification_outbox ADD COLUMN locked_until timestamptz;
+  EXCEPTION WHEN duplicate_column THEN NULL;
+  END;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.claim_outbox_messages(batch_size integer)
+RETURNS SETOF public.notification_outbox
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _ids bigint[];
+BEGIN
+  -- Seleccionar IDs para bloquear (usando SKIP LOCKED para evitar contención)
+  SELECT array_agg(id) INTO _ids
+  FROM (
+    SELECT id
+    FROM public.notification_outbox
+    WHERE processed_at IS NULL
+      AND (locked_until IS NULL OR locked_until < now())
+      AND coalesce(attempts, 0) < 5 -- Evitar bucles infinitos en mensajes corruptos
+    ORDER BY created_at ASC
+    LIMIT batch_size
+    FOR UPDATE SKIP LOCKED
+  ) sub;
+
+  IF _ids IS NOT NULL THEN
+    RETURN QUERY UPDATE public.notification_outbox
+    SET locked_until = now() + interval '2 minutes',
+        attempts = coalesce(attempts, 0) + 1
+    WHERE id = ANY(_ids)
+    RETURNING *;
+  END IF;
+  
+  RETURN;
+END;
+$$;

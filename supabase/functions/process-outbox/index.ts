@@ -1,6 +1,46 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { handleCors, jsonResponse } from '../cors-config.ts'
 import webpush from 'https://esm.sh/web-push@3.4.5'
+
+// --- CORS Configuration (Inlined for reliability) ---
+const allowedOrigins = new Set([
+  'https://logisticalopezortiz.com',
+  'https://www.logisticalopezortiz.com',
+  'http://127.0.0.1:5502',
+  'http://localhost:5502',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5507',
+  'http://localhost:5507'
+]);
+
+function corsHeadersForOrigin(origin: string | null): Record<string, string> {
+  const isAllowed = !!origin && allowedOrigins.has(origin);
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Origin': isAllowed ? origin! : '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, Authorization, X-Client-Info, Apikey, Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Max-Age': '86400'
+  };
+  if (isAllowed) headers['Access-Control-Allow-Credentials'] = 'true';
+  return headers;
+}
+
+function handleCors(req: Request): Response | null {
+  if (req.method === 'OPTIONS') {
+    const origin = req.headers.get('origin');
+    return new Response('ok', { status: 200, headers: corsHeadersForOrigin(origin) });
+  }
+  return null;
+}
+
+function jsonResponse(body: unknown, status = 200, req?: Request): Response {
+  const origin = req?.headers?.get('origin') ?? null;
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeadersForOrigin(origin), 'Content-Type': 'application/json' }
+  });
+}
+// ----------------------------------------------------
 
 type SubscriptionKeys = { p256dh: string; auth: string }
 type WebPushSubscription = { endpoint: string; keys: SubscriptionKeys }
@@ -59,23 +99,26 @@ async function resolveSubscription(userId?: string | null, contactId?: string | 
 }
 
 async function processPending(limit = 50) {
-  const { data: messages, error } = await supabase
-    .from('notification_outbox')
-    .select('id, target_user_id, target_contact_id, payload, attempts, created_at')
-    .is('processed_at', null)
-    .order('created_at', { ascending: true })
-    .limit(limit)
-  if (error) throw new Error(`outbox_select_error: ${error.message}`)
+  // [CORRECCIÓN 4] Use RPC for safe claiming with locking
+  const { data: messages, error } = await supabase.rpc('claim_outbox_messages', { batch_size: limit })
+
+  if (error) throw new Error(`outbox_claim_error: ${error.message}`)
   if (!messages || !messages.length) return { processed: 0 }
 
   let processed = 0
   for (const msg of messages as OutboxMessage[]) {
-    const attempts = (msg.attempts || 0) + 1
+    // attempts is already incremented by RPC
+    const attempts = msg.attempts || 1
+    
     try {
       const sub = await resolveSubscription(msg.target_user_id || null, msg.target_contact_id || null)
       if (!sub || !sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
-        const next = attempts >= 3
-        await supabase.from('notification_outbox').update({ attempts, last_error: 'missing_subscription', processed_at: next ? new Date().toISOString() : null }).eq('id', msg.id)
+        // Fatal: No subscription. Mark as processed (failed)
+        await supabase.from('notification_outbox').update({ 
+          last_error: 'missing_subscription', 
+          processed_at: new Date().toISOString(),
+          locked_until: null 
+        }).eq('id', msg.id)
         continue
       }
 
@@ -92,16 +135,40 @@ async function processPending(limit = 50) {
       const cleanKeys = { p256dh: String(sub.keys.p256dh || '').trim(), auth: String(sub.keys.auth || '').trim() }
       await sendWebPush({ endpoint: cleanEndpoint, keys: cleanKeys }, payload)
 
-      await supabase.from('notification_outbox').update({ attempts, processed_at: new Date().toISOString(), last_error: null }).eq('id', msg.id)
+      // Success
+      await supabase.from('notification_outbox').update({ 
+        processed_at: new Date().toISOString(), 
+        last_error: null,
+        locked_until: null
+      }).eq('id', msg.id)
       processed++
+
     } catch (err) {
       const statusCode = (err as any)?.statusCode as number | undefined
       const message = err instanceof Error ? (err.message || 'unknown_error') : String(err)
+      
       if (statusCode === 404 || statusCode === 410) {
-        await supabase.from('notification_outbox').update({ attempts, last_error: `expired_subscription_${statusCode}`, processed_at: new Date().toISOString() }).eq('id', msg.id)
+        // Fatal: Subscription expired
+        await supabase.from('notification_outbox').update({ 
+          last_error: `expired_subscription_${statusCode}`, 
+          processed_at: new Date().toISOString(),
+          locked_until: null
+        }).eq('id', msg.id)
       } else {
-        const next = attempts >= 3
-        await supabase.from('notification_outbox').update({ attempts, last_error: message, processed_at: next ? new Date().toISOString() : null }).eq('id', msg.id)
+        // Transient error
+        if (attempts >= 5) {
+           // Max retries reached
+           await supabase.from('notification_outbox').update({ 
+            last_error: `max_attempts_reached: ${message}`, 
+            processed_at: new Date().toISOString(),
+            locked_until: null
+          }).eq('id', msg.id)
+        } else {
+           // Retry later (locked_until set by RPC)
+           await supabase.from('notification_outbox').update({ 
+            last_error: message
+          }).eq('id', msg.id)
+        }
       }
     }
   }

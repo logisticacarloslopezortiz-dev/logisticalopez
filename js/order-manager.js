@@ -444,10 +444,11 @@ const OrderManager = {
       try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
 
       // 4. Enviar notificaciones push (cliente y roles)
-      // Cliente: mantener notificación existente
-      // Notificación directa obsoleta eliminada; se usa notify-role más abajo
-
+      // [REFACTOR] Se eliminó la notificación manual desde el frontend para evitar duplicados.
+      // La notificación ahora es manejada exclusivamente por triggers SQL (trg_orders_notify_status).
+      /*
       // Notificar a administradores del cambio de estado
+      /*
       try {
         const rolePayload = {
           role: 'administrador',
@@ -461,8 +462,10 @@ const OrderManager = {
       } catch (e) {
         console.warn('[OrderManager] No se pudo notificar a administradores:', e?.message || e);
       }
+      */
 
       // Notificar al colaborador asignado cuando aplique
+      /*
       try {
         const collaboratorId = additionalData?.collaborator_id || updatePayload?.assigned_to || null;
         if (collaboratorId) {
@@ -480,6 +483,7 @@ const OrderManager = {
       } catch (e) {
         console.warn('[OrderManager] No se pudo notificar a colaborador:', e?.message || e);
       }
+      */
 
       return { success: true, error: null };
 
@@ -495,3 +499,4 @@ const OrderManager = {
 try { if (typeof window !== 'undefined') { window.OrderManager = OrderManager; } } catch (_) {}
 try { if (typeof globalThis !== 'undefined') { globalThis.OrderManager = OrderManager; } } catch (_) {}
 try { if (typeof module === 'object' && module && module.exports) { module.exports = OrderManager; } } catch (_) {}
+

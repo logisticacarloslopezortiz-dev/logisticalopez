@@ -996,8 +996,9 @@ async function initMap() {
     });
     input.addEventListener('keydown', async function(e){
       if (e.key !== 'Enter') return;
+      e.preventDefault();
       const q = input.value.trim();
-      if (!q) return;
+      if (!q || q.length < 3) return;
       try {
         let placed = false;
         const fg = await forwardGeocode(q);
@@ -1016,20 +1017,22 @@ async function initMap() {
           const photonUrl = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&lang=es';
           try {
             const pr = await fetch(photonUrl, { headers: { 'Accept': 'application/json' } });
-            const pj = await pr.json();
-            const f = Array.isArray(pj.features) ? pj.features[0] : null;
-            if (f && f.geometry && Array.isArray(f.geometry.coordinates)) {
-              const lat = f.geometry.coordinates[1];
-              const lon = f.geometry.coordinates[0];
-              const label = f.properties && (f.properties.label || f.properties.name || '') || q;
-              const p = { lat, lng: lon };
-              if (!rdBounds.contains(p)) { notifications.error('Resultado fuera de República Dominicana'); }
-              else {
-                map.setView([lat, lon], 15);
-                lastLatLng = { lat, lng: lon };
-                updateMarkerAndAddress(p, label);
-                if (previewMarker) { try { map.removeLayer(previewMarker); } catch(_){} previewMarker = null; }
-                placed = true;
+            if (pr.ok) {
+              const pj = await pr.json();
+              const f = Array.isArray(pj.features) ? pj.features[0] : null;
+              if (f && f.geometry && Array.isArray(f.geometry.coordinates)) {
+                const lat = f.geometry.coordinates[1];
+                const lon = f.geometry.coordinates[0];
+                const label = f.properties && (f.properties.label || f.properties.name || '') || q;
+                const p = { lat, lng: lon };
+                if (!rdBounds.contains(p)) { notifications.error('Resultado fuera de República Dominicana'); }
+                else {
+                  map.setView([lat, lon], 15);
+                  lastLatLng = { lat, lng: lon };
+                  updateMarkerAndAddress(p, label);
+                  if (previewMarker) { try { map.removeLayer(previewMarker); } catch(_){} previewMarker = null; }
+                  placed = true;
+                }
               }
             }
           } catch(_) { }
@@ -1123,11 +1126,13 @@ async function initMap() {
           const photonUrl = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&lang=es';
           try {
             const pr = await fetch(photonUrl, { headers: { 'Accept': 'application/json' } });
-            const pj = await pr.json();
-            const f = Array.isArray(pj.features) ? pj.features[0] : null;
-            if (f && f.geometry && Array.isArray(f.geometry.coordinates)) {
-              latlng = { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
-              label = f.properties && (f.properties.label || f.properties.name || '') || q;
+            if (pr.ok) {
+              const pj = await pr.json();
+              const f = Array.isArray(pj.features) ? pj.features[0] : null;
+              if (f && f.geometry && Array.isArray(f.geometry.coordinates)) {
+                latlng = { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+                label = f.properties && (f.properties.label || f.properties.name || '') || q;
+              }
             }
           } catch(_) { /* noop */ }
         }
@@ -1399,7 +1404,9 @@ function loadPOIsForBounds() {
       const marker = L.marker([lat, lon], { icon: iconFor(tags) }).bindTooltip(name, { permanent: false });
       poiLayer.addLayer(marker);
     });
-  }).catch(() => {}).finally(() => { poiFetchInFlight = false; });
+  }).catch((err) => {
+    console.warn('POI fetch failed (non-critical):', err);
+  }).finally(() => { poiFetchInFlight = false; });
 }
 
 // --- Lógica de Notificaciones Push ---
