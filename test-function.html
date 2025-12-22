@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Función Generate Invoice PDF</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-4">Prueba de Función</h1>
+        
+        <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">Order ID (o Short ID)</label>
+            <input type="text" id="orderId" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="Ej: 123 o A1B2C3">
+        </div>
+
+        <button id="testBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 focus:outline-none focus:shadow-outline">
+            Invocar generate-invoice-pdf
+        </button>
+
+        <div id="result" class="mt-6 hidden">
+            <h2 class="text-lg font-semibold mb-2">Resultado:</h2>
+            <pre id="output" class="bg-gray-800 text-green-400 p-4 rounded text-xs overflow-x-auto"></pre>
+            
+            <div id="linkContainer" class="mt-4 hidden">
+                <a id="pdfLink" href="#" target="_blank" class="text-blue-600 underline font-bold">Ver PDF Generado</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/supabase-config.js"></script>
+    <script>
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('testBtn');
+            const output = document.getElementById('output');
+            const resultDiv = document.getElementById('result');
+            const linkContainer = document.getElementById('linkContainer');
+            const pdfLink = document.getElementById('pdfLink');
+            const orderId = document.getElementById('orderId').value;
+
+            if (!orderId) {
+                alert('Ingresa un ID de orden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Procesando...';
+            output.textContent = 'Invocando función...';
+            resultDiv.classList.remove('hidden');
+            linkContainer.classList.add('hidden');
+
+            try {
+                if (!window.supabaseConfig || !window.supabaseConfig.client) {
+                    output.textContent = 'ERROR:\nSupabase no está inicializado. Verifica que js/supabase-config.js cargó correctamente.';
+                    output.className = 'bg-gray-800 text-red-400 p-4 rounded text-xs overflow-x-auto';
+                    return;
+                }
+
+                const client = window.supabaseConfig.client;
+                const { data, error } = await client.functions.invoke('generate-invoice-pdf', {
+                    body: { orderId }
+                });
+
+                const debugText = 'DATA:\n' + JSON.stringify(data, null, 2) + '\n\nERROR:\n' + JSON.stringify(error, null, 2);
+                output.textContent = debugText;
+
+                if (error) {
+                    output.className = 'bg-gray-800 text-red-400 p-4 rounded text-xs overflow-x-auto';
+                } else {
+                    output.className = 'bg-gray-800 text-green-400 p-4 rounded text-xs overflow-x-auto';
+                    const pdf = (data && (data.pdfUrl || data.url)) || null;
+                    if (pdf) {
+                        pdfLink.href = pdf;
+                        linkContainer.classList.remove('hidden');
+                    }
+                }
+
+            } catch (e) {
+                output.textContent = 'EXCEPTION:\n' + e.message;
+                output.className = 'bg-gray-800 text-red-400 p-4 rounded text-xs overflow-x-auto';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Invocar generate-invoice-pdf';
+            }
+        });
+    </script>
+</body>
+</html>

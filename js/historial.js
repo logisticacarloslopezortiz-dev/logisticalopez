@@ -361,7 +361,7 @@ async function ensureModals(){
           <p class="text-lg font-semibold">Comprobante PDF</p>
           <button id="closePdfModal" class="p-2 text-gray-500 hover:text-gray-700">Cerrar</button>
         </div>
-        <div id="pdfOrderInfo" class="p-6 space-y-2"></div>
+        <div id="selectedOrderInfo" class="p-6 space-y-2"></div>
         <div class="px-6 py-4 border-t flex items-center justify-end gap-3">
           <button id="downloadPdfBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Descargar</button>
           <button id="cancelPdfBtn" class="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg">Cancelar</button>
@@ -372,7 +372,7 @@ async function ensureModals(){
   const closeEvidenceModalBtn = document.getElementById('closeEvidenceModal');
   const evidenceGallery = document.getElementById('evidenceGallery');
   const closePdfModalBtn = document.getElementById('closePdfModal');
-  const pdfOrderInfo = document.getElementById('pdfOrderInfo');
+  const pdfOrderInfo = document.getElementById('selectedOrderInfo');
   const downloadPdfBtn = document.getElementById('downloadPdfBtn');
   window.showEvidence = (orderId) => {
     const order = window.filteredOrders ? window.filteredOrders.find(o => o.id === orderId) : null;
@@ -423,7 +423,7 @@ async function ensureModals(){
   pdfModal.onclick = (e) => { if (e.target === pdfModal) closePdfModal(); };
 }
 
-async function generatePDF(order){
+async function generatePDF(order) {
   try {
     if (!window.jspdf) {
       const s = document.createElement('script');
@@ -433,19 +433,140 @@ async function generatePDF(order){
     }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    doc.setFontSize(14);
-    doc.text('Comprobante de Orden', 40, 40);
+    
+    // Colores corporativos
+    const brandDark = '#1e405a'; // rgb(30, 64, 90)
+    const brandTurq = '#1e8a95'; // rgb(30, 138, 149)
+    
+    // Configuración inicial
+    let y = 40;
+    const margin = 40;
+    const width = doc.internal.pageSize.getWidth();
+    const contentWidth = width - (margin * 2);
+    
+    // Cargar logo (intentar cargar, si falla, seguir sin logo)
+    try {
+      const logoUrl = 'https://logisticalopezortiz.com/img/1horizontal%20(1).png';
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.src = logoUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        // Timeout para no bloquear
+        setTimeout(() => reject(new Error('Timeout loading logo')), 3000);
+      });
+      // Calcular aspecto del logo
+      const logoWidth = 120;
+      const logoHeight = (img.height / img.width) * logoWidth;
+      doc.addImage(img, 'PNG', margin, y, logoWidth, logoHeight);
+      y += logoHeight + 20;
+    } catch (e) {
+      console.warn('No se pudo cargar el logo para el PDF:', e);
+      // Fallback texto si no hay logo
+      doc.setFontSize(18);
+      doc.setTextColor(brandDark);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Logística López Ortiz', margin, y);
+      y += 25;
+    }
+
+    // Encabezado del documento
     doc.setFontSize(10);
-    doc.text(`Orden #${order.id}`, 40, 60);
-    doc.text(`Cliente: ${order.name || ''}`, 40, 75);
-    doc.text(`Servicio: ${order.service?.name || ''}`, 40, 90);
-    doc.text(`Estado: ${order.status || ''}`, 40, 105);
-    const fecha = order.completed_at ? new Date(order.completed_at).toLocaleString('es-DO') : '';
-    doc.text(`Completado: ${fecha}`, 40, 120);
-    doc.text(`Completado por: ${order.completed_by || order.assigned_to || ''}`, 40, 135);
-    doc.text(`Monto: ${order.monto_cobrado != null ? `RD$ ${Number(order.monto_cobrado).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : '-'}`, 40, 150);
+    doc.setTextColor(100);
+    doc.setFont('helvetica', 'normal');
+    doc.text('RNC: 1-32-86086-6', margin, y);
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-DO')}`, width - margin - 100, y);
+    y += 30;
+
+    // Título de la Orden
+    doc.setFillColor(brandTurq);
+    doc.rect(margin, y, contentWidth, 25, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Comprobante de Orden #${order.id}`, margin + 10, y + 17);
+    y += 40;
+
+    // Función auxiliar para dibujar filas con mejor manejo de espacio
+    const drawRow = (label, value) => {
+      doc.setFontSize(10);
+      doc.setTextColor(50);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, margin, y);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(0);
+      
+      // Ajuste de texto largo con manejo de saltos de línea
+      const strValue = String(value || 'N/A');
+      // Dividir primero por saltos de línea explícitos si los hay
+      const paragraphs = strValue.split('\n');
+      let finalLines = [];
+      paragraphs.forEach(p => {
+        const lines = doc.splitTextToSize(p, contentWidth - 120);
+        finalLines = finalLines.concat(lines);
+      });
+
+      doc.text(finalLines, margin + 120, y);
+      
+      // Calcular nueva altura basada en líneas
+      const lineHeight = 12;
+      const height = Math.max(lineHeight, finalLines.length * lineHeight);
+      y += height + 10; // Espacio entre filas aumentado para mejor lectura
+      
+      // Verificar salto de página con margen inferior
+      if (y > doc.internal.pageSize.getHeight() - 50) {
+        doc.addPage();
+        y = 40;
+      }
+    };
+
+    drawRow('Cliente:', order.name);
+    drawRow('Teléfono:', order.phone);
+    drawRow('Servicio:', order.service?.name);
+    drawRow('Vehículo:', order.vehicle?.name);
+    drawRow('Origen:', order.pickup);
+    drawRow('Destino:', order.delivery);
+    drawRow('Estado:', order.status);
+    
+    const fechaCompletado = order.completed_at ? new Date(order.completed_at).toLocaleString('es-DO') : '';
+    if (fechaCompletado) {
+      drawRow('Completado:', fechaCompletado);
+    }
+    
+    const completadoPor = order.completed_by_name || order.assigned_to || '';
+    if (completadoPor) {
+      drawRow('Atendido por:', completadoPor);
+    }
+
+    y += 10;
+    
+    // Total
+    doc.setDrawColor(brandDark);
+    doc.setLineWidth(1);
+    doc.line(margin, y, width - margin, y);
+    y += 25;
+    
+    doc.setFontSize(14);
+    doc.setTextColor(brandDark);
+    doc.setFont('helvetica', 'bold');
+    const monto = order.monto_cobrado != null ? `RD$ ${Number(order.monto_cobrado).toLocaleString('es-DO', { minimumFractionDigits: 2 })}` : 'N/A';
+    doc.text('MONTO TOTAL:', margin, y);
+    doc.text(monto, width - margin - doc.getTextWidth(monto), y);
+
+    // Pie de página
+    const footerY = doc.internal.pageSize.getHeight() - 30;
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Gracias por preferir a Logística López Ortiz', margin, footerY);
+
     doc.save(`orden_${order.id}.pdf`);
-  } catch (_) {}
+  } catch (error) {
+    console.error('Error generando PDF:', error);
+    alert('Hubo un error al generar el PDF. Por favor intenta de nuevo.');
+  }
 }
 
 async function sendRatingLink(order){

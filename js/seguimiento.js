@@ -49,17 +49,24 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const c of candidates) {
       try {
         let primary = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function') ? supabaseConfig.client : supabaseConfig.getPublicClient();
+        
+        // Validación robusta del cliente
         if (!primary || typeof primary.from !== 'function') {
+          console.warn('Cliente primario no disponible, intentando inicializar...');
           await supabaseConfig.ensureSupabaseReady();
           primary = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function') ? supabaseConfig.client : supabaseConfig.getPublicClient();
         }
+
+        // Si aún falla, usar REST directo como último recurso antes de continuar
         if (!primary || typeof primary.from !== 'function') {
+          console.error('No se pudo obtener cliente Supabase válido para seguimiento.');
           lastError = new Error('client_unavailable');
-          // Fallback REST directo
           try {
             const { data } = await supabaseConfig.restGetOrderByAny(idStr);
             if (data) return { order: data, error: null };
-          } catch(_) {}
+          } catch(restErr) {
+            console.error('Fallo fallback REST:', restErr);
+          }
           continue;
         }
         const r = await primary

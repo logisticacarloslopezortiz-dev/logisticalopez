@@ -58,22 +58,29 @@ async function generateInvoicePDF(
   const brandTurq = rgb(30 / 255, 138 / 255, 149 / 255)
 
   // ---- LOGO ----
-  const fetchLogo = async () => {
-    const urls = [
-      'https://logisticalopezortiz.com/img/1horizontal%20(1).png',
-      'https://logisticalopezortiz.com/img/1vertical.png',
-      'https://logisticalopezortiz.com/img/android-chrome-512x512.png'
-    ]
-    for (const url of urls) {
-      try {
-        const res = await fetch(url)
-        if (!res.ok) continue
-        const buf = await res.arrayBuffer()
-        return await pdfDoc.embedPng(buf)
-      } catch (_e) {}
+    const fetchLogo = async () => {
+      const urls = [
+        'https://logisticalopezortiz.com/img/1horizontal%20(1).png',
+        'https://logisticalopezortiz.com/img/1vertical.png',
+        'https://logisticalopezortiz.com/img/android-chrome-512x512.png'
+      ]
+      for (const url of urls) {
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 2000) // 2s timeout per logo
+          
+          const res = await fetch(url, { signal: controller.signal })
+          clearTimeout(timeoutId)
+          
+          if (!res.ok) continue
+          const buf = await res.arrayBuffer()
+          return await pdfDoc.embedPng(buf)
+        } catch (_e) {
+          // console.warn('Logo fetch failed', _e)
+        }
+      }
+      return null
     }
-    return null
-  }
 
   const logo = await fetchLogo()
 
@@ -133,25 +140,31 @@ async function generateInvoicePDF(
 
   // -------- UTILS ----------
   const wrapText = (text: string, max: number, f: any, size: number) => {
-    const words = String(text || '').split(' ')
+    // Mejora: manejar saltos de línea explícitos en el texto de entrada
+    const paragraphs = String(text || '').split('\n')
     const lines: string[] = []
-    let current = ''
 
-    for (const w of words) {
-      const test = current ? current + ' ' + w : w
-      if (f.widthOfTextAtSize(test, size) > max) {
-        if (current) lines.push(current)
-        current = w
-      } else {
-        current = test
+    for (const paragraph of paragraphs) {
+      const words = paragraph.split(' ')
+      let current = ''
+
+      for (const w of words) {
+        const test = current ? current + ' ' + w : w
+        if (f.widthOfTextAtSize(test, size) > max) {
+          if (current) lines.push(current)
+          current = w
+        } else {
+          current = test
+        }
       }
+      if (current) lines.push(current)
     }
-    if (current) lines.push(current)
     return lines
   }
 
   const ensureSpace = (h: number) => {
-    if (y - h < margin) {
+    // Margen de seguridad aumentado
+    if (y - h < margin + 20) {
       page = addPage()
       const s = page.getSize()
       width = s.width
@@ -163,25 +176,31 @@ async function generateInvoicePDF(
   const drawLabelValue = (label: string, value: string, labelW = 140) => {
     const max = width - margin * 2 - labelW
     const vlines = wrapText(value || 'N/A', max, font, 11)
+    // Cálculo de altura más preciso
     const h = Math.max(16, vlines.length * 14)
 
     ensureSpace(h + 4)
 
     page.drawText(label, {
       x: margin,
-      y,
+      y: y - 10, // Ajuste para alineación visual
       font: boldFont,
-      size: 11
+      size: 11,
+      color: rgb(0.2, 0.2, 0.2)
     })
 
-    page.drawText(vlines.join('\n'), {
-      x: margin + labelW,
-      y,
-      font,
-      size: 11
+    // Dibujar cada línea del valor
+    vlines.forEach((line, i) => {
+      page.drawText(line, {
+        x: margin + labelW,
+        y: y - 10 - (i * 14),
+        font,
+        size: 11,
+        color: rgb(0, 0, 0)
+      })
     })
 
-    y -= h
+    y -= (h + 8) // Espacio extra entre filas
   }
 
   // TITLE
@@ -325,7 +344,7 @@ Deno.serve(async (req: Request) => {
 
     const q = supabase
       .from('orders')
-      .select('*, service:services(name), vehicle:vehicles(name)')
+      .select('*, service:services(name), vehicle:vehicles(name), collaborator:assigned_to(name)')
 
     const { data: order, error: oErr } = isNum
       ? await q.eq('id', Number(orderId)).single()
@@ -374,12 +393,27 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'public_url_failed' }, 500, req)
     }
 
+    // ----------------------------
+    // SEND EMAIL
+    // ----------------------------
+    let emailResult = { success: false, messageId: null }
+    const clientEmail = order.client_email || order.email
+    
+    if (clientEmail) {
+       try {
+         emailResult = await sendEmailWithInvoice(order, clientEmail, pdfUrl, invoiceNum)
+       } catch (emailErr) {
+         console.error('Email sending failed:', emailErr)
+       }
+    }
+
     return jsonResponse(
       {
         success: true,
         pdfUrl,
         filePath,
-        invoiceNumber: invoiceNum
+        invoiceNumber: invoiceNum,
+        emailSent: emailResult.success
       },
       200,
       req
@@ -389,3 +423,68 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: String(e) }, 500, req)
   }
 })
+
+async function sendEmailWithInvoice(order: any, email: string, pdfUrl: string, invoiceNumber: string) {
+  const apiKey = Deno.env.get('RESEND_API_KEY')
+  const defaultFrom = 'transporteylogisticalopezortiz@gmail.com'
+  const from = Deno.env.get('RESEND_FROM') || defaultFrom
+  const replyTo = Deno.env.get('RESEND_REPLY_TO') || defaultFrom
+  
+  const orderIdForDisplay = order.short_id || order.id
+  const trackingLink = `https://logisticalopezortiz.com/seguimiento.html`
+
+  if (!apiKey) return { success: false, messageId: null }
+
+  const subject = `✅ Solicitud Aceptada y Factura - Orden #${orderIdForDisplay} | Logística López Ortiz`
+  
+  const html = `
+    <div style="background-color: #f4f4f4; padding: 20px; font-family: Arial, sans-serif;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        <div style="background-color: #1E405A; padding: 20px; text-align: center;">
+          <img src="https://logisticalopezortiz.com/img/1vertical.png" alt="Logística López Ortiz" style="max-width: 150px; height: auto;">
+        </div>
+        <div style="padding: 30px;">
+          <h2 style="color: #1E405A; font-size: 24px; margin-top: 0;">¡Tu solicitud ha sido aceptada!</h2>
+          <p style="color: #555555; line-height: 1.6;">Hola,</p>
+          <p style="color: #555555; line-height: 1.6;">Nos complace informarte que tu solicitud de servicio ha sido aceptada y está siendo procesada.</p>
+          <p style="color: #555555; line-height: 1.6;">Puedes darle seguimiento en tiempo real usando el siguiente número de orden:</p>
+          <div style="background-color: #f0f5f9; border: 1px dashed #1E8A95; padding: 15px; text-align: center; margin: 20px 0; border-radius: 5px;">
+            <p style="font-size: 28px; font-weight: bold; color: #1E405A; margin: 0;">${orderIdForDisplay}</p>
+          </div>
+          <p style="color: #555555; line-height: 1.6;">Simplemente ingresa ese número en nuestra página de seguimiento.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${trackingLink}" style="display: inline-block; padding: 14px 28px; background-color: #1E8A95; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Ir a la Página de Seguimiento</a>
+          </div>
+          <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
+          <h3 style="color: #1E405A; font-size: 20px;">Detalles de tu Factura</h3>
+          <p style="color: #555555; line-height: 1.6;">Tu factura ha sido generada.</p>
+          <p style="color: #555555; line-height: 1.6;"><strong>Número de Factura:</strong> ${invoiceNumber}</p>
+          <p style="color: #555555; line-height: 1.6;"><strong>Total:</strong> ${(order.monto_cobrado || 0).toLocaleString('es-DO', { style: 'currency', currency: 'DOP' })}</p>
+          
+          <p style="color: #555555; line-height: 1.6; margin-top: 20px;">Puede ver y descargar su factura desde el siguiente enlace seguro:</p>
+          <p style="margin: 20px 0;">
+            <a href="${pdfUrl}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline; font-size: 16px;">Descargar factura (PDF)</a>
+          </p>
+
+          <p style="color: #555555; line-height: 1.6; margin-top: 30px;">Gracias por confiar en Logística López Ortiz.</p>
+        </div>
+        <div style="background-color: #f4f4f4; color: #888888; padding: 20px; text-align: center; font-size: 12px;">
+          <p>Este es un correo electrónico generado automáticamente. Por favor, no respondas a este mensaje.</p>
+          <p>&copy; ${new Date().getFullYear()} Logística López Ortiz. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    </div>
+  `
+
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ from, to: email, subject, html, reply_to: replyTo })
+  })
+
+  const j = await r.json().catch(() => ({}))
+  return { success: r.ok && !!j?.id, messageId: j?.id || null }
+}

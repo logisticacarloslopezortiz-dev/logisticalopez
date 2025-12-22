@@ -18,6 +18,9 @@ if (!window.supabaseConfig) {
           persistSession: true,
           detectSessionInUrl: true,
           storageKey: 'sb-tlc-main'
+        },
+        functions: {
+          url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co')
         }
       });
     } catch (e) {
@@ -30,6 +33,9 @@ if (!window.supabaseConfig) {
   window.supabaseConfig = {
     client: mainClient,
     _publicClient: null, // Se inicializa como null y se crea solo cuando se necesita
+    projectUrl: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    functionsUrl: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co'),
     useLocalStorage: false,
     vapidPublicKey: null,
     buckets: { evidence: 'order-evidence', fallbackEvidence: 'public' },
@@ -97,14 +103,16 @@ if (!window.supabaseConfig) {
       if (!this.client && typeof supabase !== 'undefined' && supabase?.createClient) {
         try {
           this.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' }
+            auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
+            functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
           });
         } catch (e) { console.error('Error re-inicializando cliente principal de Supabase:', e); }
       }
       if (!this._publicClient && typeof supabase !== 'undefined' && supabase?.createClient) {
         try {
           this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+            auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' },
+            functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
           });
         } catch (e) { console.warn('No se pudo crear public client:', e); }
       }
@@ -119,14 +127,16 @@ if (!window.supabaseConfig) {
         if (!this.client && typeof supabase !== 'undefined' && supabase?.createClient) {
           try {
             this.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-              auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' }
+              auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
+              functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
             });
           } catch (_) {}
         }
         if (!this._publicClient && typeof supabase !== 'undefined' && supabase?.createClient) {
           try {
             this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-              auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+              auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' },
+              functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
             });
           } catch (_) {}
         }
@@ -186,7 +196,8 @@ if (!window.supabaseConfig) {
     try {
       if (typeof supabase !== 'undefined' && supabase?.createClient) {
         this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+          auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' },
+          functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
         });
         return this._publicClient;
       }

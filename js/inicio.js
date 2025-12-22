@@ -10,6 +10,50 @@ let __initialized = false;
 let selectedOrderIdForPrice = null;
 let __lucideTimer = null;
 
+// --- GESTIÓN DE ESTADO CENTRALIZADO ---
+const AppState = {
+  update(order) {
+    const id = order.id;
+    const idxAll = allOrders.findIndex(o => o.id === id);
+    if (idxAll !== -1) {
+      allOrders[idxAll] = { ...allOrders[idxAll], ...order };
+    } else {
+      allOrders.unshift(order);
+    }
+    
+    const updatedOrder = idxAll !== -1 ? allOrders[idxAll] : order;
+    const idxVis = filteredOrders.findIndex(o => o.id === id);
+    const visible = isVisibleStatus(updatedOrder.status);
+
+    if (idxVis !== -1) {
+      if (visible) {
+        filteredOrders[idxVis] = updatedOrder;
+        updateRow(updatedOrder);
+      } else {
+        filteredOrders.splice(idxVis, 1);
+        removeRowDom(id);
+      }
+    } else {
+      if (visible) {
+        const insertIdx = findInsertIndex(filteredOrders, updatedOrder);
+        filteredOrders.splice(insertIdx, 0, updatedOrder);
+        insertRowDom(updatedOrder, insertIdx);
+      }
+    }
+    updateDashboardPanels();
+  },
+  
+  delete(id) {
+    allOrders = allOrders.filter(o => o.id !== id);
+    const idxVis = filteredOrders.findIndex(o => o.id === id);
+    if (idxVis !== -1) {
+      filteredOrders.splice(idxVis, 1);
+      removeRowDom(id);
+    }
+    updateDashboardPanels();
+  }
+};
+
 function getOrderDate(o) {
   if (!o || !o.date) return null;
   try { return new Date(`${o.date}T${o.time || '00:00'}`); } catch(_) { return null; }
@@ -185,62 +229,11 @@ function renderOrders(){
     return;
   }
 
-  filteredOrders.forEach(o=>{
-    const statusColor = {
-      'Pendiente': 'bg-yellow-100 text-yellow-800',
-      'Aceptada': 'bg-blue-100 text-blue-800',
-      'En curso': 'bg-purple-100 text-purple-800',
-      'Completada': 'bg-green-100 text-green-800',
-      'Cancelada': 'bg-red-100 text-red-800'
-    }[o.status] || 'bg-gray-100 text-gray-800';
-
-    const displayStatus = o.status;
-
-  const tr = document.createElement('tr');
-  tr.className = 'hover:bg-gray-50 transition-colors';
-  tr.setAttribute('data-order-id', String(o.id));
-  tr.innerHTML = /*html*/`
-      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
-      <td class="px-6 py-4 whitespace-nowrap">
-        <div class="text-sm font-medium text-gray-900">${o.name || 'N/A'}</div>
-        <div class="text-sm text-gray-500">${o.phone || ''}</div>
-        ${o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.email}">${o.email}</div>` : ''}
-        ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block" title="Empresa: ${o.empresa || 'N/A'}">RNC: ${o.rnc}</div>` : ''}
-      </td>
-      <td class="px-6 py-4 whitespace-nowrap">
-        <div class="text-sm text-gray-900">${o.service?.name || 'N/A'}</div>
-        ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
-          `<button onclick="showServiceDetails(${o.id})" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">
-            <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>Ver detalles
-          </button>`
-          : ''
-        }
-      </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle?.name || 'N/A'}</td>
-      <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">
-        ${o.pickup} → ${o.delivery}
-      </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-        <div>${o.date}</div>
-        <div class="text-gray-500">${o.time}</div>
-      </td>
-      <td class="px-6 py-4 whitespace-nowrap">
-        <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">
-          <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-          <option value="Aceptada" ${o.status === 'Aceptada' ? 'selected' : ''}>Aceptada</option>
-          <option value="En curso" ${o.status === 'En curso' ? 'selected' : ''}>En curso</option>
-          <option value="Completada" ${o.status === 'Completada' ? 'selected' : ''}>Completada</option>
-          <option value="Cancelada" ${o.status === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
-        </select>
-        ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
-      </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-        <button onclick="openPriceModal('${o.id}')" class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 transition-colors">
-          <span class="font-semibold text-green-700">${o.monto_cobrado ? `$${Number(o.monto_cobrado).toLocaleString('es-DO')}` : 'Confirmar'}</span>
-          <div class="text-xs text-gray-500">${o.metodo_pago || 'No especificado'}</div>
-        </button>
-      </td>
-    `;
+  filteredOrders.forEach(o => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-50 transition-colors';
+    tr.setAttribute('data-order-id', String(o.id));
+    tr.innerHTML = renderRowHtml(o);
     tr.addEventListener('dblclick', () => openAssignModal(o.id));
     ordersTableBody.appendChild(tr);
   });
@@ -250,42 +243,10 @@ function renderOrders(){
   if (cardContainer) {
     cardContainer.innerHTML = '';
     filteredOrders.forEach(o => {
-      const badge = {
-        'Pendiente': 'bg-yellow-100 text-yellow-800',
-        'Aceptada': 'bg-blue-100 text-blue-800',
-        'En curso': 'bg-purple-100 text-purple-800',
-        'Completada': 'bg-green-100 text-green-800',
-        'Cancelada': 'bg-red-100 text-red-800'
-      }[o.status] || 'bg-gray-100 text-gray-800';
-      const displayStatusMobile = o.status;
-    const card = document.createElement('div');
-    card.className = 'bg-white rounded-lg shadow p-4';
-    card.setAttribute('data-order-id', String(o.id));
-      card.innerHTML = `
-        <div class="flex justify-between items-start mb-2">
-          <div>
-            <div class="text-sm text-gray-500">#${o.id}</div>
-            <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
-            <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
-          </div>
-          <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${displayStatusMobile}</span>
-        </div>
-        <div class="grid grid-cols-2 gap-3 text-sm mb-3">
-          <div>
-            <p class="text-gray-500">Cliente</p>
-            <p class="text-gray-900">${o.name || 'N/A'}</p>
-          </div>
-          <div>
-            <p class="text-gray-500">Fecha</p>
-            <p class="text-gray-900">${o.date} ${o.time || ''}</p>
-          </div>
-        </div>
-        <div class="flex justify-end gap-2">
-          ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
-            `<button class="px-3 py-1 rounded bg-gray-100 text-gray-700 text-xs" onclick="showServiceDetails('${o.id}')">Detalles</button>` : ''}
-          <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs" onclick="openAssignModal('${o.id}')">Gestionar</button>
-        </div>
-      `;
+      const card = document.createElement('div');
+      card.className = 'bg-white rounded-lg shadow p-4';
+      card.setAttribute('data-order-id', String(o.id));
+      card.innerHTML = renderCardHtml(o);
       cardContainer.appendChild(card);
     });
   }
@@ -305,22 +266,8 @@ async function updateOrderStatus(orderId, newStatus) {
 
   if (success) {
     notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
-    const idxAll = allOrders.findIndex(o => String(o.id) === String(orderId));
-    if (idxAll !== -1) {
-      allOrders[idxAll] = { ...allOrders[idxAll], status: newStatus };
-    }
-    const idxVis = filteredOrders.findIndex(o => String(o.id) === String(orderId));
-    const visible = isVisibleStatus(newStatus);
-    if (idxVis !== -1 && visible) {
-      filteredOrders[idxVis] = { ...filteredOrders[idxVis], status: newStatus };
-      updateRow(filteredOrders[idxVis]);
-    } else if (idxVis !== -1 && !visible) {
-      removeRow(orderId);
-    } else if (idxVis === -1 && visible) {
-      const obj = allOrders.find(o => String(o.id) === String(orderId));
-      if (obj) insertRow(obj);
-    }
-    updateDashboardPanels();
+    
+    AppState.update({ id: Number(orderId), status: newStatus });
     refreshLucide();
 
     if (newStatus === 'Completada') {
@@ -431,7 +378,14 @@ async function openAssignModal(orderId){
   const select = document.getElementById('assignSelect');
   const assignBtn = document.getElementById('assignConfirmBtn');
 
+  if (!modal || !modalTitle || !body || !select || !assignBtn) {
+    console.error('Elementos del modal de asignación no encontrados en el DOM');
+    if (window.notifications) notifications.error('Error de interfaz', 'No se pudo abrir el modal de asignación.');
+    return;
+  }
+
   const order = allOrders.find(o => o.id === selectedOrderIdForAssign);
+  if (!order) { if (window.notifications) notifications.error('Orden no encontrada'); return; }
   const colaboradores = await loadCollaborators();
 
   modalTitle.textContent = `Gestionar Orden #${order.short_id || order.id}`;
@@ -474,41 +428,23 @@ async function openAssignModal(orderId){
   modal.classList.remove('hidden');
   modal.classList.add('flex');
   
-  // Handlers de botones del modal
+  // Handlers de botones del modal (solo dinámicos)
   const whatsappBtn = document.getElementById('whatsappBtn');
   const invoiceBtn = document.getElementById('generateInvoiceBtn');
-  const cancelBtn = document.getElementById('assignCancelBtn');
-  const deleteBtn = document.getElementById('deleteOrderBtn');
   const copyTrackBtn = document.getElementById('copyTrackingLinkBtn');
 
-  // ✅ CORRECCIÓN: Asignar evento con addEventListener para mayor fiabilidad.
+  // ✅ CORRECCIÓN: Asignación directa de eventos (elimina uso de cloneNode/replaceWith)
   if (whatsappBtn) {
-    const clone = whatsappBtn.cloneNode(true);
-    whatsappBtn.replaceWith(clone);
-    clone.addEventListener('click', () => openWhatsApp(order));
+    whatsappBtn.onclick = () => openWhatsApp(order);
   }
 
   if (invoiceBtn) {
-    const clone = invoiceBtn.cloneNode(true);
-    invoiceBtn.replaceWith(clone);
-    clone.addEventListener('click', () => generateAndSendInvoice(order.id));
-  }
-  if (cancelBtn) {
-    const clone = cancelBtn.cloneNode(true);
-    cancelBtn.replaceWith(clone);
-    clone.addEventListener('click', closeAssignModal);
-  }
-  if (deleteBtn) {
-    const clone = deleteBtn.cloneNode(true);
-    deleteBtn.replaceWith(clone);
-    clone.addEventListener('click', deleteSelectedOrder);
+    invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
   }
 
   // Copiar enlace directo de seguimiento
   if (copyTrackBtn) {
-    const clone = copyTrackBtn.cloneNode(true);
-    copyTrackBtn.replaceWith(clone);
-    clone.addEventListener('click', async () => {
+    copyTrackBtn.onclick = async () => {
       const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
       try { await navigator.clipboard.writeText(url); }
       catch(_) { if (window.notifications) notifications.warning('No se pudo copiar al portapapeles'); }
@@ -526,28 +462,18 @@ async function openAssignModal(orderId){
       } catch(_) {
         window.open(url, '_blank');
       }
-    });
+    };
   }
-  
-
-  // Doble clic para expandir el cuerpo del modal
-  const modalBody = document.getElementById('assignModalBody');
-  if (modalBody) {
-    modalBody.addEventListener('dblclick', () => {
-      modalBody.classList.toggle('max-h-[70vh]');
-      modalBody.classList.toggle('overflow-y-auto');
-    });
-  }
-
-  
 
   refreshLucide();
 }
 
 function closeAssignModal(){
   const modal = document.getElementById('assignModal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
   selectedOrderIdForAssign = null;
 }
 
@@ -619,19 +545,51 @@ async function generateAndSendInvoice(orderId) {
 
   notifications.info('Generando factura y enviando enlace por correo...', 'Espera un momento.');
 
+  console.log('[Factura] Iniciando invocación de función generate-invoice-pdf...');
+  console.log('[Factura] Order ID:', order.id);
+
   try {
-    // 1. Invocar una Edge Function para generar el PDF y obtener su URL
-    const { data: pdfData, error: pdfError } = await supabaseConfig.client.functions.invoke('generate-invoice-pdf', {
-      body: {
-        orderId: order.id
-      }
+    let pdfData = null;
+    let pdfError = null;
+    const r = await supabaseConfig.client.functions.invoke('generate-invoice-pdf', {
+      body: { orderId: order.id }
     });
+    pdfData = r?.data || null;
+    pdfError = r?.error || null;
 
-    if (pdfError || !pdfData?.pdfUrl) {
-      throw new Error(pdfError?.message || 'La función del servidor no pudo generar el PDF.');
+    console.log('[Factura] Respuesta recibida:', { pdfData, pdfError });
+    console.log('[Factura] DATA:', JSON.stringify(pdfData));
+    console.log('[Factura] ERROR:', JSON.stringify(pdfError));
+
+    if (pdfError || !pdfData) {
+      try {
+        const u = `${supabaseConfig.functionsUrl}/functions/v1/generate-invoice-pdf`;
+        const res = await fetch(u, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseConfig.anonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ orderId: order.id })
+        });
+        if (res.ok) {
+          pdfData = await res.json();
+          pdfError = null;
+          console.log('[Factura] Fallback fetch OK');
+        } else {
+          console.error('[Factura] Fallback fetch HTTP', res.status);
+        }
+      } catch (e) {
+        console.error('[Factura] Fallback fetch error', e?.message || e);
+      }
     }
-
-    const pdfUrl = pdfData.pdfUrl;
+    
+    const candidateUrl = pdfData && (pdfData.data?.pdfUrl || pdfData.pdfUrl || pdfData.url);
+    if (!pdfData || pdfData.error || !candidateUrl) {
+      console.error('Error en respuesta de función:', pdfData);
+      throw new Error(pdfData?.error || 'La función no devolvió una URL válida.');
+    }
+    const pdfUrl = candidateUrl;
 
     try {
       const linkWrap = document.getElementById('invoiceLink');
@@ -643,24 +601,15 @@ async function generateAndSendInvoice(orderId) {
       }
     } catch(_) { }
 
-    let emailSent = false;
-    try {
-      const { data: emailResp } = await supabaseConfig.client.functions.invoke('send-invoice', {
-        body: { orderId: order.id, email: clientEmail }
-      });
-      emailSent = !!(emailResp && emailResp.success && emailResp.data && emailResp.data.emailSent);
-    } catch (_) {
-      emailSent = false;
-    }
-
-    if (emailSent) {
-      notifications.success('Factura enviada', 'El cliente recibió el enlace de su factura.');
+    if (pdfData.data?.emailSent) {
+      notifications.success('Factura enviada', 'El cliente recibió el enlace de su factura por correo.');
     } else {
+      // Fallback si el envío automático falló pero tenemos PDF
       const subject = `Factura de su orden #${order.short_id || order.id} con Logística López Ortiz`;
       const body = `¡Hola, ${order.client_name || order.name}!\n\nAdjunto le enviamos los detalles y la factura correspondiente a su orden de servicio con nosotros.\n\n- Servicio: ${order.service?.name || 'N/A'}\n- Ruta: ${order.pickup} → ${order.delivery}\n- Fecha: ${order.date}\n\nPuede ver y descargar su factura desde el siguiente enlace seguro:\n${pdfUrl}\n\nSi tiene alguna pregunta, no dude en contactarnos.\n\n¡Gracias por confiar en Logística López Ortiz!`;
       const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(clientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(gmailUrl, '_blank');
-      notifications.warning('Envío por correo no disponible', 'Se abrió Gmail con el borrador para enviar la factura.');
+      notifications.warning('Envío automático falló', 'Se abrió Gmail con el borrador para enviar la factura manualmente.');
     }
 
   } catch (error) {
@@ -672,10 +621,40 @@ async function generateAndSendInvoice(orderId) {
   }
 }
 
-// Función para notificar al colaborador (simulada)
-function notifyCollaborator(order, collaborator) {
-  console.log(`Notificando a ${collaborator.name} sobre nueva asignación:`, order.id);
-  // En una implementación real, aquí se enviaría una notificación push, SMS o correo
+function renderCardHtml(o) {
+  const badge = {
+    'Pendiente': 'bg-yellow-100 text-yellow-800',
+    'Aceptada': 'bg-blue-100 text-blue-800',
+    'En curso': 'bg-purple-100 text-purple-800',
+    'Completada': 'bg-green-100 text-green-800',
+    'Cancelada': 'bg-red-100 text-red-800'
+  }[o.status] || 'bg-gray-100 text-gray-800';
+
+  return `
+    <div class="flex justify-between items-start mb-2">
+      <div>
+        <div class="text-sm text-gray-500">#${o.id}</div>
+        <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
+        <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
+      </div>
+      <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
+    </div>
+    <div class="grid grid-cols-2 gap-3 text-sm mb-3">
+      <div>
+        <p class="text-gray-500">Cliente</p>
+        <p class="text-gray-900">${o.name || 'N/A'}</p>
+      </div>
+      <div>
+        <p class="text-gray-500">Fecha</p>
+        <p class="text-gray-900">${o.date} ${o.time || ''}</p>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2">
+      ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
+        `<button class="px-3 py-1 rounded bg-gray-100 text-gray-700 text-xs" onclick="showServiceDetails('${o.id}')">Detalles</button>` : ''}
+      <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs" onclick="openAssignModal('${o.id}')">Gestionar</button>
+    </div>
+  `;
 }
 
  
@@ -735,12 +714,11 @@ function findInsertIndex(list, order){
   return list.length;
 }
 
-function insertRow(o){
+function insertRowDom(o, idx){
   const tbl = document.getElementById('ordersTableBody');
   const cards = document.getElementById('ordersCardContainer');
   if (!tbl) return;
-  const idx = findInsertIndex(filteredOrders, o);
-  filteredOrders.splice(idx, 0, o);
+  
   const tr = document.createElement('tr');
   tr.className = 'hover:bg-gray-50 transition-colors';
   tr.setAttribute('data-order-id', String(o.id));
@@ -749,44 +727,13 @@ function insertRow(o){
   const ref = tbl.children[idx] || null;
   tbl.insertBefore(tr, ref);
   if (cards) {
-    const badge = {
-      'Pendiente': 'bg-yellow-100 text-yellow-800',
-      'Aceptada': 'bg-blue-100 text-blue-800',
-      'En curso': 'bg-purple-100 text-purple-800',
-      'Completada': 'bg-green-100 text-green-800',
-      'Cancelada': 'bg-red-100 text-red-800'
-    }[o.status] || 'bg-gray-100 text-gray-800';
     const card = document.createElement('div');
     card.className = 'bg-white rounded-lg shadow p-4';
     card.setAttribute('data-order-id', String(o.id));
-    card.innerHTML = `
-      <div class="flex justify-between items-start mb-2">
-        <div>
-          <div class="text-sm text-gray-500">#${o.id}</div>
-          <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
-          <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
-        </div>
-        <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
-      </div>
-      <div class="grid grid-cols-2 gap-3 text-sm mb-3">
-        <div>
-          <p class="text-gray-500">Cliente</p>
-          <p class="text-gray-900">${o.name || 'N/A'}</p>
-        </div>
-        <div>
-          <p class="text-gray-500">Fecha</p>
-          <p class="text-gray-900">${o.date} ${o.time || ''}</p>
-        </div>
-      </div>
-      <div class="flex justify-end gap-2">
-        ${o.service_questions && Object.keys(o.service_questions).length > 0 ? `<button class="px-3 py-1 rounded bg-gray-100 text-gray-700 text-xs" onclick="showServiceDetails('${o.id}')">Detalles</button>` : ''}
-        <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs" onclick="openAssignModal('${o.id}')">Gestionar</button>
-      </div>
-    `;
+    card.innerHTML = renderCardHtml(o);
     const refCard = cards.children[idx] || null;
     cards.insertBefore(card, refCard);
   }
-  updateDashboardPanels();
   refreshLucide();
 }
 
@@ -799,44 +746,13 @@ function updateRow(o){
   if (cards) {
     const card = cards.querySelector(`div[data-order-id="${String(o.id)}"]`);
     if (card) {
-      const badge = {
-        'Pendiente': 'bg-yellow-100 text-yellow-800',
-        'Aceptada': 'bg-blue-100 text-blue-800',
-        'En curso': 'bg-purple-100 text-purple-800',
-        'Completada': 'bg-green-100 text-green-800',
-        'Cancelada': 'bg-red-100 text-red-800'
-      }[o.status] || 'bg-gray-100 text-gray-800';
-      card.innerHTML = `
-        <div class="flex justify-between items-start mb-2">
-          <div>
-            <div class="text-sm text-gray-500">#${o.id}</div>
-            <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
-            <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
-          </div>
-          <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
-        </div>
-        <div class="grid grid-cols-2 gap-3 text-sm mb-3">
-          <div>
-            <p class="text-gray-500">Cliente</p>
-            <p class="text-gray-900">${o.name || 'N/A'}</p>
-          </div>
-          <div>
-            <p class="text-gray-500">Fecha</p>
-            <p class="text-gray-900">${o.date} ${o.time || ''}</p>
-          </div>
-        </div>
-        <div class="flex justify-end gap-2">
-          ${o.service_questions && Object.keys(o.service_questions).length > 0 ? `<button class="px-3 py-1 rounded bg-gray-100 text-gray-700 text-xs" onclick="showServiceDetails('${o.id}')">Detalles</button>` : ''}
-          <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs" onclick="openAssignModal('${o.id}')">Gestionar</button>
-        </div>
-      `;
+      card.innerHTML = renderCardHtml(o);
     }
   }
-  updateDashboardPanels();
   refreshLucide();
 }
 
-function removeRow(orderId){
+function removeRowDom(orderId){
   const tbl = document.getElementById('ordersTableBody');
   const cards = document.getElementById('ordersCardContainer');
   const tr = document.querySelector(`tbody#ordersTableBody tr[data-order-id="${String(orderId)}"]`);
@@ -845,10 +761,6 @@ function removeRow(orderId){
     const card = cards.querySelector(`div[data-order-id="${String(orderId)}"]`);
     if (card) cards.removeChild(card);
   }
-  const idx = filteredOrders.findIndex(o => String(o.id) === String(orderId));
-  if (idx !== -1) filteredOrders.splice(idx, 1);
-  allOrders = allOrders.filter(o => String(o.id) !== String(orderId));
-  updateDashboardPanels();
 }
 
 // --- Lógica de Tiempo Real con Supabase ---
@@ -856,44 +768,27 @@ function removeRow(orderId){
 async function handleRealtimeUpdate(payload) {
   const { eventType, new: newRecord, old: oldRecord, table } = payload;
   if (table !== 'orders') return;
-  if (eventType === 'INSERT') {
+
+  if (eventType === 'INSERT' || eventType === 'UPDATE') {
     let full = null;
+    // Intentar obtener la orden completa para tener las relaciones (service, vehicle, etc.)
     try { full = await supabaseConfig.getOrderById(newRecord.id); } catch(_) {}
     const orderObj = full || newRecord;
-    if (allOrders.findIndex(o => o.id === orderObj.id) === -1) {
-      allOrders.unshift(orderObj);
-    } else {
-      const idxAll = allOrders.findIndex(o => o.id === orderObj.id);
-      if (idxAll !== -1) allOrders[idxAll] = { ...allOrders[idxAll], ...orderObj };
-    }
-    if (isVisibleStatus(orderObj.status)) insertRow(orderObj);
-    if (window.notifications) {
+    
+    // Usar AppState para actualizar/insertar
+    AppState.update(orderObj);
+    
+    if (eventType === 'INSERT' && window.notifications) {
       notifications.info(`Cliente: ${orderObj.name}.`, { title: `Nueva Solicitud #${orderObj.id}`, duration: 10000 });
     }
     return;
   }
-  if (eventType === 'UPDATE') {
-    let full = null;
-    try { full = await supabaseConfig.getOrderById(newRecord.id); } catch(_) {}
-    const orderObj = full || newRecord;
-    const idxAll = allOrders.findIndex(o => o.id === orderObj.id);
-    if (idxAll !== -1) allOrders[idxAll] = { ...allOrders[idxAll], ...orderObj }; else allOrders.unshift(orderObj);
-    const wasVisibleIdx = filteredOrders.findIndex(o => o.id === orderObj.id);
-    const shouldShow = isVisibleStatus(orderObj.status);
-    if (wasVisibleIdx !== -1 && shouldShow) {
-      filteredOrders[wasVisibleIdx] = { ...filteredOrders[wasVisibleIdx], ...orderObj };
-      updateRow(orderObj);
-    } else if (wasVisibleIdx !== -1 && !shouldShow) {
-      removeRow(orderObj.id);
-    } else if (wasVisibleIdx === -1 && shouldShow) {
-      insertRow(orderObj);
-    }
-    return;
-  }
+
   if (eventType === 'DELETE') {
     const id = oldRecord?.id;
     if (!id) return;
-    removeRow(id);
+    // Usar AppState para eliminar
+    AppState.delete(id);
     return;
   }
 }
@@ -935,14 +830,13 @@ async function savePriceData() {
   try {
     if (!selectedOrderIdForPrice) throw new Error('ID de orden no válido');
     const updated = await OrderManager.setOrderAmount(selectedOrderIdForPrice, monto, metodo);
-    const orderIndex = allOrders.findIndex(o => o.id == selectedOrderIdForPrice);
-    if (orderIndex !== -1 && updated) {
-      allOrders[orderIndex].monto_cobrado = updated.monto_cobrado ?? parseFloat(monto);
-      allOrders[orderIndex].metodo_pago = updated.metodo_pago ?? metodo;
-    }
-    const updatedOrder = allOrders.find(o => o.id == selectedOrderIdForPrice);
-    if (updatedOrder) updateRow(updatedOrder);
-    updateDashboardPanels();
+    
+    AppState.update({
+      id: selectedOrderIdForPrice,
+      monto_cobrado: updated?.monto_cobrado ?? parseFloat(monto),
+      metodo_pago: updated?.metodo_pago ?? metodo
+    });
+
     refreshLucide();
     notifications.success('Éxito', 'El monto y método de pago han sido actualizados.');
     closePriceModal();
@@ -1000,11 +894,28 @@ async function initAdminOrdersPage() {
 document.addEventListener('DOMContentLoaded', () => {
   try {
     const assignCancel = document.getElementById('assignCancelBtn');
+    const assignCloseX = document.getElementById('assignCloseXBtn');
     const assignConfirm = document.getElementById('assignConfirmBtn');
     const deleteOrder = document.getElementById('deleteOrderBtn');
+    const assignModalBody = document.getElementById('assignModalBody'); // Moved from openAssignModal
+
     if (assignCancel) assignCancel.addEventListener('click', closeAssignModal);
+    if (assignCloseX) assignCloseX.addEventListener('click', closeAssignModal);
     if (assignConfirm) assignConfirm.addEventListener('click', assignSelectedCollaborator);
     if (deleteOrder) deleteOrder.addEventListener('click', deleteSelectedOrder);
+
+    const priceCancel = document.getElementById('priceCancelBtn');
+    const priceSave = document.getElementById('priceSaveBtn');
+    if (priceCancel) priceCancel.addEventListener('click', closePriceModal);
+    if (priceSave) priceSave.addEventListener('click', savePriceData);
+    
+    // Listener estático para doble clic en el cuerpo del modal
+    if (assignModalBody) {
+      assignModalBody.addEventListener('dblclick', () => {
+        assignModalBody.classList.toggle('max-h-[70vh]');
+        assignModalBody.classList.toggle('overflow-y-auto');
+      });
+    }
   } catch (_) {}
   window.sortTable = sortTable;
   window.updateOrderStatus = updateOrderStatus;

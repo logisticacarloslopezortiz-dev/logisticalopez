@@ -69,7 +69,7 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
   y -= 30;
 
   // Tabla de detalles
-  const tableTop = y;
+  
   const table = {
     x: 50,
     y: y,
@@ -133,7 +133,12 @@ async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfU
             <p style="color: #555555; line-height: 1.6;">Tu factura ha sido generada.</p>
             <p style="color: #555555; line-height: 1.6;"><strong>Número de Factura:</strong> ${invoiceNumber}</p>
             <p style="color: #555555; line-height: 1.6;"><strong>Total:</strong> ${(order.monto_cobrado || 0).toLocaleString('es-DO', { style: 'currency', currency: 'DOP' })}</p>
-            <p style="color: #555555; line-height: 1.6;"><a href="${pdfUrl}" target="_blank" style="color: #1E8A95; text-decoration: underline;">Ver o descargar tu factura aquí</a></p>
+            
+            <p style="color: #555555; line-height: 1.6; margin-top: 20px;">Puede ver y descargar su factura desde el siguiente enlace seguro:</p>
+            <p style="margin: 20px 0;">
+              <a href="${pdfUrl}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline; font-size: 16px;">Descargar factura (PDF)</a>
+            </p>
+
             <p style="color: #555555; line-height: 1.6; margin-top: 30px;">Gracias por confiar en Logística López Ortiz.</p>
           </div>
           <div style="background-color: #f4f4f4; color: #888888; padding: 20px; text-align: center; font-size: 12px;">
@@ -189,7 +194,7 @@ Deno.serve(async (req: Request) => {
     const q = supabase
       .from('orders')
       // ✅ NUEVO: Seleccionar también los nombres de las tablas relacionadas
-      .select('*, service:services(name), vehicle:vehicles(name)') as SelectOrdersBuilder;
+      .select('*, service:services(name), vehicle:vehicles(name)');
     const { data: order, error: orderError } = isNumericId
       ? await q.eq('id', Number(orderId)).single()
       : await q.eq('short_id', String(orderId)).single();
@@ -214,11 +219,17 @@ Deno.serve(async (req: Request) => {
     const pdfBytes = await generateInvoicePDF(order, business);
     const invoiceNumber = `INV-${order.short_id || order.id}`;
 
-    try { await (supabase as any).storage.createBucket('invoices', { public: true }); } catch (_) {}
     const filePath = `${order.client_id || 'anon'}/${invoiceNumber}-${Date.now()}.pdf`;
-    await supabase.storage.from('invoices').upload(filePath, pdfBytes, { contentType: 'application/pdf', upsert: true });
+    const { error: uploadError } = await supabase.storage.from('invoices').upload(filePath, pdfBytes, { contentType: 'application/pdf', upsert: true });
+    if (uploadError) {
+      logDebug('Error subiendo PDF', uploadError);
+      return jsonResponse({ error: 'No se pudo subir la factura' }, 500);
+    }
     const { data: pub } = supabase.storage.from('invoices').getPublicUrl(filePath);
     const pdfUrl = ((pub as any)?.publicUrl) || '';
+    if (!pdfUrl) {
+      return jsonResponse({ error: 'No se pudo obtener la URL pública del PDF' }, 500);
+    }
     
     // Enviar por email si se proporcionó
     let emailResult = null;
@@ -274,7 +285,7 @@ Deno.serve(async (req: Request) => {
 
     // Registrar la factura en tabla invoices
     const { error: invError } = await supabase.from('invoices').insert({
-      order_id: orderId,
+      order_id: order.id,
       client_id: resolvedClientId,
       file_path: filePath,
       total: order.monto_cobrado ?? 0,
@@ -295,7 +306,8 @@ Deno.serve(async (req: Request) => {
       success: true, 
       message: 'Factura generada correctamente',
       data: {
-        invoiceNumber: invoiceNumber,
+        invoiceNumber,
+        pdfUrl,
         emailSent: !!emailResult?.success,
         recipientEmail
       }
