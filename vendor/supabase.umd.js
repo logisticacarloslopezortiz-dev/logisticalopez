@@ -14,8 +14,9 @@
         var params = new URLSearchParams();
         if (_select) params.set('select', _select);
         _filters.forEach(function(f){
-          if (f.type === 'eq') params.set(f.col, 'eq.' + f.val);
-          else if (f.type === 'not' && f.op === 'in') params.set(f.col, 'not.in.(' + f.values.join(',') + ')');
+          if (f.type === 'eq') params.append(f.col, 'eq.' + f.val);
+          else if (f.type === 'not' && f.op === 'in') params.append(f.col, 'not.in.(' + f.values.join(',') + ')');
+          else if (f.type === 'or') params.append('or', '(' + f.val + ')');
         });
         if (_order) params.set('order', _order.column + '.' + (_order.ascending !== false ? 'asc' : 'desc'));
         return params;
@@ -32,6 +33,7 @@
         order: function(column, opts){ _order = { column: column, ascending: !!(opts?opts.ascending:true) }; return this; },
         eq: function(col,val){ _filters.push({ type:'eq', col:col, val:val }); return this; },
         not: function(col, op, values){ _filters.push({ type:'not', col:col, op:op, values:Array.isArray(values)?values:[] }); return this; },
+        or: function(val){ _filters.push({ type:'or', val:val }); return this; },
         maybeSingle: async function(){ var r = await exec(); return { data: r.data ? r.data[0] || null : null, error: r.error } },
         then: function(res, rej){ return exec().then(res, rej); }
       };
