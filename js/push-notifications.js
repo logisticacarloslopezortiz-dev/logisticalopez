@@ -294,24 +294,10 @@ class PushNotificationManager {
     }
 
     async sendTestNotification() {
-        try {
-            if (!this.subscription) throw new Error('No existe suscripción activa del navegador');
-            const { data, error } = await supabaseConfig.client.functions.invoke('sendPush', {
-                body: {
-                    title: 'Notificación de prueba',
-                    body: 'Esta es una notificación de prueba del sistema',
-                    icon: '/img/android-chrome-192x192.png',
-                    url: '/inicio.html',
-                    subscription: (typeof this.subscription.toJSON === 'function') ? this.subscription.toJSON() : this.subscription
-                }
-            });
-            if (error) throw error;
-            console.log('Test notification sent via Supabase send-push:', data);
-            return data;
-        } catch (error) {
-            console.error('Error sending test notification:', error);
-            throw error;
-        }
+        // Deshabilitado: el frontend NO debe invocar funciones de envío directo.
+        // Usa el flujo de outbox + process-outbox disparado por pg_cron desde backend.
+        console.warn('[push] sendTestNotification deshabilitado. Usa notification_outbox + process-outbox.');
+        throw new Error('sendTestNotification_disabled');
     }
 
     // Utility para convertir VAPID key

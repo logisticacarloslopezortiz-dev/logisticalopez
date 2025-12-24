@@ -89,21 +89,9 @@
           const bodyText = document.getElementById('bodyText').value.trim();
           const subscription = JSON.parse(subEl.value || '{}');
 
-          sendStatusEl.textContent = 'Enviando...';
-          const resp = await fetch('https://fkprllkxyjtosjhtikxy.functions.supabase.co/send-notification', {
-            method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + anon,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ subscription, notification: { title, body: bodyText } })
-          });
-          const data = await resp.json();
-          if (data?.success) {
-            sendStatusEl.innerHTML = '<span class="ok">Notificación enviada</span>';
-          } else {
-            sendStatusEl.innerHTML = '<span class="err">' + (data?.error || 'Error desconocido') + '</span>';
-          }
+          // Deshabilitado: no usar send-notification directo. Use notification_outbox + process-outbox.
+          sendStatusEl.innerHTML = '<span class="err">send-notification deshabilitado; use outbox + process-outbox</span>';
+          return;
         } catch (e) {
           sendStatusEl.innerHTML = '<span class="err">' + (e?.message || e) + '</span>';
         }

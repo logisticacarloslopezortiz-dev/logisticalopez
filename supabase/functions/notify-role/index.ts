@@ -1,10 +1,13 @@
 /// <reference path="../globals.d.ts" />
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders as _corsHeaders, handleCors, jsonResponse } from '../cors-config.ts';
-const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
+import { jsonResponse } from '../cors-config.ts';
+const SITE_BASE = (Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com').trim();
 const absolutize = (u: string) => {
-  const s = String(u || '')
-  return /^https?:\/\//i.test(s) ? s : SITE_BASE + (s.startsWith('/') ? '' : '/') + s
+  const s = String(u || '').trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  const base = SITE_BASE.endsWith('/') ? SITE_BASE.slice(0, -1) : SITE_BASE;
+  const path = s.startsWith('/') ? s : `/${s}`;
+  return base + path;
 }
 
 const supabase: SupabaseClient = createClient(
@@ -16,11 +19,6 @@ const supabase: SupabaseClient = createClient(
 // -------------------------------
 // Tipos
 // -------------------------------
-type WebPushSubscription = {
-  endpoint: string;
-  keys: { p256dh: string; auth: string };
-};
-
 type NotifyRoleRequest = {
   role: 'administrador' | 'colaborador' | 'cliente' | 'admin' | 'worker';
   orderId: number | string;
@@ -55,68 +53,35 @@ function errorToString(err: unknown) {
 }
 
 // -------------------------------
-// Enviar PUSH
+// Encolar en notification_outbox
 // -------------------------------
-async function sendPush(sub: WebPushSubscription, payload: unknown) {
-  const webpush = await import('jsr:@negrel/webpush');
-
-  const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
-  const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
-  const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@tlc.com';
-
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    throw new Error('Faltan claves VAPID en el servidor');
-  }
-
-  const vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
-
-  const appServer = await webpush.ApplicationServer.new({ contactInformation: VAPID_SUBJECT, vapidKeys });
-  const k: any = sub.keys as any;
-  const keys = typeof k === 'string' ? (() => { try { return JSON.parse(k) } catch { return {} } })() : k;
-  if (!keys?.p256dh || !keys?.auth) {
-    throw new Error('keys_invalidas_en_suscripcion');
-  }
-  const subscription = { endpoint: sub.endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } };
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    return await appServer.push(subscription as any, JSON.stringify(payload), { ttl: 2592000, urgency: 'high', signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function pushToMany(subscriptions: WebPushSubscription[], payload: unknown, client: SupabaseClient) {
-  const results: Array<{ success: boolean; endpoint: string; error?: string }> = [];
-  for (const sub of subscriptions) {
-    try {
-      await sendPush(sub, payload);
-      results.push({ success: true, endpoint: sub.endpoint });
-      await logDb(client, 'notify-role', 'info', 'push_sent', { endpoint: sub.endpoint });
-    } catch (err) {
-      const code = (err as any)?.statusCode;
-      if (code === 404 || code === 410) {
-        try { await client.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); } catch (_) {}
-      }
-      const msg = errorToString(err);
-      results.push({ success: false, endpoint: sub.endpoint, error: msg });
-      await logDb(client, 'notify-role', 'warning', 'push_failed', { endpoint: sub.endpoint, error: msg, statusCode: code });
-    }
-  }
-  const sent = results.filter(r => r.success).length;
-  const failed = results.length - sent;
-  return { results, sent, failed, total: results.length };
+async function enqueueForUserIds(client: SupabaseClient, userIds: string[], payload: any, orderId: number | string, statusTag: string, role: string) {
+  if (!userIds || userIds.length === 0) return { queued: 0 };
+  const rows = userIds.map(uid => ({
+    order_id: Number(orderId),
+    new_status: statusTag,
+    target_role: role,
+    target_user_id: uid,
+    payload
+  }));
+  const { error } = await client.from('notification_outbox').insert(rows);
+  if (error) throw error;
+  return { queued: rows.length };
 }
 
 // ===============================================================
 //   SERVIDOR PRINCIPAL
 // ===============================================================
 Deno.serve(async (req: Request) => {
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
-
   if (req.method !== 'POST') {
     return jsonResponse({ success: false, error: 'Method not allowed' }, 405);
+  }
+
+  // Backend-only: exige Authorization: Bearer <SERVICE_ROLE>
+  const srvRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+  if (!srvRole || authHeader !== `Bearer ${srvRole}`) {
+    return jsonResponse({ success: false, error: 'unauthorized' }, 401);
   }
 
   // --------------------------------------------
@@ -152,7 +117,7 @@ Deno.serve(async (req: Request) => {
       role;
 
     // ===================================================================
-    //  CASO 1: CLIENTE
+    //  CASO 1: CLIENTE → Encolar en outbox (no enviar directo)
     // ===================================================================
     if (normalizedRole === 'cliente') {
       const { data: order, error } = await supabase
@@ -166,43 +131,23 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ success: false, error: 'No se pudo obtener información del cliente' }, 500);
       }
 
-      let subscriptions: WebPushSubscription[] = [];
-
-      // Preferencia: user_id
-      if (order?.client_id) {
-        const { data: subs } = await supabase
-          .from('push_subscriptions')
-          .select('endpoint, keys')
-          .eq('user_id', order.client_id);
-
-        if (subs) subscriptions = subs as WebPushSubscription[];
-      }
-
-      // fallback: client_contact_id
-      if (subscriptions.length === 0 && order?.client_contact_id) {
-        const { data: subs } = await supabase
-          .from('push_subscriptions')
-          .select('endpoint, keys')
-          .eq('client_contact_id', order.client_contact_id);
-
-        if (subs) subscriptions = subs as WebPushSubscription[];
-      }
-
-      if (subscriptions.length === 0) {
-        return jsonResponse({ success: false, message: 'Cliente sin suscripciones', sent: 0, failed: 0, total: 0 }, 200);
-      }
-
       const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
-      const { results, sent, failed, total } = await pushToMany(subscriptions, payload, supabase);
-
-      await supabase.from('notifications').insert({
-        user_id: order?.client_id ?? null,
-        title,
-        body: messageBody,
-        data: { orderId, role: normalizedRole },
-        created_at: new Date().toISOString()
-      });
-      return jsonResponse({ success: sent > 0, sent, failed, total, results }, 200);
+      // Preferencia: user_id; si no existe, usar client_contact_id
+      if (order?.client_id) {
+        const { queued } = await enqueueForUserIds(supabase, [String(order.client_id)], payload, Number(orderId), 'Notificación', 'cliente');
+        return jsonResponse({ success: queued > 0, queued, target: 'user' }, 200);
+      } else if (order?.client_contact_id) {
+        const { error: insErr } = await supabase.from('notification_outbox').insert({
+          order_id: Number(orderId),
+          new_status: 'Notificación',
+          target_role: 'cliente',
+          target_contact_id: order.client_contact_id,
+          payload
+        });
+        if (insErr) throw insErr;
+        return jsonResponse({ success: true, queued: 1, target: 'contact' }, 200);
+      }
+      return jsonResponse({ success: false, message: 'Cliente no encontrado en la orden' }, 404);
     }
 
     // ===================================================================
@@ -210,8 +155,9 @@ Deno.serve(async (req: Request) => {
     // ===================================================================
     const { data: collabs, error: collabErr } = await supabase
       .from('collaborators')
-      .select('id, role')
-      .eq('role', normalizedRole);
+      .select('id, role, active')
+      .eq('role', normalizedRole)
+      .eq('active', true);
 
     if (collabErr) {
       await logDb(supabase, 'notify-role', 'error', 'Error consultando colaboradores', { normalizedRole });
@@ -228,19 +174,9 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: false, message: 'No hay destinatarios' }, 200);
     }
 
-    const { data: subsRows } = await supabase
-      .from('push_subscriptions')
-      .select('endpoint, keys')
-      .in('user_id', ids);
-
-    const subscriptions = (subsRows ?? []) as WebPushSubscription[];
-    if (subscriptions.length === 0) {
-      return jsonResponse({ success: false, message: 'No hay suscripciones para el rol' }, 200);
-    }
-
     const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
-    const { results, sent, failed, total } = await pushToMany(subscriptions, payload, supabase);
-    return jsonResponse({ success: sent > 0, sent, failed, total, results }, 200);
+    const { queued } = await enqueueForUserIds(supabase, ids, payload, Number(orderId), 'Notificación', normalizedRole);
+    return jsonResponse({ success: queued > 0, queued, total_targets: ids.length }, 200);
 
   } catch (error) {
     const msg = errorToString(error);

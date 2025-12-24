@@ -43,7 +43,7 @@ begin
       $cron$
       with cfg as (
         select
-          coalesce(current_setting('app.settings.process_outbox_url', true), 'https://fkprllkxyjtosjhtikxy.functions.supabase.co/process-outbox') as url,
+          trim(coalesce(current_setting('app.settings.process_outbox_url', true), 'https://fkprllkxyjtosjhtikxy.functions.supabase.co/process-outbox')) as url,
           coalesce(current_setting('app.settings.service_role_token', true), '') as token
       ),
       hdrs as (
@@ -1636,7 +1636,7 @@ create or replace function public.invoke_process_outbox()
 returns jsonb
 language plpgsql security definer set search_path = pg_catalog, public as $$
 declare resp jsonb;
-declare v_url text := coalesce(current_setting('app.settings.process_outbox_url', true), 'https://fkprllkxyjtosjhtikxy.functions.supabase.co/process-outbox');
+declare v_url text := trim(coalesce(current_setting('app.settings.process_outbox_url', true), 'https://fkprllkxyjtosjhtikxy.functions.supabase.co/process-outbox'));
 declare v_token text := coalesce(current_setting('app.settings.service_role_token', true), '');
 declare v_headers jsonb := case when v_token <> '' then jsonb_build_object('Content-Type','application/json','Authorization','Bearer ' || v_token) else jsonb_build_object('Content-Type','application/json') end;
 begin

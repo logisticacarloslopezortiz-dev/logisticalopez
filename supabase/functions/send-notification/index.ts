@@ -1,7 +1,13 @@
 /// <reference path="../globals.d.ts" />
-import { handleCors, jsonResponse } from '../cors-config.ts'
+// Backend-only: sin CORS y con autorización obligatoria
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import webpush from 'https://esm.sh/web-push@3.4.5'
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  })
+}
+// Import dinámico para reducir cold start
 
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!
@@ -22,6 +28,7 @@ function absolutize(url: string): string {
 }
 
 async function push(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }, payload: unknown) {
+  const { default: webpush } = await import('https://esm.sh/web-push@3.4.5')
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)
@@ -33,11 +40,15 @@ async function push(subscription: { endpoint: string; keys: { p256dh: string; au
 }
 
 Deno.serve(async (req: Request) => {
-  const corsResponse = handleCors(req)
-  if (corsResponse) return corsResponse
-
   if (req.method !== 'POST') {
     return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
+  }
+
+  // Requiere autorización de backend (Service Role) para evitar uso desde navegador
+  const srvRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+  if (!srvRole || authHeader !== `Bearer ${srvRole}`) {
+    return jsonResponse({ success: false, error: 'unauthorized' }, 401)
   }
 
   try {

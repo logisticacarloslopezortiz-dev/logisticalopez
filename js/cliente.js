@@ -2033,7 +2033,7 @@ document.addEventListener('DOMContentLoaded', function() {
           // La función RPC `create_order_with_contact` ya se encarga de esto de forma segura en el backend.
           // Esto resuelve el error 401 Unauthorized.
           askForNotificationPermission(savedOrder);
-          try { await supabaseConfig.runProcessOutbox(); } catch(_){ }
+    // Eliminado: no invocar process-outbox desde el cliente
         }
 
       } catch (error) {
