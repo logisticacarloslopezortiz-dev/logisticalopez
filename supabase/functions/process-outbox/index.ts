@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-const webpushPromise = import('https://esm.sh/web-push@3.4.5')
+import * as webPush from 'jsr:@negrel/webpush'
 
 // Helpers
 function jsonResponse(body: unknown, status = 200): Response {
@@ -35,15 +35,23 @@ async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
   const subject = Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com'
   
   if (!pub || !priv) throw new Error('VAPID keys not configured')
-  
-  const { default: webpush } = await webpushPromise
-  webpush.setVapidDetails(subject, pub, priv)
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)
   
   try {
-    return await webpush.sendNotification(sub as any, JSON.stringify(payload), { TTL: 2592000 })
+    return await webPush.sendNotification(
+      { endpoint: sub.endpoint, keys: sub.keys as unknown as webPush.SubscriptionKeys },
+      JSON.stringify(payload),
+      {
+        vapidDetails: {
+          subject,
+          publicKey: pub,
+          privateKey: priv
+        },
+        TTL: 2592000
+      }
+    )
   } finally {
     clearTimeout(timeout)
   }
