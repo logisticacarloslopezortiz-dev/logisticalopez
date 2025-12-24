@@ -42,11 +42,13 @@ if (!window.supabaseConfig) {
     getEvidenceBucket() { return (this.buckets && this.buckets.evidence) ? this.buckets.evidence : 'evidence'; },
     async runProcessOutbox(){
       try {
-        const { data, error } = await this.client.functions.invoke('process-outbox', { body: {}, headers: { 'Content-Type': 'application/json' } });
-        if (!error && data) return data;
-      } catch(_) {}
-      try {
-        const { data } = await this.client.rpc('invoke_process_outbox');
+        const { data, error } = await this.client.functions.invoke('process-outbox', {
+          body: {},
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (error) {
+          return { success: false, error: error?.message || 'invoke_failed' };
+        }
         return data || { success: true };
       } catch(e){
         return { success:false, error: String(e?.message||e) };

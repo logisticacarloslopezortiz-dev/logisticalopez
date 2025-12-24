@@ -1640,7 +1640,8 @@ declare v_url text := coalesce(current_setting('app.settings.process_outbox_url'
 declare v_token text := coalesce(current_setting('app.settings.service_role_token', true), '');
 declare v_headers jsonb := case when v_token <> '' then jsonb_build_object('Content-Type','application/json','Authorization','Bearer ' || v_token) else jsonb_build_object('Content-Type','application/json') end;
 begin
-  if not (public.is_admin(auth.uid()) or public.is_owner(auth.uid())) then
+  -- Sólo administradores pueden invocar este RPC (seguridad reforzada)
+  if not public.is_admin(auth.uid()) then
     raise exception 'No autorizado' using errcode = '42501';
   end if;
   begin

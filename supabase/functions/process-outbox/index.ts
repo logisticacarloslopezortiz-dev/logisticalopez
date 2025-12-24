@@ -28,6 +28,10 @@ function corsHeadersForOrigin(origin: string | null): Record<string, string> {
 function handleCors(req: Request): Response | null {
   if (req.method === 'OPTIONS') {
     const origin = req.headers.get('origin');
+    // Log preflight CORS clearly
+    try {
+      console.log(`[process-outbox] CORS preflight OPTIONS from origin=${origin || 'unknown'} allowed=${origin ? allowedOrigins.has(origin) : false}`)
+    } catch(_) {}
     return new Response('ok', { status: 200, headers: corsHeadersForOrigin(origin) });
   }
   return null;
@@ -176,6 +180,10 @@ async function processPending(limit = 50) {
 }
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get('origin')
+  try {
+    console.log(`[process-outbox] Incoming ${req.method} from origin=${origin || 'unknown'}`)
+  } catch(_) {}
   const cors = handleCors(req)
   if (cors) return cors
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -185,10 +193,14 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url)
     const limitRaw = url.searchParams.get('limit')
     const limit = limitRaw ? Math.max(1, Math.min(200, parseInt(limitRaw))) : 50
+    // Log claiming start
+    try { console.log(`[process-outbox] Processing pending messages (limit=${limit})`) } catch(_) {}
     const result = await processPending(limit)
+    try { console.log(`[process-outbox] Done processing: processed=${result.processed ?? 0}`) } catch(_) {}
     return jsonResponse({ success: true, ...result }, 200, req)
   } catch (e) {
     const msg = e instanceof Error ? (e.message || 'unknown_error') : String(e)
+    try { console.error(`[process-outbox] Error while processing: ${msg}`) } catch(_) {}
     return jsonResponse({ error: msg }, 500, req)
   }
 })
