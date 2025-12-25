@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import * as webPush from 'jsr:@negrel/webpush'
+import * as webPush from 'https://esm.sh/jsr/@negrel/webpush'
 
 // Helpers
 function jsonResponse(body: unknown, status = 200): Response {
