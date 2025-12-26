@@ -32,6 +32,21 @@
       const { data: { session } } = await client.auth.getSession();
       const el = document.getElementById('session');
       el.textContent = JSON.stringify(session || null, null, 2);
+      // Sugerencia visual: deshabilitar invocación si no es admin
+      const isAdmin = !!(session && (
+        (Array.isArray(session.user?.app_metadata?.roles) && session.user.app_metadata.roles.includes('admin'))
+      ));
+      const btn = document.getElementById('btn-invoke');
+      const hint = document.getElementById('invoke-hint');
+      if (!isAdmin) {
+        btn.disabled = true;
+        btn.textContent = 'Invocar RPC (requiere sesión admin)';
+        hint.textContent = 'Inicia sesión como admin para ejecutar invoke_process_outbox()';
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Invocar RPC invoke_process_outbox()';
+        hint.textContent = '';
+      }
     }
 
     async function showVapidKey() {
@@ -58,6 +73,15 @@
 
     async function invokeOutbox() {
       const client = await initSupabase();
+      // Chequear sesión admin antes de invocar
+      const { data: { session } } = await client.auth.getSession();
+      const isAdmin = !!(session && (
+        (Array.isArray(session.user?.app_metadata?.roles) && session.user.app_metadata.roles.includes('admin'))
+      ));
+      if (!isAdmin) {
+        document.getElementById('invoke-result').textContent = 'No autorizado: inicia sesión como admin para invocar el procesamiento.';
+        return;
+      }
       try {
         const { data, error } = await client.rpc('invoke_process_outbox');
         const el = document.getElementById('invoke-result');
@@ -109,6 +133,7 @@
     <div class="card">
       <h2>Invocar process-outbox</h2>
       <p>Debe ejecutarse como admin/owner. Requiere configurar <code>app.settings.process_outbox_url</code> y <code>app.settings.service_role_token</code> en la DB.</p>
+      <p id="invoke-hint" style="color:#b91c1c"></p>
       <button id="btn-invoke">Invocar RPC invoke_process_outbox()</button>
       <pre id="invoke-result"></pre>
     </div>
@@ -178,4 +203,3 @@ select public.invoke_process_outbox();
   </div>
 </body>
 </html>
-

@@ -29,6 +29,18 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+function normalizeKeys(raw: unknown): SubscriptionKeys | null {
+  try {
+    const k = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown> | null;
+    const p256dh = String(k?.p256dh ?? '').trim();
+    const auth = String(k?.auth ?? '').trim();
+    if (!p256dh || !auth) return null;
+    return { p256dh, auth };
+  } catch (_) {
+    return null;
+  }
+}
+
 async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
   const pub = Deno.env.get('VAPID_PUBLIC_KEY')
   const priv = Deno.env.get('VAPID_PRIVATE_KEY')
@@ -37,7 +49,7 @@ async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
   if (!pub || !priv) throw new Error('VAPID keys not configured')
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 8000)
+  const timeout = setTimeout(() => controller.abort(), 5000)
   
   try {
     return await webPush.sendNotification(
@@ -72,7 +84,11 @@ async function resolveSubscription(userId?: string | null, contactId?: string | 
       .select('endpoint, keys')
       .eq('user_id', userId)
       .limit(1)
-    if (data?.[0]) return { endpoint: data[0].endpoint, keys: data[0].keys as SubscriptionKeys }
+    if (data?.[0]) {
+      const endpoint = String(data[0].endpoint || '').trim().replace(/`/g, '')
+      const keys = normalizeKeys((data[0] as any).keys)
+      if (endpoint && keys) return { endpoint, keys }
+    }
   }
   if (contactId) {
     const { data } = await supabase
@@ -80,9 +96,93 @@ async function resolveSubscription(userId?: string | null, contactId?: string | 
       .select('endpoint, keys')
       .eq('client_contact_id', contactId)
       .limit(1)
-    if (data?.[0]) return { endpoint: data[0].endpoint, keys: data[0].keys as SubscriptionKeys }
+    if (data?.[0]) {
+      const endpoint = String(data[0].endpoint || '').trim().replace(/`/g, '')
+      const keys = normalizeKeys((data[0] as any).keys)
+      if (endpoint && keys) return { endpoint, keys }
+    }
   }
   return null
+}
+
+async function handleMessage(msg: OutboxMessage) {
+  const attempts = msg.attempts || 1
+  try {
+    const sub = await resolveSubscription(msg.target_user_id, msg.target_contact_id)
+
+    if (!sub || !sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
+      await supabase.from('notification_outbox').update({
+        last_error: 'missing_subscription',
+        processed_at: new Date().toISOString(),
+        locked_until: null
+      }).eq('id', msg.id)
+      return false
+    }
+
+    const n = msg.payload || {}
+    const payload = {
+      title: String(n.title || 'Notificación'),
+      body: String(n.body || ''),
+      icon: absolutize(n.icon || '/img/android-chrome-192x192.png'),
+      badge: absolutize('/img/favicon-32x32.png'),
+      data: {
+        ...(typeof n.data === 'object' ? n.data : {}),
+        url: absolutize((n.data?.url) || '/')
+      }
+    }
+
+    const cleanEndpoint = String(sub.endpoint).trim().replace(/`/g, '')
+    const cleanKeys = { p256dh: sub.keys.p256dh.trim(), auth: sub.keys.auth.trim() }
+
+    await sendWebPush({ endpoint: cleanEndpoint, keys: cleanKeys }, payload)
+
+    try {
+      if (msg.target_user_id) {
+        await supabase.from('notifications').insert({
+          user_id: msg.target_user_id,
+          title: payload.title,
+          body: payload.body,
+          data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
+        })
+      } else if (msg.target_contact_id) {
+        await supabase.from('notifications').insert({
+          contact_id: msg.target_contact_id,
+          title: payload.title,
+          body: payload.body,
+          data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
+        })
+      }
+    } catch (_) {}
+
+    await supabase.from('notification_outbox').update({
+      processed_at: new Date().toISOString(),
+      last_error: null,
+      locked_until: null
+    }).eq('id', msg.id)
+    return true
+  } catch (err) {
+    const statusCode = (err as any)?.statusCode
+    const msgErr = err instanceof Error ? err.message : String(err)
+
+    if (statusCode === 404 || statusCode === 410) {
+      await supabase.from('notification_outbox').update({
+        last_error: `expired_subscription_${statusCode}`,
+        processed_at: new Date().toISOString(),
+        locked_until: null
+      }).eq('id', msg.id)
+    } else if (attempts >= 5) {
+      await supabase.from('notification_outbox').update({
+        last_error: `max_attempts_reached: ${msgErr}`,
+        processed_at: new Date().toISOString(),
+        locked_until: null
+      }).eq('id', msg.id)
+    } else {
+      await supabase.from('notification_outbox').update({
+        last_error: msgErr
+      }).eq('id', msg.id)
+    }
+    return false
+  }
 }
 
 async function processPending(limit = 10) {
@@ -90,92 +190,20 @@ async function processPending(limit = 10) {
   if (error) throw new Error(`outbox_claim_error: ${error.message}`)
   if (!messages?.length) return { processed: 0 }
 
+  const queue = [...(messages as OutboxMessage[])]
   let processed = 0
-  for (const msg of messages as OutboxMessage[]) {
-    const attempts = msg.attempts || 1
-    try {
-      const sub = await resolveSubscription(msg.target_user_id, msg.target_contact_id)
-      
-      if (!sub || !sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
-        await supabase.from('notification_outbox').update({
-          last_error: 'missing_subscription',
-          processed_at: new Date().toISOString(),
-          locked_until: null
-        }).eq('id', msg.id)
-        continue
-      }
+  const concurrency = Math.min(3, queue.length)
 
-      const n = msg.payload || {}
-      const payload = {
-        title: String(n.title || 'Notificación'),
-        body: String(n.body || ''),
-        icon: absolutize(n.icon || '/img/android-chrome-192x192.png'),
-        badge: absolutize('/img/favicon-32x32.png'),
-        data: {
-          ...(typeof n.data === 'object' ? n.data : {}),
-          url: absolutize((n.data?.url) || '/')
-        }
-      }
-
-      const cleanEndpoint = String(sub.endpoint).trim().replace(/`/g, '')
-      const cleanKeys = {
-        p256dh: String(sub.keys.p256dh).trim(),
-        auth: String(sub.keys.auth).trim()
-      }
-
-      await sendWebPush({ endpoint: cleanEndpoint, keys: cleanKeys }, payload)
-
-      // Insertar en notifications (deduplicación por índice único existente)
-      try {
-        if (msg.target_user_id) {
-          await supabase.from('notifications').insert({
-            user_id: msg.target_user_id,
-            title: payload.title,
-            body: payload.body,
-            data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
-          })
-        } else if (msg.target_contact_id) {
-          await supabase.from('notifications').insert({
-            contact_id: msg.target_contact_id,
-            title: payload.title,
-            body: payload.body,
-            data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
-          })
-        }
-      } catch (_) {
-        // Silenciar errores de deduplicación o RLS
-      }
-
-      await supabase.from('notification_outbox').update({
-        processed_at: new Date().toISOString(),
-        last_error: null,
-        locked_until: null
-      }).eq('id', msg.id)
-      processed++
-
-    } catch (err) {
-      const statusCode = (err as any)?.statusCode
-      const msgErr = err instanceof Error ? err.message : String(err)
-
-      if (statusCode === 404 || statusCode === 410) {
-        await supabase.from('notification_outbox').update({
-          last_error: `expired_subscription_${statusCode}`,
-          processed_at: new Date().toISOString(),
-          locked_until: null
-        }).eq('id', msg.id)
-      } else if (attempts >= 5) {
-        await supabase.from('notification_outbox').update({
-          last_error: `max_attempts_reached: ${msgErr}`,
-          processed_at: new Date().toISOString(),
-          locked_until: null
-        }).eq('id', msg.id)
-      } else {
-        await supabase.from('notification_outbox').update({
-          last_error: msgErr
-        }).eq('id', msg.id)
-      }
+  async function worker() {
+    for (;;) {
+      const next = queue.shift()
+      if (!next) break
+      const ok = await handleMessage(next)
+      if (ok) processed++
     }
   }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()))
   return { processed }
 }
 
