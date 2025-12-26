@@ -35,17 +35,16 @@
     }
 
     try {
+      // No habilitar suscripción push automáticamente; dejar que el usuario la active explícitamente
       if ('Notification' in window) {
         const seen = localStorage.getItem('tlc_push_prompt_seen');
         if (Notification.permission === 'default' && !seen) {
-          const proceed = confirm('¿Deseas recibir notificaciones sobre tus solicitudes?');
+          // Solo registrar que ya se mostró el prompt en esta sesión
           localStorage.setItem('tlc_push_prompt_seen', '1');
-          if (proceed && window.pushNotifications && window.pushNotifications.isSupported) {
-            try { await window.pushNotifications.enable(); } catch(_){}
-          }
+          // Si se desea, puede mostrarse un botón en UI para activar push manualmente
         }
       }
-    } catch(_){}
+    } catch(_){ }
   });
 
   // beforeinstallprompt handling moved to each page; expose helper

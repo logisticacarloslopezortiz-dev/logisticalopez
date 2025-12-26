@@ -31,12 +31,17 @@
   </style>
   <!-- Leaflet CSS y JS -->
   <link rel="stylesheet" href="vendor/leaflet.css" />
+  <style>
+    /* Asegura que el contenedor del mapa permita eventos de puntero */
+    #map { touch-action: manipulation; }
+    .leaflet-container { cursor: crosshair; }
+  </style>
 
 </head>
 <body class="bg-gray-100">
 
   <!-- Contenedor principal para el formulario -->
-  <section id="form-section" class="pt-16 pb-16 flex justify-center items-start min-h-screen">
+  <main id="form-section" class="pt-16 pb-16 flex justify-center items-start min-h-screen">
     <div class="w-full max-w-5xl px-4 relative z-50">
       <!-- Card del Formulario -->
       <div class="bg-white rounded-2xl shadow-2xl p-8 animate-fadeInUp">
@@ -63,8 +68,11 @@
           <!-- Paso 1: Datos Personales -->
           <div class="step p-6 border-2 border-azulClaro rounded-xl shadow-md animate-fadeInUp" data-step="1">
             <h4 class="text-xl font-semibold text-azulOscuro mb-4 text-center">Paso 1: Datos Personales</h4>
+            <label for="clientName" class="sr-only">Nombre completo</label>
             <input type="text" id="clientName" name="clientName" placeholder="Nombre completo" class="w-full border p-2 rounded mb-4" required aria-label="Nombre completo">
+            <label for="clientPhone" class="sr-only">Teléfono</label>
             <input type="tel" id="clientPhone" name="clientPhone" placeholder="Teléfono" class="w-full border p-2 rounded mb-4" required aria-label="Teléfono">
+            <label for="clientEmail" class="sr-only">Correo electrónico</label>
             <input type="email" id="clientEmail" name="clientEmail" placeholder="Correo electrónico" class="w-full border p-2 rounded mb-4" aria-label="Correo electrónico">
 
             <!-- Campo RNC opcional -->
@@ -77,7 +85,9 @@
 
             <!-- Campos RNC (ocultos por defecto) -->
             <div id="rncFields" class="hidden space-y-4">
+              <label for="clientRNC" class="sr-only">Número de RNC</label>
               <input type="text" id="clientRNC" name="rnc" placeholder="Número de RNC" class="w-full border p-2 rounded" pattern="\d{9,11}" title="El RNC debe tener 9 u 11 dígitos.">
+              <label for="clientCompany" class="sr-only">Nombre de la empresa</label>
               <input type="text" id="clientCompany" name="empresa" placeholder="Nombre de la empresa" class="w-full border p-2 rounded">
               <!-- Mensaje de ITBIS -->
               <div id="itbisMessage" class="hidden p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
@@ -284,7 +294,7 @@
         </form>
       </div>
     </div>
-  </section>
+  </main>
  
   <script>
     document.addEventListener('DOMContentLoaded', function(){
@@ -301,7 +311,7 @@
         <div class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-azulOscuro">🏗️ Servicio de Carga Pesada</h3>
-            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            <button type="button" class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
           </div>
           <form id="form-carga-pesada" class="space-y-4">
             <div>
@@ -357,7 +367,7 @@
         <div class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-azulOscuro">📦 Servicio de Paquetería</h3>
-            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            <button type="button" class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
           </div>
           <form id="form-paqueteria" class="space-y-4">
             <div>
@@ -416,7 +426,7 @@
         <div class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-azulOscuro">🚚 Servicio de Fletes</h3>
-            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            <button type="button" class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
           </div>
           <form id="form-flete" class="space-y-4">
             <div>
@@ -477,7 +487,7 @@
         <div class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-azulOscuro">🏢 Servicio de Transporte Comercial</h3>
-            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            <button type="button" class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
           </div>
           <form id="form-transporte-comercial" class="space-y-4">
             <div>
@@ -742,7 +752,7 @@
         <div class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-azulOscuro">🚗 Servicio de Grúa de Vehículo</h3>
-            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            <button type="button" class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
           </div>
           <form id="form-grua-vehiculo" class="space-y-4">
             <div>
@@ -802,7 +812,7 @@
         <div class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-azulOscuro">🏋️ Servicio de Grúa de Carga</h3>
-            <button class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            <button type="button" class="close-modal text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
           </div>
           <form id="form-grua-carga" class="space-y-4">
             <div>
@@ -897,8 +907,21 @@
 
   <script src="js/notifications.js"></script>
   <script src="js/pwa.js"></script>
+  <script>
+    // Solicitar permiso de notificaciones al llegar al paso 6 (intención del usuario visible)
+    document.addEventListener('DOMContentLoaded', function(){
+      const observer = new MutationObserver(() => {
+        const step6 = document.querySelector('.step[data-step="6"]');
+        if (step6 && !step6.classList.contains('hidden')) {
+          try { if (typeof requestNotificationPermission === 'function') requestNotificationPermission(); } catch(_) {}
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    });
+  </script>
   <script src="js/cliente.js"></script>
   <script>if(window.lucide){lucide.createIcons();}</script>
 </body>
- 
+
 </html>

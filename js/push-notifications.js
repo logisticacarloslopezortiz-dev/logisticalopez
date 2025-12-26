@@ -88,8 +88,15 @@ class PushNotificationManager {
                 this.subscription = subscription;
                 console.log('Existing push subscription found');
                 
-                // Verificar si está guardada en la base de datos
-                await this.syncSubscriptionWithServer(subscription);
+                // Solo sincronizar si el usuario aceptó explícitamente
+                let optedIn = false;
+                try { optedIn = localStorage.getItem('tlc_push_opt_in') === '1'; } catch(_) {}
+                if (optedIn) {
+                    // Verificar si está guardada en la base de datos
+                    await this.syncSubscriptionWithServer(subscription);
+                } else {
+                    console.log('[push] Suscripción existente detectada pero sin opt-in; no se sincroniza con el servidor.');
+                }
 
                 try {
                     const savedKey = localStorage.getItem('tlc_vapid_pub') || '';
@@ -334,6 +341,7 @@ window.pushNotifications = {
     async enable() {
         try {
             await window.pushManager.subscribe();
+            try { localStorage.setItem('tlc_push_opt_in', '1'); } catch(_) {}
             return true;
         } catch (error) {
             console.error('Failed to enable push notifications:', error);

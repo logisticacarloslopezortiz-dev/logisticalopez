@@ -83,6 +83,49 @@ document.addEventListener('DOMContentLoaded', () => {
     return String(status || '').trim();
   }
 
+  // --- Notificaciones Push (Automatización) ---
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  async function registerCollaboratorPush(userId) {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      
+      // Intentar pedir permiso si está en 'default' (puede requerir interacción en algunos navegadores)
+      if (Notification.permission === 'default') {
+        try { await Notification.requestPermission(); } catch(_) {}
+      }
+      
+      if (Notification.permission !== 'granted') return;
+
+      const registration = await navigator.serviceWorker.ready;
+      let sub = await registration.pushManager.getSubscription();
+      
+      if (!sub) {
+        const vapidKey = await supabaseConfig.getVapidPublicKey();
+        if (!vapidKey) return;
+        
+        sub = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey)
+        });
+      }
+      
+      if (sub) {
+        // Guardar suscripción en la tabla collaborators
+        await supabaseConfig.client.from('collaborators').update({ push_subscription: sub }).eq('id', userId);
+      }
+    } catch (e) { console.warn('Error auto-registro push:', e); }
+  }
+
   // --- Autenticación ---
 
   async function ensureAuthOrRedirect() {
@@ -638,6 +681,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const uid = session?.user?.id;
       
       if (uid) {
+        // ✅ AUTOMATIZACIÓN: Registrar push al cargar
+        registerCollaboratorPush(uid);
+
         const ch = supabaseConfig.client.channel('orders-collab-v2');
         ch.on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async (payload) => {
           const isNewPending = payload.eventType === 'INSERT' && payload.new.status === 'Pendiente';
@@ -767,6 +813,3 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
-
-
-
