@@ -120,17 +120,15 @@ let pickupInput;
 let deliveryInput;
 // Estado único y fuente de verdad para el mapa
 const MapState = {
-  step: 'origin', // 'origin' | 'destination' | 'complete'
+  mode: 'origin', // 'origin' | 'destination' | 'complete'
   origin: null,   // { marker, latlng, label }
   destination: null, // { marker, latlng, label }
   preview: null   // Leaflet marker (preview)
 };
-let providerForSearch = null;
 let rdBounds = null;
 let originIcon = null;
 let destinationIcon = null;
 let previewIcon = null;
-let routeLine = null;
 let mapInitialized = false; // ✅ NUEVO: Control para evitar inicializaciones múltiples del mapa.
 
 // Utilidad: debounce simple para limitar frecuencia de ejecución
@@ -159,8 +157,40 @@ async function reverseGeocode(latlng) {
 function updateStepUI() {
   try {
     const instr = document.getElementById('map-instruction-text');
-    if (instr) instr.textContent = MapState.step === 'origin' ? 'Primero, define tu punto de recogida.' : (MapState.step === 'destination' ? 'Ahora, define tu punto de entrega.' : 'Origen y destino definidos. Puedes continuar.');
-    if (deliveryInput) deliveryInput.disabled = MapState.step !== 'destination';
+    if (instr) {
+        if (MapState.mode === 'origin') instr.textContent = 'Primero, define tu punto de recogida.';
+        else if (MapState.mode === 'destination') instr.textContent = 'Ahora, define tu punto de entrega.';
+        else instr.textContent = 'Origen y destino definidos. Puedes continuar.';
+    }
+    
+    if (pickupInput) pickupInput.disabled = false;
+    if (deliveryInput) deliveryInput.disabled = MapState.mode === 'origin';
+    
+    const originCard = document.getElementById('origin-card');
+    const destCard = document.getElementById('destination-card');
+    const originDisp = document.getElementById('origin-address-display');
+    const destDisp = document.getElementById('destination-address-display');
+    
+    if (originCard && originDisp) {
+        if (MapState.origin) {
+            originCard.classList.remove('hidden');
+            originDisp.textContent = MapState.origin.label;
+        } else {
+            originCard.classList.add('hidden');
+        }
+    }
+    
+    if (destCard && destDisp) {
+        if (MapState.destination) {
+            destCard.classList.remove('hidden');
+            destDisp.textContent = MapState.destination.label;
+        } else {
+            destCard.classList.add('hidden');
+        }
+    }
+    
+    const distanceContainer = document.getElementById('distance-container');
+    if (distanceContainer) distanceContainer.classList.add('hidden'); // Calculo de distancia eliminado según reglas
   } catch(_) {}
 }
 
@@ -193,7 +223,9 @@ function showStep(step) {
 
   // ✅ SOLUCIÓN MEJORADA: Inicializar el mapa solo cuando el paso 4 es visible por primera vez.
   if (step === 4 && !MapState.origin && !MapState.destination) {
-    resetRouteSelection();
+    if (MapState.preview) { try { map.removeLayer(MapState.preview); } catch(_){} MapState.preview = null; }
+    MapState.mode = 'origin';
+    updateStepUI();
   }
   if (step === 4 && !mapInitialized) { // Si estamos en el paso 4 y el mapa NO ha sido inicializado
     mapInitialized = true; // Marcar como inicializado para no volver a ejecutar
@@ -212,60 +244,8 @@ function showStep(step) {
   updateHelpText(step);
 }
 
-function resetRouteSelection(){
-  try {
-    if (MapState.origin?.marker && map) { map.removeLayer(MapState.origin.marker); }
-    if (MapState.destination?.marker && map) { map.removeLayer(MapState.destination.marker); }
-    if (routeLine && map) { map.removeLayer(routeLine); routeLine = null; }
-  } catch(_) {}
-  MapState.origin = null;
-  MapState.destination = null;
-  MapState.preview = null;
-  MapState.step = 'origin';
-  const originCard = document.getElementById('origin-card');
-  const originDisp = document.getElementById('origin-address-display');
-  const destCard = document.getElementById('destination-card');
-  const destDisp = document.getElementById('destination-address-display');
-  const distanceContainer = document.getElementById('distance-container');
-  const pickupLabel = document.getElementById('pickup-label');
-  const deliveryLabel = document.getElementById('delivery-label');
-  const routeInputs = document.getElementById('route-inputs');
-  if (originCard) originCard.classList.add('hidden');
-  if (destCard) destCard.classList.add('hidden');
-  if (distanceContainer) distanceContainer.classList.add('hidden');
-  if (pickupLabel) pickupLabel.classList.remove('hidden');
-  if (deliveryLabel) deliveryLabel.classList.remove('hidden');
-  if (routeInputs) routeInputs.classList.add('hidden');
-  if (pickupInput) { pickupInput.disabled = false; }
-  if (deliveryInput) { deliveryInput.disabled = true; deliveryInput.value = ''; }
-  updateStepUI();
-}
+// Funciones de reset eliminadas según reglas
 
-function resetOriginOnly(){
-  try { if (MapState.origin?.marker && map) map.removeLayer(MapState.origin.marker); } catch(_){ }
-  if (routeLine && map) { map.removeLayer(routeLine); routeLine = null; }
-  MapState.origin = null;
-  MapState.step = 'origin';
-  const originCard = document.getElementById('origin-card');
-  const distanceContainer = document.getElementById('distance-container');
-  if (originCard) originCard.classList.add('hidden');
-  if (distanceContainer) distanceContainer.classList.add('hidden');
-  if (deliveryInput) deliveryInput.disabled = true;
-  updateStepUI();
-}
-
-function resetDestinationOnly(){
-  try { if (MapState.destination?.marker && map) map.removeLayer(MapState.destination.marker); } catch(_){ }
-  if (routeLine && map) { map.removeLayer(routeLine); routeLine = null; }
-  MapState.destination = null;
-  MapState.step = MapState.origin ? 'destination' : 'origin';
-  const destCard = document.getElementById('destination-card');
-  const distanceContainer = document.getElementById('distance-container');
-  if (destCard) destCard.classList.add('hidden');
-  if (distanceContainer) distanceContainer.classList.add('hidden');
-  if (deliveryInput) { deliveryInput.disabled = false; deliveryInput.value = ''; }
-  updateStepUI();
-}
 
 function updateHelpText(step) {
   if (!helpText) return;
@@ -540,7 +520,8 @@ function displayOrderSummary() {
   const delivery = deliveryEl ? deliveryEl.value : '';
 
   // Obtener datos del mapa en el momento de mostrar el resumen
-  const distance = document.getElementById('distance-value').textContent;
+  const distEl = document.getElementById('distance-value');
+  const distance = distEl ? distEl.textContent : '--';
   const originCoords = MapState.origin?.marker ? MapState.origin.marker.getLatLng() : null;
   const destinationCoords = MapState.destination?.marker ? MapState.destination.marker.getLatLng() : null;
 
@@ -695,7 +676,7 @@ function setBottomSheetForOrigin(address){
         const pickupInput = document.getElementById('pickupAddress');
         if (pickupInput && val) pickupInput.value = val;
         // Pasar al estado de destino explícitamente y habilitar el input
-        MapState.step = 'destination';
+        MapState.mode = 'destination';
         const deliveryInputLocal = document.getElementById('deliveryAddress');
         if (deliveryInputLocal) deliveryInputLocal.disabled = false;
         updateStepUI();
@@ -708,93 +689,45 @@ function setBottomSheetForOrigin(address){
 
 async function initMap() {
   const mapElement = document.getElementById("map");
-  if (!mapElement) {
-    console.log("Elemento del mapa no encontrado en esta página.");
-    return;
-  }
+  if (!mapElement) return;
 
-  // Mostrar spinner mientras carga el mapa
   const loader = document.getElementById('map-loader');
-  const loaderText = document.getElementById('map-loader-text');
-  loader.style.display = 'flex';
-  
-  rdBounds = L.latLngBounds(
-    L.latLng(17.47004, -72.00742), // Suroeste RD
-    L.latLng(19.93298, -68.32254)  // Noreste RD
-  );
+  if (loader) loader.style.display = 'flex';
+
+  rdBounds = L.latLngBounds(L.latLng(17.47004, -72.00742), L.latLng(19.93298, -68.32254));
   const sanCristobalCenter = [18.4160, -70.1090];
 
+  // Configuración Leaflet recomendada (Regla 7)
   map = L.map(mapElement, {
     maxBounds: rdBounds,
-    maxBoundsViscosity: 1.0
+    maxBoundsViscosity: 1.0,
+    scrollWheelZoom: false, // Evita zoom accidental
+    tap: true
   }).setView(sanCristobalCenter, 12);
 
-  if (map && typeof map.invalidateSize === 'function') { setTimeout(() => map.invalidateSize(), 100); }
-  mapElement.style.background = '#eef2ff';
-  mapElement.style.position = 'relative';
-  function ensureResponsiveMapHeight(){
-    const h = Math.max(360, Math.floor(window.innerHeight * 0.75));
-    mapElement.style.height = h + 'px';
-    if (map && typeof map.invalidateSize === 'function') { setTimeout(() => map.invalidateSize(), 50); }
-  }
-  ensureResponsiveMapHeight();
-  window.addEventListener('resize', ensureResponsiveMapHeight);
-  window.addEventListener('orientationchange', ensureResponsiveMapHeight);
-  // pickupInput already declared earlier; reuse it here
-  // deliveryInput ya declarado más arriba; se reutiliza aquí
+  map.on('click', () => { map.scrollWheelZoom.enable(); });
 
-  if (pickupInput) { pickupInput.classList.remove('hidden'); pickupInput.disabled = false; pickupInput.placeholder = 'Escribe o selecciona en el mapa'; }
-  if (deliveryInput) { deliveryInput.classList.remove('hidden'); deliveryInput.disabled = true; deliveryInput.placeholder = 'Escribe o selecciona en el mapa'; }
-
-  let layersControl = null;
-  let layersHidden = false;
-  const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap & CARTO',
-    subdomains: 'abcd',
-    maxZoom: 19
-  });
-  const stadiaOutdoors = L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', {
-    attribution: 'Map tiles by Stadia Maps, Data by OpenMapTiles & OpenStreetMap contributors',
-    maxZoom: 20
-  });
-  const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19
-  });
-  // Preferir Stadia Outdoors por defecto y ocultar loader cuando cargue; fallback a CARTO si falla
+  // Layers
+  const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap & CARTO', subdomains: 'abcd', maxZoom: 19 });
+  const stadiaOutdoors = L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', { attribution: 'Map tiles by Stadia Maps', maxZoom: 20 });
+  const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 });
+  
   let baseLoaded = false;
   const baseLayer = stadiaOutdoors.addTo(map);
   if (baseLayer && typeof baseLayer.on === 'function') {
-    baseLayer.on('load', () => { loader.style.display = 'none'; mapElement.style.background = ''; baseLoaded = true; });
-    baseLayer.on('tileerror', () => {
-      if (!baseLoaded) {
-        const cartoLayer = cartoVoyager.addTo(map);
-        if (cartoLayer && typeof cartoLayer.on === 'function') {
-          cartoLayer.on('load', () => { loader.style.display = 'none'; mapElement.style.background = ''; });
-        } else {
-          const osmLayer = osmStandard.addTo(map);
-          if (osmLayer && typeof osmLayer.on === 'function') {
-            osmLayer.on('load', () => { loader.style.display = 'none'; mapElement.style.background = ''; });
-          } else {
-            loader.style.display = 'none'; mapElement.style.background = '';
+      baseLayer.on('load', () => { if(loader) loader.style.display = 'none'; mapElement.style.background = ''; baseLoaded = true; });
+      baseLayer.on('tileerror', () => {
+          if (!baseLoaded) {
+              cartoVoyager.addTo(map).on('load', () => { if(loader) loader.style.display = 'none'; });
           }
-        }
-      }
-    });
-  } else {
-    // Fallback cuando Leaflet local es un stub sin eventos
-    loader.style.display = 'none';
-  }
-  if (L.control && typeof L.control.layers === 'function') {
-    layersControl = L.control.layers({ 'Stadia Outdoors': stadiaOutdoors, 'CARTO Voyager': cartoVoyager, 'OSM Standard': osmStandard }).addTo(map);
-  }
-  let providerRD = null;
-  if (window.GeoSearch && GeoSearch.OpenStreetMapProvider) {
-    providerRD = new GeoSearch.OpenStreetMapProvider({ params: { countrycodes: 'do', "accept-language": 'es', addressdetails: 1 } });
-  }
-  const geoSearchProvider = providerRD;
-  providerForSearch = geoSearchProvider;
+      });
+  } else { if(loader) loader.style.display = 'none'; }
 
+  if (L.control && typeof L.control.layers === 'function') {
+      L.control.layers({ 'Stadia Outdoors': stadiaOutdoors, 'CARTO Voyager': cartoVoyager, 'OSM Standard': osmStandard }).addTo(map);
+  }
+
+  // Helpers de búsqueda
   async function forwardGeocode(q){
     try{
       const { data, error } = await supabaseConfig.client.functions.invoke('forward-geocode', { body: { q, countrycodes: 'do', lang: 'es', addressdetails: 1 } });
@@ -802,46 +735,38 @@ async function initMap() {
       const res = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
       if (Array.isArray(res) && res.length > 0){
         const r = res[0];
-        const lat = parseFloat(r.lat ?? r.y);
-        const lon = parseFloat(r.lon ?? r.x);
-        const label = r.display_name ?? r.label ?? r.name ?? q;
-        if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lng: lon, label };
+        return { lat: parseFloat(r.lat ?? r.y), lng: parseFloat(r.lon ?? r.x), label: r.display_name ?? r.label ?? r.name ?? q };
       }
       return null;
     } catch(_) { return null; }
   }
 
-  // Búsqueda unificada con fallback
-  async function searchPlace(query) {
-    const q = String(query || '').trim();
-    if (!q || q.length < 3) return null;
-    try {
-      const fg = await forwardGeocode(q);
-      if (fg) return { lat: fg.lat, lng: fg.lng, label: fg.label };
-    } catch(_){}
-    try {
-      const clean = q.replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', ').replace(/[,:;\.]+$/g, '').trim();
-      const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(clean) + '&lang=es';
-      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      if (r.ok) {
-        const j = await r.json();
-        const f = Array.isArray(j.features) ? j.features[0] : null;
-        if (f && f.geometry && Array.isArray(f.geometry.coordinates)) {
-          return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: (f.properties && (f.properties.label || f.properties.name)) || q };
-        }
-      }
-    } catch(_){}
-    return null;
-  }
+async function searchPlace(query) {
+  const q = String(query || '').trim();
+  if (!q || q.length < 3) return null;
+  let res = await forwardGeocode(q);
+  if (res) return res;
+  try {
+    const qSan = q.replace(/[^\p{L}\s]/gu, '').trim();
+    if (!qSan || qSan.length < 3) return null;
+    const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(qSan) + '&lang=es&limit=1';
+    const r = await fetch(url);
+    if (r.ok) {
+      const j = await r.json();
+      const f = j.features?.[0];
+      if (f) return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: f.properties.name || q };
+    }
+  } catch(_){ }
+  return null;
+}
 
-  // Cache de último resultado por input
   const inputLastResult = new WeakMap();
   const previewSearch = debounce(async (inputEl) => {
     const q = (inputEl && inputEl.value ? inputEl.value : '').trim();
     const res = await searchPlace(q);
     if (!res) return;
     const latlng = L.latLng(res.lat, res.lng);
-    if (rdBounds && !rdBounds.contains(latlng)) { notify('error', 'Resultado fuera de República Dominicana'); return; }
+    if (rdBounds && !rdBounds.contains(latlng)) { notify('error', 'Fuera de RD'); return; }
     inputLastResult.set(inputEl, res);
     map.setView(latlng, 16);
     if (!MapState.preview) {
@@ -856,142 +781,18 @@ async function initMap() {
     if (!q || q.length < 3) return;
     let res = inputLastResult.get(inputEl);
     if (!res) res = await searchPlace(q);
-    if (!res) return;
-    const latlng = L.latLng(res.lat, res.lng);
-    if (rdBounds && !rdBounds.contains(latlng)) { notify('error', 'Resultado fuera de República Dominicana'); return; }
-    if (MapState.step === 'origin') {
-      setPoint('origin', latlng, q || res.label);
-      MapState.step = 'destination';
-    } else if (MapState.step === 'destination') {
-      setPoint('destination', latlng, q || res.label);
-      MapState.step = 'complete';
-    }
-    updateStepUI();
-  if (MapState.preview) { try { map.removeLayer(MapState.preview); } catch(_){} MapState.preview = null; }
+    if (res) confirmPoint(L.latLng(res.lat, res.lng), q || res.label);
   }
 
+  // Iconos
+  originIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+  destinationIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+  previewIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
 
-  // --- Iconos personalizados para los marcadores ---
-  originIcon = L.icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', // ✅ CORREGIDO: Usar URL de CDN
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', // ✅ CORREGIDO: Usar URL de CDN
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-  });
-
-  destinationIcon = L.icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', // ✅ CORREGIDO: Usar URL de CDN
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', // ✅ CORREGIDO: Usar URL de CDN
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-  });
-
-  previewIcon = L.icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-  });
-
-  // --- Búsqueda de direcciones ---
-  let searchControl = null; // Deshabilitado: evitar múltiples sistemas de búsqueda activos
-  // Buscador interno siempre visible, debajo del menú de capas
-  const container = document.createElement('div');
-  container.style.position = 'absolute';
-  container.style.top = '10px';
-  container.style.right = '10px';
-  container.style.zIndex = '1000';
-  container.style.background = '#fff';
-  container.style.padding = '6px';
-  container.style.borderRadius = '8px';
-  container.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.id = 'address-search-input';
-  input.placeholder = 'Buscar lugar en República Dominicana';
-  input.style.width = '220px';
-  input.style.border = '1px solid #e5e7eb';
-  input.style.borderRadius = '6px';
-  input.style.padding = '6px 8px';
-  container.appendChild(input);
-    // Ayuda simple: orientar al usuario a usar búsqueda o clic
-    const helpTextEl = document.createElement('div');
-    helpTextEl.style.marginTop = '6px';
-    helpTextEl.style.fontSize = '12px';
-    helpTextEl.style.color = '#6b7280';
-    helpTextEl.textContent = 'Escribe una dirección o haz clic en el mapa para seleccionar.';
-    container.appendChild(helpTextEl);
-
-    const resultsHeader = document.createElement('div');
-    resultsHeader.textContent = 'Resultados:';
-    resultsHeader.style.marginTop = '6px';
-    resultsHeader.style.fontSize = '12px';
-    resultsHeader.style.color = '#6b7280';
-    container.appendChild(resultsHeader);
-
-    const suggestions = document.createElement('ul');
-    suggestions.style.marginTop = '6px';
-    suggestions.style.maxHeight = '180px';
-    suggestions.style.overflowY = 'auto';
-    suggestions.style.borderTop = '1px solid #e5e7eb';
-    suggestions.style.listStyle = 'none';
-    suggestions.style.padding = '0';
-    container.appendChild(suggestions);
-  container.style.pointerEvents = 'auto';
-  mapElement.appendChild(container);
-  // Reposicionar debajo del menú de capas si existe
-  try {
-    const layersEl = mapElement.querySelector('.leaflet-control-layers');
-    const h = layersEl ? (layersEl.getBoundingClientRect().height || 48) : 48;
-    container.style.top = (10 + h + 8) + 'px';
-  } catch(_) {}
-  if (window.L && L.DomEvent && typeof L.DomEvent.disableClickPropagation === 'function') {
-    L.DomEvent.disableClickPropagation(container);
-    L.DomEvent.disableScrollPropagation(container);
-  }
-  ['click','mousedown','touchstart','pointerdown'].forEach(evt => {
-    container.addEventListener(evt, (e) => { e.stopPropagation(); });
-    input.addEventListener(evt, (e) => { e.stopPropagation(); });
-  });
-
-    input.addEventListener('input', () => { previewSearch(input); });
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmSearch(input); } });
-  }
-
-  // Control GeoSearch deshabilitado para evitar duplicar sistemas de geocodificación
-
-  // --- Inputs y listeners ---
+  // Inputs y Listeners
   pickupInput = document.getElementById('pickupAddress');
   deliveryInput = document.getElementById('deliveryAddress');
-  const pickupLabel = document.getElementById('pickup-label');
-  const deliveryLabel = document.getElementById('delivery-label');
-  const routeInputs = document.getElementById('route-inputs');
-  const instructionText = document.getElementById('map-instruction-text');
-  mapContainer = document.getElementById('map-container');
-  const mapEl = document.getElementById('map');
-  const searchInput = document.getElementById('address-search-input');
-
-  // --- INICIO: Mejoras para mapa en móvil ---
-  const expandMapBtn = document.getElementById('expand-map-btn');
-  function expandMap() {
-    if (mapEl) {
-      mapEl.style.height = window.innerHeight + 'px';
-      setTimeout(() => map.invalidateSize(), 50);
-    }
-  }
-  if (expandMapBtn) { expandMapBtn.addEventListener('click', () => { expandMap(); }); }
-  window.addEventListener('resize', () => { setTimeout(() => { if (map && typeof map.invalidateSize === 'function') map.invalidateSize(); }, 50); });
-  window.addEventListener('orientationchange', () => { setTimeout(() => { if (map && typeof map.invalidateSize === 'function') map.invalidateSize(); }, 50); });
-  if (pickupInput) { pickupInput.addEventListener('focus', () => { expandMap(); }); }
-  if (deliveryInput) { deliveryInput.addEventListener('focus', () => { expandMap(); }); }
-
-  // Vincular entradas externas (origen/destino) con preview y confirmación
+  
   if (pickupInput) {
     pickupInput.addEventListener('input', () => previewSearch(pickupInput));
     pickupInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmSearch(pickupInput); } });
@@ -1001,69 +802,99 @@ async function initMap() {
     deliveryInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmSearch(deliveryInput); } });
   }
 
-  // Botón usar ubicación actual
+  // Botón Expandir Mapa
+  const expandMapBtn = document.getElementById('expand-map-btn');
+  if (expandMapBtn) {
+      expandMapBtn.addEventListener('click', () => {
+          const layout = document.querySelector('.map-layout');
+          if (layout) {
+              layout.classList.toggle('map-full');
+              document.body.classList.toggle('no-scroll');
+              setTimeout(() => map.invalidateSize(), 300);
+          }
+      });
+  }
+
+  // Ubicación Actual
   const useLocBtn = document.getElementById('use-current-location');
   if (useLocBtn) {
-    useLocBtn.classList.remove('hidden');
-    useLocBtn.addEventListener('click', () => {
-      if (navigator.geolocation && MapState.step === 'origin') {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            setPoint('origin', latlng);
-            MapState.step = 'destination';
-            updateStepUI();
-          },
-          () => { /* silencioso */ }
-        );
-      }
-    });
+      useLocBtn.classList.remove('hidden');
+      useLocBtn.addEventListener('click', () => {
+          if (navigator.geolocation && MapState.mode === 'origin') {
+              navigator.geolocation.getCurrentPosition(
+                  (pos) => confirmPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                  () => notify('error', 'No se pudo obtener tu ubicación')
+              );
+          }
+      });
+  }
+
+  // Evento Click en Mapa
+  map.on('click', (e) => {
+      confirmPoint(e.latlng);
+  });
+}
+
+// --- Función CENTRAL del mapa (OBLIGATORIA) ---
+async function confirmPoint(latlng, label = null) {
+    if (!map) return;
+
+    // 1. Validar límites de República Dominicana
+    if (rdBounds && !rdBounds.contains(latlng)) {
+      notify('error', 'La ubicación está fuera de República Dominicana.');
+      return;
+    }
+
+    // 2. Limpiar preview si existe
+    if (MapState.preview) {
+      try { map.removeLayer(MapState.preview); } catch (_) {}
+      MapState.preview = null;
+    }
+
+    // 3. Reverse geocoding si no hay label
+    if (!label) {
+      label = await reverseGeocode(latlng);
+    }
+
+    // 4. Lógica de estado (Origin -> Destination -> Complete)
+    if (MapState.mode === 'complete') {
+      // Reiniciar automáticamente si ya estaba completo
+      resetMapState();
+      MapState.mode = 'origin';
+      setPoint('origin', latlng, label);
+      MapState.mode = 'destination';
+    } else if (MapState.mode === 'origin') {
+      setPoint('origin', latlng, label);
+      MapState.mode = 'destination';
+    } else if (MapState.mode === 'destination') {
+      setPoint('destination', latlng, label);
+      MapState.mode = 'complete';
+    }
+
+    // 5. Actualizar UI
+    updateStepUI();
+  }
+
+  // Reiniciar estado del mapa
+  function resetMapState() {
+    if (MapState.origin?.marker) map.removeLayer(MapState.origin.marker);
+    if (MapState.destination?.marker) map.removeLayer(MapState.destination.marker);
+    if (MapState.preview) map.removeLayer(MapState.preview);
+    MapState.origin = null;
+    MapState.destination = null;
+    MapState.preview = null;
+    MapState.mode = 'origin';
+    if (pickupInput) pickupInput.value = '';
+    if (deliveryInput) deliveryInput.value = '';
+    updateStepUI();
   }
 
   if (map && typeof map.on === 'function') {
-    map.on('click', async (e) => {
-      const latlng = e.latlng;
-      if (rdBounds && !rdBounds.contains(latlng)) { notify('error', 'La ubicación está fuera de República Dominicana.'); return; }
-      const label = await reverseGeocode(latlng);
-      if (MapState.step === 'origin') {
-        setPoint('origin', latlng, label);
-        MapState.step = 'destination';
-      } else if (MapState.step === 'destination') {
-        setPoint('destination', latlng, label);
-        MapState.step = 'complete';
-      }
-      updateStepUI();
+    // 3️⃣ Lo ÚNICO que debe pasar cuando el usuario hace click
+    map.on('click', (e) => {
+      confirmPoint(e.latlng);
     });
   }
-
-  
-
-  // Lógica principal para actualizar marcadores
-async function updateMarkerAndAddress(latlng, label = null) {
-  // Shim para compatibilidad: confirmar punto según paso actual
-  if (rdBounds && !rdBounds.contains(latlng)) {
-    notify('error', 'La ubicación seleccionada está fuera de República Dominicana.', { title: 'Ubicación Inválida' });
-    return;
-  }
-  if (MapState.step === 'origin') {
-    if (!label) label = await reverseGeocode(latlng);
-    setPoint('origin', latlng, label);
-    MapState.step = 'destination';
-    updateStepUI();
-  } else if (MapState.step === 'destination') {
-    if (!label) label = await reverseGeocode(latlng);
-    setPoint('destination', latlng, label);
-    MapState.step = 'complete';
-    updateStepUI();
-  } else {
-    // Estado 'complete': reiniciar y establecer nuevo origen sin recursión
-    resetRouteSelection();
-    if (!label) label = await reverseGeocode(latlng);
-    setPoint('origin', latlng, label);
-    MapState.step = 'destination';
-    updateStepUI();
-  }
-}
 
 function enableDrag(marker, type) {
   marker.on('dragend', debounce(async (e) => {
@@ -1079,6 +910,8 @@ function setPoint(type, latlng, label = '') {
   const inputEl = type === 'origin' ? pickupInput : deliveryInput;
   const cardId = type === 'origin' ? 'origin-card' : 'destination-card';
   const dispId = type === 'origin' ? 'origin-address-display' : 'destination-address-display';
+  const coordsId = type === 'origin' ? 'origin-coords-display' : 'destination-coords-display';
+  const editBtnId = type === 'origin' ? 'origin-edit-btn' : 'destination-edit-btn';
 
   if (!MapState[type] || !MapState[type].marker) {
     const marker = L.marker(latlng, { draggable: true, icon }).addTo(map);
@@ -1097,38 +930,20 @@ function setPoint(type, latlng, label = '') {
   if (card) card.classList.remove('hidden');
   if (disp) disp.textContent = label || `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
 
-  updateRouteIfReady();
-}
-
-function updateRouteIfReady() {
-  if (!MapState.origin?.latlng || !MapState.destination?.latlng) return;
-  if (routeLine) try { map.removeLayer(routeLine); } catch(_){}
-  routeLine = L.polyline([MapState.origin.latlng, MapState.destination.latlng], {
-    color: '#3b82f6', weight: 4, opacity: 0.7, dashArray: '10, 10'
-  }).addTo(map);
-  try { calculateAndDisplayDistance(); } catch(_) {}
-  try { fitMapToBounds(); } catch(_) {}
-  if (routeInputs) routeInputs.classList.remove('hidden');
-  if (pickupLabel) pickupLabel.classList.remove('hidden');
-  if (deliveryLabel) deliveryLabel.classList.remove('hidden');
-  if (pickupInput) pickupInput.classList.remove('hidden');
-  if (deliveryInput) deliveryInput.classList.remove('hidden');
-}
-  
-
-function calculateAndDisplayDistance() {
-  const distanceContainer = document.getElementById('distance-container');
-  const distanceValueEl = document.getElementById('distance-value');
-  if (!distanceContainer || !distanceValueEl) return;
-
-  if (MapState.origin?.marker && MapState.destination?.marker && map && typeof map.distance === 'function') {
-    const distanceInMeters = map.distance(MapState.origin.latlng, MapState.destination.latlng);
-    const distanceInKm = (distanceInMeters / 1000).toFixed(2);
-    distanceValueEl.textContent = distanceInKm;
-    distanceContainer.classList.remove('hidden');
-  } else {
-    distanceContainer.classList.add('hidden');
+  // ✅ Mostrar coordenadas debajo de la dirección
+  let coordsEl = document.getElementById(coordsId);
+  if (!coordsEl) {
+    coordsEl = document.createElement('p');
+    coordsEl.id = coordsId;
+    coordsEl.className = 'text-xs text-gray-500 mt-1';
+    card && card.appendChild(coordsEl);
   }
+  if (coordsEl) {
+    coordsEl.textContent = `Coords.: ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
+  }
+
+  // Ajustar vista
+  if (typeof fitMapToBounds === 'function') fitMapToBounds();
 }
 
 function fitMapToBounds() {
@@ -1140,101 +955,6 @@ function fitMapToBounds() {
   if (pts.length === 2) {
     const b = L.latLngBounds(pts[0], pts[1]);
     map.fitBounds(b, { padding: [50, 50], maxZoom: 16 });
-  }
-}
-let poiLayer = null;
-let lastPoiFetchAt = 0;
-let poiFetchInFlight = false;
-const poiCache = new Map();
-const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-'https://overpass.openstreetmap.ru/api/interpreter'
-];
-const MAX_SPAN = 0.25; // ~25km
-
-async function fetchWithTimeout(url, options, ms) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ms);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    return res;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-function renderPOIs(elements) {
-  if (!map) return;
-  if (!poiLayer) { poiLayer = L.layerGroup().addTo(map); } else { poiLayer.clearLayers(); }
-  const iconFor = (tags) => {
-    if (tags.amenity === 'hospital' || tags.amenity === 'clinic') return L.divIcon({ html: '<i class="fa-solid fa-hospital text-red-600"></i>', className: 'poi-icon' });
-    if (tags.amenity === 'school' || tags.amenity === 'university') return L.divIcon({ html: '<i class="fa-solid fa-school text-blue-600"></i>', className: 'poi-icon' });
-    if (tags.shop === 'mall') return L.divIcon({ html: '<i class="fa-solid fa-bag-shopping text-pink-600"></i>', className: 'poi-icon' });
-    if (tags.shop === 'supermarket') return L.divIcon({ html: '<i class="fa-solid fa-store text-green-600"></i>', className: 'poi-icon' });
-    if (tags.leisure === 'park') return L.divIcon({ html: '<i class="fa-solid fa-tree text-green-700"></i>', className: 'poi-icon' });
-    if (tags.amenity === 'police') return L.divIcon({ html: '<i class="fa-solid fa-shield-halved text-gray-700"></i>', className: 'poi-icon' });
-    if (tags.amenity === 'fire_station') return L.divIcon({ html: '<i class="fa-solid fa-fire-extinguisher text-orange-600"></i>', className: 'poi-icon' });
-    return L.divIcon({ html: '<i class="fa-solid fa-location-dot text-azulClaro"></i>', className: 'poi-icon' });
-  };
-  elements.forEach(el => {
-    const lat = el.lat || el.center?.lat;
-    const lon = el.lon || el.center?.lon;
-    if (!lat || !lon) return;
-    const tags = el.tags || {};
-    const name = tags.name || 'Sin nombre';
-    const marker = L.marker([lat, lon], { icon: iconFor(tags) }).bindTooltip(name, { permanent: false });
-    poiLayer.addLayer(marker);
-  });
-}
-
-async function loadPOIsForBounds() {
-  const now = Date.now();
-  if (poiFetchInFlight) return;
-  if (now - lastPoiFetchAt < 25000) return;
-  lastPoiFetchAt = now;
-  poiFetchInFlight = true;
-  if (!map || typeof map.getBounds !== 'function') { poiFetchInFlight = false; return; }
-  const b = map.getBounds();
-  const s = Number(b.getSouth());
-  const w = Number(b.getWest());
-  const n = Number(b.getNorth());
-  const e = Number(b.getEast());
-  const areValid = [s,w,n,e].every(v => Number.isFinite(v));
-  if (!areValid) { poiFetchInFlight = false; return; }
-  if ((n - s) > MAX_SPAN || (e - w) > MAX_SPAN) { poiFetchInFlight = false; return; }
-  const key = `${s.toFixed(2)}:${w.toFixed(2)}:${n.toFixed(2)}:${e.toFixed(2)}`;
-  if (poiCache.has(key)) { try { renderPOIs(poiCache.get(key)); } finally { poiFetchInFlight = false; } return; }
-  const query = `[
-    out:json][timeout:25];(
-    node["amenity"~"school|hospital|clinic|university|police|fire_station"](${s},${w},${n},${e});
-    node["shop"~"mall|supermarket"](${s},${w},${n},${e});
-    node["leisure"~"park"](${s},${w},${n},${e});
-  );out center;`;
-  const payload = String(query || '').trim();
-  if (!payload) { poiFetchInFlight = false; return; }
-  try {
-    let response = null;
-    for (const ep of OVERPASS_ENDPOINTS) {
-      try {
-        const r = await fetchWithTimeout(ep, { method: 'POST', body: payload }, 12000);
-        if (!r.ok) throw new Error(String(r.status));
-        response = r;
-        break;
-      } catch (e) {
-        // Intentar siguiente endpoint en caso de timeout/504/429
-        continue;
-      }
-    }
-
-    if (!response) throw new Error('All POI endpoints failed');
-    const json = await response.json();
-    poiCache.set(key, json.elements || []);
-    renderPOIs(json.elements || []);
-  } catch (err) {
-    console.warn('POI fetch failed (non-critical):', err);
-  } finally {
-    poiFetchInFlight = false;
   }
 }
 
@@ -1633,11 +1353,24 @@ document.addEventListener('DOMContentLoaded', function() {
     serviceForm.addEventListener('submit', async function(e) {
       e.preventDefault();
 
-      // ✅ SOLICITUD DEL USUARIO: Pedir permiso de notificaciones al enviar.
+      // ✅ SECUENCIA DE ENVÍO: 1. Permiso -> 2. Suscripción -> 3. Enviar Orden
+      console.log('Iniciando secuencia de envío: 1. Permiso -> 2. Suscripción -> 3. Orden');
+
+      // ✅ 1. Pedir y esperar permiso de notificaciones (con timeout para no bloquear)
+      let permissionPromise = null;
       try {
-        // No esperamos el resultado, solo disparamos la solicitud.
-        // La lógica de `getPushSubscription` se encargará de obtenerla si el permiso es concedido.
-        requestNotificationPermission();
+        permissionPromise = requestNotificationPermission();
+        // Esperar máximo 8s al usuario
+        const perm = await Promise.race([
+          permissionPromise,
+          new Promise(r => setTimeout(() => r('timeout'), 8000))
+        ]);
+
+        if (perm === 'granted') {
+          notify('info', 'Activando notificaciones para tu solicitud...', { title: 'Notificaciones activadas' });
+        } else if (perm === 'timeout') {
+          console.log('Timeout esperando permiso de notificaciones. Continuando envío...');
+        }
       } catch (err) {
         console.warn('No se pudo solicitar el permiso de notificaciones:', err);
       }
@@ -1737,14 +1470,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // ✅ OBTENER SUSCRIPCIÓN ANTES DE CONSTRUIR EL PAYLOAD
         let pushSubscription = null;
+        let pushPromise = null;
         try {
-          // Esperar a que se resuelva la suscripción. Añadir un timeout para no bloquear indefinidamente.
+          // Usar el gestor centralizado si está disponible
+          if (window.pushManager && typeof window.pushManager.subscribe === 'function') {
+             pushPromise = window.pushManager.subscribe();
+          } else {
+             pushPromise = getPushSubscription();
+          }
+          
+          // Esperar la suscripción con un margen mayor para que el usuario responda al prompt
           pushSubscription = await Promise.race([
-              getPushSubscription(),
-              new Promise(resolve => setTimeout(() => resolve(null), 2000)) // Timeout de 2 segundos
+            pushPromise,
+            new Promise(resolve => setTimeout(() => resolve(null), 8000)) // Timeout de 8 segundos
           ]);
           if (pushSubscription) {
             console.log('Suscripción push obtenida y será enviada con la orden.');
+            // Intentar guardar la suscripción en el servidor (Best Effort)
+            // Esto cumple con "Guardar push_subscription antes del submit"
+            if (window.pushManager && typeof window.pushManager.saveSubscriptionToServer === 'function') {
+                try {
+                    console.log('Intentando guardar suscripción antes de enviar orden (Pre-Submit Save)...');
+                    await window.pushManager.saveSubscriptionToServer(pushSubscription);
+                } catch (preSaveErr) {
+                    console.warn('No se pudo guardar suscripción previa (posible falta de contact_id, se intentará con la orden):', preSaveErr);
+                    // Continuamos igual para enviar la orden
+                }
+            }
           }
         } catch (e) {
           console.warn('No se pudo obtener la suscripción push (no bloqueante):', e);
@@ -1837,6 +1589,47 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Si llegamos aquí, savedOrder está presente (puede no traer ID si hubo fallback RLS)
         const displayCode = (savedOrder && (savedOrder.short_id || savedOrder.id)) ? (savedOrder.short_id || savedOrder.id) : null;
+        
+        // ✅ ACTUALIZACIÓN TARDÍA DE SUSCRIPCIÓN PUSH (RPC)
+        // Caso A: La promesa de suscripción estaba en curso pero tardó más que el timeout de envío
+        if (!pushSubscription && pushPromise && savedOrder && savedOrder.id) {
+          pushPromise.then(async (lateSub) => {
+            if (lateSub) {
+              console.log('Suscripción push obtenida tardíamente (Caso A). Actualizando orden vía RPC...');
+              try {
+                await supabaseConfig.client.rpc('update_push_subscription_by_order', {
+                  p_order_id: savedOrder.id,
+                  p_push_subscription: lateSub
+                });
+                console.log('Orden actualizada con suscripción push (late update A).');
+              } catch (err) {
+                console.error('Error en update late push subscription A:', err);
+              }
+            }
+          }).catch(err => {
+            console.debug('Late push subscription promise A failed/ignored:', err);
+          });
+        }
+        
+        // Caso B: El usuario aprobó el permiso TARDE (después del timeout de permiso)
+        if (!pushSubscription && permissionPromise && savedOrder && savedOrder.id) {
+            permissionPromise.then(async (latePerm) => {
+                if (latePerm === 'granted') {
+                    console.log('Permiso concedido tardíamente (Caso B). Intentando obtener suscripción...');
+                    try {
+                        const lateSub = await getPushSubscription();
+                        if (lateSub) {
+                            await supabaseConfig.client.rpc('update_push_subscription_by_order', {
+                                p_order_id: savedOrder.id,
+                                p_push_subscription: lateSub
+                            });
+                            console.log('Orden actualizada con suscripción push (late update B).');
+                        }
+                    } catch(e) { console.error('Error en late update B:', e); }
+                }
+            }).catch(e => console.debug('Late permission promise failed:', e));
+        }
+
         if (!displayCode) {
           console.warn('Orden creada sin datos de retorno por RLS. Mostrando confirmación genérica.');
           notify('persistent',

@@ -386,6 +386,8 @@ if (!window.supabaseConfig) {
         this.vapidPublicKey = resp.data.key;
         return this.vapidPublicKey;
       }
+      // Fallback si la respuesta no tiene key
+      console.warn('Respuesta de VAPID inválida o vacía, usando fallback.');
       this.vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
       return this.vapidPublicKey;
     } catch (e) {

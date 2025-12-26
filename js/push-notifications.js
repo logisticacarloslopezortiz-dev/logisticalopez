@@ -1,6 +1,7 @@
 // Gestión de notificaciones push
 class PushNotificationManager {
     constructor() {
+        console.log('PushNotificationManager v9 initializing...');
         this.vapidPublicKey = null;
         this.isSupported = 'serviceWorker' in navigator && 'PushManager' in window;
         this.subscription = null;
@@ -30,29 +31,53 @@ class PushNotificationManager {
 
     async loadVapidKey() {
         try {
-            const client = supabaseConfig?.client;
-            if (!client || !client.functions || typeof client.functions.invoke !== 'function') {
-                throw new Error('Supabase client/functions no disponible');
+            const FALLBACK_KEY = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
+
+            if (!window.supabaseConfig) throw new Error('supabaseConfig no encontrado');
+            // Asegurar que el cliente esté listo
+            if (typeof supabaseConfig.ensureSupabaseReady === 'function') {
+                await supabaseConfig.ensureSupabaseReady();
             }
-            // Primer intento: nombre canónico
-            let resp = await client.functions.invoke('getVapidKey');
-            if (resp.error || !resp.data?.key) {
-                // Segundo intento: nombre con guiones (posibles despliegues antiguos)
-                resp = await client.functions.invoke('get-vapid-key');
+
+            // Intentar obtener del config (que intenta edge function y tiene su propio fallback)
+            if (typeof supabaseConfig.getVapidPublicKey === 'function') {
+                try {
+                    const configKey = await supabaseConfig.getVapidPublicKey();
+                    if (configKey) this.vapidPublicKey = configKey;
+                } catch (configErr) {
+                    console.warn('Error obteniendo VAPID del config:', configErr);
+                }
             }
-            if (resp.error) throw resp.error;
-            this.vapidPublicKey = resp.data?.key || null;
-            if (!this.vapidPublicKey) throw new Error('Clave VAPID no disponible');
-            const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
-            if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
-              throw new Error('Formato de VAPID inválido');
+            
+            // Si no se obtuvo (o devolvió undefined), usar fallback local
+            if (!this.vapidPublicKey) {
+                console.log('VAPID no obtenido de config, usando fallback local.');
+                this.vapidPublicKey = FALLBACK_KEY;
             }
-            console.log('VAPID key obtenida desde Supabase Functions');
-            return;
+
+            // Validar la clave obtenida
+            try {
+                if (!this.vapidPublicKey) throw new Error('Clave VAPID vacía o nula');
+                const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
+                if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
+                    throw new Error(`Formato de VAPID inválido (len=${raw ? raw.length : '?'}, first=${raw ? raw[0] : '?'})`);
+                }
+            } catch (validationError) {
+                console.warn(`Clave VAPID inválida ("${this.vapidPublicKey?.substring(0,10)}..."), usando fallback seguro. Razón:`, validationError.message);
+                this.vapidPublicKey = FALLBACK_KEY;
+                // Validar el fallback para estar seguros
+                const raw = this.urlBase64ToUint8Array(this.vapidPublicKey);
+                if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
+                    throw new Error('Fallback VAPID key también es inválido');
+                }
+            }
+
+            console.log('VAPID key lista para suscripción');
+            return this.vapidPublicKey;
         } catch (error) {
-            console.error('Error loading VAPID key (Supabase):', error);
+            console.error('Error loading VAPID key:', error);
             this.vapidPublicKey = null;
-            throw new Error('No se pudo obtener la clave VAPID pública del servidor');
+            throw error;
         }
     }
 
@@ -138,6 +163,13 @@ class PushNotificationManager {
             // Obtener registration del Service Worker
             const registration = await navigator.serviceWorker.ready;
             
+            // Asegurar clave VAPID
+            if (!this.vapidPublicKey) {
+                await this.loadVapidKey();
+            }
+            if (!this.vapidPublicKey) {
+                throw new Error('VAPID key no disponible para suscripción');
+            }
             // Crear suscripción
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
@@ -146,8 +178,12 @@ class PushNotificationManager {
 
             console.log('Push subscription created:', subscription);
             
-            // Guardar en la base de datos
-            await this.saveSubscriptionToServer(subscription);
+            // Guardar en la base de datos (Best Effort)
+            try {
+                await this.saveSubscriptionToServer(subscription);
+            } catch (saveError) {
+                console.warn('Could not save subscription to server immediately (will be handled by order):', saveError);
+            }
             
             this.subscription = subscription;
             try { if (this.vapidPublicKey) localStorage.setItem('tlc_vapid_pub', this.vapidPublicKey); } catch(_){}
@@ -181,10 +217,34 @@ class PushNotificationManager {
         }
     }
 
+    async getSupabaseUser(client) {
+        try {
+            if (typeof client.auth.getUser === 'function') {
+                const { data } = await client.auth.getUser();
+                return data?.user;
+            }
+            if (typeof client.auth.getSession === 'function') {
+                const { data } = await client.auth.getSession();
+                return data?.session?.user;
+            }
+            if (typeof client.auth.user === 'function') {
+                return client.auth.user();
+            }
+        } catch (e) { console.warn('Error getting user:', e); }
+        return null;
+    }
+
     async saveSubscriptionToServer(subscription) {
         try {
-            const { data: { user } } = await supabaseConfig.client.auth.getUser();
-            
+            if (typeof supabaseConfig.ensureSupabaseReady === 'function') {
+                await supabaseConfig.ensureSupabaseReady();
+            }
+            const client = supabaseConfig?.client;
+            if (!client || !client.auth || typeof client.from !== 'function') {
+                throw new Error('Supabase client no inicializado o inválido en saveSubscriptionToServer');
+            }
+
+            const user = await this.getSupabaseUser(client);
             const contactId = (() => { try { return localStorage.getItem('tlc_client_contact_id'); } catch(_) { return null; } })();
             if (!user && !contactId) {
                 throw new Error('User not authenticated and no contact id');
@@ -203,22 +263,13 @@ class PushNotificationManager {
                 keys: { p256dh: keys.p256dh, auth: keys.auth }
             };
 
-            const client = supabaseConfig?.client;
-            if (!client || typeof client.from !== 'function') {
-                throw new Error('Supabase client no inicializado o inválido en saveSubscriptionToServer');
-            }
-
             const conflictCols = user ? 'user_id,endpoint' : 'client_contact_id,endpoint';
             const r = await client
                 .from('push_subscriptions')
                 .upsert(subscriptionData, { onConflict: conflictCols });
 
-            if (r.error) {
-                throw r.error;
-            }
-            
+            if (r.error) throw r.error;
             console.log('Push subscription saved to server');
-            
         } catch (error) {
             console.error('Error saving subscription to server:', error);
             throw error;
@@ -227,13 +278,16 @@ class PushNotificationManager {
 
     async syncSubscriptionWithServer(subscription) {
         try {
-            const { data: { user } } = await supabaseConfig.client.auth.getUser();
-            const contactId = (() => { try { return localStorage.getItem('tlc_client_contact_id'); } catch(_) { return null; } })();
-
+            if (typeof supabaseConfig.ensureSupabaseReady === 'function') {
+                await supabaseConfig.ensureSupabaseReady();
+            }
             const client = supabaseConfig?.client;
             if (!client || typeof client.from !== 'function') {
                 throw new Error('Supabase client no inicializado o inválido en syncSubscriptionWithServer');
             }
+
+            const user = await this.getSupabaseUser(client);
+            const contactId = (() => { try { return localStorage.getItem('tlc_client_contact_id'); } catch(_) { return null; } })();
 
             if (user && user.id) {
                 const { data: existingSubscription, error } = await client
@@ -265,13 +319,16 @@ class PushNotificationManager {
 
     async removeSubscriptionFromServer(subscription) {
         try {
-            const { data: { user } } = await supabaseConfig.client.auth.getUser();
-            const contactId = (() => { try { return localStorage.getItem('tlc_client_contact_id'); } catch(_) { return null; } })();
-
+            if (typeof supabaseConfig.ensureSupabaseReady === 'function') {
+                await supabaseConfig.ensureSupabaseReady();
+            }
             const client = supabaseConfig?.client;
             if (!client || typeof client.from !== 'function') {
                 throw new Error('Supabase client no inicializado o inválido en removeSubscriptionFromServer');
             }
+
+            const user = await this.getSupabaseUser(client);
+            const contactId = (() => { try { return localStorage.getItem('tlc_client_contact_id'); } catch(_) { return null; } })();
 
             if (user && user.id) {
                 const { error } = await client

@@ -1,32 +1,31 @@
 // sw.js
 
 // COMENTARIO: Se añade versionado de caché para forzar la actualización de archivos.
-const CACHE_NAME = 'tlc-cache-v7';
+const CACHE_NAME = 'tlc-cache-v10';
 const urlsToCache = [
   '/offline.html',
+  // CSS
   '/css/styles.css',
   '/css/animations.css',
   '/css/tailwind.min.css',
   '/css/custom-styles.css',
+  // JS core
   '/js/order-manager.js',
   '/js/supabase-config.js',
   '/js/notifications.js',
   '/js/pwa.js',
+  '/js/push-notifications.js',
+  // Vendor actually present
   '/vendor/leaflet.js',
-  '/vendor/leaflet.css',
-  '/vendor/lucide.min.js',
   '/vendor/supabase.umd.js',
-  '/vendor/images/marker-icon.png',
-  '/vendor/images/marker-icon-2x.png',
-  '/vendor/images/marker-shadow.png',
-  '/vendor/images/layers.png',
-  '/vendor/images/layers-2x.png',
+  // Images present in /img
   '/img/1vertical.png',
   '/img/favicon.ico',
   '/img/android-chrome-192x192.png',
   '/img/android-chrome-512x512.png',
   '/img/apple-touch-icon.png',
   '/img/cargo.jpg',
+  // Manifest
   '/manifest.json'
 ];
 
