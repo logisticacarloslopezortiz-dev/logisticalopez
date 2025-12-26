@@ -42,14 +42,22 @@ function normalizeKeys(raw: unknown): SubscriptionKeys | null {
 }
 
 async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
-  const pub = Deno.env.get('VAPID_PUBLIC_KEY')
-  const priv = Deno.env.get('VAPID_PRIVATE_KEY')
-  const subject = Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com'
+  const pub = (Deno.env.get('VAPID_PUBLIC_KEY') || '').trim()
+  const priv = (Deno.env.get('VAPID_PRIVATE_KEY') || '').trim()
+  const subject = (Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com').trim()
   
   if (!pub || !priv) throw new Error('VAPID keys not configured')
+  // Validación mínima de formato de la pública: debe decodificar a 65 bytes y comenzar con 0x04
+  try {
+    const b64 = pub.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (pub.length % 4)) % 4)
+    const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+    if (raw.length !== 65 || raw[0] !== 4) throw new Error('invalid_vapid_public_key')
+  } catch (_) {
+    throw new Error('invalid_vapid_public_key')
+  }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 5000)
+  const timeout = setTimeout(() => controller.abort(), 8000)
   
   try {
     return await webPush.sendNotification(
@@ -77,17 +85,17 @@ interface OutboxMessage {
   attempts?: number
 }
 
-async function resolveSubscription(userId?: string | null, contactId?: string | null) {
+async function resolveSubscriptions(userId?: string | null, contactId?: string | null) {
+  const subs: WebPushSubscription[] = []
   if (userId) {
     const { data } = await supabase
       .from('push_subscriptions')
       .select('endpoint, keys')
       .eq('user_id', userId)
-      .limit(1)
-    if (data?.[0]) {
-      const endpoint = String(data[0].endpoint || '').trim().replace(/`/g, '')
-      const keys = normalizeKeys((data[0] as any).keys)
-      if (endpoint && keys) return { endpoint, keys }
+    for (const row of data || []) {
+      const endpoint = String(row.endpoint || '').trim().replace(/`/g, '')
+      const keys = normalizeKeys((row as any).keys)
+      if (endpoint && keys) subs.push({ endpoint, keys })
     }
   }
   if (contactId) {
@@ -95,22 +103,21 @@ async function resolveSubscription(userId?: string | null, contactId?: string | 
       .from('push_subscriptions')
       .select('endpoint, keys')
       .eq('client_contact_id', contactId)
-      .limit(1)
-    if (data?.[0]) {
-      const endpoint = String(data[0].endpoint || '').trim().replace(/`/g, '')
-      const keys = normalizeKeys((data[0] as any).keys)
-      if (endpoint && keys) return { endpoint, keys }
+    for (const row of data || []) {
+      const endpoint = String(row.endpoint || '').trim().replace(/`/g, '')
+      const keys = normalizeKeys((row as any).keys)
+      if (endpoint && keys) subs.push({ endpoint, keys })
     }
   }
-  return null
+  return subs
 }
 
 async function handleMessage(msg: OutboxMessage) {
   const attempts = msg.attempts || 1
   try {
-    const sub = await resolveSubscription(msg.target_user_id, msg.target_contact_id)
+    const subs = await resolveSubscriptions(msg.target_user_id, msg.target_contact_id)
 
-    if (!sub || !sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
+    if (!subs.length) {
       await supabase.from('notification_outbox').update({
         last_error: 'missing_subscription',
         processed_at: new Date().toISOString(),
@@ -119,7 +126,12 @@ async function handleMessage(msg: OutboxMessage) {
       return false
     }
 
-    const n = msg.payload || {}
+    // Parsear payload si viene como string JSON
+    let n: any = msg.payload || {}
+    if (typeof n === 'string') {
+      try { n = JSON.parse(n) } catch { n = {} }
+    }
+
     const payload = {
       title: String(n.title || 'Notificación'),
       body: String(n.body || ''),
@@ -131,35 +143,56 @@ async function handleMessage(msg: OutboxMessage) {
       }
     }
 
-    const cleanEndpoint = String(sub.endpoint).trim().replace(/`/g, '')
-    const cleanKeys = { p256dh: sub.keys.p256dh.trim(), auth: sub.keys.auth.trim() }
-
-    await sendWebPush({ endpoint: cleanEndpoint, keys: cleanKeys }, payload)
-
-    try {
-      if (msg.target_user_id) {
-        await supabase.from('notifications').insert({
-          user_id: msg.target_user_id,
-          title: payload.title,
-          body: payload.body,
-          data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
-        })
-      } else if (msg.target_contact_id) {
-        await supabase.from('notifications').insert({
-          contact_id: msg.target_contact_id,
-          title: payload.title,
-          body: payload.body,
-          data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
-        })
+    let delivered = 0
+    for (const s of subs) {
+      const cleanEndpoint = String(s.endpoint).trim().replace(/`/g, '')
+      const cleanKeys = { p256dh: s.keys.p256dh.trim(), auth: s.keys.auth.trim() }
+      try {
+        await sendWebPush({ endpoint: cleanEndpoint, keys: cleanKeys }, payload)
+        delivered++
+      } catch (err) {
+        const code = (err as any)?.statusCode
+        if (code === 404 || code === 410) {
+          // Suscripción expirada: eliminarla
+          try {
+            await supabase.from('push_subscriptions').delete().eq('endpoint', cleanEndpoint)
+          } catch (_) {}
+        }
       }
-    } catch (_) {}
+    }
 
-    await supabase.from('notification_outbox').update({
-      processed_at: new Date().toISOString(),
-      last_error: null,
-      locked_until: null
-    }).eq('id', msg.id)
-    return true
+    if (delivered > 0) {
+      try {
+        if (msg.target_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: msg.target_user_id,
+            title: payload.title,
+            body: payload.body,
+            data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
+          })
+        } else if (msg.target_contact_id) {
+          await supabase.from('notifications').insert({
+            contact_id: msg.target_contact_id,
+            title: payload.title,
+            body: payload.body,
+            data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
+          })
+        }
+      } catch (_) {}
+
+      await supabase.from('notification_outbox').update({
+        processed_at: new Date().toISOString(),
+        last_error: null,
+        locked_until: null
+      }).eq('id', msg.id)
+      return true
+    } else {
+      await supabase.from('notification_outbox').update({
+        last_error: 'delivery_failed_all_endpoints',
+        locked_until: null
+      }).eq('id', msg.id)
+      return false
+    }
   } catch (err) {
     const statusCode = (err as any)?.statusCode
     const msgErr = err instanceof Error ? err.message : String(err)
@@ -178,7 +211,7 @@ async function handleMessage(msg: OutboxMessage) {
       }).eq('id', msg.id)
     } else {
       await supabase.from('notification_outbox').update({
-        last_error: msgErr
+        last_error: msgErr.slice(0, 300)
       }).eq('id', msg.id)
     }
     return false

@@ -563,7 +563,8 @@ async function generateAndSendInvoice(orderId) {
 
     if (pdfError || !pdfData) {
       try {
-        const u = `${supabaseConfig.functionsUrl}/functions/v1/generate-invoice-pdf`;
+        // Ajuste: usar la URL de funciones directa (sin /functions/v1 duplicado)
+        const u = `${supabaseConfig.functionsUrl}/generate-invoice-pdf`;
         const res = await fetch(u, {
           method: 'POST',
           headers: {
@@ -584,7 +585,7 @@ async function generateAndSendInvoice(orderId) {
       }
     }
     
-    const candidateUrl = pdfData && (pdfData.data?.pdfUrl || pdfData.pdfUrl || pdfData.url);
+    const candidateUrl = pdfData && (pdfData.data?.pdfUrl || pdfData.pdfUrl || pdfData.url || pdfData.file_url || pdfData.data?.file_url);
     if (!pdfData || pdfData.error || !candidateUrl) {
       console.error('Error en respuesta de función:', pdfData);
       throw new Error(pdfData?.error || 'La función no devolvió una URL válida.');
@@ -596,20 +597,33 @@ async function generateAndSendInvoice(orderId) {
       const linkA = document.getElementById('invoiceLinkAnchor');
       if (linkWrap && linkA) {
         linkA.href = pdfUrl;
-        linkA.textContent = 'Ver factura';
+        linkA.textContent = 'Abrir factura (PDF)';
+        linkA.target = '_blank';
+        linkA.rel = 'noopener';
         linkWrap.style.display = 'block';
       }
     } catch(_) { }
 
+    // Abrir la factura inmediatamente para el admin
+    try { window.open(pdfUrl, '_blank'); } catch(_) {}
+
+    // Intentar enviar el correo desde función dedicada si existe
+    try {
+      const send = await supabaseConfig.client.functions.invoke('send-invoice', { body: { orderId: order.id, pdfUrl } });
+      if (!send.error) {
+        notifications.success('Factura enviada por correo', 'El cliente recibió el enlace de su factura (correo con enlace clicable).');
+      }
+    } catch(_) {}
+
     if (pdfData.data?.emailSent) {
       notifications.success('Factura enviada', 'El cliente recibió el enlace de su factura por correo.');
     } else {
-      // Fallback si el envío automático falló pero tenemos PDF
+      // Fallback Gmail con cuerpo formateado (link clicable en la mayoría de clientes)
       const subject = `Factura de su orden #${order.short_id || order.id} con Logística López Ortiz`;
-      const body = `¡Hola, ${order.client_name || order.name}!\n\nAdjunto le enviamos los detalles y la factura correspondiente a su orden de servicio con nosotros.\n\n- Servicio: ${order.service?.name || 'N/A'}\n- Ruta: ${order.pickup} → ${order.delivery}\n- Fecha: ${order.date}\n\nPuede ver y descargar su factura desde el siguiente enlace seguro:\n${pdfUrl}\n\nSi tiene alguna pregunta, no dude en contactarnos.\n\n¡Gracias por confiar en Logística López Ortiz!`;
+      const body = `Hola, ${order.client_name || order.name}.\n\nPuede ver y descargar su factura desde este enlace:\n${pdfUrl}\n\nGracias por elegirnos.`;
       const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(clientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(gmailUrl, '_blank');
-      notifications.warning('Envío automático falló', 'Se abrió Gmail con el borrador para enviar la factura manualmente.');
+      notifications.info('Se abrió Gmail con el borrador para enviar la factura.');
     }
 
   } catch (error) {

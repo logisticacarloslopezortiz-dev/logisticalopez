@@ -37,96 +37,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const idStr = String(identifier || '').trim();
     if (!idStr) return { order: null, error: null };
     await supabaseConfig.ensureSupabaseReady();
-    const candidates = [];
-    const isNum = /^\d+$/.test(idStr);
-    if (isNum) candidates.push({ col: 'id', val: Number(idStr) });
-    candidates.push({ col: 'short_id', val: idStr });
-    if (idStr.startsWith('ORD-')) candidates.push({ col: 'short_id', val: idStr.replace(/^ORD\-/, '') });
-    candidates.push({ col: 'short_id', val: idStr.toUpperCase() });
-    candidates.push({ col: 'short_id', val: idStr.toLowerCase() });
-
-    let lastError = null;
-    for (const c of candidates) {
-      try {
-        let primary = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function') ? supabaseConfig.client : supabaseConfig.getPublicClient();
-        
-        // Validación robusta del cliente
-        if (!primary || typeof primary.from !== 'function') {
-          console.warn('Cliente primario no disponible, intentando inicializar...');
-          await supabaseConfig.ensureSupabaseReady();
-          primary = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function') ? supabaseConfig.client : supabaseConfig.getPublicClient();
-        }
-
-        // Si aún falla, usar REST directo como último recurso antes de continuar
-        if (!primary || typeof primary.from !== 'function') {
-          console.error('No se pudo obtener cliente Supabase válido para seguimiento.');
-          lastError = new Error('client_unavailable');
-          try {
-            const { data } = await supabaseConfig.restGetOrderByAny(idStr);
-            if (data) return { order: data, error: null };
-          } catch(restErr) {
-            console.error('Fallo fallback REST:', restErr);
-          }
-          continue;
-        }
-        const r = await primary
-          .from('orders')
-          .select('*, service:services(name), vehicle:vehicles(name)')
-          .eq(c.col, c.val)
-          .maybeSingle();
-        if (r.data) return { order: r.data, error: null };
-        lastError = r.error || null;
-        if (!r.error && !r.data) {
-          let secondary = supabaseConfig.getPublicClient();
-          if (!secondary || typeof secondary.from !== 'function') {
-            await supabaseConfig.ensureSupabaseReady();
-            secondary = supabaseConfig.getPublicClient();
-          }
-          if (!secondary || typeof secondary.from !== 'function') {
-            lastError = new Error('client_unavailable');
-            try {
-              const { data } = await supabaseConfig.restGetOrderByAny(idStr);
-              if (data) return { order: data, error: null };
-            } catch(_) {}
-          } else {
-            const r2 = await secondary
-              .from('orders')
-              .select('*, service:services(name), vehicle:vehicles(name)')
-              .eq(c.col, c.val)
-              .maybeSingle();
-            if (r2.data) return { order: r2.data, error: null };
-            lastError = r2.error || lastError;
-          }
-        }
-      } catch (e) {
-        lastError = e;
-        if (String(e?.message || '').toLowerCase().includes('jwt expired') || (e && e.status === 401)) {
-          try {
-            let secondary = supabaseConfig.getPublicClient();
-            if (!secondary || typeof secondary.from !== 'function') {
-              await supabaseConfig.ensureSupabaseReady();
-              secondary = supabaseConfig.getPublicClient();
-            }
-            if (!secondary || typeof secondary.from !== 'function') {
-              lastError = new Error('client_unavailable');
-              try {
-                const { data } = await supabaseConfig.restGetOrderByAny(idStr);
-                if (data) return { order: data, error: null };
-              } catch(_) {}
-            } else {
-              const r3 = await secondary
-              .from('orders')
-              .select('*, service:services(name), vehicle:vehicles(name)')
-              .eq(c.col, c.val)
-              .maybeSingle();
-              if (r3.data) return { order: r3.data, error: null };
-              lastError = r3.error || lastError;
-            }
-          } catch (_) {}
-        }
-      }
+    try {
+      const client = supabaseConfig.getPublicClient() || supabaseConfig.client;
+      if (!client || typeof client.rpc !== 'function') throw new Error('client_unavailable');
+      const { data, error } = await client.rpc('get_order_details_public', { identifier: idStr });
+      if (error) return { order: null, error };
+      // La función devuelve jsonb; si devuelve null, intentamos REST como último recurso
+      if (data) return { order: data, error: null };
+      const rest = await supabaseConfig.restGetOrderByAny(idStr);
+      return { order: rest.data, error: rest.error };
+    } catch (e) {
+      return { order: null, error: e };
     }
-    return { order: null, error: lastError };
   }
 
   // Función para buscar la orden
@@ -364,8 +286,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function initializeMap(order) {
     // Coordenadas por defecto (Santo Domingo) si no hay datos
     const defaultCoords = { lat: 18.4861, lng: -69.9312 };
-    const pickupCoords = order.pickup_coords || defaultCoords;
-    const deliveryCoords = order.delivery_coords;
+    const pickupCoords = order.origin_coords || defaultCoords;
+    const deliveryCoords = order.destination_coords;
 
     if (!map) {
       map = L.map('trackingMap').setView([pickupCoords.lat, pickupCoords.lng], 13);
@@ -555,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Función para verificar si hay un ID en la URL al cargar la página
   function checkUrlForOrderId() {
     const params = new URLSearchParams(window.location.search);
-    const orderId = params.get('codigo') || params.get('id');
+    const orderId = params.get('codigo') || params.get('id') || params.get('orderId');
     if (orderId) {
       orderIdInput.value = orderId;
       trackOrder().then(() => {
