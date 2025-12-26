@@ -63,6 +63,35 @@ Para implementar este esquema en Supabase:
 4. Copia y pega el contenido de `schema.sql`
 5. Ejecuta la consulta
 
+## Procesamiento de Notificaciones (Outbox)
+
+- La función Edge `process-outbox` está implementada en `supabase/functions/process-outbox` y definida en `supabase/config.toml`.
+- Configura los parámetros en tu DB para que el job de `pg_cron` invoque tu URL real con Service Role:
+
+```
+select set_config('app.settings.process_outbox_url','https://<PROJECT-REF>.functions.supabase.co/process-outbox', true);
+select set_config('app.settings.service_role_token','<SERVICE_ROLE_KEY>', true);
+```
+
+- Prueba manual del procesador desde SQL:
+
+```
+select public.invoke_process_outbox();
+```
+
+- Variables requeridas como Secrets en Edge Functions:
+  - `VAPID_PUBLIC_KEY`: pública P-256 (Base64 URL-safe)
+  - `VAPID_PRIVATE_KEY`: privada correspondiente a la pública
+  - `VAPID_SUBJECT`: correo o URL de contacto
+  - `SUPABASE_SERVICE_ROLE_KEY`: token Service Role que la función valida vía Bearer
+  - `SUPABASE_URL`: URL del proyecto
+
+- Para validar y probar en local, usa `test-notificaciones.html`:
+  - Muestra sesión y `getVapidKey`
+  - Lista `notification_outbox_pending` y recientes
+  - Encola una notificación de prueba por `user_id` o `client_contact_id`
+  - Invoca `invoke_process_outbox()` (requiere admin/owner)
+
 ## Integración con la Aplicación
 
 La aplicación web de TLC utiliza almacenamiento local (localStorage) para simular la persistencia de datos. Para migrar a Supabase:
