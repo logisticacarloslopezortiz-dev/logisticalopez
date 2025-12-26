@@ -378,16 +378,57 @@ if (!window.supabaseConfig) {
   async getVapidPublicKey() {
     try {
       if (this.vapidPublicKey) return this.vapidPublicKey;
-      let resp = await this.client.functions.invoke('getVapidKey');
-      if ((resp.error || !resp.data?.key)) {
-        resp = await this.client.functions.invoke('get-vapid-key');
+
+      try { await this.ensureSupabaseReady?.(); } catch(_){}
+
+      // 1) Intentar obtener desde Edge Function
+      let key = null;
+      try {
+        let resp = await this.client.functions.invoke('getVapidKey');
+        if (resp?.data?.key) key = resp.data.key;
+        if (!key) {
+          resp = await this.client.functions.invoke('get-vapid-key');
+          if (resp?.data?.key) key = resp.data.key;
+        }
+      } catch(_){}
+
+      // 2) Intentar obtener desde tabla de configuración de negocio
+      if (!key) {
+        try {
+          const bs = await this.getBusinessSettings();
+          key = bs?.vapid_public_key || bs?.push_vapid_key || null;
+        } catch(_){}
       }
-      if (!resp.error && resp.data && resp.data.key) {
-        this.vapidPublicKey = resp.data.key;
-        return this.vapidPublicKey;
+
+      // 3) Intentar obtener desde localStorage
+      if (!key) {
+        try { key = localStorage.getItem('tlc_vapid_pub') || null; } catch(_){}
       }
-      // Fallback si la respuesta no tiene key
-      console.warn('Respuesta de VAPID inválida o vacía, usando fallback.');
+
+      // Validar formato básico
+      const toBytes = (base64String) => {
+        try {
+          const padding = '='.repeat((4 - base64String.length % 4) % 4);
+          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+          const rawData = atob(base64);
+          const outputArray = new Uint8Array(rawData.length);
+          for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+          return outputArray;
+        } catch(_) { return new Uint8Array(0); }
+      };
+
+      if (key) {
+        const bytes = toBytes(key);
+        if (bytes instanceof Uint8Array && bytes.length === 65 && bytes[0] === 4) {
+          this.vapidPublicKey = key;
+          try { localStorage.setItem('tlc_vapid_pub', key); } catch(_){}
+          return this.vapidPublicKey;
+        } else {
+          console.warn('VAPID key configurada es inválida, usando fallback.');
+        }
+      }
+
+      // 4) Fallback seguro
       this.vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
       return this.vapidPublicKey;
     } catch (e) {

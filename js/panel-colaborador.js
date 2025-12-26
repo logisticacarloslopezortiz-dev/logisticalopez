@@ -151,6 +151,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function getActiveCollaboratorInfo() {
+    try {
+      await supabaseConfig.ensureFreshSession?.();
+      const { data: { session } } = await supabaseConfig.client.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) return null;
+      const v = await supabaseConfig.validateActiveCollaborator?.(uid);
+      if (v && !v.isValid) return null;
+      const { data } = await supabaseConfig.client
+        .from('collaborators')
+        .select('id,name,matricula,status')
+        .eq('id', uid)
+        .maybeSingle();
+      return data || { id: uid };
+    } catch (_) { return null; }
+  }
+
   // --- Gestión de Vistas ---
 
   function showView(name) {
@@ -295,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activeMap.setView([oc.lat, oc.lng], 14);
       }
       
-      setTimeout(() => { try { activeMap.invalidateSize(); } catch(_){} }, 200);
+      setTimeout(() => { try { activeMap.invalidateSize(); } catch(_){} }, 150);
     } catch(e){ console.error("Error init map", e); }
   }
 
@@ -324,6 +341,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeVehicle) activeVehicle.textContent = order?.vehicle?.name || '';
     if (activePickup) activePickup.textContent = order.pickup || '';
     if (activeDelivery) activeDelivery.textContent = order.delivery || '';
+    if (activeCollaborator) {
+      const n = document.getElementById('sidebarCollabName');
+      activeCollaborator.textContent = n?.textContent || '';
+    }
     
     try {
       const { data: { user } } = await supabaseConfig.client.auth.getUser();
@@ -349,6 +370,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnVerDestino) btnVerDestino.onclick = () => openGoogleMaps(order.delivery);
     
     initActiveMap(order);
+
+    try {
+      const { data: { session } } = await supabaseConfig.client.auth.getSession();
+      const uid = session?.user?.id;
+      if (uid) await registerCollaboratorPush(uid);
+    } catch(_){}
   }
 
   function closeActiveJob() {
@@ -639,17 +666,20 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           b.disabled = true;
           b.textContent = '...';
+          await supabaseConfig.ensureFreshSession?.();
           const { data: { user } } = await supabaseConfig.client.auth.getSession();
           if (!user?.id) throw new Error('Sesión inválida');
-          
+          const v = await supabaseConfig.validateActiveCollaborator?.(user.id);
+          if (v && !v.isValid) throw new Error('Sesión inválida');
+
           const res = await OrderManager.acceptOrder(o.id, { collaborator_id: user.id });
           if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
-          
+
           notifications?.success?.('Orden aceptada');
           o.status = 'Aceptada';
           o.assigned_to = user.id;
           o.last_collab_status = 'aceptada';
-          
+
           openActiveJob(o);
         } catch (e) {
           notifications?.error?.(e.message || 'No se pudo aceptar la orden');
@@ -674,6 +704,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const init = async () => {
     const ok = await ensureAuthOrRedirect();
     if (!ok) return;
+
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        try { await Notification.requestPermission(); } catch(_){}
+      }
+    } catch(_){}
+
+    try {
+      const info = await getActiveCollaboratorInfo();
+      const nameEl = document.getElementById('sidebarCollabName');
+      const matEl = document.getElementById('sidebarCollabMatricula');
+      if (nameEl) nameEl.textContent = info?.name || 'Colaborador';
+      if (matEl) matEl.textContent = info?.matricula ? `Matrícula: ${info.matricula}` : 'Matrícula: —';
+    } catch(_) {}
 
     // Suscripción Realtime
     try {
@@ -811,5 +855,34 @@ document.addEventListener('DOMContentLoaded', () => {
       openDirections(data);
     } catch(_){}
   });
+
+  const logoutBtnNav = document.getElementById('collabLogoutBtnNav');
+  const collapseBtnNav = document.getElementById('collabCollapseBtnNav');
+  if (logoutBtnNav) logoutBtnNav.addEventListener('click', async () => {
+    try {
+      await supabaseConfig.client.auth.signOut();
+    } catch(_) {}
+    try { localStorage.removeItem('userRole'); localStorage.removeItem('tlc_active_job_id'); localStorage.removeItem('tlc_active_job_state'); } catch(_){}
+    window.location.href = 'login-colaborador.html';
+  });
+  if (collapseBtnNav) collapseBtnNav.addEventListener('click', () => {
+    const footerToggle = document.getElementById('sidebar-toggle');
+    if (footerToggle) { try { footerToggle.click(); } catch(_){} return; }
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.classList.toggle('md:translate-x-0');
+  });
+
+  // Ajuste: reforzar sesión antes de aceptar órdenes
+  (function strengthenAcceptFlow(){
+    const observer = new MutationObserver(() => {
+      document.querySelectorAll('.btn-accept').forEach(btn => {
+        if (btn.__patched) return; btn.__patched = true;
+        btn.addEventListener('click', async (ev) => {
+          try { await supabaseConfig.ensureFreshSession?.(); } catch(_){ }
+        }, { once: true, capture: true });
+      });
+    });
+    observer.observe(document.getElementById('ordersGrid') || document.body, { childList: true, subtree: true });
+  })();
 
 });

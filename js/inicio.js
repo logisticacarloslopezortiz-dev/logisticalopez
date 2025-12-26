@@ -9,19 +9,22 @@ let selectedOrderIdForAssign = null; // Guardará el ID del pedido a asignar
 let __initialized = false;
 let selectedOrderIdForPrice = null;
 let __lucideTimer = null;
+const ORDER_STATUS = Object.freeze({ PENDIENTE: 'Pendiente', ACEPTADA: 'Aceptada', EN_CURSO: 'En curso', COMPLETADA: 'Completada', CANCELADA: 'Cancelada' });
 
 // --- GESTIÓN DE ESTADO CENTRALIZADO ---
 const AppState = {
   update(order) {
     const id = order.id;
     const idxAll = allOrders.findIndex(o => o.id === id);
+    const base = idxAll !== -1 ? allOrders[idxAll] : null;
+    const merged = { ...(base || {}), ...order };
+    if (!merged.status && base && base.status) merged.status = base.status;
     if (idxAll !== -1) {
-      allOrders[idxAll] = { ...allOrders[idxAll], ...order };
+      allOrders[idxAll] = merged;
     } else {
-      allOrders.unshift(order);
+      allOrders.unshift(merged);
     }
-    
-    const updatedOrder = idxAll !== -1 ? allOrders[idxAll] : order;
+    const updatedOrder = merged;
     const idxVis = filteredOrders.findIndex(o => o.id === id);
     const visible = isVisibleStatus(updatedOrder.status);
 
@@ -60,7 +63,7 @@ function getOrderDate(o) {
 }
 
 function isVisibleStatus(status) {
-  return !['Completada', 'Cancelada'].includes(status);
+  return ![ORDER_STATUS.COMPLETADA, ORDER_STATUS.CANCELADA].includes(status);
 }
 
 function normalizePhoneDR(phone) {
@@ -143,9 +146,7 @@ async function loadAdminInfo() {
 function filterOrders() {
   // YA NO HAY FILTROS EN LA UI. Se aplica el filtro por defecto de no mostrar completados/cancelados.
   filteredOrders = (allOrders || []).filter(order => isVisibleStatus(order.status));
-
-  sortTable(sortColumn, null, true); // Re-aplicar ordenamiento sin cambiar dirección
-  renderOrders();
+  sortTable(sortColumn);
 }
 
 // Función para ordenar tabla
@@ -549,48 +550,94 @@ async function generateAndSendInvoice(orderId) {
   console.log('[Factura] Order ID:', order.id);
 
   try {
-    let pdfData = null;
-    let pdfError = null;
     const r = await supabaseConfig.client.functions.invoke('generate-invoice-pdf', {
       body: { orderId: order.id }
     });
-    pdfData = r?.data || null;
-    pdfError = r?.error || null;
+    const pdfData = r?.data || null;
+    const pdfError = r?.error || null;
 
-    console.log('[Factura] Respuesta recibida:', { pdfData, pdfError });
-    console.log('[Factura] DATA:', JSON.stringify(pdfData));
-    console.log('[Factura] ERROR:', JSON.stringify(pdfError));
-
-    if (pdfError || !pdfData) {
+    let dataObj = pdfData;
+    if (pdfError || !dataObj || typeof dataObj !== 'object') {
       try {
-        // Ajuste: usar la URL de funciones directa (sin /functions/v1 duplicado)
         const u = `${supabaseConfig.functionsUrl}/generate-invoice-pdf`;
+        const { data: { session } } = await supabaseConfig.client.auth.getSession();
+        const token = session?.access_token || '';
         const res = await fetch(u, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${supabaseConfig.anonKey}`,
+            'Authorization': token ? `Bearer ${token}` : '',
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ orderId: order.id })
         });
         if (res.ok) {
-          pdfData = await res.json();
-          pdfError = null;
-          console.log('[Factura] Fallback fetch OK');
-        } else {
-          console.error('[Factura] Fallback fetch HTTP', res.status);
+          dataObj = await res.json();
         }
+      } catch(_) {}
+    }
+
+    let pdfUrl = (
+      dataObj && (dataObj.pdfUrl ||
+      dataObj.url ||
+      dataObj.file_url ||
+      (dataObj.data && (dataObj.data.pdfUrl || dataObj.data.file_url)))
+    ) || null;
+
+    if (!pdfUrl || typeof pdfUrl !== 'string') {
+      try {
+        const u = `${supabaseConfig.functionsUrl}/generate-invoice-pdf`;
+        const { data: { session } } = await supabaseConfig.client.auth.getSession();
+        const token = session?.access_token || '';
+        const res = await fetch(u, {
+          method: 'POST',
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ orderId: order.id })
+        });
+        if (res.ok) {
+          const j = await res.json();
+          pdfUrl = (
+            j.pdfUrl || j.url || j.file_url ||
+            (j.data && (j.data.pdfUrl || j.data.file_url)) ||
+            null
+          );
+        }
+      } catch (e) {}
+    }
+
+    if (!pdfUrl || typeof pdfUrl !== 'string') {
+      try {
+        const jsPDF = window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : null;
+        if (!jsPDF) throw new Error('jsPDF no disponible');
+        const doc = new jsPDF();
+        const title = 'Logística López Ortiz';
+        doc.setFontSize(20);
+        doc.text(title, 105, 20, { align: 'center' });
+        doc.setFontSize(12);
+        doc.text(`Factura #${order.short_id || order.id}`, 20, 40);
+        doc.line(20, 42, 190, 42);
+        doc.setFontSize(11);
+        doc.text(`Cliente: ${order.name || ''}`, 20, 52);
+        doc.text(`Teléfono: ${order.phone || ''}`, 20, 60);
+        doc.text(`Email: ${order.client_email || order.email || ''}`, 20, 68);
+        doc.text(`Fecha: ${new Date().toLocaleDateString('es-DO')}`, 140, 52);
+        doc.autoTable({ startY: 82, head: [['Descripción', 'Precio']], body: [
+          [`Servicio: ${order.service?.name || 'N/A'} (${order.vehicle?.name || 'N/A'})`, `${order.estimated_price || ''}`],
+          [`Ruta: ${order.pickup} -> ${order.delivery}`, '']
+        ], theme: 'striped' });
+        const finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 10 : 120;
+        doc.setFontSize(13);
+        doc.text(`Total: ${order.estimated_price || ''}`, 190, finalY, { align: 'right' });
+        doc.output('dataurlnewwindow');
+        notifications.info('Factura generada localmente.');
+        return;
       } catch (e) {
-        console.error('[Factura] Fallback fetch error', e?.message || e);
+        console.error('Error generando factura local:', e);
+        throw new Error('La función no devolvió una URL válida.');
       }
     }
-    
-    const candidateUrl = pdfData && (pdfData.data?.pdfUrl || pdfData.pdfUrl || pdfData.url || pdfData.file_url || pdfData.data?.file_url);
-    if (!pdfData || pdfData.error || !candidateUrl) {
-      console.error('Error en respuesta de función:', pdfData);
-      throw new Error(pdfData?.error || 'La función no devolvió una URL válida.');
-    }
-    const pdfUrl = candidateUrl;
 
     try {
       const linkWrap = document.getElementById('invoiceLink');
@@ -604,27 +651,18 @@ async function generateAndSendInvoice(orderId) {
       }
     } catch(_) { }
 
-    // Abrir la factura inmediatamente para el admin
-    try { window.open(pdfUrl, '_blank'); } catch(_) {}
-
-    // Intentar enviar el correo desde función dedicada si existe
-    try {
-      const send = await supabaseConfig.client.functions.invoke('send-invoice', { body: { orderId: order.id, pdfUrl } });
-      if (!send.error) {
-        notifications.success('Factura enviada por correo', 'El cliente recibió el enlace de su factura (correo con enlace clicable).');
-      }
-    } catch(_) {}
-
-    if (pdfData.data?.emailSent) {
-      notifications.success('Factura enviada', 'El cliente recibió el enlace de su factura por correo.');
-    } else {
-      // Fallback Gmail con cuerpo formateado (link clicable en la mayoría de clientes)
-      const subject = `Factura de su orden #${order.short_id || order.id} con Logística López Ortiz`;
-      const body = `Hola, ${order.client_name || order.name}.\n\nPuede ver y descargar su factura desde este enlace:\n${pdfUrl}\n\nGracias por elegirnos.`;
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(clientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.open(gmailUrl, '_blank');
-      notifications.info('Se abrió Gmail con el borrador para enviar la factura.');
-    }
+    // Componer correo en Gmail con resumen de la solicitud
+    const subject = `Factura de su orden #${order.short_id || order.id} — Logística López Ortiz`;
+    const resumen = [
+      `Servicio: ${order.service?.name || 'N/A'} (${order.vehicle?.name || 'N/A'})`,
+      `Ruta: ${order.pickup} → ${order.delivery}`,
+      `Fecha/Hora: ${order.date || ''} ${order.time || ''}`,
+      `Total: ${order.estimated_price || order.monto_cobrado || 'N/D'}`
+    ].join('\n');
+    const body = `Hola ${order.client_name || order.name || ''},\n\nAdjuntamos el enlace de su factura en PDF:\n${pdfUrl}\n\nResumen de su solicitud:\n${resumen}\n\nGracias por elegirnos.\nLogística López Ortiz`;
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(clientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank');
+    notifications.info('Se abrió Gmail con el borrador para enviar la factura.');
 
   } catch (error) {
     console.error('Error al procesar la factura:', error);
@@ -755,6 +793,7 @@ function updateRow(o){
   const tr = document.querySelector(`tbody#ordersTableBody tr[data-order-id="${String(o.id)}"]`);
   if (tr) {
     tr.innerHTML = renderRowHtml(o);
+    tr.addEventListener('dblclick', () => openAssignModal(o.id));
   }
   const cards = document.getElementById('ordersCardContainer');
   if (cards) {
@@ -816,8 +855,8 @@ function setupRealtime() {
 }
 
 function openPriceModal(orderId) {
-  selectedOrderIdForPrice = orderId;
-  const order = allOrders.find(o => o.id == selectedOrderIdForPrice);
+  selectedOrderIdForPrice = Number(orderId);
+  const order = allOrders.find(o => o.id === selectedOrderIdForPrice);
   if (!order) { notifications.error('Error', 'No se encontró la orden para actualizar el precio.'); return; }
   const montoEl = document.getElementById('montoCobrado');
   const metodoEl = document.getElementById('metodoPago');
@@ -941,6 +980,16 @@ document.addEventListener('DOMContentLoaded', () => {
   window.closeAssignModal = closeAssignModal;
   window.closePriceModal = closePriceModal;
   window.savePriceData = savePriceData;
+
+  try {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      try {
+        const enable = window.pushNotifications && window.pushNotifications.enable;
+        if (typeof enable === 'function') { enable().catch(() => {}); }
+        else if (Notification.requestPermission) { Notification.requestPermission().catch(() => {}); }
+      } catch(_){}
+    }
+  } catch(_){}
 
   try {
     const permEl = document.getElementById('pushStatusPerm');

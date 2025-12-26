@@ -159,8 +159,7 @@ const OrderManager = {
       const rpcPayload = {
         order_id: Number(orderId),
         amount: Number(amount),
-        method: method,
-        collaborator_id: null // Se añade explícitamente para resolver ambigüedad en la función RPC (int vs bigint)
+        method: method
       };
       console.debug('[OrderManager.setOrderAmount] RPC set_order_amount_admin payload:', rpcPayload);
       const { data, error } = await supabaseConfig.client.rpc('set_order_amount_admin', rpcPayload);
