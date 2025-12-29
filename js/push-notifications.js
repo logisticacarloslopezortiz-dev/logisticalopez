@@ -28,46 +28,23 @@ class PushNotificationManager {
 
     async ensureVapidKey() {
         if (this.vapidPublicKey) return this.vapidPublicKey;
-        if (!window.supabaseConfig) throw new Error('supabaseConfig no encontrado');
-        if (typeof supabaseConfig.ensureSupabaseReady === 'function') {
-            await supabaseConfig.ensureSupabaseReady();
+        let key = null;
+        try { if (typeof window.__VAPID_PUBLIC_KEY__ === 'string') key = window.__VAPID_PUBLIC_KEY__; } catch(_) {}
+        if (!key) { try { key = localStorage.getItem('tlc_vapid_pub') || null; } catch(_) {} }
+        if (this.isValidVapid(key)) {
+            this.vapidPublicKey = key;
+            return this.vapidPublicKey;
         }
-        if (typeof supabaseConfig.getVapidPublicKey === 'function') {
+        if (window.supabaseConfig && typeof supabaseConfig.getVapidPublicKey === 'function') {
             const response = await supabaseConfig.getVapidPublicKey();
-            console.log('[push] respuesta cruda getVapidPublicKey:', response);
-            let key = typeof response === 'string' ? response : response?.key;
+            key = typeof response === 'string' ? response : response?.key;
             if (this.isValidVapid(key)) {
                 this.vapidPublicKey = key;
+                try { localStorage.setItem('tlc_vapid_pub', key); } catch(_) {}
                 return this.vapidPublicKey;
             }
-            try {
-                let accessToken = null;
-                try {
-                    if (supabaseConfig?.client?.auth?.getSession) {
-                        const session = await supabaseConfig.client.auth.getSession();
-                        accessToken = session?.data?.session?.access_token || null;
-                    }
-                } catch(_) {}
-                const bearer = accessToken || supabaseConfig?.anonKey || '';
-                const direct = await fetch(`${supabaseConfig.projectUrl}/functions/v1/getVapidKey`, {
-                    method: 'GET',
-                    headers: {
-                        Authorization: `Bearer ${bearer}`,
-                        apikey: supabaseConfig?.anonKey || ''
-                    }
-                });
-                if (direct && direct.ok) {
-                    const json = await direct.json();
-                    key = typeof json === 'string' ? json : json?.key;
-                    if (this.isValidVapid(key)) {
-                        this.vapidPublicKey = key;
-                        return this.vapidPublicKey;
-                    }
-                }
-            } catch(_) {}
-            console.error('[push] VAPID recibida pero inválida:', key);
         }
-        throw new Error('No se pudo obtener VAPID pública válida');
+        throw new Error('VAPID pública no configurada');
     }
 
     isValidVapid(key) {
@@ -117,8 +94,10 @@ class PushNotificationManager {
 
     async subscribe() {
         if (!this.isSupported) throw new Error('Push not supported');
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') throw new Error('Notification permission denied');
+        if (Notification.permission !== 'granted') {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') throw new Error('Notification permission denied');
+        }
         await this.ensureVapidKey();
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.subscribe({
@@ -128,7 +107,6 @@ class PushNotificationManager {
         this.subscription = subscription;
         this.setOptIn(true);
         await this.syncSubscriptionWithServer(subscription);
-        try { if (this.vapidPublicKey) localStorage.setItem('tlc_vapid_pub', this.vapidPublicKey); } catch(_){}
         return subscription;
     }
 

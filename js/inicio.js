@@ -544,132 +544,42 @@ async function generateAndSendInvoice(orderId) {
     return;
   }
 
-  notifications.info('Generando factura y enviando enlace por correo...', 'Espera un momento.');
-
-  console.log('[Factura] Iniciando invocación de función generate-invoice-pdf...');
-  console.log('[Factura] Order ID:', order.id);
+  notifications.info('Generando y enviando factura por correo...', 'Espera un momento.');
 
   try {
-    const r = await supabaseConfig.client.functions.invoke('generate-invoice-pdf', {
-      body: { orderId: order.id }
+    const { data, error } = await supabaseConfig.client.functions.invoke('send-invoice', {
+      body: { orderId: order.id, email: clientEmail }
     });
-    const pdfData = r?.data || null;
-    const pdfError = r?.error || null;
 
-    let dataObj = pdfData;
-    if (pdfError || !dataObj || typeof dataObj !== 'object') {
-      try {
-        const u = `${supabaseConfig.functionsUrl}/generate-invoice-pdf`;
-        const { data: { session } } = await supabaseConfig.client.auth.getSession();
-        const token = session?.access_token || '';
-        const res = await fetch(u, {
-          method: 'POST',
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ orderId: order.id })
-        });
-        if (res.ok) {
-          dataObj = await res.json();
-        }
-      } catch(_) {}
+    if (error) {
+      throw new Error(error.message || 'Error invocando send-invoice');
     }
 
-    let pdfUrl = (
-      dataObj && (dataObj.pdfUrl ||
-      dataObj.url ||
-      dataObj.file_url ||
-      (dataObj.data && (dataObj.data.pdfUrl || dataObj.data.file_url)))
-    ) || null;
-
-    if (!pdfUrl || typeof pdfUrl !== 'string') {
-      try {
-        const u = `${supabaseConfig.functionsUrl}/generate-invoice-pdf`;
-        const { data: { session } } = await supabaseConfig.client.auth.getSession();
-        const token = session?.access_token || '';
-        const res = await fetch(u, {
-          method: 'POST',
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ orderId: order.id })
-        });
-        if (res.ok) {
-          const j = await res.json();
-          pdfUrl = (
-            j.pdfUrl || j.url || j.file_url ||
-            (j.data && (j.data.pdfUrl || j.data.file_url)) ||
-            null
-          );
-        }
-      } catch (e) {}
-    }
-
-    if (!pdfUrl || typeof pdfUrl !== 'string') {
-      try {
-        const jsPDF = window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : null;
-        if (!jsPDF) throw new Error('jsPDF no disponible');
-        const doc = new jsPDF();
-        const title = 'Logística López Ortiz';
-        doc.setFontSize(20);
-        doc.text(title, 105, 20, { align: 'center' });
-        doc.setFontSize(12);
-        doc.text(`Factura #${order.short_id || order.id}`, 20, 40);
-        doc.line(20, 42, 190, 42);
-        doc.setFontSize(11);
-        doc.text(`Cliente: ${order.name || ''}`, 20, 52);
-        doc.text(`Teléfono: ${order.phone || ''}`, 20, 60);
-        doc.text(`Email: ${order.client_email || order.email || ''}`, 20, 68);
-        doc.text(`Fecha: ${new Date().toLocaleDateString('es-DO')}`, 140, 52);
-        doc.autoTable({ startY: 82, head: [['Descripción', 'Precio']], body: [
-          [`Servicio: ${order.service?.name || 'N/A'} (${order.vehicle?.name || 'N/A'})`, `${order.estimated_price || ''}`],
-          [`Ruta: ${order.pickup} -> ${order.delivery}`, '']
-        ], theme: 'striped' });
-        const finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 10 : 120;
-        doc.setFontSize(13);
-        doc.text(`Total: ${order.estimated_price || ''}`, 190, finalY, { align: 'right' });
-        doc.output('dataurlnewwindow');
-        notifications.info('Factura generada localmente.');
-        return;
-      } catch (e) {
-        console.error('Error generando factura local:', e);
-        throw new Error('La función no devolvió una URL válida.');
-      }
-    }
-
-    try {
-      const linkWrap = document.getElementById('invoiceLink');
-      const linkA = document.getElementById('invoiceLinkAnchor');
-      if (linkWrap && linkA) {
-        linkA.href = pdfUrl;
-        linkA.textContent = 'Abrir factura (PDF)';
-        linkA.target = '_blank';
-        linkA.rel = 'noopener';
-        linkWrap.style.display = 'block';
-      }
-    } catch(_) { }
-
-    // Componer correo en Gmail con resumen de la solicitud
-    const subject = `Factura de su orden #${order.short_id || order.id} — Logística López Ortiz`;
-    const resumen = [
-      `Servicio: ${order.service?.name || 'N/A'} (${order.vehicle?.name || 'N/A'})`,
-      `Ruta: ${order.pickup} → ${order.delivery}`,
-      `Fecha/Hora: ${order.date || ''} ${order.time || ''}`,
-      `Total: ${order.estimated_price || order.monto_cobrado || 'N/D'}`
-    ].join('\n');
-    const body = `Hola ${order.client_name || order.name || ''},\n\nAdjuntamos el enlace de su factura en PDF:\n${pdfUrl}\n\nResumen de su solicitud:\n${resumen}\n\nGracias por elegirnos.\nLogística López Ortiz`;
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(clientEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(gmailUrl, '_blank');
-    notifications.info('Se abrió Gmail con el borrador para enviar la factura.');
-
-  } catch (error) {
-    console.error('Error al procesar la factura:', error);
-    notifications.error(
-      'Error al procesar factura',
-      error.message || 'No se pudo generar el enlace de la factura. Revisa la consola y la Edge Function `generate-invoice-pdf`.'
+    const pdfUrl = (
+      (data && data.data && data.data.pdfUrl) ||
+      (data && data.pdfUrl) ||
+      null
     );
+
+    if (pdfUrl && typeof pdfUrl === 'string') {
+      try {
+        const linkWrap = document.getElementById('invoiceLink');
+        const linkA = document.getElementById('invoiceLinkAnchor');
+        if (linkWrap && linkA) {
+          linkA.href = pdfUrl;
+          linkA.textContent = 'Abrir factura (PDF)';
+          linkA.target = '_blank';
+          linkA.rel = 'noopener';
+          linkWrap.style.display = 'block';
+        }
+      } catch(_) { }
+    }
+
+    const recipient = (data && data.data && data.data.recipientEmail) || clientEmail;
+    notifications.success('Factura enviada', `Se envió el correo a ${recipient}`);
+  } catch (error) {
+    console.error('Error al enviar factura:', error);
+    notifications.error('Error al enviar factura', error.message || 'No se pudo enviar la factura por correo.');
   }
 }
 
