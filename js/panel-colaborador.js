@@ -120,8 +120,25 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       if (sub) {
-        // Guardar suscripción en la tabla collaborators
-        await supabaseConfig.client.from('collaborators').update({ push_subscription: sub }).eq('id', userId);
+        const raw = typeof sub.toJSON === 'function' ? sub.toJSON() : null;
+        const keys = raw?.keys || (sub.keys || {});
+        const endpoint = sub.endpoint;
+        // Guardar suscripción en la tabla collaborators, con fallback a push_subscriptions
+        const { error: collabErr } = await supabaseConfig.client
+          .from('collaborators')
+          .update({ push_subscription: raw || sub })
+          .eq('id', userId);
+        if (collabErr) {
+          try {
+            await supabaseConfig.client
+              .from('push_subscriptions')
+              .upsert({
+                user_id: userId,
+                endpoint,
+                keys: { p256dh: keys.p256dh, auth: keys.auth }
+              }, { onConflict: 'user_id,endpoint' });
+          } catch (_) {}
+        }
       }
     } catch (e) { console.warn('Error auto-registro push:', e); }
   }
@@ -398,6 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updatePrimaryActionButtons(order){
     const phase = String(order?.last_collab_status || '').toLowerCase();
+    const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
     
     // Ocultar y deshabilitar todos primero
     [btnGoPickup, btnLoading, btnGoDeliver, btnComplete].forEach(btn => {
@@ -417,10 +435,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (btnLoading) { btnLoading.classList.remove('hidden'); btnLoading.disabled = false; } 
     }
     else if (phase === 'cargando') { 
-      if (btnGoDeliver) { btnGoDeliver.classList.remove('hidden'); btnGoDeliver.disabled = false; } 
+      if (btnGoDeliver) { btnGoDeliver.classList.remove('hidden'); btnGoDeliver.disabled = false; }
+      try {
+        notifications?.info?.('Sube evidencia fotográfica antes de continuar');
+        document.getElementById('evidenceInput')?.focus();
+        document.getElementById('activeEvidence')?.scrollIntoView({ behavior: 'smooth' });
+      } catch(_) {}
     }
     else if (phase === 'en_camino_entregar') { 
-      if (btnComplete) { btnComplete.classList.remove('hidden'); btnComplete.disabled = false; } 
+      if (btnComplete) { btnComplete.classList.remove('hidden'); btnComplete.disabled = !hasEvidence; }
+      if (!hasEvidence) {
+        try {
+          notifications?.warning?.('Debes subir al menos una evidencia antes de completar');
+          document.getElementById('evidenceInput')?.focus();
+        } catch(_) {}
+      }
     }
     else { 
       // Por defecto (ej. Aceptada), mostrar "En camino a recoger"
@@ -445,6 +474,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       notifications?.success?.(successMsg);
       currentOrder.last_collab_status = newStatus;
+
+      if (newStatus === 'cargando') {
+        try {
+          notifications?.info?.('Sube evidencia fotográfica en la sección Evidencia');
+          document.getElementById('evidenceInput')?.focus();
+          document.getElementById('activeEvidence')?.scrollIntoView({ behavior: 'smooth' });
+        } catch(_) {}
+      }
       
       // Si es estado final, cerrar
       if (['entregada', 'cancelada'].includes(newStatus)) {
@@ -470,6 +507,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnGoDeliver) btnGoDeliver.addEventListener('click', () => handleStatusUpdate('en_camino_entregar', 'En camino a entregar', btnGoDeliver));
   
   if (btnComplete) btnComplete.addEventListener('click', () => {
+    const photos = Array.isArray(currentOrder?.evidence_photos) ? currentOrder.evidence_photos : [];
+    if (!photos.length) {
+      try {
+        notifications?.warning?.('Debes subir al menos una evidencia antes de completar');
+        document.getElementById('evidenceInput')?.focus();
+        document.getElementById('activeEvidence')?.scrollIntoView({ behavior: 'smooth' });
+      } catch(_) {}
+      return;
+    }
     if (confirm('¿Seguro que deseas completar esta solicitud?')) {
       handleStatusUpdate('entregada', 'Solicitud completada', btnComplete);
     }
@@ -667,17 +713,18 @@ document.addEventListener('DOMContentLoaded', () => {
           b.disabled = true;
           b.textContent = '...';
           await supabaseConfig.ensureFreshSession?.();
-          const { data: { user } } = await supabaseConfig.client.auth.getSession();
-          if (!user?.id) throw new Error('Sesión inválida');
-          const v = await supabaseConfig.validateActiveCollaborator?.(user.id);
+          const { data: { session } } = await supabaseConfig.client.auth.getSession();
+          const userId = session?.user?.id;
+          if (!userId) throw new Error('Sesión inválida');
+          const v = await supabaseConfig.validateActiveCollaborator?.(userId);
           if (v && !v.isValid) throw new Error('Sesión inválida');
 
-          const res = await OrderManager.acceptOrder(o.id, { collaborator_id: user.id });
+          const res = await OrderManager.acceptOrder(o.id, { collaborator_id: userId });
           if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
 
           notifications?.success?.('Orden aceptada');
           o.status = 'Aceptada';
-          o.assigned_to = user.id;
+          o.assigned_to = userId;
           o.last_collab_status = 'aceptada';
 
           openActiveJob(o);

@@ -480,11 +480,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const orderId = params.get('codigo') || params.get('id') || params.get('orderId');
     if (orderId) {
       orderIdInput.value = orderId;
-      trackOrder().then(() => {
-        const isNumericId = /^\d+$/.test(orderId);
-        const idForSub = isNumericId ? Number(orderId) : null;
-        if (idForSub) subscribeToOrderUpdates(idForSub);
-      });
+      // trackOrder ya se encarga de suscribir si el ID es numérico
+      trackOrder();
     }
   }
 

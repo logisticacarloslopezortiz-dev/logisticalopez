@@ -4,28 +4,18 @@
 const CACHE_NAME = 'tlc-cache-v10';
 const urlsToCache = [
   '/offline.html',
-  // CSS
   '/css/styles.css',
   '/css/animations.css',
   '/css/tailwind.min.css',
   '/css/custom-styles.css',
-  // JS core
-  '/js/order-manager.js',
-  '/js/supabase-config.js',
-  '/js/notifications.js',
-  '/js/pwa.js',
-  '/js/push-notifications.js',
-  // Vendor actually present
   '/vendor/leaflet.js',
   '/vendor/supabase.umd.js',
-  // Images present in /img
   '/img/1vertical.png',
   '/img/favicon.ico',
   '/img/android-chrome-192x192.png',
   '/img/android-chrome-512x512.png',
   '/img/apple-touch-icon.png',
   '/img/cargo.jpg',
-  // Manifest
   '/manifest.json'
 ];
 
@@ -79,7 +69,9 @@ self.addEventListener('fetch', (event) => {
   
 
   event.respondWith((async () => {
-    const cached = await caches.match(event.request, { ignoreSearch: true });
+    const cached = dest !== 'document'
+      ? await caches.match(event.request, { ignoreSearch: true })
+      : await caches.match(event.request);
     try {
       const networkResponse = await fetch(event.request);
       // Cachea en segundo plano recursos estáticos de mismo origen y respuestas OK
@@ -93,20 +85,7 @@ self.addEventListener('fetch', (event) => {
           await cache.put(event.request, networkResponse.clone());
         } catch (_) {}
       }
-      if (
-        networkResponse && networkResponse.ok &&
-        ['script', 'style', 'image', 'font'].includes(dest) &&
-        url.origin === self.location.origin
-      ) {
-        try {
-          const forHeaders = networkResponse.clone();
-          const bodyBlob = await forHeaders.blob();
-          const headers = new Headers(forHeaders.headers);
-          if (!headers.has('Cache-Control')) headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-          headers.set('X-Content-Type-Options', 'nosniff');
-          return new Response(bodyBlob, { status: forHeaders.status, statusText: forHeaders.statusText, headers });
-        } catch (_) { }
-      }
+      
       return networkResponse;
     } catch (e) {
       // Fallback a caché si existe
@@ -137,8 +116,9 @@ self.addEventListener('push', (event) => {
   let incoming = {};
   try { incoming = event.data && typeof event.data.json === 'function' ? event.data.json() : {}; } catch (_) {}
   const payload = incoming && typeof incoming === 'object' && incoming.notification ? incoming.notification : incoming;
-  const title = typeof payload.title === 'string' ? payload.title : 'TLC';
+  const title = typeof payload.title === 'string' ? payload.title : '';
   const body = typeof payload.body === 'string' ? payload.body : '';
+  if (!title || !body) return;
   const icon = payload.icon || '/img/android-chrome-192x192.png';
   const badge = payload.badge || '/img/favicon-32x32.png';
   const dataObj = payload.data || {};
@@ -148,7 +128,7 @@ self.addEventListener('push', (event) => {
     body,
     icon,
     badge,
-    requireInteraction: true,
+    requireInteraction: payload.urgent === true,
     renotify: true,
     tag: orderId ? `tlc-order-${orderId}` : 'tlc-order',
     data: { url: builtUrl },
@@ -158,6 +138,13 @@ self.addEventListener('push', (event) => {
     ]
   };
   event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclose', (event) => {
+  try {
+    const data = event.notification?.data || {};
+    // hook opcional: enviar métricas a API si se requiere
+  } catch (_) {}
 });
 
 self.addEventListener('notificationclick', (event) => {

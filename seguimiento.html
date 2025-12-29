@@ -82,10 +82,16 @@
             <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold bg-secundario">LLO</div>
             <span class="text-white text-lg font-semibold">Seguimiento</span>
           </a>
-          <a href="index.html" id="newOrderButton" class="text-white hover:underline text-sm font-medium flex items-center gap-1.5">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            Volver
-          </a>
+          <div class="flex items-center gap-3">
+            <button id="enablePushBtn" class="px-3 py-2 rounded-lg text-sm font-medium bg-secundario text-white hover:bg-secundario/90 flex items-center gap-1.5">
+              <i data-lucide="bell" class="w-4 h-4"></i>
+              Activar notificaciones
+            </button>
+            <a href="index.html" id="newOrderButton" class="text-white hover:underline text-sm font-medium flex items-center gap-1.5">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+              Volver
+            </a>
+          </div>
         </div>
         <div id="notifLatencyIndicator" class="mt-2 text-xs text-white/80">Notificaciones en tiempo real</div>
       </div>
@@ -200,6 +206,41 @@
   <script src="js/logging.js?v=20251220"></script>
   <script src="js/notifications.js?v=20251220"></script>
   <script src="js/seguimiento.js?v=20251220"></script>
+  <script src="js/push-notifications.js" defer></script>
+  <script src="js/pwa.js"></script>
+  <script>
+    (function(){
+      const onReady = () => {
+        const btn = document.getElementById('enablePushBtn');
+        if (!btn || !window.pushNotifications) return;
+        const updateBtn = () => {
+          const perm = window.pushNotifications.permission;
+          const enabled = window.pushNotifications.isEnabled;
+          if (perm === 'denied') {
+            btn.textContent = 'Permiso de notificaciones denegado';
+            btn.disabled = true;
+          } else if (enabled) {
+            btn.textContent = 'Notificaciones activas';
+            btn.disabled = true;
+          } else {
+            btn.textContent = 'Activar notificaciones';
+            btn.disabled = false;
+          }
+        };
+        updateBtn();
+        btn.addEventListener('click', async () => {
+          if (!window.pushNotifications.isSupported) return;
+          await window.pushNotifications.enable();
+          updateBtn();
+          try { if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons(); } catch(_){}
+        });
+        try { if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons(); } catch(_){}
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', onReady);
+      } else { onReady(); }
+    })();
+  </script>
   <script>try{if(window.lucide&&lucide.createIcons){lucide.createIcons();}}catch(_){}</script>
 </body>
 </html>

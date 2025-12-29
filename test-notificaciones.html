@@ -51,8 +51,7 @@
 
     async function showVapidKey() {
       const client = await initSupabase();
-      let resp = await client.functions.invoke('getVapidKey');
-      if (resp.error || !resp.data?.key) resp = await client.functions.invoke('get-vapid-key');
+      const resp = await client.functions.invoke('getVapidKey');
       const el = document.getElementById('vapid');
       el.textContent = resp.error ? String(resp.error.message || resp.error) : String(resp.data?.key || 'No disponible');
     }

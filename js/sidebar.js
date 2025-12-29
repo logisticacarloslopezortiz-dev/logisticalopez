@@ -11,8 +11,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     'historial-solicitudes.html'
   ]);
 
-  const loginHref = 'login.html';
+  const collabPages = new Set([
+    'panel-colaborador.html',
+    'rendimiento.html'
+  ]);
   const isAdminPage = adminPages.has(currentPage);
+  const isCollabPage = collabPages.has(currentPage);
+  const loginHref = isCollabPage ? 'login-colaborador.html' : 'login.html';
 
   let adminReady = false;
 
@@ -43,7 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       adminReady = true;
     } catch (err) {
       console.error('[Sidebar] Error validando sesión admin/owner:', err);
-      window.location.replace(loginHref);
+      window.location.replace('login.html');
       return;
     }
   }

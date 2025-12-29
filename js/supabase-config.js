@@ -381,15 +381,11 @@ if (!window.supabaseConfig) {
 
       try { await this.ensureSupabaseReady?.(); } catch(_){}
 
-      // 1) Intentar obtener desde Edge Function
+      // 1) Obtener SOLO desde Edge Function unificada
       let key = null;
       try {
-        let resp = await this.client.functions.invoke('getVapidKey');
-        if (resp?.data?.key) key = resp.data.key;
-        if (!key) {
-          resp = await this.client.functions.invoke('get-vapid-key');
-          if (resp?.data?.key) key = resp.data.key;
-        }
+        const resp = await this.client.functions.invoke('getVapidKey');
+        if (resp?.data?.key && typeof resp.data.key === 'string') key = resp.data.key;
       } catch(_){}
 
       // 2) Intentar obtener desde tabla de configuración de negocio
@@ -424,17 +420,14 @@ if (!window.supabaseConfig) {
           try { localStorage.setItem('tlc_vapid_pub', key); } catch(_){}
           return this.vapidPublicKey;
         } else {
-          console.warn('VAPID key configurada es inválida, usando fallback.');
+          console.warn('VAPID pública inválida desde Edge Function. Debe responder { key: PUBLIC_VAPID_KEY }');
         }
       }
 
-      // 4) Fallback seguro
-      this.vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
-      return this.vapidPublicKey;
+      throw new Error('No se pudo obtener VAPID pública válida');
     } catch (e) {
       console.warn('No se pudo obtener VAPID public key:', e);
-      this.vapidPublicKey = 'BLBz5HXcYVnRWZxsRiEgTQZYfS6VipYQPj7xQYqKtBUH9Mz7OHwzB5UYRurLrj_TJKQNRPDkzDKq9lHP0ERJ1K8';
-      return this.vapidPublicKey;
+      throw e;
     }
   },
 

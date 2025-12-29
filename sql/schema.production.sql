@@ -1123,8 +1123,11 @@ BEGIN
       'orderId', NEW.id
     );
 
-    PERFORM public.push_to_target(NEW.client_id, NULL,
-      '✅ Solicitud Recibida', 'Hemos recibido tu solicitud #' || NEW.short_id,
+    PERFORM public.send_and_store_notification(
+      NEW.client_id,
+      NULL,
+      '✅ Solicitud Recibida',
+      'Hemos recibido tu solicitud #' || NEW.short_id,
       jsonb_build_object('orderId', NEW.id)
     );
 
@@ -1135,8 +1138,11 @@ BEGIN
       'orderId', NEW.id
     );
 
-    PERFORM public.push_to_target(NULL, NEW.client_contact_id,
-      '✅ Solicitud Recibida', 'Hemos recibido tu solicitud #' || NEW.short_id,
+    PERFORM public.send_and_store_notification(
+      NULL,
+      NEW.client_contact_id,
+      '✅ Solicitud Recibida',
+      'Hemos recibido tu solicitud #' || NEW.short_id,
       jsonb_build_object('orderId', NEW.id)
     );
   END IF;
@@ -1152,8 +1158,11 @@ BEGIN
   );
 
   FOR _adm IN SELECT c.id FROM public.collaborators c WHERE lower(c.role) = 'administrador' AND c.status = 'activo' LOOP
-    PERFORM public.push_to_target(_adm.id, NULL,
-      '📢 Nueva Solicitud', 'Se creó la orden #' || NEW.short_id,
+    PERFORM public.send_and_store_notification(
+      _adm.id,
+      NULL,
+      '📢 Nueva Solicitud',
+      'Se creó la orden #' || NEW.short_id,
       jsonb_build_object('orderId', NEW.id, 'url', 'https://logisticalopezortiz.com/inicio.html?orderId=' || NEW.short_id)
     );
   END LOOP;
@@ -1187,6 +1196,16 @@ BEGIN
     -- No romper por errores de red
     PERFORM 1;
   END;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
+DROP FUNCTION IF EXISTS public.send_and_store_notification(uuid, uuid, text, text, jsonb);
+CREATE OR REPLACE FUNCTION public.send_and_store_notification(p_user_id uuid, p_contact_id uuid, p_title text, p_body text, p_data jsonb)
+RETURNS void AS $$
+BEGIN
+  INSERT INTO public.notifications(user_id, contact_id, title, body, data)
+  VALUES (p_user_id, p_contact_id, p_title, p_body, p_data)
+  ON CONFLICT DO NOTHING;
+  PERFORM public.push_to_target(p_user_id, p_contact_id, p_title, p_body, p_data);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 
@@ -1287,6 +1306,7 @@ BEGIN
       'created_at', o.created_at,
       'status', o.status,
       'tracking_data', o.tracking_data,
+      'evidence_photos', o.evidence_photos,
       'service', jsonb_build_object('name', o.service_name),
       'vehicle', jsonb_build_object('name', o.vehicle_name)
     );
@@ -1303,6 +1323,7 @@ BEGIN
     'pickup', o.pickup,
     'delivery', o.delivery,
     'tracking_data', o.tracking_data,
+    'evidence_photos', o.evidence_photos,
     'estimated_price', o.estimated_price,
     'monto_cobrado', o.monto_cobrado,
     'service', jsonb_build_object('name', o.service_name),
@@ -1317,27 +1338,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 
 GRANT EXECUTE ON FUNCTION public.get_order_details_public(text) TO anon, authenticated;
 -- Notificar al colaborador cuando se le asigna una orden
-create or replace function public.notify_assigned_collaborator()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  if NEW.assigned_to is not null and (OLD.assigned_to is distinct from NEW.assigned_to) then
-    PERFORM public.push_to_target(
-      NEW.assigned_to,
-      NULL,
-      '🛠️ Orden asignada',
-      'Se te asignó la orden #' || coalesce(NEW.short_id::text, NEW.id::text),
-      jsonb_build_object('url','https://logisticalopezortiz.com/panel-colaborador.html?orderId=' || coalesce(NEW.short_id::text, NEW.id::text))
-    );
-  end if;
-  return NEW;
-end;
-$$;
-
-drop trigger if exists trg_notify_assigned_collaborator on public.orders;
-create trigger trg_notify_assigned_collaborator
-after update of assigned_to on public.orders
-for each row
-execute function public.notify_assigned_collaborator();
+ 
 
 -- ==== PATCH: Redefiniciones para llenar correctamente target_user_id / target_contact_id ====
 
@@ -1362,7 +1363,7 @@ BEGIN
     );
 
     IF NEW.client_id IS NOT NULL THEN
-      PERFORM public.push_to_target(
+      PERFORM public.send_and_store_notification(
         NEW.client_id,
         NULL,
         'Estado actualizado',
@@ -1371,7 +1372,7 @@ BEGIN
       );
 
     ELSIF NEW.client_contact_id IS NOT NULL THEN
-      PERFORM public.push_to_target(
+      PERFORM public.send_and_store_notification(
         NULL,
         NEW.client_contact_id,
         'Estado actualizado',
@@ -1390,7 +1391,7 @@ BEGIN
     );
 
     FOR _r IN SELECT c.id FROM public.collaborators c WHERE lower(c.role) = 'administrador' AND c.status = 'activo' LOOP
-      PERFORM public.push_to_target(
+      PERFORM public.send_and_store_notification(
         _r.id,
         NULL,
         'Estado actualizado',
@@ -1416,7 +1417,7 @@ BEGIN
   IF NEW.assigned_to IS NOT NULL
      AND OLD.assigned_to IS DISTINCT FROM NEW.assigned_to THEN
 
-    PERFORM public.push_to_target(
+    PERFORM public.send_and_store_notification(
       NEW.assigned_to,
       NULL,
       '🛠️ Orden asignada',
@@ -1450,12 +1451,12 @@ BEGIN
     END IF;
     IF client_payload IS NOT NULL THEN
       IF NEW.client_id IS NOT NULL THEN
-        PERFORM public.push_to_target(NEW.client_id, NULL,
+        PERFORM public.send_and_store_notification(NEW.client_id, NULL,
           'Precio estimado actualizado', 'El precio estimado de tu orden fue actualizado.',
           jsonb_build_object('orderId', NEW.id)
         );
       ELSIF NEW.client_contact_id IS NOT NULL THEN
-        PERFORM public.push_to_target(NULL, NEW.client_contact_id,
+        PERFORM public.send_and_store_notification(NULL, NEW.client_contact_id,
           'Precio estimado actualizado', 'El precio estimado de tu orden fue actualizado.',
           jsonb_build_object('orderId', NEW.id)
         );
@@ -1465,7 +1466,7 @@ BEGIN
     
     -- [CORRECCIÓN 1] Fan-out Admin
     FOR _pa IN SELECT c.id FROM public.collaborators c WHERE lower(c.role) = 'administrador' AND c.status = 'activo' LOOP
-      PERFORM public.push_to_target(_pa.id, NULL,
+      PERFORM public.send_and_store_notification(_pa.id, NULL,
         'Precio estimado actualizado', 'La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' actualizó su precio estimado.',
         jsonb_build_object('orderId', NEW.id)
       );
@@ -1490,12 +1491,12 @@ BEGIN
     END IF;
     IF client_payload IS NOT NULL THEN
       IF NEW.client_id IS NOT NULL THEN
-        PERFORM public.push_to_target(NEW.client_id, NULL,
+        PERFORM public.send_and_store_notification(NEW.client_id, NULL,
           'Monto actualizado', 'El monto cobrado de tu orden fue actualizado.',
           jsonb_build_object('orderId', NEW.id)
         );
       ELSIF NEW.client_contact_id IS NOT NULL THEN
-        PERFORM public.push_to_target(NULL, NEW.client_contact_id,
+        PERFORM public.send_and_store_notification(NULL, NEW.client_contact_id,
           'Monto actualizado', 'El monto cobrado de tu orden fue actualizado.',
           jsonb_build_object('orderId', NEW.id)
         );
@@ -1505,7 +1506,7 @@ BEGIN
     
     -- [CORRECCIÓN 1] Fan-out Admin
     FOR _ma IN SELECT c.id FROM public.collaborators c WHERE lower(c.role) = 'administrador' AND c.status = 'activo' LOOP
-      PERFORM public.push_to_target(_ma.id, NULL,
+      PERFORM public.send_and_store_notification(_ma.id, NULL,
         'Monto actualizado', 'La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' actualizó su monto cobrado.',
         jsonb_build_object('orderId', NEW.id)
       );
@@ -1530,12 +1531,12 @@ BEGIN
     END IF;
     IF client_payload IS NOT NULL THEN
       IF NEW.client_id IS NOT NULL THEN
-        PERFORM public.push_to_target(NEW.client_id, NULL,
+        PERFORM public.send_and_store_notification(NEW.client_id, NULL,
           'Nueva evidencia subida', 'Se ha subido evidencia a tu orden.',
           jsonb_build_object('orderId', NEW.id)
         );
       ELSIF NEW.client_contact_id IS NOT NULL THEN
-        PERFORM public.push_to_target(NULL, NEW.client_contact_id,
+        PERFORM public.send_and_store_notification(NULL, NEW.client_contact_id,
           'Nueva evidencia subida', 'Se ha subido evidencia a tu orden.',
           jsonb_build_object('orderId', NEW.id)
         );
@@ -1545,7 +1546,7 @@ BEGIN
     
     -- [CORRECCIÓN 1] Fan-out Admin
     FOR _ev IN SELECT c.id FROM public.collaborators c WHERE lower(c.role) = 'administrador' AND c.status = 'activo' LOOP
-      PERFORM public.push_to_target(_ev.id, NULL,
+      PERFORM public.send_and_store_notification(_ev.id, NULL,
         'Nueva evidencia subida', 'La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' tiene nueva evidencia.',
         jsonb_build_object('orderId', NEW.id)
       );
@@ -1570,12 +1571,12 @@ BEGIN
     END IF;
     IF client_payload IS NOT NULL THEN
       IF NEW.client_id IS NOT NULL THEN
-        PERFORM public.push_to_target(NEW.client_id, NULL,
+        PERFORM public.send_and_store_notification(NEW.client_id, NULL,
           'Aviso de la orden', NEW.last_collab_status,
           jsonb_build_object('orderId', NEW.id)
         );
       ELSIF NEW.client_contact_id IS NOT NULL THEN
-        PERFORM public.push_to_target(NULL, NEW.client_contact_id,
+        PERFORM public.send_and_store_notification(NULL, NEW.client_contact_id,
           'Aviso de la orden', NEW.last_collab_status,
           jsonb_build_object('orderId', NEW.id)
         );
@@ -1585,7 +1586,7 @@ BEGIN
     
     -- [CORRECCIÓN 1] Fan-out Admin
     FOR _al IN SELECT c.id FROM public.collaborators c WHERE lower(c.role) = 'administrador' AND c.status = 'activo' LOOP
-      PERFORM public.push_to_target(_al.id, NULL,
+      PERFORM public.send_and_store_notification(_al.id, NULL,
         'Aviso importante', 'La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ': ' || NEW.last_collab_status,
         jsonb_build_object('orderId', NEW.id)
       );
