@@ -33,11 +33,39 @@ class PushNotificationManager {
             await supabaseConfig.ensureSupabaseReady();
         }
         if (typeof supabaseConfig.getVapidPublicKey === 'function') {
-            const key = await supabaseConfig.getVapidPublicKey();
+            const response = await supabaseConfig.getVapidPublicKey();
+            console.log('[push] respuesta cruda getVapidPublicKey:', response);
+            let key = typeof response === 'string' ? response : response?.key;
             if (this.isValidVapid(key)) {
                 this.vapidPublicKey = key;
                 return this.vapidPublicKey;
             }
+            try {
+                let accessToken = null;
+                try {
+                    if (supabaseConfig?.client?.auth?.getSession) {
+                        const session = await supabaseConfig.client.auth.getSession();
+                        accessToken = session?.data?.session?.access_token || null;
+                    }
+                } catch(_) {}
+                const bearer = accessToken || supabaseConfig?.anonKey || '';
+                const direct = await fetch(`${supabaseConfig.projectUrl}/functions/v1/getVapidKey`, {
+                    method: 'GET',
+                    headers: {
+                        Authorization: `Bearer ${bearer}`,
+                        apikey: supabaseConfig?.anonKey || ''
+                    }
+                });
+                if (direct && direct.ok) {
+                    const json = await direct.json();
+                    key = typeof json === 'string' ? json : json?.key;
+                    if (this.isValidVapid(key)) {
+                        this.vapidPublicKey = key;
+                        return this.vapidPublicKey;
+                    }
+                }
+            } catch(_) {}
+            console.error('[push] VAPID recibida pero inválida:', key);
         }
         throw new Error('No se pudo obtener VAPID pública válida');
     }
