@@ -122,23 +122,32 @@ document.addEventListener('DOMContentLoaded', () => {
       if (sub) {
         const raw = typeof sub.toJSON === 'function' ? sub.toJSON() : null;
         const keys = raw?.keys || (sub.keys || {});
-        const endpoint = sub.endpoint;
-        // Guardar suscripción en la tabla collaborators, con fallback a push_subscriptions
-        const { error: collabErr } = await supabaseConfig.client
-          .from('collaborators')
-          .update({ push_subscription: raw || sub })
-          .eq('id', userId);
-        if (collabErr) {
-          try {
-            await supabaseConfig.client
-              .from('push_subscriptions')
-              .upsert({
-                user_id: userId,
-                endpoint,
-                keys: { p256dh: keys.p256dh, auth: keys.auth }
-              }, { onConflict: 'user_id,endpoint' });
-          } catch (_) {}
+        const endpoint = String(sub.endpoint || '').trim().replace(/`+/g, '');
+        // Validar si el colaborador está activo antes de intentar actualizar su fila
+        let canUpdateCollaborator = false;
+        try {
+          const v = await supabaseConfig.validateActiveCollaborator?.(userId);
+          canUpdateCollaborator = !!(v && v.isValid);
+        } catch(_){}
+
+        if (canUpdateCollaborator) {
+          const { error: collabErr } = await supabaseConfig.client
+            .from('collaborators')
+            .update({ push_subscription: raw || sub })
+            .eq('id', userId);
+          if (!collabErr) return; // sincroniza a push_subscriptions por trigger
         }
+
+        // Fallback robusto: guardar directamente en push_subscriptions
+        try {
+          await supabaseConfig.client
+            .from('push_subscriptions')
+            .upsert({
+              user_id: userId,
+              endpoint,
+              keys: { p256dh: keys.p256dh, auth: keys.auth }
+            }, { onConflict: 'user_id,endpoint' });
+        } catch(_){}
       }
     } catch (e) { console.warn('Error auto-registro push:', e); }
   }
@@ -488,6 +497,8 @@ document.addEventListener('DOMContentLoaded', () => {
         clearActiveJobStorage();
         closeActiveJob();
         document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
+        // Refrescar la lista para que la orden completada desaparezca
+        fetchOrdersForCollaborator();
       } else {
         updatePrimaryActionButtons(currentOrder);
         try { localStorage.setItem('tlc_active_job_state', newStatus); } catch(_){}
@@ -597,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Cargar ordenes: Asignadas a mi O Pendientes (sin asignar)
       // Usamos .or() para eficiencia
-      const EXCLUDE = ['Completada', 'Cancelada', 'completada', 'cancelada'];
+      const EXCLUDE = ['completada', 'cancelada'];
       
       // Importante: seleccionar last_collab_status
       const { data, error } = await supabaseConfig.client
@@ -608,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (error) throw error;
 
-      orders = (data || []).filter(o => !EXCLUDE.includes(String(o.status || '').trim()));
+      orders = (data || []).filter(o => !EXCLUDE.includes(String(o.status || '').toLowerCase().trim()));
       renderOrders();
 
     } catch (e) {

@@ -25,6 +25,7 @@ async function loadSettings() {
     document.getElementById('businessPhone').value = settings.phone || '';
     document.getElementById('businessEmail').value = settings.email || '';
     document.getElementById('businessRnc').value = settings.rnc || '';
+    document.getElementById('businessVapidKey').value = settings.vapid_public_key || settings.push_vapid_key || '';
 
     // Formulario de cotización
     const rates = settings.quotation_rates || {};
@@ -103,7 +104,8 @@ businessForm.addEventListener('submit', async (e) => {
     address: document.getElementById('businessAddress').value,
     phone: document.getElementById('businessPhone').value,
     email: document.getElementById('businessEmail').value,
-    rnc: document.getElementById('businessRnc').value
+    rnc: document.getElementById('businessRnc').value,
+    vapid_public_key: (document.getElementById('businessVapidKey').value || '').trim()
   };
   try {
     await supabaseConfig.saveBusinessSettings(updates);

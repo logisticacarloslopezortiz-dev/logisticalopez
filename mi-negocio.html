@@ -91,6 +91,11 @@
           <label class="block font-semibold mb-1">RNC:</label>
           <input type="text" id="businessRnc" class="border p-2 rounded-lg w-full" placeholder="123-45678-9">
         </div>
+        <div>
+          <label class="block font-semibold mb-1">Clave VAPID Pública (Web Push):</label>
+          <input type="text" id="businessVapidKey" class="border p-2 rounded-lg w-full" placeholder="BA... (Base64 URL-safe P-256)">
+          <p class="text-sm text-gray-500 mt-1">Usada por el navegador para suscribirse a notificaciones push. Puedes obtenerla del panel de funciones o de tu generador VAPID.</p>
+        </div>
         <button type="submit" class="btn-primary px-4 py-2 rounded-lg">Guardar cambios</button>
       </form>
       </div>

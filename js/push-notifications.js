@@ -151,13 +151,16 @@ class PushNotificationManager {
             }
             const raw = typeof subscription.toJSON === 'function' ? subscription.toJSON() : null;
             const keys = (raw && raw.keys) ? raw.keys : (subscription.keys || {});
+            const cleanEndpoint = String(subscription.endpoint || '')
+              .trim()
+              .replace(/`+/g, '');
             const subscriptionData = user ? {
                 user_id: user.id,
-                endpoint: subscription.endpoint,
+                endpoint: cleanEndpoint,
                 keys: { p256dh: keys.p256dh, auth: keys.auth }
             } : {
                 client_contact_id: contactId,
-                endpoint: subscription.endpoint,
+                endpoint: cleanEndpoint,
                 keys: { p256dh: keys.p256dh, auth: keys.auth }
             };
             const conflictCols = user ? 'user_id,endpoint' : 'client_contact_id,endpoint';
