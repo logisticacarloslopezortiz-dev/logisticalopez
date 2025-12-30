@@ -1691,3 +1691,12 @@ DO $$ BEGIN
 END $$;
 
 -- RLS y funciones del outbox eliminadas.
+-- Configuración de GUCs para push (sesión/transaction). Persistente requiere permisos elevados en Dashboard.
+DO $$ BEGIN
+  PERFORM set_config('app.settings.send_push_url','https://fkprllkxyjtosjhtikxy.functions.supabase.co/send-push', true);
+EXCEPTION WHEN OTHERS THEN
+  PERFORM 1;
+END $$;
+
+-- Para producción: establece 'app.settings.service_role_token' manualmente en el SQL Editor (no persistimos secretos):
+-- select set_config('app.settings.service_role_token','<SUPABASE_SERVICE_ROLE_KEY>', true);

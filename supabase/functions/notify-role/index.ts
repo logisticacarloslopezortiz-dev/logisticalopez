@@ -15,6 +15,8 @@ const supabase: SupabaseClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
+const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') || '').trim()
+const FUNCTIONS_BASE = SUPABASE_URL ? SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') : ''
 
 // -------------------------------
 // Tipos
@@ -87,11 +89,11 @@ Deno.serve(async (req: Request) => {
   // --------------------------------------------
   // Supabase
   // --------------------------------------------
-  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-  const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
-    return jsonResponse({ success: false, error: 'Error de configuración del servidor' }, 500);
-  }
+    const SUPABASE_URL_ENV = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!SUPABASE_URL_ENV || !SUPABASE_SERVICE_ROLE) {
+      return jsonResponse({ success: false, error: 'Error de configuración del servidor' }, 500);
+    }
 
   try {
     const body = (await req.json()) as NotifyRoleRequest;
@@ -132,20 +134,22 @@ Deno.serve(async (req: Request) => {
       }
 
       const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
-      // Preferencia: user_id; si no existe, usar client_contact_id
-      if (order?.client_id) {
-        const { queued } = await enqueueForUserIds(supabase, [String(order.client_id)], payload, Number(orderId), 'Notificación', 'cliente');
-        return jsonResponse({ success: queued > 0, queued, target: 'user' }, 200);
-      } else if (order?.client_contact_id) {
-        const { error: insErr } = await supabase.from('notification_outbox').insert({
-          order_id: Number(orderId),
-          new_status: 'Notificación',
-          target_role: 'cliente',
-          target_contact_id: order.client_contact_id,
-          payload
+      if (order?.client_id && FUNCTIONS_BASE) {
+        const r = await fetch(`${FUNCTIONS_BASE}/send-push`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: String(order.client_id), title, body: messageBody, data: payload.data })
         });
-        if (insErr) throw insErr;
-        return jsonResponse({ success: true, queued: 1, target: 'contact' }, 200);
+        const ok = r.ok;
+        return jsonResponse({ success: ok, target: 'user' }, ok ? 200 : 500);
+      } else if (order?.client_contact_id && FUNCTIONS_BASE) {
+        const r = await fetch(`${FUNCTIONS_BASE}/send-push`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contact_id: String(order.client_contact_id), title, body: messageBody, data: payload.data })
+        });
+        const ok = r.ok;
+        return jsonResponse({ success: ok, target: 'contact' }, ok ? 200 : 500);
       }
       return jsonResponse({ success: false, message: 'Cliente no encontrado en la orden' }, 404);
     }
@@ -175,8 +179,19 @@ Deno.serve(async (req: Request) => {
     }
 
     const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
-    const { queued } = await enqueueForUserIds(supabase, ids, payload, Number(orderId), 'Notificación', normalizedRole);
-    return jsonResponse({ success: queued > 0, queued, total_targets: ids.length }, 200);
+    if (FUNCTIONS_BASE) {
+      let delivered = 0;
+      for (const uid of ids) {
+        const r = await fetch(`${FUNCTIONS_BASE}/send-push`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: uid, title, body: messageBody, data: payload.data })
+        });
+        if (r.ok) delivered++;
+      }
+      return jsonResponse({ success: delivered > 0, delivered, total_targets: ids.length }, 200);
+    }
+    return jsonResponse({ success: false, error: 'Funciones no configuradas' }, 500);
 
   } catch (error) {
     const msg = errorToString(error);
