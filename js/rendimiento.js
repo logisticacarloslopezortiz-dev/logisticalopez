@@ -5,128 +5,169 @@
  * Paso 3: Si todo es válido, cargar panel. Si no, redirigir a login.
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  // Verificar que Supabase esté disponible
-  if (!window.supabaseConfig || !supabaseConfig.client) {
-    console.error('Supabase Config no inicializado. Redirigiendo a login.');
+  /* ==============================
+     VALIDAR SUPABASE DISPONIBLE
+  =============================== */
+  if (!window.supabaseConfig?.client) {
+    console.error('[AUTH] Supabase no inicializado');
     window.location.href = 'login-colaborador.html';
     return;
   }
 
-  // Paso 1: Obtener sesión activa
+  /* ==============================
+     PASO 1: SESIÓN ACTIVA
+  =============================== */
   let session = null;
   try {
-    // Intentar refrescar sesión si es necesario
-    if (supabaseConfig.ensureFreshSession) {
-      try { await supabaseConfig.ensureFreshSession(); } catch (e) { /* no-op */ }
-    }
-    const { data } = await supabaseConfig.client.auth.getSession();
-    session = data?.session;
-  } catch (e) {
-    console.error('Error obteniendo sesión:', e);
+    await supabaseConfig.ensureFreshSession?.();
+    const { data, error } = await supabaseConfig.client.auth.getSession();
+    if (error) throw error;
+    session = data?.session || null;
+  } catch (err) {
+    console.error('[AUTH] Error obteniendo sesión:', err);
   }
 
-  if (!session) {
-    console.warn('No hay sesión activa. Redirigiendo a login.');
-    try { localStorage.removeItem('userRole'); localStorage.removeItem('collaboratorId'); localStorage.removeItem('tlc_active_job'); localStorage.removeItem('tlc_offline_updates'); } catch(_){}
+  if (!session?.user?.id) {
+    console.warn('[AUTH] Sesión inválida');
+    clearLocalAuth();
     window.location.href = 'login-colaborador.html';
     return;
   }
 
-  const userId = session.user?.id;
-  console.log('Sesión activa. Usuario ID:', userId);
+  const userId = session.user.id;
+  console.log('[AUTH] Sesión válida:', userId);
 
-  // Paso 2: Validar que sea colaborador activo en la BD
-  const validation = await supabaseConfig.validateActiveCollaborator(userId);
-  
-  if (!validation.isValid) {
-    console.error('Validación fallida:', validation.error);
-    
-    // Mostrar alerta al usuario
-    const msg = validation.error === 'Collaborator is not active' 
-      ? 'Tu cuenta ha sido desactivada. Contacta al administrador.'
-      : validation.error === 'Invalid role for this panel'
-      ? 'No tienes permisos de colaborador. Acceso denegado.'
-      : 'No estás registrado como colaborador. Acceso denegado.';
-    
+  /* ==============================
+     PASO 2: VALIDAR COLABORADOR
+  =============================== */
+  let validation;
+  try {
+    validation = await supabaseConfig.validateActiveCollaborator(userId);
+  } catch (err) {
+    console.error('[AUTH] Error validando colaborador:', err);
+    alert('Error de validación. Intenta nuevamente.');
+    clearLocalAuth();
+    window.location.href = 'login-colaborador.html';
+    return;
+  }
+
+  if (!validation?.isValid) {
+    console.warn('[AUTH] Validación fallida:', validation?.error);
+
+    const msg =
+      validation?.error === 'Collaborator is not active'
+        ? 'Tu cuenta está desactivada. Contacta al administrador.'
+        : validation?.error === 'Invalid role for this panel'
+          ? 'No tienes permisos para este panel.'
+          : 'No estás registrado como colaborador.';
+
     alert(msg);
-    
-    // Limpiar sesión y redirigir
-    try {
-      await supabaseConfig.client.auth.signOut();
-    } catch (_) {}
-    try { localStorage.removeItem('userRole'); localStorage.removeItem('collaboratorId'); localStorage.removeItem('tlc_active_job'); localStorage.removeItem('tlc_offline_updates'); } catch(_){}
+
+    try { await supabaseConfig.client.auth.signOut(); } catch (_) {}
+    clearLocalAuth();
     window.location.href = 'login-colaborador.html';
     return;
   }
 
-  // Paso 3: Validación exitosa. Cargar panel
-  console.log('✅ Validación de colaborador exitosa:', validation.collaborator.email);
-  
-  // Guardar en localStorage para referencia
+  /* ==============================
+     PASO 3: ACCESO CONCEDIDO
+  =============================== */
+  console.log('✅ Colaborador validado:', validation.collaborator?.email);
+
   try {
     localStorage.setItem('userRole', 'colaborador');
     localStorage.setItem('collaboratorId', userId);
   } catch (_) {}
 
-  // Cargar métricas y funcionalidades
-  await loadMetrics(session.user.id);
-  setupAutoRefresh(session.user.id);
+  await loadMetrics(userId);
+  setupAutoRefresh(userId);
 });
 
-async function loadMetrics(collabId) {
-  // Preferir RPC para métricas agregadas; fallback local si falla
-  let mine = [];
-  let completed = [];
-  let assigned = [];
+/* ==============================
+   HELPERS
+============================== */
+function clearLocalAuth() {
   try {
-    const { data, error } = await supabaseConfig.client.rpc('get_collaborator_metrics', { collaborator_id: collabId });
-    if (!error && Array.isArray(data) && data[0]) {
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('collaboratorId');
+    localStorage.removeItem('tlc_active_job');
+    localStorage.removeItem('tlc_offline_updates');
+  } catch (_) {}
+}
+
+/* ==============================
+   MÉTRICAS
+============================== */
+async function loadMetrics(collabId) {
+  let orders = [];
+  let completed = [];
+
+  /* ---------- RPC MÉTRICAS ---------- */
+  try {
+    const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
+      .rpc('get_collaborator_metrics', { collaborator_id: collabId })
+    ) || supabaseConfig.client
+      .rpc('get_collaborator_metrics', { collaborator_id: collabId }));
+    const { data, error } = resp;
+
+    if (!error && data?.[0]) {
       const m = data[0];
-      const assignedEl = document.getElementById('metricAssigned');
-      if (assignedEl) assignedEl.textContent = String(m.assigned || 0);
-      const completedEl = document.getElementById('metricCompleted');
-      if (completedEl) completedEl.textContent = String(m.completed || 0);
-      const avgEl = document.getElementById('metricAvgTime');
-      if (avgEl) avgEl.textContent = `${Math.round(Number(m.avg_hours || 0))}h`;
+      setText('metricAssigned', m.assigned ?? 0);
+      setText('metricCompleted', m.completed ?? 0);
+      setText('metricAvgTime', `${Math.round(Number(m.avg_hours || 0))}h`);
     }
   } catch (_) {}
 
+  /* ---------- FALLBACK LOCAL ---------- */
   try {
-    const all = await supabaseConfig.getOrders();
-    mine = (all || []).filter(o => o.assigned_to === collabId);
-    assigned = mine.filter(o => !['completada','cancelada'].includes(String(o.status || '').toLowerCase()));
-    completed = mine.filter(o => String(o.status || '').toLowerCase() === 'completada');
-    // Fallback/consumo para gráficos y tabla
-    const assignedEl = document.getElementById('metricAssigned');
-    if (assignedEl && !assignedEl.textContent) assignedEl.textContent = String(assigned.length);
-    const completedEl = document.getElementById('metricCompleted');
-    if (completedEl && !completedEl.textContent) completedEl.textContent = String(completed.length);
-    const avgEl = document.getElementById('metricAvgTime');
-    if (avgEl && !avgEl.textContent) avgEl.textContent = formatAvgTime(completed);
+    orders = await supabaseConfig.getOrders() || [];
+    const mine = orders.filter(o => o.assigned_to === collabId);
+
+    completed = mine.filter(o =>
+      String(o.status || '').toLowerCase() === 'completada'
+    );
+
+    if (!document.getElementById('metricAssigned')?.textContent) {
+      setText('metricAssigned', mine.length);
+    }
+    if (!document.getElementById('metricCompleted')?.textContent) {
+      setText('metricCompleted', completed.length);
+    }
+    if (!document.getElementById('metricAvgTime')?.textContent) {
+      setText('metricAvgTime', formatAvgTime(completed));
+    }
   } catch (_) {}
 
-  renderCharts(mine);
   renderWeekly(completed);
-  renderServiceDistribution(mine);
-  renderVehicleDistribution(mine);
+  renderServiceDistribution(orders);
+  renderVehicleDistribution(orders);
   await renderUnifiedTable(collabId, completed);
 }
 
+/* ==============================
+   UTILIDADES
+============================== */
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(value);
+}
+
 function formatAvgTime(completed) {
-  if (!completed || completed.length === 0) return '0h';
-  let sum = 0;
+  if (!completed?.length) return '0h';
+  let total = 0;
   let count = 0;
   for (const o of completed) {
-    const start = o.accepted_at ? Date.parse(o.accepted_at) : null;
-    const end = o.completed_at ? Date.parse(o.completed_at) : null;
-    if (start && end && end > start) {
-      sum += (end - start);
-      count += 1;
+    const start = o.accepted_at || o.assigned_at;
+    const end = o.completed_at;
+    if (start && end) {
+      const diff = Date.parse(end) - Date.parse(start);
+      if (diff > 0) {
+        total += diff;
+        count++;
+      }
     }
   }
-  if (count === 0) return '0h';
-  const hours = Math.round(sum / count / 1000 / 60 / 60);
-  return `${hours}h`;
+  return count ? `${Math.round(total / count / 36e5)}h` : '0h';
 }
 
 let weeklyChart = null;
@@ -376,10 +417,13 @@ function renderUnifiedPagination() {
   last.onclick = () => { rendPageState.currentPage = total; renderUnifiedTablePage(); renderUnifiedPagination(); };
 }
 
+/* ==============================
+   AUTO REFRESH
+============================== */
 function setupAutoRefresh(collabId) {
-  try {
-    setInterval(() => loadMetrics(collabId), 30000);
-  } catch (_) {}
+  setInterval(() => {
+    loadMetrics(collabId).catch(() => {});
+  }, 30000);
 }
 
 function groupByMonth(orders) {

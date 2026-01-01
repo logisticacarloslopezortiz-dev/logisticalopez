@@ -70,6 +70,38 @@ if (!window.supabaseConfig) {
     } catch (_) { /* no-op */ }
   },
 
+  isJwtExpiredError: function(err) {
+    if (!err) return false;
+    const msg = String(err.message || '');
+    const code = String(err.code || '');
+    const status = Number(err.status || 0);
+    return /jwt expired/i.test(msg) || code === 'PGRST303' || status === 401 || /JWT expired/i.test(msg);
+  },
+
+  withAuthRetry: async function (op) {
+    await this.ensureFreshSession();
+
+    let res;
+    try {
+      res = await op();
+    } catch (e) {
+      return { data: null, error: e };
+    }
+
+    if (this.isJwtExpiredError(res?.error)) {
+      try {
+        await this.client.auth.refreshSession?.();
+      } catch (_) {}
+      try {
+        return await op();
+      } catch (e) {
+        return { data: null, error: e };
+      }
+    }
+
+    return res;
+  },
+
   // Garantiza que Supabase UMD esté cargado y clientes inicializados
   ensureSupabaseReady: async function() {
     try {
@@ -146,7 +178,6 @@ if (!window.supabaseConfig) {
         method: 'GET',
         headers: {
           'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'Accept': 'application/json'
         }
       });
@@ -263,28 +294,23 @@ if (!window.supabaseConfig) {
     if (this.useLocalStorage) {
       try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
     }
-    await this.ensureFreshSession();
-    let { data, error } = await this.client.from('orders').select('*, service:services(name), vehicle:vehicles(name)');
-    if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
-      return [];
-    }
-
-    if (error) console.error('Error fetching orders:', error);
-    return data || [];
+    const resp = await this.withAuthRetry(() => this.client
+      .from('orders')
+      .select('*, service:services(name), vehicle:vehicles(name)')
+    );
+    if (resp?.error) return [];
+    return resp?.data || [];
   },
 
   async getOrderById(orderId) {
-    await this.ensureFreshSession();
-    let { data, error } = await this.client
+    const resp = await this.withAuthRetry(() => this.client
       .from('orders')
       .select('*, service:services(name), vehicle:vehicles(name)')
       .eq('id', orderId)
-      .maybeSingle();
-    if (error && (error.code === 'PGRST303' || error.status === 401 || /jwt expired/i.test(String(error.message || '')))) {
-      return null;
-    }
-    if (error) return null;
-    return data || null;
+      .maybeSingle()
+    );
+    if (resp?.error) return null;
+    return resp?.data || null;
   },
 
   /**
@@ -294,32 +320,44 @@ if (!window.supabaseConfig) {
    */
   async getOrdersForCollaborator(collaboratorId) {
     if (!this.client) return [];
+
     try {
       if (!collaboratorId) {
         const { data: u } = await this.client.auth.getUser();
         collaboratorId = u?.user?.id || null;
       }
-    } catch(_) {}
+    } catch (_) {}
 
-    let assigned = [];
-    let pending = [];
-    let error = null;
+    const FINAL_STATES = new Set(['completed', 'cancelled', 'entregada', 'completada', 'cancelada']);
+
     try {
-      const sel = 'id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),assigned_to';
-      const [respAssigned, respPending] = await Promise.all([
-        this.client.from('orders').select(sel).eq('assigned_to', collaboratorId),
-        this.client.from('orders').select(sel).is('assigned_to', null)
-      ]);
-      assigned = respAssigned?.data || [];
-      pending = respPending?.data || [];
-      error = respAssigned?.error || respPending?.error || null;
-    } catch (e) { error = e; }
+      const sel = `
+        id,short_id,name,phone,status,
+        pickup,delivery,
+        service:services(name),
+        vehicle:vehicles(name),
+        assigned_to
+      `;
 
-    const EXCLUDE = new Set(['Completada','Cancelada','completada','cancelada']);
-    const merged = [...assigned, ...pending];
-    const filtered = merged.filter(o => !EXCLUDE.has(String(o.status || '').trim()));
-    if (error) console.error(`Error fetching orders for collaborator ${collaboratorId}:`, error);
-    return filtered;
+      const { data, error } = await this.withAuthRetry(() =>
+        this.client.from('orders').select(sel)
+      );
+
+      if (error) {
+        console.error('Error fetching orders:', error);
+        return [];
+      }
+
+      // 🧠 Filtro REAL basado en estado
+      return (data || []).filter(o => {
+        const s = String(o.status || '').toLowerCase().trim();
+        return !FINAL_STATES.has(s);
+      });
+
+    } catch (e) {
+      console.error('Unexpected error fetching collaborator orders:', e);
+      return [];
+    }
   },
 
   /**
@@ -328,7 +366,8 @@ if (!window.supabaseConfig) {
    * @returns {Promise<object>} El servicio recién creado.
    */
   async addService(serviceData) {
-    const { data, error } = await this.client.from('services').insert(serviceData).select().single();
+    const { data, error } = await (this.withAuthRetry?.(() => this.client.from('services').insert(serviceData).select().single())
+      || this.client.from('services').insert(serviceData).select().single());
     if (error) throw error;
     return data;
   },
@@ -338,7 +377,8 @@ if (!window.supabaseConfig) {
    * @param {string} serviceId - El ID del servicio a eliminar.
    */
   async deleteService(serviceId) {
-    const { error } = await this.client.from('services').delete().eq('id', serviceId);
+    const { error } = await (this.withAuthRetry?.(() => this.client.from('services').delete().eq('id', serviceId))
+      || this.client.from('services').delete().eq('id', serviceId));
     if (error) throw error;
   },
 
@@ -348,7 +388,8 @@ if (!window.supabaseConfig) {
    * @returns {Promise<object>} El vehículo recién creado.
    */
   async addVehicle(vehicleData) {
-    const { data, error } = await this.client.from('vehicles').insert(vehicleData).select().single();
+    const { data, error } = await (this.withAuthRetry?.(() => this.client.from('vehicles').insert(vehicleData).select().single())
+      || this.client.from('vehicles').insert(vehicleData).select().single());
     if (error) throw error;
     return data;
   },
@@ -358,7 +399,8 @@ if (!window.supabaseConfig) {
    * @param {string} vehicleId - El ID del vehículo a eliminar.
    */
   async deleteVehicle(vehicleId) {
-    const { error } = await this.client.from('vehicles').delete().eq('id', vehicleId);
+    const { error } = await (this.withAuthRetry?.(() => this.client.from('vehicles').delete().eq('id', vehicleId))
+      || this.client.from('vehicles').delete().eq('id', vehicleId));
     if (error) throw error;
   },
 
@@ -503,15 +545,17 @@ if (!window.supabaseConfig) {
         return { isValid: false, collaborator: null, error: 'User ID is empty' };
       }
       try { await this.ensureFreshSession(); } catch(_){ }
-      
       const { data: { session } } = await this.client.auth.getSession();
       const emailClaim = session?.user?.email || null;
 
-      const { data: collaborator, error } = await this.client
+      const resp = await this.withAuthRetry(() => this.client
         .from('collaborators')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .maybeSingle()
+      );
+      const collaborator = resp?.data || null;
+      const error = resp?.error || null;
       
       if (error) {
         console.error('Error validating collaborator:', error);
@@ -520,11 +564,14 @@ if (!window.supabaseConfig) {
       
       let collab = collaborator;
       if (!collab && emailClaim) {
-        const { data: byEmail, error: e2 } = await this.client
+        const byEmailResp = await this.withAuthRetry(() => this.client
           .from('collaborators')
           .select('*')
           .eq('email', emailClaim)
-          .maybeSingle();
+          .maybeSingle()
+        );
+        const byEmail = byEmailResp?.data || null;
+        const e2 = byEmailResp?.error || null;
         if (e2) {
           console.error('Error validating collaborator by email:', e2);
           return { isValid: false, collaborator: null, error: e2.message };
@@ -537,13 +584,13 @@ if (!window.supabaseConfig) {
       }
       
       // Validar que el status sea 'activo'
-      if (String(collab.status || '').toLowerCase() !== 'activo') {
+      if (String(collab.status || '').trim().toLowerCase() !== 'activo') {
         console.warn(`Collaborator ${userId} has status: ${collab.status}`);
         return { isValid: false, collaborator: collab, error: 'Collaborator is not active' };
       }
       
       // Validar que el role sea 'colaborador'
-      if (String(collab.role || '').toLowerCase() !== 'colaborador') {
+      if (String(collab.role || '').trim().toLowerCase() !== 'colaborador') {
         console.warn(`Collaborator ${userId} has role: ${collab.role}`);
         return { isValid: false, collaborator: collab, error: 'Invalid role for this panel' };
       }

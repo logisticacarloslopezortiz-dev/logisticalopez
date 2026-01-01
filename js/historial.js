@@ -151,12 +151,18 @@
         const start = (histPageState.currentPage - 1) * histPageState.pageSize;
         const end = start + histPageState.pageSize - 1;
         const sel = 'id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to, service:services(name), vehicle:vehicles(name)';
-        const { data, count, error } = await client
+        const resp = await (supabaseConfig.withAuthRetry?.(() => client
           .from('orders')
           .select(sel, { count: 'exact' })
           .in('status', STATUS_OK)
           .order('completed_at', { ascending: false })
-          .range(start, end);
+          .range(start, end)) || client
+          .from('orders')
+          .select(sel, { count: 'exact' })
+          .in('status', STATUS_OK)
+          .order('completed_at', { ascending: false })
+          .range(start, end));
+        const { data, count, error } = resp;
         if (error) err = error; else { orders = data || []; histPageState.totalCount = count || orders.length; }
       } catch (e) { err = e; }
 
@@ -169,6 +175,23 @@
           orders = filtered.sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime());
           err = null;
         } catch (e2) { err = e2; }
+      }
+
+      if (err && (String(err.message||'').toLowerCase().includes('jwt expired') || err.status === 401 || err.code === 'PGRST303')) {
+        try {
+          const pub = supabaseConfig.getPublicClient?.();
+          if (pub) {
+            const resp2 = await pub
+              .from('orders')
+              .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to, service:services(name), vehicle:vehicles(name)', { count: 'exact' })
+              .in('status', STATUS_OK)
+              .order('completed_at', { ascending: false })
+              .range(0, histPageState.pageSize - 1);
+            orders = resp2.data || [];
+            histPageState.totalCount = resp2.count || orders.length;
+            err = null;
+          }
+        } catch (_) {}
       }
 
       if (err) {

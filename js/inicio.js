@@ -92,7 +92,9 @@ async function loadOrders() {
 
 // Carga de colaboradores desde Supabase
 async function loadCollaborators() {
-  const { data, error } = await supabaseConfig.client.from('collaborators').select('*');
+  const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client.from('collaborators').select('*'))
+    || supabaseConfig.client.from('collaborators').select('*'));
+  const { data, error } = resp;
   if (error) {
     console.error("Error al cargar colaboradores:", error);
     return [];
@@ -516,8 +518,8 @@ async function assignSelectedCollaborator(){
 
 async function deleteSelectedOrder(){
   if (!confirm('¿Eliminar esta solicitud?')) return;
-  
-  const { error } = await supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign);
+  const { error } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign))
+    || supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign));
   
   if (error) {
     notifications.error('Error al eliminar', error.message);

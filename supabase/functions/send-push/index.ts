@@ -12,6 +12,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@logisticalopezortiz.com';
+const INTERNAL_SECRET = Deno.env.get('PUSH_INTERNAL_SECRET') ?? '';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -67,11 +68,9 @@ async function sendWebPush(endpoint: string, keys: SubscriptionKeys, payload: Re
   return { ok: true };
 }
 
-function requireServiceRole(req: Request): boolean {
-  const auth = req.headers.get('Authorization') ?? '';
-  if (!SUPABASE_SERVICE_ROLE_KEY) return false;
-  const expected = `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
-  return auth === expected;
+function requireInternalSecret(req: Request): boolean {
+  const secret = req.headers.get('x-internal-secret') ?? '';
+  return INTERNAL_SECRET && secret === INTERNAL_SECRET;
 }
 
 Deno.serve(async (req) => {
@@ -79,8 +78,7 @@ Deno.serve(async (req) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  // Strict: only SRK can invoke.
-  if (!requireServiceRole(req)) return unauthorized();
+  if (!requireInternalSecret(req)) return unauthorized();
 
   let json: any;
   try {

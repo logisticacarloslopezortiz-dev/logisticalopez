@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ✅ EVENTO GLOBAL – SE EMITE UNA SOLA VEZ, con el estado de la sesión.
+  window.tlcAdminReady = adminReady; // Flag global para scripts que carguen tarde
   document.dispatchEvent(
     new CustomEvent('admin-session-ready', {
       detail: { isAdmin: adminReady }

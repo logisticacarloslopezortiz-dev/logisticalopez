@@ -7,13 +7,13 @@
  */
 
 const UI_TO_DB_STATUS = {
-  pendiente: 'Pendiente',
-  aceptada: 'Aceptada',
-  en_camino_recoger: 'En curso',
-  cargando: 'En curso',
-  en_camino_entregar: 'En curso',
-  entregada: 'Completada',
-  cancelada: 'Cancelada'
+  pendiente: 'pending',
+  aceptada: 'accepted',
+  en_camino_recoger: 'in_progress',
+  cargando: 'in_progress',
+  en_camino_entregar: 'in_progress',
+  entregada: 'completed',
+  cancelada: 'cancelled'
 };
 
 const STATE_FLOW = {
@@ -181,12 +181,12 @@ const OrderManager = {
   },
 
    /**
-    * Cancela un trabajo activo marcándolo como Cancelada
+    * Cancela un trabajo activo marcándolo como cancelada
     */
    async cancelActiveJob(orderId) {
      console.log(`[OrderManager] Cancelando trabajo activo #${orderId}`);
      
-     return await this.actualizarEstadoPedido(orderId, 'Cancelada');
+     return await this.actualizarEstadoPedido(orderId, 'cancelada');
    },
 
    /**
@@ -256,22 +256,22 @@ const OrderManager = {
     if (UI_TO_DB_STATUS[ns]) {
       const db = UI_TO_DB_STATUS[ns];
       updatePayload.status = db;
-      if (db === 'Completada') updatePayload.completed_at = new Date().toISOString();
-      if (db === 'Aceptada') updatePayload.assigned_at = new Date().toISOString();
-    } else if (['completada'].includes(ns)) {
-      updatePayload.status = 'Completada';
+      if (db === 'completed') updatePayload.completed_at = new Date().toISOString();
+      if (db === 'accepted') updatePayload.assigned_at = new Date().toISOString();
+    } else if (['completada', 'completed'].includes(ns)) {
+      updatePayload.status = 'completed';
       updatePayload.completed_at = new Date().toISOString();
-    } else if (['aceptada'].includes(ns)) {
-      updatePayload.status = 'Aceptada';
+    } else if (['aceptada', 'accepted'].includes(ns)) {
+      updatePayload.status = 'accepted';
       updatePayload.assigned_at = new Date().toISOString();
-    } else if (['en curso'].includes(ns)) {
-      updatePayload.status = 'En curso';
-    } else if (['cancelada','cancelado'].includes(ns)) {
-      updatePayload.status = 'Cancelada';
-    } else if (['pendiente'].includes(ns)) {
-      updatePayload.status = 'Pendiente';
+    } else if (['en curso', 'in_progress'].includes(ns)) {
+      updatePayload.status = 'in_progress';
+    } else if (['cancelada','cancelado', 'cancelled'].includes(ns)) {
+      updatePayload.status = 'cancelled';
+    } else if (['pendiente', 'pending'].includes(ns)) {
+      updatePayload.status = 'pending';
     }
-    updatePayload.last_collab_status = ns;
+    // updatePayload.last_collab_status = ns; // REMOVED
 
     // Intentar primero vía RPC para evitar problemas de RLS en SELECT/UPDATE
     try {
@@ -294,7 +294,7 @@ const OrderManager = {
 
       const rpcPayload = {
         order_id: normalizedId,
-        new_status: newStatus,
+        new_status: ns, // ✅ CORRECCIÓN: Usar ns (siempre lowercase) en lugar de newStatus inconsistente
         collaborator_id: additionalData?.collaborator_id || null,
         tracking_entry: rpcTrackingEntry,
         extra: updatePayload
@@ -327,7 +327,7 @@ const OrderManager = {
         console.log('[OrderManager] Fetch intento con:', cand);
         const { data, error } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id, status, last_collab_status')
+          .select('tracking_data, id, short_id, status, evidence_photos')
           .eq(cand.col, cand.val)
           .maybeSingle();
 
@@ -356,7 +356,7 @@ const OrderManager = {
         if (Number.isFinite(nId)) {
         const { data } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id, status, last_collab_status')
+          .select('tracking_data, id, short_id, status, evidence_photos')
           .eq('id', nId)
           .maybeSingle();
           if (data) { currentOrder = data; usedFilter = { col: 'id', val: data.id }; }
@@ -364,7 +364,7 @@ const OrderManager = {
         if (!currentOrder && typeof orderId === 'string') {
         const { data } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id, status, last_collab_status')
+          .select('tracking_data, id, short_id, status, evidence_photos')
           .eq('short_id', orderId)
           .maybeSingle();
           if (data) { currentOrder = data; usedFilter = { col: 'id', val: data.id }; }
@@ -378,17 +378,32 @@ const OrderManager = {
 
       // Validar transición de estado (máquina de estados)
       const currentDbStatus = String(currentOrder.status || '').toLowerCase();
-      const currentPhase = (typeof currentOrder.last_collab_status === 'string' && currentOrder.last_collab_status)
-        ? String(currentOrder.last_collab_status).toLowerCase()
-        : (currentDbStatus === 'pendiente' ? 'pendiente'
-          : currentDbStatus === 'aceptada' ? 'en_camino_recoger'
-          : currentDbStatus === 'en curso' ? (Array.isArray(currentOrder.tracking_data) && currentOrder.tracking_data.length > 0
-              ? String(currentOrder.tracking_data[currentOrder.tracking_data.length - 1]?.ui_status || 'cargando').toLowerCase()
-              : 'cargando')
-          : currentDbStatus);
+      let currentPhase = currentDbStatus;
+
+      // Mapear status DB a fase UI
+      if (currentDbStatus === 'pending') currentPhase = 'pendiente';
+      else if (currentDbStatus === 'accepted') currentPhase = 'aceptada';
+      else if (currentDbStatus === 'completed') currentPhase = 'entregada';
+      else if (currentDbStatus === 'cancelled') currentPhase = 'cancelada';
+      else if (currentDbStatus === 'in_progress' || currentDbStatus === 'en curso') {
+          // Derivar sub-estado de tracking_data
+          if (Array.isArray(currentOrder.tracking_data) && currentOrder.tracking_data.length > 0) {
+             const lastTrack = currentOrder.tracking_data[currentOrder.tracking_data.length - 1];
+             currentPhase = String(lastTrack?.ui_status || 'cargando').toLowerCase();
+          } else {
+             // Default para in_progress si no hay tracking
+             currentPhase = 'en_camino_recoger'; // Asumir inicio de progreso
+          }
+      }
       const nextAllowed = STATE_FLOW[currentPhase] || [];
-      if (ns !== 'cancelada' && ns !== 'entregada' && !nextAllowed.includes(ns)) {
-        throw new Error(`Transición no permitida desde "${currentPhase}" a "${ns}"`);
+      
+      // ✅ CORRECCIÓN: Validación más clara y explícita
+      if (ns === 'cancelada') {
+        // Cancelación siempre permitida desde cualquier estado
+      } else if (ns === 'entregada') {
+        // Entrega tiene validaciones adicionales (ver abajo)
+      } else if (!nextAllowed.includes(ns)) {
+        throw new Error(`Transición no permitida desde "${currentPhase}" a "${ns}". Estados permitidos: ${nextAllowed.join(', ')}`);
       }
 
       if (ns === 'entregada') {
@@ -411,15 +426,15 @@ const OrderManager = {
           ? 'Orden aceptada, en camino a recoger'
           : ns === 'cargando'
             ? 'Carga en proceso'
-            : ns === 'en_camino_entregar'
-              ? 'En ruta hacia entrega'
-              : ns === 'entregada'
-                ? 'Pedido entregado'
-                : undefined
+          : ns === 'en_camino_entregar'
+            ? 'En ruta hacia entrega'
+          : ns === 'entregada'
+            ? 'Pedido entregado'
+            : undefined
       };
       const currentTracking = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
       updatePayload.tracking_data = [...currentTracking, newTrackingEntry];
-      updatePayload.last_collab_status = ns;
+      // updatePayload.last_collab_status = ns; // REMOVED
 
       console.log('[OrderManager] Update payload:', updatePayload);
 

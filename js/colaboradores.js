@@ -46,10 +46,14 @@
 
     try {
       try { await supabaseConfig.ensureFreshSession?.(); } catch(_) {}
-      const { data, error } = await supabaseConfig.client
+      const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
         .from('collaborators')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })) || supabaseConfig.client
+        .from('collaborators')
+        .select('*')
+        .order('created_at', { ascending: false }));
+      const { data, error } = resp;
 
       if (error) {
         throw error;
@@ -151,10 +155,13 @@
         const pct = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
         e.target.value = pct;
         try {
-          const { error } = await supabaseConfig.client
+          const { error } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
             .from('collaborators')
             .update({ commission_percent: pct })
-            .eq('id', id);
+            .eq('id', id)) || supabaseConfig.client
+            .from('collaborators')
+            .update({ commission_percent: pct })
+            .eq('id', id));
           if (error) throw error;
         } catch (err) {
           console.error('Error al guardar porcentaje de comisión:', err);

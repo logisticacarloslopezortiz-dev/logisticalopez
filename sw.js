@@ -1,7 +1,7 @@
 // sw.js
 
 // COMENTARIO: Se añade versionado de caché para forzar la actualización de archivos.
-const CACHE_NAME = 'tlc-cache-v10';
+const CACHE_NAME = 'tlc-cache-v11';
 const urlsToCache = [
   '/offline.html',
   '/css/styles.css',

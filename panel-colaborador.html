@@ -25,6 +25,15 @@
     .sidebar-footer button{background:#0C375D;color:#fff}
     .sidebar-footer button:hover{background:#facc15;color:#0C375D}
   </style>
+  <style>
+    #activeJobView {
+      background: linear-gradient(135deg, #f3f6f8 0%, #eef2f5 50%, #e5e7eb 100%);
+    }
+    #activeJobView .bg-white {
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(10px);
+    }
+  </style>
 </head>
 <body class="bg-gray-100">
   <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden" aria-label="Abrir menú" title="Abrir menú"><i data-lucide="menu" class="w-6 h-6 text-gray-800"></i></button>
@@ -78,14 +87,14 @@
 
   <section id="activeJobView" class="hidden max-w-7xl mx-auto h-[calc(100vh-2rem)] overflow-hidden p-4">
     <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-      <div class="px-6 py-6 border-b bg-[var(--azul)] text-white">
+      <div class="px-6 py-6 border-b bg-gradient-to-r from-[var(--azul)] to-[var(--azul-claro)] text-white">
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-2xl md:text-3xl font-extrabold tracking-wide">TRABAJO ACTIVO</h2>
-            <p class="mt-2 inline-flex items-center gap-2 text-sm bg-[var(--amarillo)] text-[var(--azul)] px-3 py-1 rounded-full font-semibold"><span id="activeJobId">#</span><span id="activeJobService"></span></p>
+            <p class="mt-2 inline-flex items-center gap-2 text-sm bg-[var(--amarillo)] text-[var(--azul)] px-3 py-1 rounded-full font-semibold"><span id="activeJobId" class="underline font-bold">#</span><span id="activeJobService"></span></p>
             <p id="activeJobStatus" class="mt-1 text-xs opacity-90"></p>
-            <div class="w-full bg-gray-200 rounded-full h-2 mt-4">
-              <div id="jobProgressBar" class="h-2 rounded-full bg-green-500 transition-all" style="width:0%"></div>
+            <div class="w-full bg-white/20 rounded-full h-2 mt-4">
+              <div id="jobProgressBar" class="h-2 rounded-full bg-[var(--amarillo)] transition-all" style="width:0%"></div>
             </div>
           </div>
           <button id="backToListBtn" class="p-2 rounded-lg bg-white/10 hover:bg-white/20" aria-label="Volver"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
@@ -95,33 +104,33 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
           <div class="md:col-span-2 space-y-6 overflow-y-auto pr-2">
             <div class="rounded-xl border shadow-sm">
-              <div class="px-4 py-3 bg-[var(--turquesa)] text-white font-semibold rounded-t-xl">Acciones</div>
+              <div class="px-4 py-3 bg-gradient-to-r from-[var(--turquesa)] to-[var(--azul-claro)] text-white font-semibold rounded-t-xl">Acciones</div>
               <div class="px-4 py-4 flex flex-wrap gap-3">
-                <button id="btnGoPickup" class="px-4 py-2 rounded-lg text-white" style="background: var(--azul-claro)">En camino a recoger</button>
-                <button id="btnLoading" class="px-4 py-2 rounded-lg text-white" style="background: var(--turquesa)">Cargando</button>
-                <button id="btnGoDeliver" class="px-4 py-2 rounded-lg text-white" style="background: var(--azul)">En camino a entregar</button>
-                <button id="btnComplete" class="px-4 py-2 rounded-lg text-white" style="background: #16a34a">Completar</button>
-                <button id="btnCancel" class="px-4 py-2 rounded-lg text-white" style="background: #dc2626">Cancelar</button>
+                <button id="btnGoPickup" class="px-4 py-2 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all" style="background: linear-gradient(135deg, var(--azul-claro), #60a5fa)">En camino a recoger</button>
+                <button id="btnLoading" class="px-4 py-2 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all" style="background: linear-gradient(135deg, var(--turquesa), #34d399)">Cargando</button>
+                <button id="btnGoDeliver" class="px-4 py-2 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all" style="background: linear-gradient(135deg, var(--azul), #3b82f6)">En camino a entregar</button>
+                <button id="btnComplete" class="px-4 py-2 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all" style="background: linear-gradient(135deg, #16a34a, #22c55e)">Completar</button>
+                <button id="btnCancel" class="px-4 py-2 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all" style="background: linear-gradient(135deg, #dc2626, #ef4444)">Cancelar</button>
               </div>
             </div>
 
-            <div class="rounded-xl border shadow-sm">
-              <div class="px-4 py-3 bg-[var(--turquesa)] text-white font-semibold rounded-t-xl">Datos</div>
+            <div class="rounded-xl border shadow-sm bg-gradient-to-br from-white to-gray-50">
+              <div class="px-4 py-3 bg-gradient-to-r from-[var(--azul)] to-[var(--turquesa)] text-white font-semibold rounded-t-xl">Resumen de la Orden</div>
               <div class="px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p class="text-xs text-gray-500">Colaborador</p>
-                  <p id="activeCollaborator" class="text-sm text-gray-800"></p>
+                <div class="bg-white p-3 rounded-lg shadow-sm border">
+                  <p class="text-xs text-gray-500 font-medium">Colaborador</p>
+                  <p id="activeCollaborator" class="text-sm text-gray-800 font-semibold underline"></p>
                 </div>
-                <div>
-                  <p class="text-xs text-gray-500">Cliente / Teléfono</p>
+                <div class="bg-white p-3 rounded-lg shadow-sm border">
+                  <p class="text-xs text-gray-500 font-medium">Cliente / Teléfono</p>
                   <p id="activeJobClient" class="text-sm text-gray-800"></p>
                 </div>
-                <div>
-                  <p class="text-xs text-gray-500">Dirección</p>
+                <div class="bg-white p-3 rounded-lg shadow-sm border">
+                  <p class="text-xs text-gray-500 font-medium">Dirección Origen</p>
                   <p id="activeJobPickup" class="text-sm text-gray-800 break-words"></p>
                 </div>
-                <div>
-                  <p class="text-xs text-gray-500">Vehículo</p>
+                <div class="bg-white p-3 rounded-lg shadow-sm border">
+                  <p class="text-xs text-gray-500 font-medium">Vehículo</p>
                   <p id="activeJobVehicle" class="text-sm text-gray-800"></p>
                 </div>
               </div>
@@ -132,17 +141,17 @@
               <div id="activeMap" class="w-full h-[45vh] md:h-full min-h-[260px]" style="background:#eef2ff"></div>
             </div>
             <div class="flex items-center gap-3">
-              <button id="btnVerOrigen" class="px-3 py-2 rounded-lg text-[var(--azul)]" style="background: var(--amarillo)">Ruta origen</button>
-              <button id="btnVerDestino" class="px-3 py-2 rounded-lg text-white" style="background: var(--turquesa)">Ruta destino</button>
+              <button id="btnVerOrigen" class="px-3 py-2 rounded-lg text-[var(--azul)] font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all" style="background: linear-gradient(135deg, var(--amarillo), #fbbf24)">Ruta origen</button>
+              <button id="btnVerDestino" class="px-3 py-2 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all" style="background: linear-gradient(135deg, var(--turquesa), #06b6d4)">Ruta destino</button>
             </div>
           </div>
         </div>
 
-        <div class="rounded-xl border shadow-sm">
-          <div class="px-4 py-3 bg-[var(--azul)] text-white font-semibold rounded-t-xl">Evidencia</div>
+        <div class="rounded-xl border shadow-sm bg-gradient-to-br from-white to-gray-50">
+          <div class="px-4 py-3 bg-gradient-to-r from-[var(--azul)] to-[var(--azul-claro)] text-white font-semibold rounded-t-xl">Evidencia Fotográfica</div>
           <div class="p-4">
             <div class="flex items-center gap-3 mb-3">
-              <input type="file" id="evidenceInput" accept="image/*" multiple class="block w-full text-sm text-gray-700" />
+              <input type="file" id="evidenceInput" accept="image/*" multiple class="block w-full text-sm text-gray-700 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-[var(--azul)] focus:border-transparent" />
             </div>
             <div id="evidencePreview" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
             <div id="activeEvidence" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
@@ -230,12 +239,12 @@
 
   
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js?v=20251215"></script>
-  <script src="js/pwa.js?v=20251215"></script>
-  <script src="js/push-notifications.js?v=20251215"></script>
-  <script src="js/sidebar.js?v=20251215"></script>
-  <script src="js/notifications.js?v=20251215"></script>
-  <script src="js/order-manager.js?v=20251215"></script>
-  <script src="js/panel-colaborador.js?v=20251215"></script>
+  <script src="js/supabase-config.js?v=20251231"></script>
+    <script src="js/pwa.js?v=20251231"></script>
+    <script src="js/push-notifications.js?v=20251231"></script>
+    <script src="js/sidebar.js?v=20251231"></script>
+    <script src="js/notifications.js?v=20251231"></script>
+    <script src="js/order-manager.js?v=20251231"></script>
+    <script src="js/panel-colaborador.js?v=20251231"></script>
 </body>
 </html>

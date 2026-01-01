@@ -50,7 +50,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const COMPLETED = ['Completada','completada','Entregada','entregada','Finalizada','finalizada'];
       let data = null; let error = null;
       try {
-        const resp = await supabaseConfig.client
+        const resp = await supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
+          .from('orders')
+          .select('id, status, completed_at, monto_cobrado, completed_by, assigned_to, service:services(name)')
+          .in('status', COMPLETED)
+          .not('monto_cobrado', 'is', null)
+          .order('completed_at', { ascending: false })
+        ) || await supabaseConfig.client
           .from('orders')
           .select('id, status, completed_at, monto_cobrado, completed_by, assigned_to, service:services(name)')
           .in('status', COMPLETED)
@@ -72,7 +78,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (_) {}
       }
 
-      if (error && (String(error.message||'').toLowerCase().includes('jwt expired') || error.status === 401)) {
+      if (error && (String(error.message||'').toLowerCase().includes('jwt expired') || error.status === 401 || error.code === 'PGRST303')) {
         try {
           const pub = supabaseConfig.getPublicClient();
           const resp2 = await pub
@@ -103,9 +109,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function fetchCollaborators() {
     try {
-      const { data, error } = await supabaseConfig.client
+      const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
         .from('collaborators')
-        .select('id, name, commission_percent, role, status');
+        .select('id, name, commission_percent, role, status')
+      ) || supabaseConfig.client
+        .from('collaborators')
+        .select('id, name, commission_percent, role, status'));
+      const { data, error } = resp;
       if (error) throw error;
       collaborators = Array.isArray(data) ? data : [];
       collabPercentMap = new Map();
@@ -246,7 +256,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Handlers de edición de %
     const savePctDebounced = debounce(async (id, pct) => {
       try {
-        const { error } = await supabaseConfig.client.from('collaborators').update({ commission_percent: pct }).eq('id', id);
+        const { error } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client.from('collaborators').update({ commission_percent: pct }).eq('id', id))
+          || supabaseConfig.client.from('collaborators').update({ commission_percent: pct }).eq('id', id));
         if (error) throw error;
         collabPercentMap.set(String(id), pct);
         await renderFinance(session);

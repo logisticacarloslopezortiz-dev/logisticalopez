@@ -3,6 +3,17 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
   }
   loadGanancias();
+  try {
+    if (supabaseConfig?.client?.channel) {
+      const ch = supabaseConfig.client
+        .channel('ganancia-orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async () => {
+          try { await loadGanancias(); } catch(_) {}
+        })
+        .subscribe();
+      window.__ganancia_channel = ch;
+    }
+  } catch(_) {}
 });
 
 async function loadGanancias() {
@@ -22,19 +33,26 @@ async function loadGanancias() {
   // Intentar consulta y fallback a cliente público si hay RLS
   async function fetchCompleted() {
     try {
-      const { data, error, status } = await client
+      const resp = await (supabaseConfig.withAuthRetry?.(() => client
         .from('orders')
         .select('id, short_id, name, status, monto_cobrado, completed_at')
         .in('status', statuses)
         .not('monto_cobrado', 'is', null)
         .order('completed_at', { ascending: false })
-        .limit(50);
+        .limit(50)) || client
+        .from('orders')
+        .select('id, short_id, name, status, monto_cobrado, completed_at')
+        .in('status', statuses)
+        .not('monto_cobrado', 'is', null)
+        .order('completed_at', { ascending: false })
+        .limit(50));
+      const { data, error, status } = resp;
       if (error) throw error;
       return data || [];
     } catch (err) {
       const msg = String(err?.message || '').toLowerCase();
       const code = err?.code || '';
-      if (code === 'PGRST303' || /rls|not authorized|permission/i.test(msg)) {
+      if (code === 'PGRST303' || /rls|not authorized|permission/i.test(msg) || /jwt expired/i.test(msg) || status === 401) {
         try {
           const publicClient = supabaseConfig.getPublicClient?.();
           if (publicClient) {

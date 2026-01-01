@@ -12,8 +12,8 @@ function jsonResponse(body: unknown, status = 200): Response {
 type SubscriptionKeys = { p256dh: string; auth: string }
 type WebPushSubscription = { endpoint: string; keys: SubscriptionKeys }
 
-// ✅ Corrección crítica: eliminar espacios en SITE_BASE
 const SITE_BASE = (Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com').trim()
+const DEFAULT_ICON = Deno.env.get('DEFAULT_PUSH_ICON') || '/img/android-chrome-192x192.png'
 
 const absolutize = (u: string): string => {
   const url = String(u || '').trim()
@@ -47,7 +47,6 @@ async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
   const subject = (Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com').trim()
   
   if (!pub || !priv) throw new Error('VAPID keys not configured')
-  // Validación mínima de formato de la pública: debe decodificar a 65 bytes y comenzar con 0x04
   try {
     const b64 = pub.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (pub.length % 4)) % 4)
     const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
@@ -77,65 +76,68 @@ async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
   }
 }
 
-interface OutboxMessage {
-  id: number
-  target_user_id?: string | null
-  target_contact_id?: string | null
-  payload?: any
-  attempts?: number
+interface NotificationEvent {
+  id: string
+  type: string
+  target_type: 'user' | 'contact'
+  target_id: string
+  payload: any
+  status: string
+  attempts: number
 }
 
-async function resolveSubscriptions(userId?: string | null, contactId?: string | null) {
+async function resolveSubscriptions(targetType: 'user' | 'contact', targetId: string) {
   const subs: WebPushSubscription[] = []
-  if (userId) {
-    const { data } = await supabase
-      .from('push_subscriptions')
-      .select('endpoint, keys')
-      .eq('user_id', userId)
-    for (const row of data || []) {
-      const endpoint = String(row.endpoint || '').trim().replace(/`/g, '')
-      const keys = normalizeKeys((row as any).keys)
-      if (endpoint && keys) subs.push({ endpoint, keys })
-    }
+  
+  let query = supabase.from('push_subscriptions').select('endpoint, keys')
+  if (targetType === 'user') {
+    query = query.eq('user_id', targetId)
+  } else {
+    query = query.eq('client_contact_id', targetId)
   }
-  if (contactId) {
-    const { data } = await supabase
-      .from('push_subscriptions')
-      .select('endpoint, keys')
-      .eq('client_contact_id', contactId)
-    for (const row of data || []) {
-      const endpoint = String(row.endpoint || '').trim().replace(/`/g, '')
-      const keys = normalizeKeys((row as any).keys)
-      if (endpoint && keys) subs.push({ endpoint, keys })
-    }
+  
+  const { data } = await query
+  
+  for (const row of data || []) {
+    const endpoint = String(row.endpoint || '').trim().replace(/`/g, '')
+    const keys = normalizeKeys((row as any).keys)
+    if (endpoint && keys) subs.push({ endpoint, keys })
   }
+  
   return subs
 }
 
-async function handleMessage(msg: OutboxMessage) {
-  const attempts = msg.attempts || 1
+async function handleEvent(event: NotificationEvent) {
+  // attempts already incremented by RPC
+  const attempts = event.attempts
+  
   try {
-    const subs = await resolveSubscriptions(msg.target_user_id, msg.target_contact_id)
+    // 1. Resolve subscriptions
+    const subs = await resolveSubscriptions(event.target_type, event.target_id)
 
     if (!subs.length) {
-      await supabase.from('notification_outbox').update({
+      await supabase.from('notification_events').update({
+        status: 'failed',
         last_error: 'missing_subscription',
-        processed_at: new Date().toISOString(),
-        locked_until: null
-      }).eq('id', msg.id)
+        processed_at: new Date().toISOString()
+      }).eq('id', event.id)
       return false
     }
 
-    // Parsear payload si viene como string JSON
-    let n: any = msg.payload || {}
+    // 2. Prepare payload & Validate
+    let n: any = event.payload || {}
     if (typeof n === 'string') {
       try { n = JSON.parse(n) } catch { n = {} }
     }
 
+    if (!n.title || !n.body) {
+       throw new Error('invalid_payload: missing title or body')
+    }
+
     const payload = {
-      title: String(n.title || 'Notificación'),
-      body: String(n.body || ''),
-      icon: absolutize(n.icon || '/img/android-chrome-192x192.png'),
+      title: String(n.title),
+      body: String(n.body),
+      icon: absolutize(n.icon || DEFAULT_ICON),
       badge: absolutize('/img/favicon-32x32.png'),
       data: {
         ...(typeof n.data === 'object' ? n.data : {}),
@@ -143,15 +145,22 @@ async function handleMessage(msg: OutboxMessage) {
       }
     }
 
+    // 3. Send to all endpoints
     let delivered = 0
+    let failures = 0
+    
+    const logs: Array<{ event_id: string; endpoint: string; status_code: number | null; error: string | null }> = []
     for (const s of subs) {
       const cleanEndpoint = String(s.endpoint).trim().replace(/`/g, '')
       const cleanKeys = { p256dh: s.keys.p256dh.trim(), auth: s.keys.auth.trim() }
       try {
         await sendWebPush({ endpoint: cleanEndpoint, keys: cleanKeys }, payload)
         delivered++
+        logs.push({ event_id: event.id, endpoint: cleanEndpoint, status_code: 201, error: null })
       } catch (err) {
+        failures++
         const code = (err as any)?.statusCode
+        logs.push({ event_id: event.id, endpoint: cleanEndpoint, status_code: typeof code === 'number' ? code : null, error: String((err as any)?.message || err).slice(0, 300) })
         if (code === 404 || code === 410) {
           // Suscripción expirada: eliminarla
           try {
@@ -160,78 +169,62 @@ async function handleMessage(msg: OutboxMessage) {
         }
       }
     }
+    if (logs.length) {
+      try { await supabase.from('push_delivery_attempts').insert(logs) } catch (_) {}
+    }
 
+    // 4. Update status
     if (delivered > 0) {
-      try {
-        if (msg.target_user_id) {
-          await supabase.from('notifications').insert({
-            user_id: msg.target_user_id,
-            title: payload.title,
-            body: payload.body,
-            data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
-          })
-        } else if (msg.target_contact_id) {
-          await supabase.from('notifications').insert({
-            contact_id: msg.target_contact_id,
-            title: payload.title,
-            body: payload.body,
-            data: { orderId: (msg as any).order_id, role: (msg as any).target_role }
-          })
-        }
-      } catch (_) {}
-
-      await supabase.from('notification_outbox').update({
+      await supabase.from('notification_events').update({
+        status: 'sent',
         processed_at: new Date().toISOString(),
-        last_error: null,
-        locked_until: null
-      }).eq('id', msg.id)
+        last_error: failures > 0 ? `delivered:${delivered}, failed:${failures}` : null
+      }).eq('id', event.id)
       return true
     } else {
-      await supabase.from('notification_outbox').update({
-        last_error: 'delivery_failed_all_endpoints',
-        locked_until: null
-      }).eq('id', msg.id)
-      return false
+      // If we are here, it means we had subscriptions but all failed (e.g. 404s, 500s from FCM/Mozilla)
+      // If they were all 404/410, retrying won't help. 
+      // But if it was a network error, maybe it helps.
+      // For simplicity, we treat "delivery_failed_all_endpoints" as a failure that might be retried if < 5,
+      // but usually if all endpoints failed it's often fatal or temporary.
+      // Let's follow the general retry logic below by throwing an error or handling it here.
+      throw new Error(`all_endpoints_failed: ${failures} errors`)
     }
-  } catch (err) {
-    const statusCode = (err as any)?.statusCode
-    const msgErr = err instanceof Error ? err.message : String(err)
 
-    if (statusCode === 404 || statusCode === 410) {
-      await supabase.from('notification_outbox').update({
-        last_error: `expired_subscription_${statusCode}`,
-        processed_at: new Date().toISOString(),
-        locked_until: null
-      }).eq('id', msg.id)
-    } else if (attempts >= 5) {
-      await supabase.from('notification_outbox').update({
-        last_error: `max_attempts_reached: ${msgErr}`,
-        processed_at: new Date().toISOString(),
-        locked_until: null
-      }).eq('id', msg.id)
-    } else {
-      await supabase.from('notification_outbox').update({
-        last_error: msgErr.slice(0, 300)
-      }).eq('id', msg.id)
-    }
+  } catch (err) {
+    const msgErr = err instanceof Error ? err.message : String(err)
+    
+    // Retry logic
+    const nextStatus = attempts >= 5 ? 'failed' : 'retry'
+    
+    await supabase.from('notification_events').update({
+      status: nextStatus,
+      last_error: msgErr.slice(0, 300),
+      processed_at: nextStatus === 'failed' ? new Date().toISOString() : null
+    }).eq('id', event.id)
+    
     return false
   }
 }
 
 async function processPending(limit = 10) {
-  const { data: messages, error } = await supabase.rpc('claim_outbox_messages', { batch_size: limit })
-  if (error) throw new Error(`outbox_claim_error: ${error.message}`)
-  if (!messages?.length) return { processed: 0 }
+  // Atomic Claim via RPC
+  const { data: events, error } = await supabase
+    .rpc('claim_notification_events', { p_limit: limit })
 
-  const queue = [...(messages as OutboxMessage[])]
+  if (error) throw new Error(`claim_error: ${error.message}`)
+  if (!events?.length) return { processed: 0 }
+
+  // Process
   let processed = 0
+  const queue = [...(events as NotificationEvent[])]
   const concurrency = Math.min(3, queue.length)
 
   async function worker() {
     for (;;) {
       const next = queue.shift()
       if (!next) break
-      const ok = await handleMessage(next)
+      const ok = await handleEvent(next)
       if (ok) processed++
     }
   }
@@ -240,21 +233,21 @@ async function processPending(limit = 10) {
   return { processed }
 }
 
-// ✅ Timeout global para evitar 504
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
   }
 
-  // Backend-only: requiere autorización Service Role para evitar invocación desde navegador
-  const srvRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
-  if (!srvRole || authHeader !== `Bearer ${srvRole}`) {
+  // Auth: ONLY Internal Secret
+  const internalSecret = Deno.env.get('PUSH_INTERNAL_SECRET')
+  const reqSecret = req.headers.get('x-internal-secret')
+  
+  if (!internalSecret || reqSecret !== internalSecret) {
     return jsonResponse({ success: false, error: 'unauthorized' }, 401)
   }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 50_000) // 50 segundos
+  const timeout = setTimeout(() => controller.abort(), 50_000)
 
   try {
     const url = new URL(req.url)
@@ -265,10 +258,6 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ success: true, ...result })
   } catch (e) {
     clearTimeout(timeout)
-    if (controller.signal.aborted) {
-      console.warn('[process-outbox] Global timeout triggered')
-      return jsonResponse({ error: 'timeout' }, 408)
-    }
     const msg = e instanceof Error ? e.message : String(e)
     console.error('[process-outbox] Fatal:', msg)
     return jsonResponse({ error: msg }, 500)

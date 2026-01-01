@@ -390,7 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setActiveJobStorage(order.id);
     updatePrimaryActionButtons(order);
     
-    try { localStorage.setItem('tlc_active_job_state', order.last_collab_status || ''); } catch(_){ }
+    try { localStorage.setItem('tlc_active_job_state', getUiStatus(order)); } catch(_){ }
     
     if (btnVerOrigen) btnVerOrigen.onclick = () => openGoogleMaps(order.pickup);
     if (btnVerDestino) btnVerDestino.onclick = () => openGoogleMaps(order.delivery);
@@ -413,6 +413,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Actualización de Estados ---
 
+  // Helper para obtener estado UI desde orden DB
+  function getUiStatus(order) {
+    if (!order) return '';
+    const s = String(order.status || '').toLowerCase();
+    
+    if (s === 'pending') return 'pendiente';
+    if (s === 'accepted') return 'aceptada';
+    if (s === 'completed') return 'entregada';
+    if (s === 'cancelled') return 'cancelada';
+    
+    if (s === 'in_progress' || s === 'en curso') {
+      if (Array.isArray(order.tracking_data) && order.tracking_data.length > 0) {
+        const last = order.tracking_data[order.tracking_data.length - 1];
+        return String(last.ui_status || 'cargando').toLowerCase();
+      }
+      return 'en_camino_recoger'; 
+    }
+    return s;
+  }
+
   function updateProgressBar(status){
     const bar = document.getElementById('jobProgressBar');
     if (!bar) return;
@@ -423,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updatePrimaryActionButtons(order){
-    const phase = String(order?.last_collab_status || '').toLowerCase();
+    const phase = getUiStatus(order);
     const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
     
     // Ocultar y deshabilitar todos primero
@@ -482,7 +502,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res?.success) throw new Error(res?.error || 'Error actualizando estado');
 
       notifications?.success?.(successMsg);
-      currentOrder.last_collab_status = newStatus;
+      // Actualizar localmente para reflejar cambio inmediato
+      // currentOrder.last_collab_status = newStatus; // REMOVED
+      
+      // Actualizar status DB localmente (aproximado)
+      if (['entregada', 'completada'].includes(newStatus)) currentOrder.status = 'completed';
+      else if (['cancelada'].includes(newStatus)) currentOrder.status = 'cancelled';
+      else if (['aceptada'].includes(newStatus)) currentOrder.status = 'accepted';
+      else currentOrder.status = 'in_progress';
+      
+      // Simular tracking update
+      if (!currentOrder.tracking_data) currentOrder.tracking_data = [];
+      currentOrder.tracking_data.push({ ui_status: newStatus, date: new Date().toISOString() });
 
       if (newStatus === 'cargando') {
         try {
@@ -559,7 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const prev = Array.isArray(currentOrder.evidence_photos) ? currentOrder.evidence_photos : [];
       const next = [...prev, { bucket, path, url }];
       
-      const { error: updErr } = await supabaseConfig.client.from('orders').update({ evidence_photos: next }).eq('id', currentOrder.id);
+      const { error: updErr } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client.from('orders').update({ evidence_photos: next }).eq('id', currentOrder.id))
+        || supabaseConfig.client.from('orders').update({ evidence_photos: next }).eq('id', currentOrder.id));
       if (updErr) throw updErr;
 
       currentOrder.evidence_photos = next;
@@ -597,8 +629,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Validar colaborador (opcional, depende de reglas de negocio)
       try {
-        const v = await supabaseConfig.validateActiveCollaborator(uid);
-        if (!v?.isValid) {
+        const v = await supabaseConfig.validateActiveCollaborator?.(uid);
+        if (v && !v.isValid) {
           notifications?.error?.(v?.error === 'Collaborator is not active' ? 'Cuenta desactivada.' : 'No autorizado.');
           await supabaseConfig.client.auth.signOut();
           window.location.href = 'login-colaborador.html';
@@ -606,24 +638,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (e) { console.error("Validacion error", e); }
 
-      // Cargar ordenes: Asignadas a mi O Pendientes (sin asignar)
-      // Usamos .or() para eficiencia
-      const EXCLUDE = ['completada', 'cancelada'];
-      
-      // Importante: seleccionar last_collab_status
-      const { data, error } = await supabaseConfig.client
+      // PRIMERO: Verificar qué órdenes existen en general
+      const respAll = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
         .from('orders')
-        .select('id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),assigned_to,last_collab_status')
+        .select('id,status,assigned_to')
+        .limit(10)) || supabaseConfig.client
+        .from('orders')
+        .select('id,status,assigned_to')
+        .limit(10));
+      const { data: allOrders, error: allError } = respAll;
+      
+      // Verificar si hay políticas RLS bloqueando
+      if (allError) {
+        console.error('Cannot access orders table:', allError);
+        throw new Error(`No se puede acceder a la tabla orders: ${allError.message}`);
+      }
+      
+      if (!allOrders || allOrders.length === 0) {
+        orders = [];
+        renderOrders();
+        return;
+      }
+      
+      // Importante: seleccionar campos necesarios 
+      const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
+        .from('orders')
+        .select('id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),assigned_to,tracking_data')
         .or(`assigned_to.eq.${uid},assigned_to.is.null`)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })) || supabaseConfig.client
+        .from('orders')
+        .select('id,short_id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),assigned_to,tracking_data')
+        .or(`assigned_to.eq.${uid},assigned_to.is.null`)
+        .order('created_at', { ascending: false }));
+      const { data, error } = resp;
 
       if (error) throw error;
 
-      orders = (data || []).filter(o => !EXCLUDE.includes(String(o.status || '').toLowerCase().trim()));
+      const rawOrders = data || [];
+      
+      // Filtrar órdenes asignadas al usuario o pendientes
+      orders = rawOrders.filter(o => {
+        const isAssignedToUser = o.assigned_to === uid;
+        const isPending = o.assigned_to === null;
+        return isAssignedToUser || isPending;
+      });
+      
+      // ✅ CORRECCIÓN: Filtrar por getUiStatus
+      const FINAL_COLLAB_STATES = ['entregada', 'completada', 'cancelada'];
+      
+      orders = orders.filter(o => {
+        const collabState = getUiStatus(o);
+        
+        // ❌ NO mostrar órdenes ya finalizadas por el colaborador
+        return !FINAL_COLLAB_STATES.includes(collabState);
+      });
+
       renderOrders();
 
     } catch (e) {
-      console.error(e);
+      console.error('Error in fetchOrdersForCollaborator:', e);
       notifications?.error?.('Error cargando solicitudes.');
     } finally {
       overlay.classList.add('hidden');
@@ -736,7 +809,6 @@ document.addEventListener('DOMContentLoaded', () => {
           notifications?.success?.('Orden aceptada');
           o.status = 'Aceptada';
           o.assigned_to = userId;
-          o.last_collab_status = 'aceptada';
 
           openActiveJob(o);
         } catch (e) {
@@ -815,15 +887,22 @@ document.addEventListener('DOMContentLoaded', () => {
        try {
          const { data: { user } } = await supabaseConfig.client.auth.getSession();
          if (user?.id) {
-           const activeOrder = orders.find(o => 
-             o.assigned_to === user.id && 
-             String(o.status || '').toLowerCase() !== 'pendiente'
-           );
+           // ✅ CORRECCIÓN: Solo restaurar órdenes realmente activas
+           const FINAL_COLLAB_STATES = ['entregada', 'completada', 'cancelada'];
+           
+           const activeOrder = orders.find(o => {
+             const collabState = getUiStatus(o);
+             
+             return (
+               o.assigned_to === user.id &&
+               !FINAL_COLLAB_STATES.includes(collabState)
+             );
+           });
            
            if (activeOrder) {
              console.log('[Continuidad] Orden activa encontrada en DB, restaurando sesión:', activeOrder.id);
              setActiveJobStorage(activeOrder.id);
-             try { localStorage.setItem('tlc_active_job_state', activeOrder.last_collab_status || activeOrder.status); } catch(_){}
+             try { localStorage.setItem('tlc_active_job_state', getUiStatus(activeOrder)); } catch(_){}
            }
          }
        } catch (e) {
@@ -847,9 +926,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (o) {
-          const s = String(o.status || '').toLowerCase();
-          if (['completada', 'entregada', 'cancelada'].includes(s)) {
+          // ✅ CORRECCIÓN: Usar getUiStatus para determinar si mostrar banner
+          const uiStatus = getUiStatus(o);
+          const FINAL_COLLAB_STATES = ['entregada', 'completada', 'cancelada', 'completed', 'cancelled'];
+          
+          if (FINAL_COLLAB_STATES.includes(uiStatus)) {
              clearActiveJobStorage();
+             if (continueBanner) continueBanner.classList.add('hidden');
           } else {
              if (continueBanner) continueBanner.classList.remove('hidden');
           }
@@ -867,11 +950,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!storedId) return;
       
       // Buscar orden fresca
-      const { data, error } = await supabaseConfig.client
+      const dresp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
              .from('orders')
              .select('*,service:services(name),vehicle:vehicles(name)')
              .eq('id', storedId)
-             .single();
+             .single()) || supabaseConfig.client
+             .from('orders')
+             .select('*,service:services(name),vehicle:vehicles(name)')
+             .eq('id', storedId)
+             .single());
+      const { data, error } = dresp;
              
       if (error || !data) {
         notifications?.error?.("La orden ya no está disponible");
@@ -880,8 +968,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const s = String(data.status || '').toLowerCase();
-      if (['completada', 'entregada', 'cancelada'].includes(s)) {
+      const s = getUiStatus(data);
+      const FINAL_COLLAB_STATES = ['entregada', 'completada', 'cancelada'];
+      
+      if (FINAL_COLLAB_STATES.includes(s)) {
         notifications?.info?.("Esta orden ya fue finalizada");
         clearActiveJobStorage();
         continueBanner.classList.add('hidden');
@@ -900,11 +990,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const storedId = localStorage.getItem('tlc_active_job_id');
       if (!storedId) return;
       
-      const { data } = await supabaseConfig.client
+      const { data } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
              .from('orders')
              .select('*,service:services(name),vehicle:vehicles(name)')
              .eq('id', storedId)
-             .single();
+             .single()) || supabaseConfig.client
+             .from('orders')
+             .select('*,service:services(name),vehicle:vehicles(name)')
+             .eq('id', storedId)
+             .single());
              
       if (!data) return;
       

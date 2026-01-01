@@ -1,4 +1,4 @@
-// Espera a que el DOM esté completamente cargado
+ // Espera a que el DOM esté completamente cargado
 document.addEventListener('DOMContentLoaded', () => {
   // --- ELEMENTOS DEL DOM ---
   const loginScreen = document.getElementById('loginScreen');
@@ -31,6 +31,25 @@ document.addEventListener('DOMContentLoaded', () => {
   function showLoginError(message) {
     errorMessage.querySelector('p').textContent = message;
     errorMessage.classList.remove('hidden');
+  }
+
+  function normalizeOrder(order) {
+    if (!order || typeof order !== 'object') return order;
+    const td = order.tracking_data;
+    if (typeof td === 'string') {
+      try { order.tracking_data = JSON.parse(td); } catch(_) {}
+    }
+    const ep = order.evidence_photos;
+    if (typeof ep === 'string') {
+      try { order.evidence_photos = JSON.parse(ep); } catch(_) {}
+    }
+    if (order.service && typeof order.service === 'string') {
+      order.service = { name: order.service };
+    }
+    if (order.vehicle && typeof order.vehicle === 'string') {
+      order.vehicle = { name: order.vehicle };
+    }
+    return order;
   }
 
   async function fetchOrderFlexible(identifier) {
@@ -74,9 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      const o = normalizeOrder(order);
       let collaboratorName = '';
       try {
-        if (order.assigned_to) {
+        if (o.assigned_to) {
           const clientToUse = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function')
             ? supabaseConfig.client
             : supabaseConfig.getPublicClient();
@@ -84,21 +104,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const { data: collab } = await clientToUse
               .from('collaborators')
               .select('name')
-              .eq('id', order.assigned_to)
+              .eq('id', o.assigned_to)
               .maybeSingle();
             collaboratorName = collab?.name || '';
           }
         }
       } catch (_) {}
-      order.collaborator_name = collaboratorName;
+      o.collaborator_name = collaboratorName;
       
-      renderTrackingInfo(order);
+      renderTrackingInfo(o);
       loginScreen.classList.add('hidden');
       trackingScreen.classList.remove('hidden');
       try { localStorage.setItem('tlc_tracking_order_id', id); } catch(_) {}
 
       // Inicializar el mapa con las coordenadas de la orden
-      initializeMap(order);
+      initializeMap(o);
       try {
         const isNumericId2 = /^\d+$/.test(id);
         const idForSub2 = isNumericId2 ? Number(id) : null;
@@ -399,8 +419,9 @@ document.addEventListener('DOMContentLoaded', () => {
       try { await supabaseConfig.ensureFreshSession(); } catch(_) {}
       const { order } = await fetchOrderFlexible(candidate);
       if (order) {
-        renderTrackingInfo(order);
-        initializeMap(order);
+        const o = normalizeOrder(order);
+        renderTrackingInfo(o);
+        initializeMap(o);
         try { updateTimelineRealtimeIndicator(); } catch(_) {}
       }
     } catch(_) {}
@@ -424,9 +445,10 @@ document.addEventListener('DOMContentLoaded', () => {
               .eq('id', orderId)
               .maybeSingle();
             if (order) {
-              renderTrackingInfo(order);
-              initializeMap(order);
-              try { updateTimelineRealtimeIndicator(); } catch(_){}
+              const o = normalizeOrder(order);
+              renderTrackingInfo(o);
+              initializeMap(o);
+              try { updateTimelineRealtimeIndicator(); } catch(_) {}
             }
           } catch(_){}
         }, 10000);
@@ -456,17 +478,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fallback: activar polling si el canal falla
             try { if (pollingTimer) clearInterval(pollingTimer); } catch(_){}
             pollingTimer = setInterval(async () => {
-              try {
-                const { data: order } = await supabaseConfig.client
-                  .from('orders')
-                  .select('*, service:services(name), vehicle:vehicles(name)')
-                  .eq('id', orderId)
-                  .maybeSingle();
-                if (order) {
-                  renderTrackingInfo(order);
-                  initializeMap(order);
-                  try { updateTimelineRealtimeIndicator(); } catch(_){}
-                }
+          try {
+            const { data: order } = await supabaseConfig.client
+              .from('orders')
+              .select('*, service:services(name), vehicle:vehicles(name)')
+              .eq('id', orderId)
+              .maybeSingle();
+            if (order) {
+              const o = normalizeOrder(order);
+              renderTrackingInfo(o);
+              initializeMap(o);
+              try { updateTimelineRealtimeIndicator(); } catch(_) {}
+            }
               } catch(_){}
             }, 10000);
           }

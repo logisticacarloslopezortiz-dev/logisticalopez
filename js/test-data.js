@@ -84,7 +84,6 @@ window.TEST_DATA = {
       assigned_to: 'demo-user-123', // Reemplazar con user.id real
       origin_coords: { lat: 19.4295, lng: -99.1332 },
       destination_coords: { lat: 19.6015, lng: -99.0506 },
-      last_collab_status: 'en_camino_recoger',
       evidence_photos: [],
       tracking_data: [
         { status: 'Asignado', date: new Date(Date.now() - 3600000).toISOString() },
@@ -107,7 +106,6 @@ window.TEST_DATA = {
       assigned_to: 'demo-user-123',
       origin_coords: { lat: 19.4326, lng: -99.1438 },
       destination_coords: { lat: 19.4445, lng: -99.1606 },
-      last_collab_status: 'cargando',
       evidence_photos: [],
       tracking_data: [
         { status: 'Asignado', date: new Date(Date.now() - 1800000).toISOString() },
@@ -135,7 +133,6 @@ window.TEST_DATA = {
       assigned_to: 'demo-user-123',
       origin_coords: { lat: 19.4202, lng: -99.1662 },
       destination_coords: { lat: 19.4317, lng: -99.1450 },
-      last_collab_status: 'entregado',
       evidence_photos: ['https://via.placeholder.com/300x300?text=Foto+1'],
       tracking_data: [
         { status: 'Asignado', date: new Date(Date.now() - 86400000).toISOString() },

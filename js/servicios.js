@@ -341,4 +341,21 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('admin-session-ready', () => {
         safeLoadInitialData();
     });
+
+    // Fallback: Si el evento ya ocurrió o se perdió
+    if (window.tlcAdminReady) {
+        safeLoadInitialData();
+    } else {
+        // Doble seguridad: si pasados 2 segundos no hay evento, verificar sesión manualmente
+        setTimeout(() => {
+            if (!initialDataLoaded && window.supabaseConfig && window.supabaseConfig.client) {
+                console.warn('Evento admin-session-ready no recibido, intentando carga manual...');
+                window.supabaseConfig.client.auth.getSession().then(({ data }) => {
+                    if (data && data.session) {
+                        safeLoadInitialData();
+                    }
+                });
+            }
+        }, 2000);
+    }
 });
