@@ -139,7 +139,7 @@
       const client = supabaseConfig.client;
       let orders = [];
       let err = null;
-      const STATUS_OK = ['Completada', 'Cancelada', 'completada', 'cancelada', 'Completado', 'Cancelado', 'completado', 'cancelado', 'Finalizada', 'finalizada', 'Entregada', 'entregada'];
+      const STATUS_OK = ['completed', 'cancelled'];
 
       try {
         setLoading(true);
@@ -171,7 +171,7 @@
           const { data } = await client
             .from('orders')
             .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to, service:services(name), vehicle:vehicles(name)');
-          const filtered = (data || []).filter(o => STATUS_OK.includes(String(o.status || '')));
+          const filtered = (data || []).filter(o => STATUS_OK.includes(String(o.status || '').toLowerCase()));
           orders = filtered.sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime());
           err = null;
         } catch (e2) { err = e2; }
@@ -240,7 +240,7 @@
       try {
         if (cli && typeof cli.channel === 'function') {
           const channel = cli.channel('historial-updates');
-          const STATUS_OK = ['Completada', 'Cancelada'];
+          const STATUS_OK = ['completed', 'cancelled'];
           channel
             .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `status=in.(${STATUS_OK.join(',')})` }, (payload) => {
               if (!payload.new) return;
@@ -402,7 +402,8 @@ async function ensureModals(){
     const list = order ? order.evidence_photos || [] : [];
     evidenceGallery.innerHTML = list.map(p => {
       const url = typeof p === 'string' ? p : (p?.url || p?.public_url || '');
-      return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer"><img src="${url}" class="w-full h-48 object-cover rounded-lg"/></a>` : '';
+      const clean = String(url || '').replace(/`/g, '').replace(/\+$/g, '').trim();
+      return clean ? `<a href="${clean}" target="_blank" rel="noopener noreferrer"><img src="${clean}" class="w-full h-48 object-cover rounded-lg"/></a>` : '';
     }).join('');
     const modal = document.getElementById('evidenceModal');
     modal.classList.remove('hidden');

@@ -27,7 +27,7 @@ async function loadGanancias() {
   // Intentar sesionar fresco; si falla, continuar
   try { await supabaseConfig.ensureFreshSession?.(); } catch (_) {}
 
-  const statuses = ['Completada', 'Completado'];
+  const statuses = ['completed'];
   let client = supabaseConfig.client;
 
   // Intentar consulta y fallback a cliente público si hay RLS
@@ -87,7 +87,7 @@ async function loadGanancias() {
     // Renderizar tabla
     tbody.innerHTML = rows.map(r => {
       const code = r.short_id || r.id;
-      const statusText = (r.status === 'Completada') ? 'Completado' : r.status;
+      const statusText = (String(r.status || '').toLowerCase() === 'completed') ? 'Completado' : (r.status || 'Completado');
       const monto = (typeof r.monto_cobrado === 'string') ? parseFloat(r.monto_cobrado) : (r.monto_cobrado || 0);
       const fecha = r.completed_at ? new Date(r.completed_at).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
       return `

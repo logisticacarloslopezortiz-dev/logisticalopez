@@ -191,6 +191,24 @@ if (!window.supabaseConfig) {
     }
   },
 
+  async restInsert(table, row) {
+    try {
+      const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+        'Accept': 'application/json'
+      };
+      const resp = await fetch(url.toString(), { method: 'POST', headers, body: JSON.stringify(row) });
+      if (!resp.ok) return { data: null, error: new Error(`rest_error_${resp.status}`) };
+      const data = await resp.json();
+      return { data, error: null };
+    } catch (e) {
+      return { data: null, error: e };
+    }
+  },
+
   async restGetOrderByAny(identifier) {
     const idStr = String(identifier || '').trim();
     if (!idStr) return { data: null, error: null };
@@ -443,6 +461,11 @@ if (!window.supabaseConfig) {
         try { key = localStorage.getItem('tlc_vapid_pub') || null; } catch(_){}
       }
 
+      // 4) Fallback de emergencia (Generado automáticamente)
+      if (!key) {
+        key = 'BCgYgK3ZJwHjR529P7BaTE27ImKc6Cl-BzJSr8h2KrnUeQXth7G2iuAqfS-8BUQ9qAQ8oAMjb76cAXzA3R0MUn8';
+      }
+
       // Validar formato básico
       const toBytes = (base64String) => {
         try {
@@ -589,8 +612,9 @@ if (!window.supabaseConfig) {
         return { isValid: false, collaborator: collab, error: 'Collaborator is not active' };
       }
       
-      // Validar que el role sea 'colaborador'
-      if (String(collab.role || '').trim().toLowerCase() !== 'colaborador') {
+      // Validar que el role sea 'colaborador' o 'administrador'
+      const role = String(collab.role || '').trim().toLowerCase();
+      if (role !== 'colaborador' && role !== 'administrador') {
         console.warn(`Collaborator ${userId} has role: ${collab.role}`);
         return { isValid: false, collaborator: collab, error: 'Invalid role for this panel' };
       }
@@ -600,6 +624,51 @@ if (!window.supabaseConfig) {
       console.error('Unexpected error in validateActiveCollaborator:', e);
       return { isValid: false, collaborator: null, error: e.message };
     }
+  }
+  ,
+
+  async getActiveJobOrder() {
+    try {
+      await this.ensureFreshSession?.();
+      const { data: { session } } = await this.client.auth.getSession();
+      if (!session?.user?.id) return null;
+      const { data: job } = await this.client
+        .from('collaborator_active_jobs')
+        .select('order_id')
+        .maybeSingle();
+      const orderId = job?.order_id;
+      if (!orderId) return null;
+      const resp = await this.client
+        .from('orders')
+        .select('*, service:services(name), vehicle:vehicles(name)')
+        .eq('id', orderId)
+        .maybeSingle();
+      return resp?.data || null;
+    } catch (_) { return null; }
+  },
+
+  async startOrderWork(orderId) {
+    try {
+      await this.ensureFreshSession?.();
+      const { data, error } = await this.client.rpc('start_order_work', { p_order_id: Number(orderId) });
+      if (error) return { order: null, error };
+      const { data: ord } = await this.client
+        .from('orders')
+        .select('*, service:services(name), vehicle:vehicles(name)')
+        .eq('id', Number(orderId))
+        .maybeSingle();
+      return { order: ord || null, error: null };
+    } catch (e) {
+      return { order: null, error: e };
+    }
+  },
+
+  async completeOrderWork(orderId) {
+    try {
+      await this.ensureFreshSession?.();
+      const { error } = await this.client.rpc('complete_order_work', { p_order_id: Number(orderId) });
+      return { error: error || null };
+    } catch (e) { return { error: e }; }
   }
   };
 } // end if guard

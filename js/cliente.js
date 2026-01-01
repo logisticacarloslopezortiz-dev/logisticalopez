@@ -1433,7 +1433,7 @@ document.addEventListener('DOMContentLoaded', function() {
           // Estado y precio inicial
           status: 'Pendiente',
           estimated_price: 'Por confirmar',
-          tracking_data: [{ status: 'Solicitud Creada', date: new Date().toISOString() }]
+          tracking_data: [{ status: 'created', date: new Date().toISOString() }]
         };
 
         // Guardar orden en Supabase con estrategia de reintento según esquema
@@ -1454,8 +1454,8 @@ document.addEventListener('DOMContentLoaded', function() {
           date: orderData.date,
           time: orderData.time,
           // Estado y precio inicial
-          status: orderData.status,
-          estimated_price: orderData.estimated_price,
+          status: 'pending',
+          estimated_price: null,
           tracking_data: orderData.tracking_data
         };
 
@@ -1544,9 +1544,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
           // Fallback: intento de inserción directa en la tabla public.orders (RLS permite inserts Pendiente)
           try {
-            const { data: insData, error: insError } = await supabaseConfig.client
-              .from('orders')
-              .insert({
+            await supabaseConfig.ensureSupabaseReady?.();
+            const builder = supabaseConfig.client?.from?.('orders');
+            if (builder && typeof builder.insert === 'function') {
+              const { data: insData, error: insError } = await builder
+                .insert({
+                  name: baseOrder.name,
+                  phone: baseOrder.phone,
+                  email: baseOrder.email,
+                  rnc: baseOrder.rnc,
+                  empresa: baseOrder.empresa,
+                  service_id: orderData.service_id,
+                  vehicle_id: orderData.vehicle_id,
+                  service_questions: baseOrder.service_questions,
+                  pickup: baseOrder.pickup,
+                  delivery: baseOrder.delivery,
+                  origin_coords: origin_coords2,
+                  destination_coords: destination_coords2,
+                  date: baseOrder.date,
+                  time: baseOrder.time,
+                  status: 'pending',
+                  estimated_price: null,
+                  tracking_data: baseOrder.tracking_data
+                })
+                .select()
+                .single();
+              if (insError) throw insError;
+              savedOrder = insData;
+              console.log('Fallback insert en orders realizado con éxito.');
+            } else {
+              const { data: insData, error: insError } = await supabaseConfig.restInsert('orders', {
                 name: baseOrder.name,
                 phone: baseOrder.phone,
                 email: baseOrder.email,
@@ -1561,15 +1588,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 destination_coords: destination_coords2,
                 date: baseOrder.date,
                 time: baseOrder.time,
-                status: baseOrder.status,
-                estimated_price: baseOrder.estimated_price,
+                status: 'pending',
+                estimated_price: null,
                 tracking_data: baseOrder.tracking_data
-              })
-              .select()
-              .single();
-            if (insError) throw insError;
-            savedOrder = insData;
-            console.log('Fallback insert en orders realizado con éxito.');
+              });
+              if (insError) throw insError;
+              savedOrder = Array.isArray(insData) ? insData[0] : insData;
+              console.log('Fallback insert REST en orders realizado con éxito.');
+            }
           } catch (fallbackErr) {
             console.error('Fallback insert en orders falló:', fallbackErr);
             let errorMsg = 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';

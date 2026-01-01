@@ -99,12 +99,21 @@ document.addEventListener('DOMContentLoaded', () => {
 // Guardar datos del negocio
 businessForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  
+  const rncInput = document.getElementById('businessRnc').value || '';
+  const rncClean = rncInput.replace(/\D/g, '');
+
+  if (rncClean && (rncClean.length < 9 || rncClean.length > 11)) {
+    alert('El RNC debe contener entre 9 y 11 dígitos.');
+    return;
+  }
+
   const updates = {
     business_name: document.getElementById('businessName').value,
     address: document.getElementById('businessAddress').value,
     phone: document.getElementById('businessPhone').value,
     email: document.getElementById('businessEmail').value,
-    rnc: document.getElementById('businessRnc').value,
+    rnc: rncClean,
     vapid_public_key: (document.getElementById('businessVapidKey').value || '').trim()
   };
   try {
@@ -112,7 +121,7 @@ businessForm.addEventListener('submit', async (e) => {
     alert('Datos del negocio guardados correctamente.');
   } catch (error) {
     console.error("Error al guardar datos del negocio:", error);
-    alert("No se pudieron guardar los datos del negocio.");
+    alert("Error al guardar: " + (error.message || "No se pudieron guardar los datos del negocio."));
   }
 });
 

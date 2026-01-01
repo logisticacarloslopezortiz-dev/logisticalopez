@@ -353,7 +353,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.supabaseConfig.client.auth.getSession().then(({ data }) => {
                     if (data && data.session) {
                         safeLoadInitialData();
+                    } else {
+                        console.error('No se pudo establecer sesión de administrador automáticamente.');
+                        alert('No se detectó una sesión activa. Por favor, recarga la página o inicia sesión nuevamente.');
                     }
+                }).catch(err => {
+                    console.error('Error verificando sesión:', err);
+                    alert('Error verificando sesión. Por favor, revisa tu conexión y recarga la página.');
                 });
             }
         }, 2000);

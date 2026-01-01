@@ -31,7 +31,7 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_status') THEN
     CREATE TYPE public.notification_status AS ENUM (
-      'pending', 'processing', 'retry', 'sent', 'failed', 'queued'
+      'pending', 'processing', 'retry', 'sent', 'failed'
     );
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invoice_status') THEN
@@ -171,7 +171,7 @@ create table if not exists public.business (
   owner_user_id uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint business_rnc_check check (rnc ~ '^[0-9]{9,11}$' or rnc is null)
+  constraint business_rnc_check check (rnc ~ '^\d{3}-\d{5}-\d{1}$' or rnc is null)
 );
 alter table public.business add column if not exists vapid_public_key text;
 alter table public.business add column if not exists push_vapid_key text;
@@ -183,8 +183,8 @@ create trigger trg_business_touch_updated
 before update on public.business
 for each row execute function public.set_updated_at();
 
-insert into public.business (id, business_name, address, phone, email)
-values (1, 'Mi Negocio', '', '', '')
+insert into public.business (business_name, address, phone, email)
+values ('Mi Negocio', '', '', '')
 on conflict (id) do nothing;
 
 -- Helpers de rol
@@ -352,8 +352,8 @@ begin
   if s = '' then return 'pending'; end if;
   s := replace(lower(s), '_', ' ');
   if s in ('pendiente', 'pending') then return 'pending'; end if;
-  if s in ('aceptada','aceptado','aceptar','accepted', 'en_camino_recoger') then return 'accepted'; end if;
-  if s in ('en curso','en progreso','en proceso','en transito','en tránsito', 'in_progress', 'cargando', 'en_camino_entregar') then return 'in_progress'; end if;
+  if s in ('aceptada','aceptado','aceptar','accepted') then return 'accepted'; end if;
+  if s in ('en curso','en progreso','en proceso','en transito','en tránsito', 'in_progress', 'en_camino_recoger', 'cargando', 'en_camino_entregar') then return 'in_progress'; end if;
   if s in ('completada','completado','finalizada','terminada','entregado','entregada', 'completed') then return 'completed'; end if;
   if s in ('cancelada','cancelado','anulada', 'cancelled') then return 'cancelled'; end if;
   return 'pending';
@@ -721,7 +721,7 @@ begin
     assigned_at = case when v_normalized = 'accepted' and o.assigned_at is null then now() else assigned_at end,
     completed_by = case when v_normalized = 'completed' then collaborator_id else completed_by end,
     completed_at = case when v_normalized = 'completed' then now() else completed_at end,
-    tracking_data = case when tracking_entry is not null then jsonb_build_array(tracking_entry) else o.tracking_data end
+    tracking_data = case when tracking_entry is not null then coalesce(o.tracking_data, '[]'::jsonb) || jsonb_build_array(tracking_entry) else o.tracking_data end
   where o.id = order_id
     and (o.assigned_to = collaborator_id or o.assigned_to is null)
     and o.status not in ('cancelled', 'completed')
@@ -729,6 +729,16 @@ begin
 
   if updated is null then
     raise exception 'No autorizado o no encontrada' using errcode = '42501';
+  end if;
+  if v_normalized = 'in_progress' then
+    if exists (select 1 from public.collaborator_active_jobs j where j.collaborator_id = collaborator_id) then
+      raise exception 'Ya tienes una orden activa' using errcode = 'P0001';
+    end if;
+    insert into public.collaborator_active_jobs(collaborator_id, order_id)
+    values (collaborator_id, order_id)
+    on conflict (collaborator_id) do update set order_id = excluded.order_id, started_at = now();
+  elsif v_normalized in ('completed','cancelled') then
+    delete from public.collaborator_active_jobs where order_id = order_id;
   end if;
   return updated;
 end;
@@ -946,6 +956,7 @@ drop policy if exists admin_delete_orders on public.orders;
 -- 1. Insert (Public)
 create policy orders_insert_public on public.orders for insert with check (
   status = 'pending' and assigned_to is null
+  and (client_id is not null or client_contact_id is not null)
 );
 
 -- 2. Select (Client + Collaborator + Admin)
@@ -1144,13 +1155,20 @@ create table if not exists public.notification_events (
   last_error text,
   created_at timestamptz default now(),
   processed_at timestamptz,
-  processing_started_at timestamptz
+  processing_started_at timestamptz,
+  constraint chk_target_integrity check (
+    (target_type = 'user' and target_id is not null)
+    or
+    (target_type = 'contact' and target_id is not null)
+  )
 );
 create index if not exists idx_notification_events_status on public.notification_events(status);
 create index if not exists idx_notification_events_target on public.notification_events(target_id);
 create index if not exists idx_notification_events_created_at on public.notification_events(created_at);
 create index if not exists idx_notification_events_status_created on public.notification_events(status, created_at);
 create index if not exists idx_notification_events_processing_started_at on public.notification_events(processing_started_at);
+create index if not exists idx_notification_events_retry
+on public.notification_events(status, processing_started_at);
 
 -- Dashboard View for Monitoring (moved here after notification_events)
 create or replace view public.v_notification_stats as
@@ -1179,11 +1197,16 @@ BEGIN
 
   FOR r IN
     SELECT id FROM public.collaborators
-    WHERE lower(role) = 'administrador' AND status = 'activo'
+    WHERE role IN ('admin', 'administrador') AND status = 'activo'
   LOOP
-    PERFORM public.dispatch_notification(
-      r.id, NULL, p_title, p_body, p_data
-    );
+    PERFORM public.dispatch_notification(r.id, NULL, p_title, p_body, p_data);
+  END LOOP;
+
+  -- Also notify business owners
+  FOR r IN
+    SELECT owner_user_id as id FROM public.business WHERE owner_user_id IS NOT NULL
+  LOOP
+    PERFORM public.dispatch_notification(r.id, NULL, p_title, p_body, p_data);
   END LOOP;
 END;
 $$;
@@ -1207,7 +1230,7 @@ BEGIN
 
   SELECT count(*) INTO _e_sent
   FROM public.notification_events
-  WHERE payload->'data'->>'runId' = _run_id AND status IN ('sent', 'queued');
+  WHERE payload->'data'->>'runId' = _run_id AND status = 'sent';
 
   SELECT count(*) INTO _e_failed
   FROM public.notification_events
@@ -1272,8 +1295,31 @@ BEGIN
     RETURN;
   END IF;
 
-  INSERT INTO public.notifications(user_id, contact_id, title, body, data)
-  VALUES (p_user_id, p_contact_id, p_title, p_body, p_data);
+  IF p_user_id IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.notifications n
+      WHERE n.user_id = p_user_id
+        AND n.title = p_title
+        AND n.body = p_body
+        AND (n.data->>'orderId') = (p_data->>'orderId')
+    ) THEN
+      RETURN;
+    END IF;
+    INSERT INTO public.notifications(user_id, contact_id, title, body, data)
+    VALUES (p_user_id, p_contact_id, p_title, p_body, p_data);
+  ELSE
+    IF EXISTS (
+      SELECT 1 FROM public.notifications n
+      WHERE n.contact_id = p_contact_id
+        AND n.title = p_title
+        AND n.body = p_body
+        AND (n.data->>'orderId') = (p_data->>'orderId')
+    ) THEN
+      RETURN;
+    END IF;
+    INSERT INTO public.notifications(user_id, contact_id, title, body, data)
+    VALUES (p_user_id, p_contact_id, p_title, p_body, p_data);
+  END IF;
 END;
 $$;
 
@@ -1468,6 +1514,7 @@ BEGIN
     'status', o.status,
     'name', o.name,
     'tracking_data', o.tracking_data,
+    'evidence_photos', o.evidence_photos,
     'service', jsonb_build_object('name', o.service_name),
     'vehicle', jsonb_build_object('name', o.vehicle_name),
     'pickup', o.pickup,
@@ -1482,12 +1529,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
 GRANT EXECUTE ON FUNCTION public.get_order_details_public(text) TO anon, authenticated;
 
 -- Indices dedup
-CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedup_idx ON public.notifications (
-  user_id, title, body, ((data->>'orderId'))
-);
-CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedup_contact_idx ON public.notifications (
-  contact_id, title, body, ((data->>'orderId'))
-);
+CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedup_idx
+ON public.notifications (user_id, title, body, ((data->>'orderId')))
+WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedup_contact_idx
+ON public.notifications (contact_id, title, body, ((data->>'orderId')))
+WHERE contact_id IS NOT NULL;
 
 -- Configs
 DO $$ BEGIN
@@ -1501,7 +1548,8 @@ returns int language sql security definer set search_path = pg_catalog, public a
   with upd as (
     update public.notification_events
     set status = 'retry', processing_started_at = null,
-        last_error = coalesce(last_error,'') || ' | reset_stuck'
+        last_error = coalesce(last_error,'') || ' | reset_stuck',
+        attempts = attempts + 1
     where status = 'processing' and processing_started_at < now() - make_interval(mins => p_minutes)
     returning 1
   )
@@ -1535,7 +1583,7 @@ begin
   end if;
 
   -- Housekeeping previo
-  perform public.reset_stuck_notification_events(10);
+  perform public.reset_stuck_notification_events(5);
   perform public.plan_failed_retries(5, 5);
 
   -- Llamada HTTP a la función de proceso
@@ -1571,3 +1619,214 @@ DO $$ BEGIN
     end;
   end;
 END $$;
+
+-- Actualizar clave VAPID pública en la tabla de configuración de negocio
+-- Clave generada para corregir el error: VAPID pública no configurada
+
+insert into public.business (id, business_name, vapid_public_key, push_vapid_key)
+values (
+  1, 
+  'Logística López Ortiz', 
+  'BCgYgK3ZJwHjR529P7BaTE27ImKc6Cl-BzJSr8h2KrnUeQXth7G2iuAqfS-8BUQ9qAQ8oAMjb76cAXzA3R0MUn8',
+  'BCgYgK3ZJwHjR529P7BaTE27ImKc6Cl-BzJSr8h2KrnUeQXth7G2iuAqfS-8BUQ9qAQ8oAMjb76cAXzA3R0MUn8'
+)
+on conflict (id) do update
+set 
+  vapid_public_key = excluded.vapid_public_key,
+  push_vapid_key = excluded.push_vapid_key;
+
+-- NOTA: Para que las notificaciones funcionen realmente, debes configurar la clave PRIVADA en las Edge Functions:
+-- VAPID_PRIVATE_KEY=AFSWGqy7fZcFF3f63qgdKGBv474ISmREJOBS6T1UTSk
+-- PUBLIC_VAPID_KEY=BCgYgK3ZJwHjR529P7BaTE27ImKc6Cl-BzJSr8h2KrnUeQXth7G2iuAqfS-8BUQ9qAQ8oAMjb76cAXzA3R0MUn8
+
+-- Function to accept order with optional price update
+create or replace function public.accept_order_with_price(
+  p_order_id bigint,
+  p_price numeric default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  _now timestamptz := now();
+begin
+  -- Check if collaborator is active
+  if not exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid() and lower(coalesce(c.status,'inactive')) = 'activo'
+  ) then
+    raise exception 'No autorizado: colaborador inactivo' using errcode = '42501';
+  end if;
+
+  -- Prevent accepting when collaborator already has an active order
+  if exists (
+    select 1 from public.orders o
+    where o.assigned_to = auth.uid()
+      and o.status in ('accepted','in_progress')
+  ) then
+    raise exception 'Ya tienes una orden activa' using errcode = 'P0001';
+  end if;
+
+  -- Update order
+  update public.orders
+  set
+    status = 'accepted',
+    accepted_at = coalesce(accepted_at, _now),
+    accepted_by = coalesce(accepted_by, auth.uid()),
+    assigned_to = coalesce(assigned_to, auth.uid()),
+    assigned_at = coalesce(assigned_at, _now),
+    estimated_price = coalesce(p_price, estimated_price), -- Update price if provided
+    tracking_data = coalesce(tracking_data, '[]'::jsonb) || jsonb_build_array(
+      jsonb_build_object(
+        'status', 'accepted',
+        'date', _now,
+        'description', case when p_price is not null then 'Orden aceptada con tarifa ajustada: ' || p_price else 'Orden aceptada' end
+      )
+    )
+  where id = p_order_id
+    and status = 'pending'
+    and assigned_to is null;
+
+  if not found then
+    raise exception 'No se pudo aceptar la orden. Puede que ya no esté disponible.' using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+grant execute on function public.accept_order_with_price(bigint, numeric) to authenticated;
+create table if not exists public.collaborator_active_jobs (
+  collaborator_id uuid not null references public.profiles(id) on delete cascade,
+  order_id bigint not null references public.orders(id) on delete cascade,
+  started_at timestamptz not null default now(),
+  primary key (collaborator_id),
+  unique(order_id)
+);
+create index if not exists idx_active_jobs_collab on public.collaborator_active_jobs(collaborator_id);
+create index if not exists idx_active_jobs_order on public.collaborator_active_jobs(order_id);
+alter table public.collaborator_active_jobs enable row level security;
+create policy active_jobs_select on public.collaborator_active_jobs for select using (
+  collaborator_id = auth.uid() or public.is_owner(auth.uid()) or public.is_admin(auth.uid())
+);
+create policy active_jobs_insert on public.collaborator_active_jobs for insert with check (
+  collaborator_id = auth.uid() or public.is_owner(auth.uid()) or public.is_admin(auth.uid())
+);
+create policy active_jobs_delete on public.collaborator_active_jobs for delete using (
+  collaborator_id = auth.uid() or public.is_owner(auth.uid()) or public.is_admin(auth.uid())
+);
+create or replace function public.cleanup_active_job_on_status()
+returns trigger
+language plpgsql set search_path = pg_catalog, public as $$
+begin
+  if new.status in ('completed','cancelled') then
+    delete from public.collaborator_active_jobs where order_id = new.id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_cleanup_active_job on public.orders;
+create trigger trg_cleanup_active_job
+after update of status on public.orders
+for each row execute function public.cleanup_active_job_on_status();
+-- Active Jobs model
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS public.collaborator_active_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  collaborator_id uuid NOT NULL REFERENCES public.collaborators(id) ON DELETE CASCADE,
+  order_id bigint NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  started_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT unique_active_job_per_collaborator UNIQUE (collaborator_id),
+  CONSTRAINT unique_active_job_per_order UNIQUE (order_id)
+);
+
+ALTER TABLE public.collaborator_active_jobs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY collaborator_active_jobs_select_own
+ON public.collaborator_active_jobs
+FOR SELECT
+USING (collaborator_id = auth.uid());
+
+CREATE POLICY collaborator_active_jobs_manage_own
+ON public.collaborator_active_jobs
+FOR ALL
+USING (collaborator_id = auth.uid())
+WITH CHECK (collaborator_id = auth.uid());
+
+DROP FUNCTION IF EXISTS public.accept_order_by_id(bigint);
+
+CREATE OR REPLACE FUNCTION public.accept_order_by_id(p_order_id bigint)
+RETURNS public.orders
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+DECLARE v_order public.orders;
+BEGIN
+  UPDATE public.orders
+  SET status = 'accepted', assigned_to = COALESCE(assigned_to, auth.uid()), assigned_at = COALESCE(assigned_at, now())
+  WHERE id = p_order_id AND status = 'pending'
+  RETURNING * INTO v_order;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not available';
+  END IF;
+
+  RETURN v_order;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.start_order_work(p_order_id bigint)
+RETURNS public.collaborator_active_jobs
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+DECLARE v_job public.collaborator_active_jobs%ROWTYPE;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.collaborator_active_jobs WHERE collaborator_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Ya tienes un trabajo activo';
+  END IF;
+
+  UPDATE public.orders
+  SET status = 'in_progress'
+  WHERE id = p_order_id AND status = 'accepted'
+  RETURNING id INTO v_job.order_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Orden no válida';
+  END IF;
+
+  INSERT INTO public.collaborator_active_jobs(collaborator_id, order_id)
+  VALUES (auth.uid(), p_order_id)
+  RETURNING * INTO v_job;
+
+  RETURN v_job;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.complete_order_work(p_order_id bigint)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+BEGIN
+  UPDATE public.orders
+  SET status = 'completed'
+  WHERE id = p_order_id AND status = 'in_progress';
+
+  DELETE FROM public.collaborator_active_jobs
+  WHERE order_id = p_order_id AND collaborator_id = auth.uid();
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cleanup_active_job()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.status IN ('cancelled','completed') THEN
+    DELETE FROM public.collaborator_active_jobs WHERE order_id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
+
+DROP TRIGGER IF EXISTS trg_cleanup_active_job ON public.orders;
+CREATE TRIGGER trg_cleanup_active_job
+AFTER UPDATE OF status ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.cleanup_active_job();

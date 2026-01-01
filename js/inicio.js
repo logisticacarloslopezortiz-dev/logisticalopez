@@ -9,7 +9,22 @@ let selectedOrderIdForAssign = null; // Guardará el ID del pedido a asignar
 let __initialized = false;
 let selectedOrderIdForPrice = null;
 let __lucideTimer = null;
-const ORDER_STATUS = Object.freeze({ PENDIENTE: 'Pendiente', ACEPTADA: 'Aceptada', EN_CURSO: 'En curso', COMPLETADA: 'Completada', CANCELADA: 'Cancelada' });
+const ORDER_STATUS = Object.freeze({ PENDIENTE: 'Pendiente', ACEPTADA: 'Aceptada', EN_CURSO: 'En curso', COMPLETADA: 'entregada', CANCELADA: 'cancelada' });
+
+function formatUiStatus(s) {
+  const v = String(s || '').toLowerCase();
+  if (v === 'pending') return ORDER_STATUS.PENDIENTE;
+  if (v === 'accepted') return ORDER_STATUS.ACEPTADA;
+  if (v === 'in_progress') return ORDER_STATUS.EN_CURSO;
+  if (v === 'completed') return ORDER_STATUS.COMPLETADA;
+  if (v === 'cancelled') return ORDER_STATUS.CANCELADA;
+  return s || ORDER_STATUS.PENDIENTE;
+}
+
+function isFinalOrderStatus(s) {
+  const v = String(s || '').toLowerCase();
+  return v === 'completed' || v === 'cancelled' || s === ORDER_STATUS.COMPLETADA || s === ORDER_STATUS.CANCELADA;
+}
 
 // --- GESTIÓN DE ESTADO CENTRALIZADO ---
 const AppState = {
@@ -63,7 +78,7 @@ function getOrderDate(o) {
 }
 
 function isVisibleStatus(status) {
-  return ![ORDER_STATUS.COMPLETADA, ORDER_STATUS.CANCELADA].includes(status);
+  return !isFinalOrderStatus(status);
 }
 
 function normalizePhoneDR(phone) {
@@ -273,7 +288,7 @@ async function updateOrderStatus(orderId, newStatus) {
     AppState.update({ id: Number(orderId), status: newStatus });
     refreshLucide();
 
-    if (newStatus === 'Completada') {
+    if (newStatus === 'entregada') {
       try { window.location.href = 'historial-solicitudes.html'; } catch (_) {}
     }
 
@@ -325,7 +340,7 @@ function showServiceDetails(orderId) {
 function updateResumen(){
   const today = new Date().toISOString().split('T')[0];
   const todayOrders = allOrders.filter(o => o.date === today);
-  const completedOrders = allOrders.filter(o => o.status === 'Completada').length;
+  const completedOrders = allOrders.filter(o => String(o.status || '').toLowerCase() === 'completed' || o.status === ORDER_STATUS.COMPLETADA).length;
   const pendingOrders = allOrders.filter(o => isVisibleStatus(o.status));
   const urgentOrders = pendingOrders.filter(o => {
     const serviceTime = getOrderDate(o) || new Date(8640000000000000);
@@ -624,13 +639,14 @@ function renderCardHtml(o) {
  
 
 function renderRowHtml(o){
+  const displayStatus = formatUiStatus(o.status);
   const statusColor = {
     'Pendiente': 'bg-yellow-100 text-yellow-800',
     'Aceptada': 'bg-blue-100 text-blue-800',
     'En curso': 'bg-purple-100 text-purple-800',
     'Completada': 'bg-green-100 text-green-800',
     'Cancelada': 'bg-red-100 text-red-800'
-  }[o.status] || 'bg-gray-100 text-gray-800';
+  }[displayStatus] || 'bg-gray-100 text-gray-800';
   return `
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
     <td class="px-6 py-4 whitespace-nowrap">
@@ -650,7 +666,7 @@ function renderRowHtml(o){
     <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</td>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><div>${o.date}</div><div class="text-gray-500">${o.time}</div></td>
     <td class="px-6 py-4 whitespace-nowrap">
-      <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">\n        <option value="Pendiente" ${o.status === 'Pendiente' ? 'selected' : ''}>Pendiente</option>\n        <option value="Aceptada" ${o.status === 'Aceptada' ? 'selected' : ''}>Aceptada</option>\n        <option value="En curso" ${o.status === 'En curso' ? 'selected' : ''}>En curso</option>\n        <option value="Completada" ${o.status === 'Completada' ? 'selected' : ''}>Completada</option>\n        <option value="Cancelada" ${o.status === 'Cancelada' ? 'selected' : ''}>Cancelada</option>\n      </select>
+      <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">\n        <option value="Pendiente" ${formatUiStatus(o.status) === 'Pendiente' ? 'selected' : ''}>Pendiente</option>\n        <option value="Aceptada" ${formatUiStatus(o.status) === 'Aceptada' ? 'selected' : ''}>Aceptada</option>\n        <option value="En curso" ${formatUiStatus(o.status) === 'En curso' ? 'selected' : ''}>En curso</option>\n        <option value="entregada" ${formatUiStatus(o.status) === 'entregada' ? 'selected' : ''}>Completada</option>\n        <option value="cancelada" ${formatUiStatus(o.status) === 'cancelada' ? 'selected' : ''}>Cancelada</option>\n      </select>
       ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
     </td>
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">

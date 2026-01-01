@@ -124,7 +124,7 @@ async function loadMetrics(collabId) {
     const mine = orders.filter(o => o.assigned_to === collabId);
 
     completed = mine.filter(o =>
-      String(o.status || '').toLowerCase() === 'completada'
+      String(o.status || '').toLowerCase() === 'completed'
     );
 
     if (!document.getElementById('metricAssigned')?.textContent) {
@@ -206,7 +206,7 @@ function getWeekCounts(orders) {
   const counts = [0,0,0,0,0,0,0];
   for (const o of (orders || [])) {
     const st = String(o.status || '').toLowerCase();
-    if (st !== 'completada') continue;
+    if (st !== 'completed') continue;
     const d = o.completed_at ? new Date(o.completed_at) : (o.date ? new Date(o.date) : null);
     if (!d) continue;
     if (d >= start) {
@@ -279,7 +279,7 @@ function renderRecentTable(completed) {
     const cliente = o.name || 'Cliente';
     const serv = (o.service && o.service.name) ? o.service.name : (o.service || '—');
     const fecha = o.completed_at ? new Date(o.completed_at).toLocaleString('es-DO') : (o.date || '—');
-    const status = o.status || 'Completada';
+    const status = String(o.status || '').toLowerCase() === 'completed' ? 'Completada' : (o.status || 'Completada');
     return `<tr class="bg-white"><td class="px-4 py-2">${id}</td><td class="px-4 py-2">${cliente}</td><td class="px-4 py-2">${serv}</td><td class="px-4 py-2">${fecha}</td><td class="px-4 py-2">${status}</td></tr>`;
   }).join('');
   body.innerHTML = rows || '<tr><td class="px-4 py-3 text-gray-500" colspan="5">Sin registros recientes.</td></tr>';
@@ -434,7 +434,7 @@ function groupByMonth(orders) {
     const key = dt ? `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}` : 'N/A';
     if (!map[key]) map[key] = { assigned: 0, completed: 0 };
     const st = String(o.status || '').toLowerCase();
-    if (st === 'completada') map[key].completed += 1; else map[key].assigned += 1;
+    if (st === 'completed') map[key].completed += 1; else map[key].assigned += 1;
   }
   return map;
 }

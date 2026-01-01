@@ -35,15 +35,27 @@ class PushNotificationManager {
             this.vapidPublicKey = key;
             return this.vapidPublicKey;
         }
-        if (window.supabaseConfig && typeof supabaseConfig.getVapidPublicKey === 'function') {
-            const response = await supabaseConfig.getVapidPublicKey();
-            key = typeof response === 'string' ? response : response?.key;
-            if (this.isValidVapid(key)) {
-                this.vapidPublicKey = key;
-                try { localStorage.setItem('tlc_vapid_pub', key); } catch(_) {}
-                return this.vapidPublicKey;
+        
+        try {
+            if (window.supabaseConfig && typeof supabaseConfig.getVapidPublicKey === 'function') {
+                const response = await supabaseConfig.getVapidPublicKey();
+                key = typeof response === 'string' ? response : response?.key;
+                if (this.isValidVapid(key)) {
+                    this.vapidPublicKey = key;
+                    try { localStorage.setItem('tlc_vapid_pub', key); } catch(_) {}
+                    return this.vapidPublicKey;
+                }
             }
+        } catch(e) { console.warn('Supabase getVapidPublicKey failed', e); }
+
+        // Fallback final hardcoded (Emergencia)
+        key = 'BCgYgK3ZJwHjR529P7BaTE27ImKc6Cl-BzJSr8h2KrnUeQXth7G2iuAqfS-8BUQ9qAQ8oAMjb76cAXzA3R0MUn8';
+        if (this.isValidVapid(key)) {
+             this.vapidPublicKey = key;
+             try { localStorage.setItem('tlc_vapid_pub', key); } catch(_) {}
+             return this.vapidPublicKey;
         }
+
         throw new Error('VAPID pública no configurada');
     }
 

@@ -441,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             const { data: order } = await supabaseConfig.client
               .from('orders')
-              .select('*, service:services(name), vehicle:vehicles(name)')
+              .select('*, service:services(name), vehicle:vehicles(name), evidence_photos')
               .eq('id', orderId)
               .maybeSingle();
             if (order) {
@@ -464,12 +464,13 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             const { data: order } = await supabaseConfig.client
               .from('orders')
-              .select('*, service:services(name), vehicle:vehicles(name)')
+              .select('*, service:services(name), vehicle:vehicles(name), evidence_photos')
               .eq('id', orderId)
               .maybeSingle();
             if (order) {
-              renderTrackingInfo(order);
-              initializeMap(order);
+              const o = normalizeOrder(order);
+              renderTrackingInfo(o);
+              initializeMap(o);
             }
           } catch (e) { console.warn('Realtime update failed', e); }
         })
@@ -481,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             const { data: order } = await supabaseConfig.client
               .from('orders')
-              .select('*, service:services(name), vehicle:vehicles(name)')
+              .select('*, service:services(name), vehicle:vehicles(name), evidence_photos')
               .eq('id', orderId)
               .maybeSingle();
             if (order) {

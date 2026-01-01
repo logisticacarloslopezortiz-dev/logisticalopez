@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function load() {
     try {
       try { await supabaseConfig.ensureFreshSession?.(); } catch(_) {}
-      const COMPLETED = ['Completada','completada','Entregada','entregada','Finalizada','finalizada','Completado','completado'];
+      const COMPLETED = ['completed'];
       const now = new Date();
       const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client

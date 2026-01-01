@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function fetchCompletedOrders() {
     ui.loadingOverlay.classList.remove('hidden');
     try {
-      const COMPLETED = ['Completada','completada','Entregada','entregada','Finalizada','finalizada'];
+      const COMPLETED = ['completed'];
       let data = null; let error = null;
       try {
         const resp = await supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const { data: fallback } = await supabaseConfig.client
             .from('orders')
             .select('id, status, completed_at, monto_cobrado, completed_by, assigned_to, service:services(name)');
-          data = (fallback || []).filter(o => COMPLETED.includes(String(o.status||'')))
+          data = (fallback || []).filter(o => COMPLETED.includes(String(o.status||'').toLowerCase()))
             .filter(o => o.monto_cobrado != null)
             .sort((a,b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime());
           error = null;
@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (error && (String(error.message||'').toLowerCase().includes('jwt expired') || error.status === 401 || error.code === 'PGRST303')) {
         try {
-          const pub = supabaseConfig.getPublicClient();
+          const pub = supabaseConfig.getPublicClient?.() || supabaseConfig.client;
           const resp2 = await pub
             .from('orders')
             .select('id, status, completed_at, monto_cobrado, completed_by, assigned_to, service:services(name)')

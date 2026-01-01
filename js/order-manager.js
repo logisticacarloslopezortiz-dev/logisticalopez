@@ -113,11 +113,13 @@ const OrderManager = {
       return await this.actualizarEstadoPedido(orderId, 'aceptada', additionalData);
     }
 
-    const rpcPayload = { order_id: normalizedId };
-    console.log('[OrderManager] RPC accept_order -> payload', rpcPayload);
+    const hasPrice = typeof additionalData?.estimated_price === 'number' && !isNaN(additionalData.estimated_price);
+    const fnName = hasPrice ? 'accept_order_with_price' : 'accept_order_by_id';
+    const rpcPayload = hasPrice ? { p_order_id: normalizedId, p_price: additionalData.estimated_price } : { p_order_id: normalizedId };
+    console.log(`[OrderManager] RPC ${fnName} -> payload`, rpcPayload);
 
     try {
-      const { data, error } = await supabaseConfig.client.rpc('accept_order', rpcPayload);
+      const { data, error } = await supabaseConfig.client.rpc(fnName, rpcPayload);
 
       if (error) {
         console.error('[OrderManager] RPC error accept_order', {
@@ -271,7 +273,6 @@ const OrderManager = {
     } else if (['pendiente', 'pending'].includes(ns)) {
       updatePayload.status = 'pending';
     }
-    // updatePayload.last_collab_status = ns; // REMOVED
 
     // Intentar primero vía RPC para evitar problemas de RLS en SELECT/UPDATE
     try {
@@ -434,7 +435,6 @@ const OrderManager = {
       };
       const currentTracking = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
       updatePayload.tracking_data = [...currentTracking, newTrackingEntry];
-      // updatePayload.last_collab_status = ns; // REMOVED
 
       console.log('[OrderManager] Update payload:', updatePayload);
 
