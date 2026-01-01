@@ -114,8 +114,8 @@ const OrderManager = {
     }
 
     const hasPrice = typeof additionalData?.estimated_price === 'number' && !isNaN(additionalData.estimated_price);
-    const fnName = hasPrice ? 'accept_order_with_price' : 'accept_order_by_id';
-    const rpcPayload = hasPrice ? { p_order_id: normalizedId, p_price: additionalData.estimated_price } : { p_order_id: normalizedId };
+    const fnName = 'accept_order_with_price';
+    const rpcPayload = { p_order_id: normalizedId, p_price: hasPrice ? additionalData.estimated_price : null };
     console.log(`[OrderManager] RPC ${fnName} -> payload`, rpcPayload);
 
     try {

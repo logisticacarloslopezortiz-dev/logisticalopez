@@ -119,7 +119,7 @@ Deno.serve(async (req: Request) => {
       role;
 
     // ===================================================================
-    //  CASO 1: CLIENTE → Encolar en outbox (no enviar directo)
+    //  CASO 1: CLIENTE → Insertar notifications (triggers crean events)
     // ===================================================================
     if (normalizedRole === 'cliente') {
       const { data: order, error } = await supabase
@@ -133,25 +133,16 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ success: false, error: 'No se pudo obtener información del cliente' }, 500);
       }
 
-      const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
-      if (order?.client_id && FUNCTIONS_BASE) {
-        const r = await fetch(`${FUNCTIONS_BASE}/send-push`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: String(order.client_id), title, body: messageBody, data: payload.data })
-        });
-        const ok = r.ok;
-        return jsonResponse({ success: ok, target: 'user' }, ok ? 200 : 500);
-      } else if (order?.client_contact_id && FUNCTIONS_BASE) {
-        const r = await fetch(`${FUNCTIONS_BASE}/send-push`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contact_id: String(order.client_contact_id), title, body: messageBody, data: payload.data })
-        });
-        const ok = r.ok;
-        return jsonResponse({ success: ok, target: 'contact' }, ok ? 200 : 500);
+      const rowBase = { title, body: messageBody, data: { orderId } } as any;
+      let inserted = 0;
+      if (order?.client_id) {
+        const { error: e1 } = await supabase.from('notifications').insert({ ...rowBase, user_id: order.client_id, contact_id: null });
+        if (!e1) inserted++;
+      } else if (order?.client_contact_id) {
+        const { error: e2 } = await supabase.from('notifications').insert({ ...rowBase, user_id: null, contact_id: order.client_contact_id });
+        if (!e2) inserted++;
       }
-      return jsonResponse({ success: false, message: 'Cliente no encontrado en la orden' }, 404);
+      return jsonResponse({ success: inserted > 0, inserted }, inserted > 0 ? 200 : 404);
     }
 
     // ===================================================================
@@ -178,20 +169,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: false, message: 'No hay destinatarios' }, 200);
     }
 
-    const payload = { title, body: messageBody, icon: absolutize(icon), vibrate: [100, 50, 100], data: { orderId, role: normalizedRole, ...data } };
-    if (FUNCTIONS_BASE) {
-      let delivered = 0;
-      for (const uid of ids) {
-        const r = await fetch(`${FUNCTIONS_BASE}/send-push`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: uid, title, body: messageBody, data: payload.data })
-        });
-        if (r.ok) delivered++;
-      }
-      return jsonResponse({ success: delivered > 0, delivered, total_targets: ids.length }, 200);
+    let inserted = 0;
+    for (const uid of ids) {
+      const { error: e } = await supabase.from('notifications').insert({ user_id: uid, contact_id: null, title, body: messageBody, data: { orderId } });
+      if (!e) inserted++;
     }
-    return jsonResponse({ success: false, error: 'Funciones no configuradas' }, 500);
+    return jsonResponse({ success: inserted > 0, inserted, total_targets: ids.length }, 200);
 
   } catch (error) {
     const msg = errorToString(error);

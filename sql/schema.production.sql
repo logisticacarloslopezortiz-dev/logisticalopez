@@ -639,33 +639,6 @@ end;
 $$;
 grant execute on function public.create_order_with_contact(jsonb) to anon, authenticated;
 
--- RPC: Aceptar orden por ID
-create or replace function public.accept_order_by_id(p_order_id bigint)
-returns void language plpgsql security definer set search_path = pg_catalog, public as $$
-declare _now timestamptz := now();
-begin
-  if not exists (
-    select 1 from public.collaborators c
-    where c.id = auth.uid() and lower(coalesce(c.status,'inactive')) = 'activo'
-  ) then
-    raise exception 'No autorizado: colaborador inactivo' using errcode = '42501';
-  end if;
-  update public.orders
-  set
-    status = 'accepted',
-    accepted_at = coalesce(accepted_at, _now),
-    accepted_by = coalesce(accepted_by, auth.uid()),
-    assigned_to = coalesce(assigned_to, auth.uid()),
-    assigned_at = coalesce(assigned_at, _now),
-    tracking_data = jsonb_build_array(
-      jsonb_build_object('status','accepted','date',_now,'description','Orden aceptada'))
-  where id = p_order_id
-    and status = 'pending'
-    and assigned_to is null;
-end;
-$$;
-grant execute on function public.accept_order_by_id(bigint) to authenticated;
-
 -- RPC: Aceptar orden por Short ID
 create or replace function public.accept_order_by_short_id(p_short_id text)
 returns void language plpgsql security definer set search_path = pg_catalog, public as $$
@@ -1048,12 +1021,12 @@ begin
     avg_rating = case
       when p_rating is null then public.collaborator_performance.avg_rating
       else coalesce(((coalesce(public.collaborator_performance.avg_rating,0) * nullif(public.collaborator_performance.completed_count,0)) + p_rating)
-                    / nullif(public.collaborator_performance.completed_count + 1,0), p_rating)
+                    / nullif(public.collaborator_performance.completed_count + greatest(p_complete_inc,0),0), p_rating)
     end,
     avg_completion_minutes = case
       when p_completion_minutes is null then public.collaborator_performance.avg_completion_minutes
       else coalesce(((coalesce(public.collaborator_performance.avg_completion_minutes,0) * nullif(public.collaborator_performance.completed_count,0)) + p_completion_minutes)
-                    / nullif(public.collaborator_performance.completed_count + 1,0), p_completion_minutes)
+                    / nullif(public.collaborator_performance.completed_count + greatest(p_complete_inc,0),0), p_completion_minutes)
     end,
     updated_at = now();
 end;$$;
@@ -1574,23 +1547,49 @@ create or replace function public.process_outbox_tick(p_limit int default 50)
 returns jsonb language plpgsql security definer set search_path = pg_catalog, public as $$
 declare
   _url text;
+  _secret text;
+  _token text;
   _status int;
   _body text;
 begin
-  _url := current_setting('app.settings.send_push_url', true);
+  _url := coalesce(
+    current_setting('SEND_PUSH_URL', true),
+    current_setting('app.settings.send_push_url', true)
+  );
   if coalesce(btrim(_url),'') = '' then
     return jsonb_build_object('ok', false, 'error','send_push_url not configured');
+  end if;
+
+  _secret := coalesce(
+    current_setting('PUSH_INTERNAL_SECRET', true),
+    current_setting('app.settings.outbox_internal_secret', true)
+  );
+  if coalesce(btrim(_secret),'') = '' then
+    return jsonb_build_object('ok', false, 'error','outbox_internal_secret not configured');
+  end if;
+
+  _token := coalesce(
+    current_setting('SERVICE_ROLE_TOKEN', true),
+    current_setting('app.settings.service_role_token', true)
+  );
+  if coalesce(btrim(_token),'') = '' then
+    return jsonb_build_object('ok', false, 'error','service_role_token not configured');
   end if;
 
   -- Housekeeping previo
   perform public.reset_stuck_notification_events(5);
   perform public.plan_failed_retries(5, 5);
 
-  -- Llamada HTTP a la función de proceso
+  -- Llamada HTTP a la función de proceso con cabecera interna
   select status, body into _status, _body
   from net.http_post(
     url := _url,
-    headers := jsonb_build_object('Content-Type','application/json'),
+    headers := jsonb_build_object(
+      'Content-Type','application/json',
+      'x-internal-secret', _secret,
+      'Authorization', 'Bearer ' || _token,
+      'apikey', _token
+    ),
     body := jsonb_build_object('limit', p_limit)::text
   );
 
@@ -1619,6 +1618,20 @@ DO $$ BEGIN
     end;
   end;
 END $$;
+
+create or replace function public.invoke_process_outbox(p_limit int default 50)
+returns jsonb language plpgsql security definer set search_path = pg_catalog, public as $$
+declare
+  _is_admin boolean;
+begin
+  _is_admin := public.is_owner(auth.uid()) or public.is_admin(auth.uid());
+  if not _is_admin then
+    raise exception 'Unauthorized';
+  end if;
+  return public.process_outbox_tick(p_limit);
+end;
+$$;
+grant execute on function public.invoke_process_outbox(int) to authenticated;
 
 -- Actualizar clave VAPID pública en la tabla de configuración de negocio
 -- Clave generada para corregir el error: VAPID pública no configurada
@@ -1730,103 +1743,24 @@ drop trigger if exists trg_cleanup_active_job on public.orders;
 create trigger trg_cleanup_active_job
 after update of status on public.orders
 for each row execute function public.cleanup_active_job_on_status();
--- Active Jobs model
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE TABLE IF NOT EXISTS public.collaborator_active_jobs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  collaborator_id uuid NOT NULL REFERENCES public.collaborators(id) ON DELETE CASCADE,
-  order_id bigint NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  started_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT unique_active_job_per_collaborator UNIQUE (collaborator_id),
-  CONSTRAINT unique_active_job_per_order UNIQUE (order_id)
-);
-
-ALTER TABLE public.collaborator_active_jobs ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY collaborator_active_jobs_select_own
-ON public.collaborator_active_jobs
-FOR SELECT
-USING (collaborator_id = auth.uid());
-
-CREATE POLICY collaborator_active_jobs_manage_own
-ON public.collaborator_active_jobs
-FOR ALL
-USING (collaborator_id = auth.uid())
-WITH CHECK (collaborator_id = auth.uid());
-
-DROP FUNCTION IF EXISTS public.accept_order_by_id(bigint);
-
-CREATE OR REPLACE FUNCTION public.accept_order_by_id(p_order_id bigint)
-RETURNS public.orders
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-DECLARE v_order public.orders;
-BEGIN
-  UPDATE public.orders
-  SET status = 'accepted', assigned_to = COALESCE(assigned_to, auth.uid()), assigned_at = COALESCE(assigned_at, now())
-  WHERE id = p_order_id AND status = 'pending'
-  RETURNING * INTO v_order;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Order not available';
-  END IF;
-
-  RETURN v_order;
-END;
+create or replace function public.create_active_job_on_start()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if old.status <> 'in_progress' and new.status = 'in_progress' then
+    insert into public.collaborator_active_jobs(collaborator_id, order_id)
+    values (new.assigned_to, new.id)
+    on conflict do nothing;
+  end if;
+  return new;
+end;
 $$;
 
-CREATE OR REPLACE FUNCTION public.start_order_work(p_order_id bigint)
-RETURNS public.collaborator_active_jobs
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-DECLARE v_job public.collaborator_active_jobs%ROWTYPE;
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM public.collaborator_active_jobs WHERE collaborator_id = auth.uid()
-  ) THEN
-    RAISE EXCEPTION 'Ya tienes un trabajo activo';
-  END IF;
-
-  UPDATE public.orders
-  SET status = 'in_progress'
-  WHERE id = p_order_id AND status = 'accepted'
-  RETURNING id INTO v_job.order_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Orden no válida';
-  END IF;
-
-  INSERT INTO public.collaborator_active_jobs(collaborator_id, order_id)
-  VALUES (auth.uid(), p_order_id)
-  RETURNING * INTO v_job;
-
-  RETURN v_job;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.complete_order_work(p_order_id bigint)
-RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-BEGIN
-  UPDATE public.orders
-  SET status = 'completed'
-  WHERE id = p_order_id AND status = 'in_progress';
-
-  DELETE FROM public.collaborator_active_jobs
-  WHERE order_id = p_order_id AND collaborator_id = auth.uid();
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.cleanup_active_job()
-RETURNS trigger AS $$
-BEGIN
-  IF NEW.status IN ('cancelled','completed') THEN
-    DELETE FROM public.collaborator_active_jobs WHERE order_id = NEW.id;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
-
-DROP TRIGGER IF EXISTS trg_cleanup_active_job ON public.orders;
-CREATE TRIGGER trg_cleanup_active_job
-AFTER UPDATE OF status ON public.orders
-FOR EACH ROW EXECUTE FUNCTION public.cleanup_active_job();
+drop trigger if exists trg_create_active_job on public.orders;
+create trigger trg_create_active_job
+after update of status on public.orders
+for each row
+execute function public.create_active_job_on_start();
