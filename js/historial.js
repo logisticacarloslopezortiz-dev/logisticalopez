@@ -468,7 +468,7 @@ async function generatePDF(order) {
     const width = doc.internal.pageSize.getWidth();
     const contentWidth = width - (margin * 2);
     
-    // Cargar logo (intentar cargar, si falla, seguir sin logo)
+    // --- ENCABEZADO PROFESIONAL ---
     try {
       const logoUrl = 'https://logisticalopezortiz.com/img/1horizontal%20(1).png';
       const img = new Image();
@@ -477,40 +477,75 @@ async function generatePDF(order) {
       await new Promise((resolve, reject) => {
         img.onload = resolve;
         img.onerror = reject;
-        // Timeout para no bloquear
         setTimeout(() => reject(new Error('Timeout loading logo')), 3000);
       });
-      // Calcular aspecto del logo
+      
       const logoWidth = 120;
       const logoHeight = (img.height / img.width) * logoWidth;
+      
+      // Logo a la izquierda
       doc.addImage(img, 'PNG', margin, y, logoWidth, logoHeight);
-      y += logoHeight + 20;
+      
+      // Datos de la empresa a la derecha del logo
+      const textX = margin + logoWidth + 20;
+      let textY = y + 15;
+      
+      doc.setFontSize(16);
+      doc.setTextColor(brandDark);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Logística López Ortiz', textX, textY);
+      
+      textY += 15;
+      doc.setFontSize(10);
+      doc.setTextColor(80);
+      doc.setFont('helvetica', 'normal');
+      doc.text('RNC: 1-32-86086-6', textX, textY);
+      
+      textY += 12;
+      doc.text('Tel: (809) 555-5555', textX, textY);
+      
+      textY += 12;
+      doc.text('Santo Domingo, República Dominicana', textX, textY);
+      
+      y = Math.max(y + logoHeight, textY) + 25;
     } catch (e) {
-      console.warn('No se pudo cargar el logo para el PDF:', e);
-      // Fallback texto si no hay logo
+      console.warn('No se pudo cargar el logo:', e);
       doc.setFontSize(18);
       doc.setTextColor(brandDark);
       doc.setFont('helvetica', 'bold');
       doc.text('Logística López Ortiz', margin, y);
       y += 25;
+      doc.setFontSize(10);
+      doc.setTextColor(80);
+      doc.setFont('helvetica', 'normal');
+      doc.text('RNC: 1-32-86086-6', margin, y);
+      y += 30;
     }
 
-    // Encabezado del documento
-    doc.setFontSize(10);
+    // Línea separadora y Fecha
+    doc.setDrawColor(200);
+    doc.setLineWidth(1);
+    doc.line(margin, y, width - margin, y);
+    
+    doc.setFontSize(9);
     doc.setTextColor(100);
-    doc.setFont('helvetica', 'normal');
-    doc.text('RNC: 1-32-86086-6', margin, y);
-    doc.text(`Fecha: ${new Date().toLocaleDateString('es-DO')}`, width - margin - 100, y);
-    y += 30;
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-DO')}`, width - margin, y - 10, { align: 'right' });
+    
+    y += 25;
 
     // Título de la Orden
     doc.setFillColor(brandTurq);
-    doc.rect(margin, y, contentWidth, 25, 'F');
+    if (typeof doc.roundedRect === 'function') {
+        doc.roundedRect(margin, y, contentWidth, 30, 3, 3, 'F');
+    } else {
+        doc.rect(margin, y, contentWidth, 30, 'F');
+    }
+    
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Comprobante de Orden #${order.id}`, margin + 10, y + 17);
-    y += 40;
+    doc.text(`Comprobante de Orden #${order.id}`, margin + 15, y + 20);
+    y += 50;
 
     // Función auxiliar para dibujar filas con mejor manejo de espacio
     const drawRow = (label, value) => {
