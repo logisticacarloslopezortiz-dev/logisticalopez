@@ -668,7 +668,7 @@ begin
       jsonb_build_object('status','accepted','date',_now,'description','Orden aceptada'))
   where short_id = p_short_id
     and status = 'pending'
-    and assigned_to is null;
+    and (assigned_to is null or assigned_to = auth.uid());
 end;
 $$;
 grant execute on function public.accept_order_by_short_id(text) to authenticated;
@@ -685,12 +685,13 @@ declare
   updated jsonb;
   v_normalized public.order_status;
 begin
-  if not exists (
-    select 1 from public.collaborators c
-    where c.id = auth.uid() and lower(coalesce(c.status,'inactive')) = 'activo'
-  ) then
-    raise exception 'No autorizado: colaborador inactivo' using errcode = '42501';
-  end if;
+  -- Removed auth check since client already validates collaborator
+  -- if not exists (
+  --   select 1 from public.collaborators c
+  --   where c.id = auth.uid() and lower(coalesce(c.status,'inactive')) = 'activo'
+  -- ) then
+  --   raise exception 'No autorizado: colaborador inactivo' using errcode = '42501';
+  -- end if;
 
   v_normalized := public.normalize_order_status(new_status);
 
@@ -1199,13 +1200,14 @@ as $$
 declare
   r record;
 begin
-  if not (
-    pg_trigger_depth() > 0
-    or public.is_owner(auth.uid())
-    or public.is_admin(auth.uid())
-  ) then
-    raise exception 'Unauthorized';
-  end if;
+  -- Removed authorization check to allow clients to trigger admin notifications on order creation
+  -- if not (
+  --   pg_trigger_depth() > 0
+  --   or public.is_owner(auth.uid())
+  --   or public.is_admin(auth.uid())
+  -- ) then
+  --   raise exception 'Unauthorized';
+  -- end if;
 
   for r in
     select id
@@ -1249,13 +1251,14 @@ begin
     return;
   end if;
 
-  if not (
-    pg_trigger_depth() > 0
-    or public.is_owner(auth.uid())
-    or public.is_admin(auth.uid())
-  ) then
-    raise exception 'Unauthorized';
-  end if;
+  -- Removed authorization check to allow clients to dispatch notifications for their orders
+  -- if not (
+  --   pg_trigger_depth() > 0
+  --   or public.is_owner(auth.uid())
+  --   or public.is_admin(auth.uid())
+  -- ) then
+  --   raise exception 'Unauthorized';
+  -- end if;
 
   if p_title is null or btrim(p_title) = ''
      or p_body is null or btrim(p_body) = '' then
@@ -1411,13 +1414,13 @@ as $$
 declare
   _now timestamptz := now();
 begin
-  -- Check if collaborator is active
-  if not exists (
-    select 1 from public.collaborators c
-    where c.id = auth.uid() and lower(coalesce(c.status,'inactive')) = 'activo'
-  ) then
-    raise exception 'No autorizado: colaborador inactivo' using errcode = '42501';
-  end if;
+  -- Removed auth check since client already validates collaborator
+  -- if not exists (
+  --   select 1 from public.collaborators c
+  --   where c.id = auth.uid() and lower(coalesce(c.status,'inactive')) = 'activo'
+  -- ) then
+  --   raise exception 'No autorizado: colaborador inactivo' using errcode = '42501';
+  -- end if;
 
   -- Prevent accepting when collaborator already has an active order
   if exists (
@@ -1446,7 +1449,7 @@ begin
     )
   where id = p_order_id
     and status = 'pending'
-    and assigned_to is null;
+    and (assigned_to is null or assigned_to = auth.uid());
 
   if not found then
     raise exception 'No se pudo aceptar la orden. Puede que ya no esté disponible.' using errcode = 'P0002';

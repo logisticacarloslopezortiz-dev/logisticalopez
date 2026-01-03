@@ -93,12 +93,20 @@
     // Pendiente
     if (/(pendient|pending|por\s*aceptar)/.test(x)) return ESTADOS.pendiente;
 
+    // En curso (in_progress genérico)
+    if (x === 'in_progress' || x === 'en curso') return 'en curso';
+
+    // Cancelada
+    if (x === 'cancelled' || /cancelad/.test(x)) return 'cancelada';
+
     // Tokens del manager reverso
     if (x === 'en_camino_recoger') return ESTADOS.en_camino_recoger;
     if (x === 'en_camino_entregar') return ESTADOS.en_camino_entregar;
     if (x === 'entregado') return ESTADOS.completada;
     if (x === 'cargando') return ESTADOS.cargando;
     if (x === 'aceptada') return ESTADOS.aceptada;
+    if (x === 'completada') return ESTADOS.completada;
+    if (x === 'cancelada') return 'cancelada';
 
     return x;
   }

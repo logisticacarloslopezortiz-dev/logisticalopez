@@ -102,64 +102,99 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
 
 async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfUrl: string, invoiceNumber: string, fromEmail?: string) {
   const apiKey = Deno.env.get('RESEND_API_KEY');
-  const defaultFrom = 'transporteylogisticalopezortiz@gmail.com';
-  const from = fromEmail || Deno.env.get('RESEND_FROM') || defaultFrom;
+  const defaultFrom = 'Logística López Ortiz <facturacion@logisticalopezortiz.com>';
+  const from = defaultFrom;
   const replyTo = Deno.env.get('RESEND_REPLY_TO') || defaultFrom;
   const orderIdForDisplay = order.short_id || order.id;
   const trackingLink = `https://logisticalopezortiz.com/seguimiento.html`;
 
-  if (apiKey) {
-    const subject = `✅ Solicitud Aceptada y Factura - Orden #${orderIdForDisplay} | Logística López Ortiz`;
-    const html = `
-      <div style="background-color: #f4f4f4; padding: 20px; font-family: Arial, sans-serif;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-          <div style="background-color: #1E405A; padding: 20px; text-align: center;">
-            <img src="https://logisticalopezortiz.com/img/1vertical.png" alt="Logística López Ortiz" style="max-width: 150px; height: auto;">
-          </div>
-          <div style="padding: 30px;">
-            <h2 style="color: #1E405A; font-size: 24px; margin-top: 0;">¡Tu solicitud ha sido aceptada!</h2>
-            <p style="color: #555555; line-height: 1.6;">Hola,</p>
-            <p style="color: #555555; line-height: 1.6;">Nos complace informarte que tu solicitud de servicio ha sido aceptada y está siendo procesada.</p>
-            <p style="color: #555555; line-height: 1.6;">Puedes darle seguimiento en tiempo real usando el siguiente número de orden:</p>
-            <div style="background-color: #f0f5f9; border: 1px dashed #1E8A95; padding: 15px; text-align: center; margin: 20px 0; border-radius: 5px;">
-              <p style="font-size: 28px; font-weight: bold; color: #1E405A; margin: 0;">${orderIdForDisplay}</p>
-            </div>
-            <p style="color: #555555; line-height: 1.6;">Simplemente ingresa ese número en nuestra página de seguimiento.</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${trackingLink}" style="display: inline-block; padding: 14px 28px; background-color: #1E8A95; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Ir a la Página de Seguimiento</a>
-            </div>
-            <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
-            <h3 style="color: #1E405A; font-size: 20px;">Detalles de tu Factura</h3>
-            <p style="color: #555555; line-height: 1.6;">Tu factura ha sido generada.</p>
-            <p style="color: #555555; line-height: 1.6;"><strong>Número de Factura:</strong> ${invoiceNumber}</p>
-            <p style="color: #555555; line-height: 1.6;"><strong>Total:</strong> ${(order.monto_cobrado || 0).toLocaleString('es-DO', { style: 'currency', currency: 'DOP' })}</p>
-            
-            <p style="color: #555555; line-height: 1.6; margin-top: 20px;">Puede ver y descargar su factura desde el siguiente enlace seguro:</p>
-            <p style="margin: 20px 0;">
-              <a href="${pdfUrl}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline; font-size: 16px;">Descargar factura (PDF)</a>
-            </p>
+  if (!apiKey) {
+    logDebug('RESEND_API_KEY not set');
+    return { success: false, messageId: null };
+  }
 
-            <p style="color: #555555; line-height: 1.6; margin-top: 30px;">Gracias por confiar en Logística López Ortiz.</p>
+  const subject = `✅ Solicitud Aceptada y Factura - Orden #${orderIdForDisplay} | Logística López Ortiz`;
+  const html = `
+    <div style="background-color: #f4f4f4; padding: 20px; font-family: Arial, sans-serif;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        <div style="background-color: #1E405A; padding: 20px; text-align: center;">
+          <img src="https://logisticalopezortiz.com/img/1vertical.png" alt="Logística López Ortiz" style="max-width: 150px; height: auto;">
+        </div>
+        <div style="padding: 30px;">
+          <h2 style="color: #1E405A; font-size: 24px; margin-top: 0;">¡Tu solicitud ha sido aceptada!</h2>
+          <p style="color: #555555; line-height: 1.6;">Hola,</p>
+          <p style="color: #555555; line-height: 1.6;">Nos complace informarte que tu solicitud de servicio ha sido aceptada y está siendo procesada.</p>
+          <p style="color: #555555; line-height: 1.6;">Puedes darle seguimiento en tiempo real usando el siguiente número de orden:</p>
+          <div style="background-color: #f0f5f9; border: 1px dashed #1E8A95; padding: 15px; text-align: center; margin: 20px 0; border-radius: 5px;">
+            <p style="font-size: 28px; font-weight: bold; color: #1E405A; margin: 0;">${orderIdForDisplay}</p>
           </div>
-          <div style="background-color: #f4f4f4; color: #888888; padding: 20px; text-align: center; font-size: 12px;">
-            <p>Este es un correo electrónico generado automáticamente. Por favor, no respondas a este mensaje.</p>
-            <p>&copy; ${new Date().getFullYear()} Logística López Ortiz. Todos los derechos reservados.</p>
+          <p style="color: #555555; line-height: 1.6;">Simplemente ingresa ese número en nuestra página de seguimiento.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${trackingLink}" style="display: inline-block; padding: 14px 28px; background-color: #1E8A95; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Ir a la Página de Seguimiento</a>
           </div>
+          <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
+          <h3 style="color: #1E405A; font-size: 20px;">Detalles de tu Factura</h3>
+          <p style="color: #555555; line-height: 1.6;">Tu factura ha sido generada.</p>
+          <p style="color: #555555; line-height: 1.6;"><strong>Número de Factura:</strong> ${invoiceNumber}</p>
+          <p style="color: #555555; line-height: 1.6;"><strong>Total:</strong> ${(order.monto_cobrado || 0).toLocaleString('es-DO', { style: 'currency', currency: 'DOP' })}</p>
+          
+          <p style="color: #555555; line-height: 1.6; margin-top: 20px;">Puede ver y descargar su factura desde el siguiente enlace seguro:</p>
+          <p style="margin: 20px 0;">
+            <a href="${pdfUrl}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline; font-size: 16px;">Descargar factura (PDF)</a>
+          </p>
+
+          <p style="color: #555555; line-height: 1.6; margin-top: 30px;">Gracias por confiar en Logística López Ortiz.</p>
+        </div>
+        <div style="background-color: #f4f4f4; color: #888888; padding: 20px; text-align: center; font-size: 12px;">
+          <p>Este es un correo electrónico generado automáticamente. Por favor, no respondas a este mensaje.</p>
+          <p>&copy; ${new Date().getFullYear()} Logística López Ortiz. Todos los derechos reservados.</p>
         </div>
       </div>
-    `;
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ from, to: email, subject, html, reply_to: replyTo })
-    });
-    const j = await r.json().catch(() => ({}));
-    const ok = r.ok && j?.id;
-    return { success: !!ok, messageId: j?.id || null };
+    </div>
+  `;
+
+  // Retry logic: up to 2 attempts
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      logDebug(`Attempting email send (attempt ${attempt}) for order ${orderIdForDisplay}`);
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ from, to: email, subject, html, reply_to: replyTo })
+      });
+
+      const j = await r.json().catch(() => ({}));
+
+      if (!r.ok) {
+        logDebug(`Resend API error on attempt ${attempt}:`, { status: r.status, response: j });
+        if (attempt === 2) {
+          return { success: false, messageId: null };
+        }
+        continue;
+      }
+
+      if (!j?.id) {
+        logDebug(`No message ID from Resend on attempt ${attempt}:`, j);
+        if (attempt === 2) {
+          return { success: false, messageId: null };
+        }
+        continue;
+      }
+
+      logDebug(`Email sent successfully on attempt ${attempt}, messageId: ${j.id}`);
+      return { success: true, messageId: j.id };
+
+    } catch (error) {
+      logDebug(`Fetch error on attempt ${attempt}:`, error);
+      if (attempt === 2) {
+        return { success: false, messageId: null };
+      }
+    }
   }
+
   return { success: false, messageId: null };
 }
 
@@ -219,7 +254,7 @@ Deno.serve(async (req: Request) => {
     const pdfBytes = await generateInvoicePDF(order, business);
     const invoiceNumber = `INV-${order.short_id || order.id}`;
 
-    const filePath = `${order.client_id || 'anon'}/${invoiceNumber}-${Date.now()}.pdf`;
+    const filePath = `${order.client_id || 'anon'}/${invoiceNumber}.pdf`;
     const { error: uploadError } = await supabase.storage.from('invoices').upload(filePath, pdfBytes, { contentType: 'application/pdf', upsert: true });
     if (uploadError) {
       logDebug('Error subiendo PDF', uploadError);
@@ -264,10 +299,13 @@ Deno.serve(async (req: Request) => {
         if (profileRow?.email) recipientEmail = profileRow.email;
       } catch (err) { logDebug('No se pudo obtener email de perfil', err); }
     }
-    const senderEmail = business?.email || 'transporteylogisticalopezortiz@gmail.com';
+    const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || ''));
+    if (!isValidEmail(recipientEmail || '')) {
+      recipientEmail = null;
+    }
     
     if (recipientEmail && pdfUrl) {
-      emailResult = await sendEmailWithInvoice(order, recipientEmail, pdfUrl, invoiceNumber, senderEmail);
+      emailResult = await sendEmailWithInvoice(order, recipientEmail, pdfUrl, invoiceNumber);
     }
     
     // Resolver client_id si está vacío usando el email del perfil
@@ -293,8 +331,9 @@ Deno.serve(async (req: Request) => {
       recipient_email: recipientEmail ?? null,
       data: {
         invoice_number: invoiceNumber,
-        email_sent: !!emailResult?.success,
-        recipient_email: recipientEmail
+        email_sent: emailResult?.success && !!emailResult?.messageId,
+        recipient_email: recipientEmail,
+        message_id: emailResult?.messageId
       }
     });
     if (invError) {
@@ -308,8 +347,9 @@ Deno.serve(async (req: Request) => {
       data: {
         invoiceNumber,
         pdfUrl,
-        emailSent: !!emailResult?.success,
-        recipientEmail
+        emailSent: emailResult?.success === true,
+        recipientEmail,
+        messageId: emailResult?.messageId
       }
     });
     

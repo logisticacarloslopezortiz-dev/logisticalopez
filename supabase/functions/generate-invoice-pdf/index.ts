@@ -28,6 +28,7 @@ type OrderDataMinimal = {
   time?: string
   metodo_pago?: string
   status?: string
+  business_id?: number
   service?: { name?: string }
   vehicle?: { name?: string }
 }
@@ -157,7 +158,22 @@ async function generateInvoicePDF(
           current = test
         }
       }
-      if (current) lines.push(current)
+      if (current) {
+        // Break long words if necessary
+        if (f.widthOfTextAtSize(current, size) > max) {
+          let remaining = current
+          while (remaining) {
+            let chunk = remaining
+            while (f.widthOfTextAtSize(chunk, size) > max && chunk.length > 1) {
+              chunk = chunk.slice(0, -1)
+            }
+            lines.push(chunk)
+            remaining = remaining.slice(chunk.length)
+          }
+        } else {
+          lines.push(current)
+        }
+      }
     }
     return lines
   }
@@ -262,6 +278,14 @@ async function generateInvoicePDF(
   const tableW = width - margin * 2
   const col1 = 160
 
+  const statusMap: Record<string, string> = {
+    pending: 'Pendiente',
+    accepted: 'Aceptada',
+    in_progress: 'En proceso',
+    completed: 'Completada',
+    cancelled: 'Cancelada'
+  }
+
   const drawRow = (label: string, value: string, bold = false) => {
     const f = bold ? boldFont : font
     const lines = wrapText(value || 'N/A', tableW - col1 - 16, f, 11)
@@ -285,11 +309,13 @@ async function generateInvoicePDF(
       size: 11
     })
 
-    page.drawText(lines.join('\n'), {
-      x: tableX + col1,
-      y: y - 14,
-      font: f,
-      size: 11
+    lines.forEach((line, i) => {
+      page.drawText(line, {
+        x: tableX + col1,
+        y: y - 14 - (i * 14),
+        font: f,
+        size: 11
+      })
     })
 
     y -= h
@@ -300,7 +326,7 @@ async function generateInvoicePDF(
   drawRow('Origen', order.pickup || 'N/A')
   drawRow('Destino', order.delivery || 'N/A')
   drawRow('Fecha y Hora', `${order.date || ''} ${order.time || ''}`.trim())
-  drawRow('Estado Actual', order.status || 'N/A')
+  drawRow('Estado Actual', statusMap[order.status ?? ''] || 'N/A')
   drawRow('Método de Pago', order.metodo_pago || 'N/A')
   drawRow(
     'MONTO TOTAL',
@@ -357,7 +383,7 @@ Deno.serve(async (req: Request) => {
     const { data: business, error: bErr } = await supabase
       .from('business')
       .select('*')
-      .eq('id', 1)
+      .eq('id', order.business_id)
       .single()
 
     if (bErr || !business) {
@@ -366,12 +392,13 @@ Deno.serve(async (req: Request) => {
 
     const pdfBytes = await generateInvoicePDF(order, business)
 
+    if (!pdfBytes || pdfBytes.length < 500) {
+      return jsonResponse({ error: 'pdf_invalid' }, 500, req)
+    }
+
     // Storage filename
     const invoiceNum = `INV-${order.short_id || order.id}`
-    const filePath = `${order.client_id || 'anon'}/${invoiceNum}-${Date.now()}.pdf`
-
-    // Ensure bucket exists
-    await supabase.storage.createBucket('invoices', { public: true }).catch(() => {})
+    const filePath = `${order.client_id || 'anon'}/${invoiceNum}.pdf`
 
     // Upload
     const { error: uploadErr } = await supabase.storage

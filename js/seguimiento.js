@@ -52,6 +52,22 @@ document.addEventListener('DOMContentLoaded', () => {
     return order;
   }
 
+  function toSpanishStatus(s) {
+    const x = String(s || '').trim().toLowerCase();
+    if (!x) return 'Pendiente';
+    if (x === 'created') return 'Orden Recibida';
+    if (x === 'pending' || x === 'pendiente') return 'Pendiente';
+    if (x === 'accepted' || x === 'aceptada') return 'Aceptada';
+    if (x === 'in_progress' || x === 'en curso') return 'En curso';
+    if (x === 'en_camino_recoger') return 'En camino a recoger';
+    if (x === 'cargando') return 'Cargando';
+    if (x === 'en_camino_entregar') return 'En camino a entregar';
+    if (x === 'completed' || x === 'completada' || x === 'entregado' || x === 'entregada') return 'Completada';
+    if (x === 'cancelled' || x === 'cancelada') return 'Cancelada';
+    if (x === 'delay' || x.includes('retraso')) return 'Retraso por tapón';
+    return s;
+  }
+
   async function fetchOrderFlexible(identifier) {
     const idStr = String(identifier || '').trim();
     if (!idStr) return { order: null, error: null };
@@ -141,10 +157,11 @@ document.addEventListener('DOMContentLoaded', () => {
     orderDate.textContent = `Creada el ${new Date(order.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}`;
 
     // Limpiar clases de estado anteriores y añadir la nueva
-    orderStatus.className = 'status-badge'; // Resetea
-    const statusClass = `status-${(order.status || 'Pendiente').replace(/\s+/g, '-')}`;
+    orderStatus.className = 'status-badge';
+    const statusEs = toSpanishStatus(order.status);
+    const statusClass = `status-${(statusEs || 'Pendiente').replace(/\s+/g, '-')}`;
     orderStatus.classList.add(statusClass);
-    orderStatus.textContent = order.status;
+    orderStatus.textContent = statusEs;
 
     // --- 2. Renderizar Detalles de la Orden ---
     orderDetails.innerHTML = `
@@ -241,14 +258,14 @@ document.addEventListener('DOMContentLoaded', () => {
       'Completada': 'Servicio Completado'
     };
 
+    const currentStatusEs = toSpanishStatus(currentStatus);
     if (!history || history.length === 0) {
-      // Si no hay historial, mostrar solo el estado actual
-      history = [{ status: currentStatus, at: new Date().toISOString() }];
+      history = [{ status: currentStatusEs, at: new Date().toISOString() }];
     }
 
     // Normalizar y ordenar por fecha (soporta claves 'at' y 'date')
     const normalized = history.map(h => ({
-      status: h.status || h.new_status || h.label || 'Pendiente',
+      status: toSpanishStatus(h.status || h.new_status || h.label || 'Pendiente'),
       notes: h.notes || h.comment || null,
       timestamp: h.at || h.date || h.timestamp || h.time || new Date().toISOString()
     })).filter(h => !!h.status);
@@ -264,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
       item.className = 'timeline-item';
       
       // Marcar como activo si es el estado actual o uno anterior en el flujo
-      const currentIndex = statusOrder.indexOf(currentStatus);
+      const currentIndex = statusOrder.indexOf(currentStatusEs);
       const eventIndex = statusOrder.indexOf(event.status);
       if (eventIndex !== -1 && eventIndex <= currentIndex) {
         item.classList.add('active');

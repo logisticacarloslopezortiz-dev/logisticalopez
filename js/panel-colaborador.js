@@ -81,15 +81,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function formatStatus(status) {
     const v = String(status || '').toLowerCase();
-    if (v === 'pending' || v === 'pendiente') return 'Pendiente';
-    if (v === 'accepted' || v === 'aceptada') return 'Aceptada';
+    if (v === 'pending') return 'Pendiente';
+    if (v === 'accepted') return 'Aceptada';
+    if (v === 'completed') return 'Completada';
+    if (v === 'cancelled') return 'Cancelada';
     if (v === 'en_camino_recoger') return 'En camino a recoger';
     if (v === 'cargando') return 'Cargando';
     if (v === 'en_camino_entregar') return 'En camino a entregar';
-    if (v === 'completed' || v === 'entregada' || v === 'completada') return 'Completada';
-    if (v === 'cancelled' || v === 'cancelada') return 'Cancelada';
-    if (v === 'in_progress' || v === 'en curso') return 'En progreso';
-    return String(status || '').trim();
+    return v;
   }
 
   // --- Notificaciones Push (Automatización) ---
@@ -728,11 +727,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
         .from('orders')
         .select('id,short_id,name,phone,status,pickup,delivery,origin_coords,destination_coords,service_questions,estimated_price,service:services(name,description),vehicle:vehicles(name),assigned_to,tracking_data')
-        .or(`assigned_to.eq.${uid},status.eq.pending`)
+        .or(`assigned_to.eq.${uid},and(status.eq.pending,assigned_to.is.null)`)
         .order('created_at', { ascending: false })) || supabaseConfig.client
         .from('orders')
         .select('id,short_id,name,phone,status,pickup,delivery,origin_coords,destination_coords,service_questions,estimated_price,service:services(name,description),vehicle:vehicles(name),assigned_to,tracking_data')
-        .or(`assigned_to.eq.${uid},status.eq.pending`)
+        .or(`assigned_to.eq.${uid},and(status.eq.pending,assigned_to.is.null)`)
         .order('created_at', { ascending: false }));
       const { data, error } = resp;
 
@@ -740,14 +739,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const rawOrders = data || [];
       
-      // Filtrar órdenes asignadas al usuario o pendientes
-      orders = rawOrders.filter(o => {
-        const isAssignedToUser = o.assigned_to === uid;
-        const isPending = o.assigned_to === null;
-        return isAssignedToUser || isPending;
-      });
-      
-      orders = orders.filter(o => !isFinalOrder(o));
+      // Filtrar órdenes no finalizadas (ya filtradas en SQL)
+      orders = rawOrders.filter(o => !isFinalOrder(o));
 
       renderOrders();
 
@@ -760,7 +753,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderOrders() {
+function renderOrders() {
     const total = orders.length;
     if (totalEl) totalEl.textContent = String(total);
     if (showingEl) showingEl.textContent = String(total);
@@ -772,14 +765,29 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    function toSpanishStatus(s) {
+      const x = String(s || '').trim().toLowerCase();
+      if (!x) return 'Pendiente';
+      if (x === 'pending' || x === 'pendiente') return 'Pendiente';
+      if (x === 'accepted' || x === 'aceptada') return 'Aceptada';
+      if (x === 'in_progress' || x === 'en curso') return 'En curso';
+      if (x === 'en_camino_recoger') return 'En camino a recoger';
+      if (x === 'cargando') return 'Cargando';
+      if (x === 'en_camino_entregar') return 'En camino a entregar';
+      if (x === 'completed' || x === 'completada' || x === 'entregada') return 'Completada';
+      if (x === 'cancelled' || x === 'cancelada') return 'Cancelada';
+      return s;
+    }
+
     grid.innerHTML = orders.map(o => {
       const idDisplay = o.id; // o.short_id si prefieres
       const service = escapeHtml(o?.service?.name || 'Servicio General');
-      const status = String(o.status || '').trim();
+      const rawStatus = String(o.status || '').trim();
+      const status = toSpanishStatus(rawStatus);
       const s = status.toLowerCase();
       
       let badge = 'bg-gray-100 text-gray-700';
-      if (s === 'pendiente') badge = 'bg-yellow-100 text-yellow-700';
+      if (s === 'pending') badge = 'bg-yellow-100 text-yellow-700';
       else if (s === 'aceptada') badge = 'bg-blue-100 text-blue-700';
       else if (s.includes('curso') || s.includes('camino')) badge = 'bg-indigo-100 text-indigo-700';
       else if (s === 'cancelada') badge = 'bg-red-100 text-red-700';
@@ -904,12 +912,15 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('No se pudo refrescar datos de la orden:', fetchError);
           }
           
+          // Forzar estado UI correcto antes de abrir
+          o.status = 'accepted';
+          o.tracking_data = [{ ui_status: 'en_camino_recoger', date: new Date().toISOString() }];
+          
           // Abrir trabajo activo automáticamente después de aceptar
           setTimeout(() => {
             try {
               openActiveJob(o);
-              // Refrescar la lista para que la orden aceptada desaparezca
-              fetchOrdersForCollaborator();
+              // No refrescar lista aquí para evitar cerrar la vista activa
             } catch (error) {
               console.error('Error al abrir trabajo activo:', error);
               notifications?.error?.('Error al abrir el trabajo activo');
@@ -1002,6 +1013,11 @@ document.addEventListener('DOMContentLoaded', () => {
           
           if (isNewPending || isMyOrder || isUnassigned) {
              await fetchOrdersForCollaborator();
+             // Protección: Evitar resetear vista activa al asignar orden
+             if (currentOrder && payload.eventType === 'UPDATE' && payload.new?.assigned_to) {
+               Object.assign(currentOrder, payload.new);
+               return;
+             }
              // Si la orden activa cambió, actualizar vista activa
              if (currentOrder && payload.new && payload.new.id === currentOrder.id) {
                const s = String(payload.new.status || '').toLowerCase();
