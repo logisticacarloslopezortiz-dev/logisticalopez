@@ -564,7 +564,8 @@ if (!window.supabaseConfig) {
    */
   async validateActiveCollaborator(userId) {
     try {
-      if (!userId) {
+      const uid = String(userId || '').trim();
+      if (!uid || !/^[0-9a-f-]{36}$/i.test(uid)) {
         return { isValid: false, collaborator: null, error: 'User ID is empty' };
       }
       try { await this.ensureFreshSession(); } catch(_){ }
@@ -574,7 +575,7 @@ if (!window.supabaseConfig) {
       const resp = await this.withAuthRetry(() => this.client
         .from('collaborators')
         .select('*')
-        .eq('id', userId)
+        .eq('id', uid)
         .maybeSingle()
       );
       const collaborator = resp?.data || null;

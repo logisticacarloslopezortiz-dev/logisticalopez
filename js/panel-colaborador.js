@@ -189,16 +189,16 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await supabaseConfig.ensureFreshSession?.();
       const { data: { session } } = await supabaseConfig.client.auth.getSession();
-      const uid = session?.user?.id;
+      const uid = String(session?.user?.id || '').trim();
       if (!uid) return null;
       const v = await supabaseConfig.validateActiveCollaborator?.(uid);
       if (v && !v.isValid) return null;
-      const { data } = await supabaseConfig.client
+      const resp = await supabaseConfig.withAuthRetry(() => supabaseConfig.client
         .from('collaborators')
         .select('id,name,matricula,status')
         .eq('id', uid)
-        .maybeSingle();
-      return data || { id: uid };
+        .maybeSingle());
+      return resp?.data || { id: uid };
     } catch (_) { return null; }
   }
 
@@ -523,53 +523,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function handleStatusUpdate(newStatus, successMsg, btn) {
     if (!currentOrder) return;
+
+    // Helper: actualiza tracking_data y (si aplica) status en DB
+    async function persistTrackingStep(orderId, uiStatus, opts = {}) {
+      const { setInProgress = true } = opts;
+      // Obtener tracking actual desde DB para evitar sobrescribir
+      const { data: fresh, error: getErr } = await (supabaseConfig.withAuthRetry?.(() =>
+        supabaseConfig.client
+          .from('orders')
+          .select('tracking_data,status')
+          .eq('id', orderId)
+          .single()) || supabaseConfig.client
+          .from('orders')
+          .select('tracking_data,status')
+          .eq('id', orderId)
+          .single());
+      if (getErr) throw getErr;
+
+      const tracking = Array.isArray(fresh?.tracking_data) ? [...fresh.tracking_data] : [];
+      tracking.push({ ui_status: uiStatus, date: new Date().toISOString() });
+
+      const patch = { tracking_data: tracking };
+      if (setInProgress) patch.status = 'in_progress';
+
+      const { error: updErr } = await (supabaseConfig.withAuthRetry?.(() =>
+        supabaseConfig.client
+          .from('orders')
+          .update(patch)
+          .eq('id', orderId)) || supabaseConfig.client
+          .from('orders')
+          .update(patch)
+          .eq('id', orderId));
+      if (updErr) throw updErr;
+
+      return tracking;
+    }
+
     try {
-      if (window.__updatingOrder) return; 
+      if (window.__updatingOrder) return;
       window.__updatingOrder = true;
-      if(btn) btn.disabled = true;
+      if (btn) btn.disabled = true;
 
       const { data: { user } } = await supabaseConfig.client.auth.getUser();
       if (!user?.id) throw new Error('Sesión inválida');
 
-      const res = await OrderManager.actualizarEstadoPedido(currentOrder.id, newStatus, { collaborator_id: user.id });
-      if (!res?.success) throw new Error(res?.error || 'Error actualizando estado');
+      // Estados finales ya tienen flujos dedicados (complete/cancel). Aquí manejamos intermedios.
+      if (['entregada', 'completada', 'cancelada'].includes(newStatus)) {
+        throw new Error('Estado no soportado por este flujo');
+      }
+
+      // Persistir tracking y forzar in_progress
+      const nextTracking = await persistTrackingStep(currentOrder.id, newStatus, { setInProgress: true });
+
+      // Refrescar orden desde DB para tener estado consistente
+      try {
+        const { data: freshOrder } = await supabaseConfig.client
+          .from('orders')
+          .select('*,service:services(name,description),vehicle:vehicles(name)')
+          .eq('id', currentOrder.id)
+          .single();
+        if (freshOrder) currentOrder = freshOrder;
+      } catch (_) {}
+
+      // Asegurar estado local coherente
+      currentOrder.status = 'in_progress';
+      currentOrder.tracking_data = nextTracking;
 
       notifications?.success?.(successMsg);
-      
-      // Actualizar status DB localmente (aproximado)
-      if (['entregada', 'completada'].includes(newStatus)) currentOrder.status = 'completed';
-      else if (['cancelada'].includes(newStatus)) currentOrder.status = 'cancelled';
-      else if (['aceptada'].includes(newStatus)) currentOrder.status = 'accepted';
-      else currentOrder.status = 'in_progress';
-      
-      // Simular tracking update
-      if (!currentOrder.tracking_data) currentOrder.tracking_data = [];
-      currentOrder.tracking_data.push({ ui_status: newStatus, date: new Date().toISOString() });
 
       if (newStatus === 'cargando') {
         try {
           notifications?.info?.('Sube evidencia fotográfica en la sección Evidencia');
           document.getElementById('evidenceInput')?.focus();
           document.getElementById('activeEvidence')?.scrollIntoView({ behavior: 'smooth' });
-        } catch(_) {}
-      }
-      
-      // Si es estado final, cerrar
-      if (['entregada', 'cancelada'].includes(newStatus)) {
-        clearActiveJobStorage();
-        closeActiveJob();
-        document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
-        // Refrescar la lista para que la orden completada desaparezca
-        fetchOrdersForCollaborator();
-      } else {
-        updatePrimaryActionButtons(currentOrder);
-        try { localStorage.setItem('tlc_active_job_state', newStatus); } catch(_){}
+        } catch (_) {}
       }
 
+      updatePrimaryActionButtons(currentOrder);
+      try { localStorage.setItem('tlc_active_job_state', newStatus); } catch (_) {}
     } catch (e) {
       notifications?.error?.(e?.message || 'No se pudo actualizar');
     } finally {
-      if(btn) btn.disabled = false;
+      if (btn) btn.disabled = false;
       window.__updatingOrder = false;
     }
   }
@@ -626,9 +661,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  if (btnCancel) btnCancel.addEventListener('click', () => {
-    if (confirm('¿Seguro que deseas cancelar esta solicitud?')) {
-      handleStatusUpdate('cancelada', 'Solicitud cancelada', btnCancel);
+  if (btnCancel) btnCancel.addEventListener('click', async () => {
+    if (!currentOrder?.id) return;
+    if (!confirm('¿Seguro que deseas cancelar esta solicitud?')) return;
+    btnCancel.disabled = true;
+    try {
+      const res = await OrderManager.cancelActiveJob(currentOrder.id);
+      if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
+      notifications?.success?.('Solicitud cancelada');
+      clearActiveJobStorage();
+      closeActiveJob();
+      document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
+      fetchOrdersForCollaborator();
+    } catch (e) {
+      notifications?.error?.(e?.message || 'No se pudo cancelar');
+    } finally {
+      btnCancel.disabled = false;
     }
   });
 
@@ -823,19 +871,7 @@ function renderOrders() {
                </div>
             </div>
 
-            <!-- TARIFA EDITABLE -->
-            <div class="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
-               <i data-lucide="dollar-sign" class="w-4 h-4 text-gray-400"></i>
-               <div class="text-xs text-gray-600 flex-1">
-                 <div class="font-medium text-gray-900">Tarifa:</div>
-                 ${canAccept 
-                  ? `<input type="number" step="0.01" min="0" class="price-input w-full mt-1 px-2 py-1 border rounded text-sm" value="${(o.estimated_price && parseFloat(o.estimated_price) > 0) ? o.estimated_price : ''}" placeholder="A convenir" data-id="${o.id}">`
-                  : `<span class="text-sm font-semibold text-gray-800">${(o.estimated_price && parseFloat(o.estimated_price) > 0) ? '$'+o.estimated_price : 'A convenir'}</span>`
-                }
-               </div>
             </div>
-            
-          </div>
           <div class="px-4 py-3 border-t flex items-center justify-end gap-2 bg-gray-50">
             <button class="btn-open px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors" data-id="${o.id}">Detalles</button>
             ${canAccept ? `<button class="btn-accept px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${o.id}">Aceptar</button>` : ''}
@@ -880,19 +916,8 @@ function renderOrders() {
           const v = await supabaseConfig.validateActiveCollaborator?.(userId);
           if (v && !v.isValid) throw new Error('Sesión inválida');
 
-          // Obtener precio editado si existe
-          const inputPrice = grid.querySelector(`.price-input[data-id="${o.id}"]`);
-          let finalPrice = null;
-          if (inputPrice) {
-            const val = parseFloat(inputPrice.value);
-            if (!isNaN(val) && val >= 0) {
-              finalPrice = val;
-            }
-          }
-
           const res = await OrderManager.acceptOrder(o.id, { 
-            collaborator_id: userId,
-            estimated_price: finalPrice
+            collaborator_id: userId
           });
           if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
 

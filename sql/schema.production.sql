@@ -711,13 +711,19 @@ begin
   if updated is null then
     raise exception 'No autorizado o no encontrada' using errcode = '42501';
   end if;
-  if v_normalized = 'in_progress' then
-    if exists (select 1 from public.collaborator_active_jobs j where j.collaborator_id = collaborator_id) then
-      raise exception 'Ya tienes una orden activa' using errcode = 'P0001';
+  if v_normalized in ('accepted','in_progress') then
+    if exists (
+      select 1 from public.collaborator_active_jobs j 
+      where j.collaborator_id = collaborator_id
+        and j.order_id <> order_id
+    ) then
+      raise exception 'Ya tienes otra orden activa' using errcode = 'P0001';
     end if;
     insert into public.collaborator_active_jobs(collaborator_id, order_id)
     values (collaborator_id, order_id)
-    on conflict (collaborator_id) do update set order_id = excluded.order_id, started_at = now();
+    on conflict (collaborator_id) do update set 
+      order_id = excluded.order_id,
+      started_at = case when collaborator_active_jobs.order_id <> excluded.order_id then now() else collaborator_active_jobs.started_at end;
   elsif v_normalized in ('completed','cancelled') then
     delete from public.collaborator_active_jobs where order_id = order_id;
   end if;
@@ -1095,7 +1101,7 @@ end;$$;
 
 drop trigger if exists trg_orders_track_metrics on public.orders;
 create trigger trg_orders_track_metrics
-after update on public.orders
+after insert or update on public.orders
 for each row execute function public.track_order_metrics();
 
 create or replace view public.collaborator_performance_view as
@@ -1454,6 +1460,18 @@ begin
   if not found then
     raise exception 'No se pudo aceptar la orden. Puede que ya no esté disponible.' using errcode = 'P0002';
   end if;
+
+  -- Insertar/actualizar trabajo activo también para 'accepted' para que aparezca en el panel
+  begin
+    insert into public.collaborator_active_jobs(collaborator_id, order_id)
+    values (auth.uid(), p_order_id)
+    on conflict (collaborator_id)
+    do update set order_id = excluded.order_id, started_at = now();
+  exception when others then
+    -- No bloquear la aceptación por errores en la tabla de trabajos activos
+    -- (por ejemplo, RLS o conflicto de order_id único)
+    perform 1;
+  end;
 end;
 $$;
 

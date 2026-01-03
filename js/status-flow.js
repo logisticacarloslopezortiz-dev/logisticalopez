@@ -115,14 +115,20 @@
   function statusToManagerToken(s){
     const n = normalizeStatus(s);
     switch(n){
-      case ESTADOS.en_camino_recoger: return 'en_camino_recoger';
-      case ESTADOS.cargando: return 'cargando';
-      case ESTADOS.en_camino_entregar: return 'en_camino_entregar';
-      case ESTADOS.completada: return 'entregado';
-      case ESTADOS.aceptada: return 'aceptada';
-      case ESTADOS.pendiente: return 'pendiente';
-      case ESTADOS.retraso: return 'retraso';
-      default: return n; // devuelve lo que haya para no romper
+      case ESTADOS.en_camino_recoger:
+      case ESTADOS.cargando:
+      case ESTADOS.en_camino_entregar:
+        return 'in_progress';
+      case ESTADOS.completada:
+        return 'completed';
+      case ESTADOS.aceptada:
+        return 'accepted';
+      case ESTADOS.pendiente:
+        return 'pending';
+      case ESTADOS.retraso:
+        return 'in_progress';
+      default:
+        return n;
     }
   }
 
