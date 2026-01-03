@@ -73,122 +73,145 @@
 
   <script src="vendor/supabase.umd.js"></script>
   <script src="js/supabase-config.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      const params = new URLSearchParams(location.search);
-      let orderId = params.get('pedido');
-      const form = document.getElementById('ratingForm');
-      const result = document.getElementById('result');
-      const lookupForm = document.getElementById('orderLookupForm');
-      const lookupInput = document.getElementById('lookupInput');
-      const lookupResult = document.getElementById('lookupResult');
-      let isSubmitting = false;
 
-      if (!orderId) {
-        form.classList.add('hidden');
-        lookupForm.classList.remove('hidden');
-        lookupForm.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const v = (lookupInput.value || '').trim();
-          if (!v) return;
-          lookupResult.classList.add('hidden');
-          try {
-            const resp = await supabaseConfig.client
-              .from('orders')
-              .select('id, short_id')
-              .or(`id.eq.${v},short_id.eq.${v}`)
-              .maybeSingle();
-            if (resp.error) throw resp.error;
-            const data = resp.data;
-            if (data && data.id) {
-              orderId = data.id;
-              lookupResult.className = 'mt-2 p-2 rounded bg-green-100 text-green-800 text-sm';
-              lookupResult.textContent = `Pedido encontrado: #${data.short_id || data.id}`;
-              lookupResult.classList.remove('hidden');
-              form.classList.remove('hidden');
-              lookupForm.classList.add('hidden');
-            } else {
-              lookupResult.className = 'mt-2 p-2 rounded bg-red-100 text-red-800 text-sm';
-              lookupResult.textContent = 'No encontramos el pedido. Verifica el ID.';
-              lookupResult.classList.remove('hidden');
-            }
-          } catch (err) {
-            lookupResult.className = 'mt-2 p-2 rounded bg-red-100 text-red-800 text-sm';
-            lookupResult.textContent = err?.message || 'Error al buscar el pedido.';
-            lookupResult.classList.remove('hidden');
-          }
-        });
+  <script>
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!window.supabaseConfig?.client) {
+    alert('Error de configuración. Intenta más tarde.');
+    return;
+  }
+
+  const supabase = supabaseConfig.client;
+
+  const params = new URLSearchParams(location.search);
+  const rawParam = (params.get('pedido') || '').trim();
+
+  const form = document.getElementById('ratingForm');
+  const result = document.getElementById('result');
+  const lookupForm = document.getElementById('orderLookupForm');
+  const lookupInput = document.getElementById('lookupInput');
+  const lookupResult = document.getElementById('lookupResult');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  let orderId = null;
+  let isSubmitting = false;
+
+  // -----------------------------
+  // UTIL
+  // -----------------------------
+  const showMsg = (el, msg, type = 'info') => {
+    const map = {
+      success: 'bg-green-100 text-green-800',
+      error: 'bg-red-100 text-red-800',
+      warn: 'bg-yellow-100 text-yellow-800',
+      info: 'bg-blue-100 text-blue-800'
+    };
+    el.className = `mt-4 p-3 rounded-lg text-sm ${map[type] || map.info}`;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  };
+
+  const resolveOrderId = async (value) => {
+    const isNumeric = /^\d+$/.test(value);
+    let q = supabase.from('orders').select('id');
+
+    if (isNumeric) {
+      // Si es numérico, buscamos en ID o short_id
+      q = q.or(`id.eq.${value},short_id.eq.${value}`);
+    } else {
+      // Si no es numérico, solo buscamos en short_id (evita error de tipo bigint en id)
+      q = q.eq('short_id', value);
+    }
+
+    const { data, error } = await q.maybeSingle();
+    if (error || !data?.id) return null;
+    return data.id;
+  };
+
+  // -----------------------------
+  // SI NO VIENE POR URL
+  // -----------------------------
+  if (!rawParam) {
+    form.classList.add('hidden');
+    lookupForm.classList.remove('hidden');
+
+    lookupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      lookupResult.classList.add('hidden');
+
+      const v = lookupInput.value.trim();
+      if (!v) return;
+
+      const id = await resolveOrderId(v);
+      if (!id) {
+        showMsg(lookupResult, 'No encontramos el pedido. Verifica el ID.', 'error');
         return;
       }
 
-      try {
-        const raw = String(orderId || '').trim();
-        const resp = await supabaseConfig.client
-          .from('orders')
-          .select('id, short_id')
-          .or(`id.eq.${raw},short_id.eq.${raw}`)
-          .maybeSingle();
-        if (!resp.error && resp.data && resp.data.id) {
-          orderId = resp.data.id;
-        } else {
-          form.classList.add('hidden');
-          lookupForm.classList.remove('hidden');
-          lookupResult.className = 'mt-2 p-2 rounded bg-red-100 text-red-800 text-sm';
-          lookupResult.textContent = 'No encontramos el pedido. Verifica el ID.';
-          lookupResult.classList.remove('hidden');
-          return;
-        }
-      } catch (_) {}
-
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (isSubmitting) return;
-        isSubmitting = true;
-        form.querySelector('button[type="submit"]').disabled = true;
-
-        const s = parseInt(document.getElementById('serviceRating').value, 10);
-        const c = parseInt(document.getElementById('collabRating').value, 10);
-        const comentario = document.getElementById('comment').value || '';
-
-        if (!s || !c) {
-          result.className = 'mt-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-800';
-          result.textContent = 'Debes seleccionar ambas calificaciones.';
-          result.classList.remove('hidden');
-          isSubmitting = false;
-          form.querySelector('button[type="submit"]').disabled = false;
-          return;
-        }
-
-        if (comentario.length > 0 && comentario.length < 10) {
-          result.className = 'mt-4 p-3 rounded-lg text-sm bg-yellow-100 text-yellow-800';
-          result.textContent = 'El comentario debe tener al menos 10 caracteres.';
-          result.classList.remove('hidden');
-          isSubmitting = false;
-          form.querySelector('button[type="submit"]').disabled = false;
-          return;
-        }
-
-        try {
-          const { error } = await supabaseConfig.client.rpc('submit_rating_v2', {
-            order_id: Number(orderId),
-            service_stars: s,
-            collab_stars: c,
-            comment: comentario
-          });
-          if (error) throw error;
-          result.className = 'mt-4 p-3 rounded-lg text-sm bg-green-100 text-green-800';
-          result.textContent = '¡Gracias! Tu calificación fue registrada.';
-          result.classList.remove('hidden');
-          form.classList.add('hidden');
-        } catch (err) {
-          result.className = 'mt-4 p-3 rounded-lg text-sm bg-red-100 text-red-800';
-          result.textContent = err?.message || 'Error al guardar calificación.';
-          result.classList.remove('hidden');
-          isSubmitting = false;
-          form.querySelector('button[type="submit"]').disabled = false;
-        }
-      });
+      orderId = id;
+      showMsg(lookupResult, 'Pedido encontrado. Puedes calificar.', 'success');
+      lookupForm.classList.add('hidden');
+      form.classList.remove('hidden');
     });
-  </script>
+
+    return;
+  }
+
+  // -----------------------------
+  // SI VIENE POR URL
+  // -----------------------------
+  orderId = await resolveOrderId(rawParam);
+  if (!orderId) {
+    form.classList.add('hidden');
+    lookupForm.classList.remove('hidden');
+    showMsg(lookupResult, 'No encontramos el pedido. Verifica el ID.', 'error');
+    return;
+  }
+
+  // -----------------------------
+  // SUBMIT RATING
+  // -----------------------------
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+
+    const s = Number(document.getElementById('serviceRating').value);
+    const c = Number(document.getElementById('collabRating').value);
+    const comment = document.getElementById('comment').value.trim();
+
+    if (!s || !c) {
+      showMsg(result, 'Debes seleccionar ambas calificaciones.', 'warn');
+      return;
+    }
+
+    if (comment && comment.length < 10) {
+      showMsg(result, 'El comentario debe tener al menos 10 caracteres.', 'warn');
+      return;
+    }
+
+    try {
+      isSubmitting = true;
+      submitBtn.disabled = true;
+
+      const { error } = await supabase.rpc('submit_rating_v2', {
+        order_id: orderId,
+        service_stars: s,
+        collab_stars: c,
+        comment
+      });
+
+      if (error) throw error;
+
+      showMsg(result, '¡Gracias! Tu calificación fue registrada.', 'success');
+      form.classList.add('hidden');
+
+    } catch (err) {
+      showMsg(result, err.message || 'Error al guardar calificación.', 'error');
+      isSubmitting = false;
+      submitBtn.disabled = false;
+    }
+  });
+});
+</script>
 </body>
 </html>

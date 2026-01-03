@@ -529,7 +529,16 @@ if (!window.supabaseConfig) {
       if (normalized && (normalized.length < 9 || normalized.length > 11)) {
         throw new Error('RNC inválido: debe contener entre 9 y 11 dígitos');
       }
-      payload.rnc = normalized;
+      
+      // Formatear RNC para cumplir con el constraint de la base de datos (XXX-XXXXX-X)
+      if (normalized && normalized.length === 9) {
+        payload.rnc = normalized.replace(/^(\d{3})(\d{5})(\d{1})$/, '$1-$2-$3');
+      } else if (normalized && normalized.length === 11) {
+        // Formato estándar para cédula/persona física (XXX-XXXXXXX-X)
+        payload.rnc = normalized.replace(/^(\d{3})(\d{7})(\d{1})$/, '$1-$2-$3');
+      } else {
+        payload.rnc = normalized;
+      }
     }
     // quotation_rates debe ser objeto JSON serializable
     if (Object.prototype.hasOwnProperty.call(payload, 'quotation_rates')) {

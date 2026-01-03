@@ -31,7 +31,7 @@ serve(async (req) => {
     const toEmail = order.client_email || order.email;
     if (!toEmail) return new Response(JSON.stringify({ error: "No client email found" }), { status: 400, headers: { "Content-Type": "application/json" } });
 
-    const ratingLink = `${SITE_BASE_URL}/calificar.html?pedido=${encodeURIComponent(String(order.id))}`;
+    const ratingLink = `${SITE_BASE_URL}/calificar.html?pedido=${encodeURIComponent(String(order.short_id || order.id))}`;
     const subject = `Tu opinión sobre el servicio #${order.short_id || order.id}`;
     const html = `
       <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif">
@@ -68,4 +68,3 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: String(e?.message || e) }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 });
-

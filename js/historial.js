@@ -594,7 +594,8 @@ async function generatePDF(order) {
 }
 
 async function sendRatingLink(order){
-  const link = 'https://logisticalopezortiz.com/calificar.html';
+  const code = String(order.short_id || order.id || '').trim();
+  const link = `https://logisticalopezortiz.com/calificar.html?pedido=${encodeURIComponent(code)}`;
   const phone = String(order.phone || '').replace(/\D/g, '');
   const hasPhone = phone.length >= 8;
   const email = order.client_email || order.email || '';

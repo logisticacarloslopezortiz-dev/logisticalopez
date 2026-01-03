@@ -103,8 +103,22 @@ businessForm.addEventListener('submit', async (e) => {
   const rncInput = document.getElementById('businessRnc').value || '';
   const rncClean = rncInput.replace(/\D/g, '');
 
-  if (rncClean && (rncClean.length < 9 || rncClean.length > 11)) {
-    alert('El RNC debe contener entre 9 y 11 dígitos.');
+  function isValidRNC(rnc) {
+    return (
+      /^1\d{8}$/.test(rnc) ||        // Empresa (9 dígitos, empieza con 1)
+      /^4\d{10}$/.test(rnc) ||       // Persona física (11 dígitos, empieza con 4)
+      /^101\d{6}$/.test(rnc)         // Antiguo (9 dígitos, empieza con 101)
+    );
+  }
+
+  if (rncClean && !isValidRNC(rncClean)) {
+    alert(
+      'RNC inválido.\n\n' +
+      'Formatos aceptados:\n' +
+      '- Empresa: 1XXXXXXXX\n' +
+      '- Persona física: 4XXXXXXXXXX\n' +
+      '- Antiguo: 101XXXXXX'
+    );
     return;
   }
 

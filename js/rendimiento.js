@@ -104,6 +104,8 @@ async function loadMetrics(collabId) {
 
   /* ---------- RPC MÉTRICAS ---------- */
   try {
+    const isUuid = typeof collabId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(collabId);
+    if (!isUuid) throw new Error('invalid collaborator id');
     const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
       .rpc('get_collaborator_metrics', { collaborator_id: collabId })
     ) || supabaseConfig.client
@@ -136,6 +138,40 @@ async function loadMetrics(collabId) {
     if (!document.getElementById('metricAvgTime')?.textContent) {
       setText('metricAvgTime', formatAvgTime(completed));
     }
+  } catch (_) {}
+
+  /* ---------- FETCH COMPLETED WITH RATING ---------- */
+  try {
+    const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
+      .from('orders')
+      .select('id,short_id,name,status,completed_at,monto_cobrado,assigned_to,service:services(name),rating,customer_comment')
+      .eq('assigned_to', collabId)
+      .in('status', ['completed'])
+      .order('completed_at', { ascending: false })
+    ) || supabaseConfig.client
+      .from('orders')
+      .select('id,short_id,name,status,completed_at,monto_cobrado,assigned_to,service:services(name),rating,customer_comment')
+      .eq('assigned_to', collabId)
+      .in('status', ['completed'])
+      .order('completed_at', { ascending: false }));
+    const { data, error } = resp;
+    if (!error && Array.isArray(data)) {
+      completed = data;
+    }
+  } catch (_) {}
+
+  try {
+    const ratings = (completed || []).map(o => {
+      if (o && o.rating && typeof o.rating === 'object') {
+        const v = Number(o.rating.collab ?? o.rating.stars ?? o.rating['stars'] ?? 0);
+        return isNaN(v) ? 0 : v;
+      }
+      const x = Number(o?.rating_stars || 0);
+      return isNaN(x) ? 0 : x;
+    }).filter(n => n > 0);
+    const avg = ratings.length ? (ratings.reduce((a,b)=>a+b,0) / ratings.length) : 0;
+    const val = avg ? `${avg.toFixed(1)}★` : '—';
+    setText('myAvgRating', val);
   } catch (_) {}
 
   renderWeekly(completed);
@@ -346,7 +382,7 @@ async function renderUnifiedTable(collabId, completed) {
     const serv = (o.service && o.service.name) ? o.service.name : (o.service || '—');
     const id = o.short_id ? `#${o.short_id}` : (o.id ? `#${o.id}` : '—');
     const dateStr = d ? d.toLocaleString('es-DO') : '—';
-    const stars = o.rating && typeof o.rating === 'object' ? Number(o.rating.stars || o.rating['stars'] || 0) : Number(o.rating_stars || 0);
+    const stars = o.rating && typeof o.rating === 'object' ? Number((o.rating.collab ?? o.rating.stars ?? o.rating['stars']) || 0) : Number(o.rating_stars || 0);
     const starsStr = stars > 0 ? '★★★★★'.slice(0, stars) + '☆☆☆☆☆'.slice(stars, 5) : '—';
     const comment = o.customer_comment || (o.rating && o.rating.comment ? o.rating.comment : '');
     const btn = comment ? `<button class="px-2 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200" data-comment="${String(comment).replace(/"/g,'&quot;')}"><i data-lucide="cloud" class="w-4 h-4"></i></button>` : '—';

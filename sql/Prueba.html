@@ -1782,3 +1782,209 @@ create trigger trg_create_active_job
 after update of status on public.orders
 for each row
 execute function public.create_active_job_on_start();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!window.supabaseConfig?.client) {
+    alert('Error de configuración. Intenta más tarde.');
+    return;
+  }
+
+  const supabase = supabaseConfig.client;
+
+  const params = new URLSearchParams(location.search);
+  const rawParam = (params.get('pedido') || '').trim();
+
+  const form = document.getElementById('ratingForm');
+  const result = document.getElementById('result');
+  const lookupForm = document.getElementById('orderLookupForm');
+  const lookupInput = document.getElementById('lookupInput');
+  const lookupResult = document.getElementById('lookupResult');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  let orderId = null;
+  let isSubmitting = false;
+
+  // -----------------------------
+  // UTIL
+  // -----------------------------
+  const showMsg = (el, msg, type = 'info') => {
+    const map = {
+      success: 'bg-green-100 text-green-800',
+      error: 'bg-red-100 text-red-800',
+      warn: 'bg-yellow-100 text-yellow-800',
+      info: 'bg-blue-100 text-blue-800'
+    };
+    el.className = `mt-4 p-3 rounded-lg text-sm ${map[type] || map.info}`;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  };
+
+  const resolveOrderId = async (value) => {
+    const isNumeric = /^\d+$/.test(value);
+    const q = supabase
+      .from('orders')
+      .select('id, short_id')
+      [isNumeric ? 'eq' : 'eq'](isNumeric ? 'id' : 'short_id', isNumeric ? Number(value) : value)
+      .maybeSingle();
+
+    const { data, error } = await q;
+    if (error || !data?.id) return null;
+    return data.id;
+  };
+
+  // -----------------------------
+  // SI NO VIENE POR URL
+  // -----------------------------
+  if (!rawParam) {
+    form.classList.add('hidden');
+    lookupForm.classList.remove('hidden');
+
+    lookupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      lookupResult.classList.add('hidden');
+
+      const v = lookupInput.value.trim();
+      if (!v) return;
+
+      const id = await resolveOrderId(v);
+      if (!id) {
+        showMsg(lookupResult, 'No encontramos el pedido. Verifica el ID.', 'error');
+        return;
+      }
+
+      orderId = id;
+      showMsg(lookupResult, 'Pedido encontrado. Puedes calificar.', 'success');
+      lookupForm.classList.add('hidden');
+      form.classList.remove('hidden');
+    });
+
+    return;
+  }
+
+  // -----------------------------
+  // SI VIENE POR URL
+  // -----------------------------
+  orderId = await resolveOrderId(rawParam);
+  if (!orderId) {
+    form.classList.add('hidden');
+    lookupForm.classList.remove('hidden');
+    showMsg(lookupResult, 'No encontramos el pedido. Verifica el ID.', 'error');
+    return;
+  }
+
+  // -----------------------------
+  // SUBMIT RATING
+  // -----------------------------
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+
+    const s = Number(document.getElementById('serviceRating').value);
+    const c = Number(document.getElementById('collabRating').value);
+    const comment = document.getElementById('comment').value.trim();
+
+    if (!s || !c) {
+      showMsg(result, 'Debes seleccionar ambas calificaciones.', 'warn');
+      return;
+    }
+
+    if (comment && comment.length < 10) {
+      showMsg(result, 'El comentario debe tener al menos 10 caracteres.', 'warn');
+      return;
+    }
+
+    try {
+      isSubmitting = true;
+      submitBtn.disabled = true;
+
+      const { error } = await supabase.rpc('submit_rating_v2', {
+        order_id: orderId,
+        service_stars: s,
+        collab_stars: c,
+        comment
+      });
+
+      if (error) throw error;
+
+      showMsg(result, '¡Gracias! Tu calificación fue registrada.', 'success');
+      form.classList.add('hidden');
+
+    } catch (err) {
+      showMsg(result, err.message || 'Error al guardar calificación.', 'error');
+      isSubmitting = false;
+      submitBtn.disabled = false;
+    }
+  });
+});
+</script>
