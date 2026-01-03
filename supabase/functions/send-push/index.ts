@@ -12,7 +12,6 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contacto@logisticalopezortiz.com';
-const INTERNAL_SECRET = Deno.env.get('PUSH_INTERNAL_SECRET') ?? '';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -36,9 +35,7 @@ function normalizeKeys(raw: unknown): SubscriptionKeys | null {
   }
 }
 
-function unauthorized() {
-  return new Response('Unauthorized', { status: 401 });
-}
+function unauthorized() { return new Response('Unauthorized', { status: 401 }); }
 
 function badRequest(message: string) {
   return new Response(JSON.stringify({ error: 'bad_request', message }), {
@@ -68,17 +65,18 @@ async function sendWebPush(endpoint: string, keys: SubscriptionKeys, payload: Re
   return { ok: true };
 }
 
-function requireInternalSecret(req: Request): boolean {
-  const secret = req.headers.get('x-internal-secret') ?? '';
-  return INTERNAL_SECRET && secret === INTERNAL_SECRET;
+function requireBearerAuth(req: Request): boolean {
+  const hdr = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+  const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : '';
+  return !!token && token === SUPABASE_SERVICE_ROLE_KEY;
 }
 
 Deno.serve(async (req) => {
+  console.log('[send-push] invoked');
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
-
-  if (!requireInternalSecret(req)) return unauthorized();
+  if (!requireBearerAuth(req)) return unauthorized();
 
   let json: any;
   try {
@@ -104,12 +102,12 @@ Deno.serve(async (req) => {
   if (user_id) orFilter.push(`user_id.eq.${user_id}`);
   if (contact_id) orFilter.push(`client_contact_id.eq.${contact_id}`);
 
+  console.log('[send-push] target', { user_id, contact_id });
   const { data: subs, error } = await supabase
     .from('push_subscriptions')
     .select('id, endpoint, keys')
     .or(orFilter.join(','))
     .order('created_at', { ascending: false })
-    .limit(1)
     .maybeSingle();
 
   if (error) {
@@ -140,6 +138,14 @@ Deno.serve(async (req) => {
     const payload = { title, body, data };
     const result = await sendWebPush(endpoint, keys, payload);
     if (result.ok) {
+      console.log('[send-push] sent OK');
+      // Optional: Log success to DB
+      await supabase.from('function_logs').insert({
+        fn_name: 'send-push',
+        level: 'info',
+        message: 'Push sent successfully',
+        payload: { user_id, contact_id }
+      });
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },

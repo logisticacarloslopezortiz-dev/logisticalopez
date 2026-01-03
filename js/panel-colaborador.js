@@ -889,9 +889,33 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
 
           notifications?.success?.('Orden aceptada');
-          o.status = 'Aceptada';
-          o.assigned_to = userId;
-          if (finalPrice !== null) o.estimated_price = finalPrice;
+          
+          // Obtener la orden actualizada con todos los datos
+          try {
+            const { data: updatedOrder } = await supabaseConfig.client
+              .from('orders')
+              .select('*,service:services(name,description),vehicle:vehicles(name)')
+              .eq('id', o.id)
+              .single();
+            if (updatedOrder) {
+              Object.assign(o, updatedOrder); // Actualizar el objeto local
+            }
+          } catch (fetchError) {
+            console.warn('No se pudo refrescar datos de la orden:', fetchError);
+          }
+          
+          // Abrir trabajo activo automáticamente después de aceptar
+          setTimeout(() => {
+            try {
+              openActiveJob(o);
+              // Refrescar la lista para que la orden aceptada desaparezca
+              fetchOrdersForCollaborator();
+            } catch (error) {
+              console.error('Error al abrir trabajo activo:', error);
+              notifications?.error?.('Error al abrir el trabajo activo');
+            }
+          }, 100);
+          
           try { notifications?.info?.('Pulsa "En camino a recoger" para iniciar el trabajo'); } catch(_){}
         } catch (e) {
           notifications?.error?.(e.message || 'No se pudo aceptar la orden');

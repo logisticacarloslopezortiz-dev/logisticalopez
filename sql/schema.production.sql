@@ -19,7 +19,6 @@
 
 -- 1) EXTENSIONES
 create extension if not exists pgcrypto;
-create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
 -- 1.1) ENUMS
@@ -597,6 +596,10 @@ begin
       (CASE WHEN order_payload->>'estimated_price' ~ '^[0-9]+(\.[0-9]+)?$' THEN (order_payload->>'estimated_price')::numeric ELSE NULL END),
       order_payload->'tracking_data', v_contact_id
     ) returning * into v_order;
+
+    -- Notificaciones al crear orden
+    perform public.dispatch_notification(v_client_id, v_contact_id, 'Orden Creada', 'Tu orden ha sido creada exitosamente. Espera confirmación.', jsonb_build_object('orderId', v_order.id));
+    perform public.notify_admins('Nueva Orden', 'Se ha creado una nueva orden pendiente.', jsonb_build_object('orderId', v_order.id));
   else
     if order_payload->'push_subscription' is not null and order_payload->'push_subscription'->>'endpoint' is not null then
       insert into public.push_subscriptions(user_id, endpoint, keys)
@@ -633,6 +636,10 @@ begin
       order_payload->'tracking_data',
       v_client_id
     ) returning * into v_order;
+
+    -- Notificaciones al crear orden
+    perform public.dispatch_notification(v_client_id, v_contact_id, 'Orden Creada', 'Tu orden ha sido creada exitosamente. Espera confirmación.', jsonb_build_object('orderId', v_order.id));
+    perform public.notify_admins('Nueva Orden', 'Se ha creado una nueva orden pendiente.', jsonb_build_object('orderId', v_order.id));
   end if;
   return v_order;
 end;
@@ -717,6 +724,23 @@ begin
 end;
 $$;
 grant execute on function public.update_order_status(bigint, text, uuid, jsonb) to authenticated;
+
+-- RPC: iniciar trabajo sobre una orden (wrapper)
+create or replace function public.start_order_work(p_order_id bigint)
+returns jsonb language plpgsql security definer set search_path = pg_catalog, public as $$
+declare
+  res jsonb;
+begin
+  res := public.update_order_status(
+    p_order_id,
+    'in_progress',
+    auth.uid(),
+    jsonb_build_object('status','in_progress','date', now(), 'description','Trabajo iniciado')
+  );
+  return res;
+end;
+$$;
+grant execute on function public.start_order_work(bigint) to authenticated;
 
 -- Modificar monto
 create or replace function public.set_order_amount_admin(
@@ -913,7 +937,7 @@ create trigger trg_orders_create_receipt_on_complete
 after update of status on public.orders
 for each row execute function public.create_completion_receipt_on_order_complete();
 
--- Orders RLS
+ --Orders RLS
 -- Limpiar previas
 drop policy if exists public_insert_pending_orders on public.orders;
 drop policy if exists client_select_own_orders on public.orders;
@@ -1117,540 +1141,262 @@ on conflict (name) do nothing;
 
 -- 12) NOTIFICACIONES Y OUTBOX (Refactorizado)
 
-create table if not exists public.notification_events (
-  id uuid primary key default gen_random_uuid(),
-  type text not null,
-  target_type text not null check (target_type in ('user','contact')),
-  target_id uuid,
-  payload jsonb not null,
-  status public.notification_status not null default 'pending',
-  attempts int not null default 0,
-  last_error text,
-  created_at timestamptz default now(),
-  processed_at timestamptz,
-  processing_started_at timestamptz,
-  constraint chk_target_integrity check (
-    (target_type = 'user' and target_id is not null)
-    or
-    (target_type = 'contact' and target_id is not null)
-  )
+-- Requerido para net.http_post
+create extension if not exists pg_net;
+
+-- Tabla para logs de funciones (necesaria para debugging)
+create table if not exists public.function_logs (
+  id bigserial primary key,
+  fn_name text not null,
+  level text not null check (level in ('debug','info','warn','error')),
+  message text not null,
+  payload jsonb,
+  created_at timestamptz not null default now()
 );
-create index if not exists idx_notification_events_status on public.notification_events(status);
-create index if not exists idx_notification_events_target on public.notification_events(target_id);
-create index if not exists idx_notification_events_created_at on public.notification_events(created_at);
-create index if not exists idx_notification_events_status_created on public.notification_events(status, created_at);
-create index if not exists idx_notification_events_processing_started_at on public.notification_events(processing_started_at);
-create index if not exists idx_notification_events_retry
-on public.notification_events(status, processing_started_at);
+create index if not exists idx_function_logs_fn_created
+  on public.function_logs(fn_name, created_at);
+create index if not exists idx_function_logs_level_created
+  on public.function_logs(level, created_at);
 
--- Dashboard View for Monitoring (moved here after notification_events)
-create or replace view public.v_notification_stats as
-select
-  count(*) filter (where status = 'pending') as pending,
-  count(*) filter (where status = 'processing') as processing,
-  count(*) filter (where status = 'retry') as retry,
-  count(*) filter (where status = 'failed') as failed,
-  count(*) filter (where status = 'sent' and processed_at > now() - interval '24 hours') as sent_24h,
-  avg(attempts) filter (where status = 'sent') as avg_attempts,
-  max(processed_at) as last_processed_at
-from public.notification_events;
+-- Limpieza de restos del sistema outbox anterior
+drop view if exists public.v_notification_stats;
+drop table if exists public.push_delivery_attempts cascade;
+drop table if exists public.notification_events cascade;
+drop function if exists public.claim_notification_events cascade;
+drop function if exists public.reset_stuck_notification_events cascade;
+drop function if exists public.plan_failed_retries cascade;
+drop function if exists public.process_outbox_tick cascade;
 
-CREATE OR REPLACE FUNCTION public.notify_admins(
+-- Drop all overloads of invoke_process_outbox
+do $$
+declare
+  func record;
+begin
+  for func in
+    select oid::regprocedure as sig
+    from pg_proc
+    where proname = 'invoke_process_outbox'
+      and pg_function_is_visible(oid)
+  loop
+    execute 'drop function if exists ' || func.sig || ' cascade';
+  end loop;
+end $$;
+
+drop extension if exists pg_cron;
+
+-- =========================
+-- NOTIFY ADMINS
+-- =========================
+create or replace function public.notify_admins(
   p_title text,
   p_body text,
   p_data jsonb
-) RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-DECLARE
-  r RECORD;
-BEGIN
-  IF NOT (pg_trigger_depth() > 0 OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid())) THEN
-    RAISE EXCEPTION 'Unauthorized';
-  END IF;
+) returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  r record;
+begin
+  if not (
+    pg_trigger_depth() > 0
+    or public.is_owner(auth.uid())
+    or public.is_admin(auth.uid())
+  ) then
+    raise exception 'Unauthorized';
+  end if;
 
-  FOR r IN
-    SELECT id FROM public.collaborators
-    WHERE role IN ('admin', 'administrador') AND status = 'activo'
-  LOOP
-    PERFORM public.dispatch_notification(r.id, NULL, p_title, p_body, p_data);
-  END LOOP;
+  for r in
+    select id
+    from public.collaborators
+    where role in ('admin','administrador')
+      and status = 'activo'
+  loop
+    perform public.dispatch_notification(
+      r.id, null, p_title, p_body, p_data
+    );
+  end loop;
 
-  -- Also notify business owners
-  FOR r IN
-    SELECT owner_user_id as id FROM public.business WHERE owner_user_id IS NOT NULL
-  LOOP
-    PERFORM public.dispatch_notification(r.id, NULL, p_title, p_body, p_data);
-  END LOOP;
-END;
+  for r in
+    select owner_user_id as id
+    from public.business
+    where owner_user_id is not null
+  loop
+    perform public.dispatch_notification(
+      r.id, null, p_title, p_body, p_data
+    );
+  end loop;
+end;
 $$;
 
-CREATE OR REPLACE FUNCTION public.run_push_self_test()
-RETURNS jsonb AS $$
-DECLARE
-  _run_id text := md5(random()::text || clock_timestamp()::text);
-  _n_total integer := 0;
-  _e_total integer := 0;
-  _e_sent integer := 0;
-  _e_failed integer := 0;
-BEGIN
-  PERFORM public.notify_admins('🔧 Self Test', 'Prueba de entrega push', jsonb_build_object('runId', _run_id));
-
-  SELECT count(*) INTO _n_total FROM public.notifications WHERE data->>'runId' = _run_id;
-
-  SELECT count(*) INTO _e_total
-  FROM public.notification_events
-  WHERE payload->'data'->>'runId' = _run_id;
-
-  SELECT count(*) INTO _e_sent
-  FROM public.notification_events
-  WHERE payload->'data'->>'runId' = _run_id AND status = 'sent';
-
-  SELECT count(*) INTO _e_failed
-  FROM public.notification_events
-  WHERE payload->'data'->>'runId' = _run_id AND status = 'failed';
-
-  RETURN jsonb_build_object(
-    'runId', _run_id,
-    'notifications', _n_total,
-    'events', _e_total,
-    'queued_or_sent', _e_sent,
-    'failed', _e_failed
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
-create index if not exists idx_notification_events_status_attempts on public.notification_events(status, attempts);
-
-create table if not exists public.push_delivery_attempts (
-  id bigserial primary key,
-  event_id uuid not null references public.notification_events(id) on delete cascade,
-  endpoint text not null,
-  status_code int,
-  error text,
-  created_at timestamptz not null default now()
-);
-create index if not exists idx_push_attempts_event on public.push_delivery_attempts(event_id);
-
-CREATE OR REPLACE FUNCTION public.claim_notification_events(p_limit int)
-RETURNS setof public.notification_events
-LANGUAGE sql
-SECURITY DEFINER SET search_path = pg_catalog, public
-AS $$
-  UPDATE public.notification_events
-  SET
-    status = 'processing',
-    processing_started_at = now(),
-    attempts = attempts + 1
-  WHERE id IN (
-    SELECT id
-    FROM public.notification_events
-    WHERE status IN ('pending', 'retry')
-    ORDER BY created_at ASC
-    LIMIT p_limit
-    FOR UPDATE SKIP LOCKED
-  )
-  RETURNING *;
-$$;
-
-CREATE OR REPLACE FUNCTION public.dispatch_notification(
+-- =========================
+-- DISPATCH NOTIFICATION
+-- =========================
+create or replace function public.dispatch_notification(
   p_user_id uuid,
   p_contact_id uuid,
   p_title text,
   p_body text,
   p_data jsonb
-) RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-BEGIN
-  IF NOT (pg_trigger_depth() > 0 OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid())) THEN
-    RAISE EXCEPTION 'Unauthorized';
-  END IF;
+) returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if p_user_id is null and p_contact_id is null then
+    return;
+  end if;
 
-  IF p_title IS NULL OR btrim(p_title) = '' OR p_body IS NULL OR btrim(p_body) = '' THEN
-    RETURN;
-  END IF;
+  if not (
+    pg_trigger_depth() > 0
+    or public.is_owner(auth.uid())
+    or public.is_admin(auth.uid())
+  ) then
+    raise exception 'Unauthorized';
+  end if;
 
-  IF p_user_id IS NOT NULL THEN
-    IF EXISTS (
-      SELECT 1 FROM public.notifications n
-      WHERE n.user_id = p_user_id
-        AND n.title = p_title
-        AND n.body = p_body
-        AND (n.data->>'orderId') = (p_data->>'orderId')
-    ) THEN
-      RETURN;
-    END IF;
-    INSERT INTO public.notifications(user_id, contact_id, title, body, data)
-    VALUES (p_user_id, p_contact_id, p_title, p_body, p_data);
-  ELSE
-    IF EXISTS (
-      SELECT 1 FROM public.notifications n
-      WHERE n.contact_id = p_contact_id
-        AND n.title = p_title
-        AND n.body = p_body
-        AND (n.data->>'orderId') = (p_data->>'orderId')
-    ) THEN
-      RETURN;
-    END IF;
-    INSERT INTO public.notifications(user_id, contact_id, title, body, data)
-    VALUES (p_user_id, p_contact_id, p_title, p_body, p_data);
-  END IF;
-END;
+  if p_title is null or btrim(p_title) = ''
+     or p_body is null or btrim(p_body) = '' then
+    return;
+  end if;
+
+  if p_user_id is not null then
+    if exists (
+      select 1
+      from public.notifications n
+      where n.user_id = p_user_id
+        and n.title = p_title
+        and n.body = p_body
+        and (n.data->>'orderId') = (p_data->>'orderId')
+    ) then
+      return;
+    end if;
+
+    insert into public.notifications(user_id, contact_id, title, body, data)
+    values (p_user_id, p_contact_id, p_title, p_body, p_data);
+
+  else
+    if exists (
+      select 1
+      from public.notifications n
+      where n.contact_id = p_contact_id
+        and n.title = p_title
+        and n.body = p_body
+        and (n.data->>'orderId') = (p_data->>'orderId')
+    ) then
+      return;
+    end if;
+
+    insert into public.notifications(user_id, contact_id, title, body, data)
+    values (p_user_id, p_contact_id, p_title, p_body, p_data);
+  end if;
+end;
 $$;
 
-CREATE OR REPLACE FUNCTION public.trg_create_notification()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.notification_events(type, target_type, target_id, payload)
-  VALUES (
-    'push',
-    CASE WHEN NEW.user_id IS NOT NULL THEN 'user' ELSE 'contact' END,
-    COALESCE(NEW.user_id, NEW.contact_id),
-    jsonb_build_object(
-      'title', NEW.title,
-      'body', NEW.body,
-      'data', NEW.data,
-      'user_id', NEW.user_id,
-      'contact_id', NEW.contact_id,
-      'notification_id', NEW.id
-    )
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
-
-DROP TRIGGER IF EXISTS trg_create_notification_event ON public.notifications;
-CREATE TRIGGER trg_create_notification_event
-AFTER INSERT ON public.notifications
-FOR EACH ROW EXECUTE FUNCTION public.trg_create_notification();
-
--- HELPER: Enqueue generic order notification (Avoid code duplication)
-CREATE OR REPLACE FUNCTION public.enqueue_order_notification(
-  p_order_id bigint,
-  p_short_id text,
-  p_client_id uuid,
-  p_client_contact_id uuid,
-  p_title text,
-  p_client_body text,
-  p_admin_body text
-) RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-BEGIN
-  IF NOT (pg_trigger_depth() > 0 OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid())) THEN
-    RAISE EXCEPTION 'Unauthorized';
-  END IF;
-
-  -- Client
-  IF p_client_id IS NOT NULL THEN
-    PERFORM public.dispatch_notification(
-      p_client_id, NULL, p_title, p_client_body, jsonb_build_object('orderId', p_order_id)
-    );
-  ELSIF p_client_contact_id IS NOT NULL THEN
-    PERFORM public.dispatch_notification(
-      NULL, p_client_contact_id, p_title, p_client_body, jsonb_build_object('orderId', p_order_id)
-    );
-  END IF;
-
-  -- Admin
-  PERFORM public.notify_admins(
-    p_title,
-    p_admin_body,
-    jsonb_build_object('orderId', p_order_id)
-  );
-END;
-$$;
-
--- ORDER INSERT TRIGGER (Consolidated)
-CREATE OR REPLACE FUNCTION public.orders_after_insert_notify()
-RETURNS trigger AS $$
-BEGIN
-  PERFORM public.enqueue_order_notification(
-    NEW.id,
-    NEW.short_id,
-    NEW.client_id,
-    NEW.client_contact_id,
-    '✅ Solicitud Recibida',
-    'Hemos recibido tu solicitud #' || NEW.short_id,
-    'Se creó la orden #' || NEW.short_id
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
-
-DROP TRIGGER IF EXISTS trg_orders_notify_creation ON public.orders;
-CREATE TRIGGER trg_orders_after_insert_notify
-AFTER INSERT ON public.orders
-FOR EACH ROW EXECUTE FUNCTION public.orders_after_insert_notify();
-
--- ORDER UPDATE TRIGGER (Consolidated)
-CREATE OR REPLACE FUNCTION public.orders_after_update_notify()
-RETURNS trigger AS $$
-BEGIN
-  -- 1. Assignment
-  IF NEW.assigned_to IS DISTINCT FROM OLD.assigned_to AND NEW.assigned_to IS NOT NULL THEN
-    PERFORM public.dispatch_notification(
-      NEW.assigned_to,
-      NULL,
-      '🛠️ Orden asignada',
-      'Se te asignó la orden #' || COALESCE(NEW.short_id::text, NEW.id::text),
-      jsonb_build_object('orderId', NEW.id)
-    );
-  END IF;
-
-  -- 2. Status Change
-  IF NEW.status IS DISTINCT FROM OLD.status THEN
-    PERFORM public.enqueue_order_notification(
-      NEW.id, NEW.short_id, NEW.client_id, NEW.client_contact_id,
-      'Estado actualizado',
-      'Tu orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' ahora está: ' || NEW.status,
-      'La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' → ' || NEW.status
-    );
-  END IF;
-
-  -- 3. Price Update
-  IF NEW.estimated_price IS DISTINCT FROM OLD.estimated_price THEN
-    PERFORM public.enqueue_order_notification(
-      NEW.id, NEW.short_id, NEW.client_id, NEW.client_contact_id,
-      'Precio estimado actualizado',
-      'El precio estimado de tu orden fue actualizado.',
-      'La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' actualizó su precio estimado.'
-    );
-  END IF;
-
-  -- 4. Amount Update
-  IF NEW.monto_cobrado IS DISTINCT FROM OLD.monto_cobrado THEN
-    PERFORM public.enqueue_order_notification(
-      NEW.id, NEW.short_id, NEW.client_id, NEW.client_contact_id,
-      'Monto actualizado',
-      'El monto cobrado de tu orden fue actualizado.',
-      'La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' actualizó su monto cobrado.'
-    );
-  END IF;
-
-  -- 5. Evidence Upload
-  IF NEW.evidence_photos IS DISTINCT FROM OLD.evidence_photos AND NEW.evidence_photos IS NOT NULL THEN
-    PERFORM public.enqueue_order_notification(
-      NEW.id, NEW.short_id, NEW.client_id, NEW.client_contact_id,
-      'Nueva evidencia subida',
-      'Se ha subido evidencia a tu orden.',
-      'La orden #' || COALESCE(NEW.short_id::text, NEW.id::text) || ' tiene nueva evidencia.'
-    );
-  END IF;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
-
-DROP TRIGGER IF EXISTS trg_orders_after_update_notify ON public.orders;
-CREATE TRIGGER trg_orders_after_update_notify
-AFTER UPDATE ON public.orders
-FOR EACH ROW EXECUTE FUNCTION public.orders_after_update_notify();
-
--- CLEANUP OLD TRIGGERS/FUNCTIONS
-DROP TRIGGER IF EXISTS trg_notify_price_update ON public.orders;
-DROP TRIGGER IF EXISTS trg_notify_amount_update ON public.orders;
-DROP TRIGGER IF EXISTS trg_notify_evidence_upload ON public.orders;
-DROP TRIGGER IF EXISTS trg_notify_alert_update ON public.orders;
-DROP TRIGGER IF EXISTS trg_orders_notify_status ON public.orders;
-DROP TRIGGER IF EXISTS trg_notify_assigned_collaborator ON public.orders;
-
--- Helper to get details (Updated for ENUM if needed, though JSON output handles it)
-CREATE OR REPLACE FUNCTION public.get_order_details_public(identifier text)
-RETURNS jsonb AS $$
-DECLARE
-  o RECORD;
-  res jsonb;
-BEGIN
-  o := NULL;
-  -- Same logic as before, status is now ENUM but will cast to text in JSON automatically or explicit
-  IF identifier ~ '^[0-9]+$' THEN
-    SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
-    FROM public.orders o2
-    LEFT JOIN public.services s ON s.id = o2.service_id
-    LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
-    WHERE o2.id = identifier::bigint
-    LIMIT 1;
-  ELSE
-    -- ... (shortened for brevity, assuming similar logic)
-    SELECT o2.*, s.name AS service_name, v.name AS vehicle_name INTO o
-    FROM public.orders o2
-    LEFT JOIN public.services s ON s.id = o2.service_id
-    LEFT JOIN public.vehicles v ON v.id = o2.vehicle_id
-    WHERE o2.short_id = identifier
-    LIMIT 1;
-  END IF;
-
-  IF o IS NULL THEN RETURN NULL; END IF;
-
-  res := jsonb_build_object(
-    'id', o.id,
-    'short_id', o.short_id,
-    'created_at', o.created_at,
-    'status', o.status,
-    'name', o.name,
-    'tracking_data', o.tracking_data,
-    'evidence_photos', o.evidence_photos,
-    'service', jsonb_build_object('name', o.service_name),
-    'vehicle', jsonb_build_object('name', o.vehicle_name),
-    'pickup', o.pickup,
-    'delivery', o.delivery,
-    'estimated_price', o.estimated_price,
-    'origin_coords', o.origin_coords,
-    'destination_coords', o.destination_coords
-  );
-  RETURN res;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
-GRANT EXECUTE ON FUNCTION public.get_order_details_public(text) TO anon, authenticated;
-
--- Indices dedup
-CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedup_idx
-ON public.notifications (user_id, title, body, ((data->>'orderId')))
-WHERE user_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedup_contact_idx
-ON public.notifications (contact_id, title, body, ((data->>'orderId')))
-WHERE contact_id IS NOT NULL;
-
--- Configs
-DO $$ BEGIN
-  PERFORM set_config('app.settings.send_push_url','https://fkprllkxyjtosjhtikxy.functions.supabase.co/process-outbox', true);
-EXCEPTION WHEN OTHERS THEN PERFORM 1; END $$;
-
--- 13) PROCESAMIENTO OUTBOX EN PRODUCCIÓN (pg_net + pg_cron)
--- Reencolar eventos atascados en 'processing' por más de N minutos
-create or replace function public.reset_stuck_notification_events(p_minutes int default 10)
-returns int language sql security definer set search_path = pg_catalog, public as $$
-  with upd as (
-    update public.notification_events
-    set status = 'retry', processing_started_at = null,
-        last_error = coalesce(last_error,'') || ' | reset_stuck',
-        attempts = attempts + 1
-    where status = 'processing' and processing_started_at < now() - make_interval(mins => p_minutes)
-    returning 1
-  )
-  select count(*) from upd;
-$$;
-
--- Pasar failed->retry respetando backoff y límite de intentos
-create or replace function public.plan_failed_retries(p_max_attempts int default 5, p_backoff_minutes int default 5)
-returns int language sql security definer set search_path = pg_catalog, public as $$
-  with upd as (
-    update public.notification_events
-    set status = 'retry', last_error = null
-    where status = 'failed' and attempts < p_max_attempts
-      and coalesce(processed_at, created_at) < now() - make_interval(mins => p_backoff_minutes)
-    returning 1
-  )
-  select count(*) from upd;
-$$;
-
--- Tick que invoca la función de procesamiento HTTP (edge function) y aplica housekeeping
-create or replace function public.process_outbox_tick(p_limit int default 50)
-returns jsonb language plpgsql security definer set search_path = pg_catalog, public as $$
+-- =========================
+-- TRIGGER: SEND PUSH
+-- =========================
+create or replace function public.trg_create_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
 declare
   _url text;
-  _secret text;
   _token text;
   _status int;
   _body text;
 begin
+  if new.user_id is null and new.contact_id is null then
+    return new;
+  end if;
+
   _url := coalesce(
-    current_setting('SEND_PUSH_URL', true),
-    current_setting('app.settings.send_push_url', true)
-  );
-  if coalesce(btrim(_url),'') = '' then
-    return jsonb_build_object('ok', false, 'error','send_push_url not configured');
-  end if;
-
-  _secret := coalesce(
-    current_setting('PUSH_INTERNAL_SECRET', true),
-    current_setting('app.settings.outbox_internal_secret', true)
-  );
-  if coalesce(btrim(_secret),'') = '' then
-    return jsonb_build_object('ok', false, 'error','outbox_internal_secret not configured');
-  end if;
-
-  _token := coalesce(
-    current_setting('SERVICE_ROLE_TOKEN', true),
-    current_setting('app.settings.service_role_token', true)
-  );
-  if coalesce(btrim(_token),'') = '' then
-    return jsonb_build_object('ok', false, 'error','service_role_token not configured');
-  end if;
-
-  -- Housekeeping previo
-  perform public.reset_stuck_notification_events(5);
-  perform public.plan_failed_retries(5, 5);
-
-  -- Llamada HTTP a la función de proceso con cabecera interna
-  select status, body into _status, _body
-  from net.http_post(
-    url := _url,
-    headers := jsonb_build_object(
-      'Content-Type','application/json',
-      'x-internal-secret', _secret,
-      'Authorization', 'Bearer ' || _token,
-      'apikey', _token
-    ),
-    body := jsonb_build_object('limit', p_limit)::text
+    current_setting('app.settings.send_push_url', true),
+    current_setting('SEND_PUSH_URL', true)
   );
 
-  return jsonb_build_object('ok', (_status between 200 and 299), 'status', _status, 'body', _body);
-exception when others then
-  insert into public.function_logs(fn_name, level, message, payload)
-  values ('process_outbox_tick','error', SQLERRM, jsonb_build_object('hint','net.http_post failed'));
-  return jsonb_build_object('ok', false, 'error', SQLERRM);
-end;
-$$;
+  _token := current_setting(
+    'app.settings.service_role_token', true
+  );
 
--- Programación automática cada minuto (pg_cron)
-DO $$ BEGIN
-  begin
-    perform cron.unschedule('process_outbox_every_minute');
-  exception when others then null; end;
-
-  begin
-    perform cron.schedule('process_outbox_every_minute', '*/1 * * * *', 'select public.process_outbox_tick(100);');
-  exception when others then
-    -- Fallback sin nombre
+  if coalesce(btrim(_url),'') <> ''
+     and coalesce(btrim(_token),'') <> '' then
     begin
-      perform cron.schedule('*/1 * * * *', 'select public.process_outbox_tick(100);');
-    exception when others then
-      perform 1;
-    end;
-  end;
-END $$;
+      select status, body
+      into _status, _body
+      from net.http_post(
+        url := regexp_replace(btrim(_url), '`', '', 'g'),
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization','Bearer ' || _token
+        ),
+        body := jsonb_build_object(
+          'user_id', new.user_id,
+          'contact_id', new.contact_id,
+          'title', new.title,
+          'body', new.body,
+          'data', new.data
+        )::text
+      );
 
-create or replace function public.invoke_process_outbox(p_limit int default 50)
-returns jsonb language plpgsql security definer set search_path = pg_catalog, public as $$
-declare
-  _is_admin boolean;
-begin
-  _is_admin := public.is_owner(auth.uid()) or public.is_admin(auth.uid());
-  if not _is_admin then
-    raise exception 'Unauthorized';
+      insert into public.function_logs(fn_name, level, message, payload)
+      values (
+        'trg_create_notification',
+        'info',
+        'send-push response',
+        jsonb_build_object('status', _status, 'body', _body)
+      );
+
+    exception when others then
+      insert into public.function_logs(fn_name, level, message, payload)
+      values (
+        'trg_create_notification',
+        'error',
+        sqlerrm,
+        jsonb_build_object('url', _url)
+      );
+    end;
   end if;
-  return public.process_outbox_tick(p_limit);
+
+  return new;
 end;
 $$;
-grant execute on function public.invoke_process_outbox(int) to authenticated;
 
--- Actualizar clave VAPID pública en la tabla de configuración de negocio
--- Clave generada para corregir el error: VAPID pública no configurada
+drop trigger if exists trg_create_notification_event on public.notifications;
+create trigger trg_create_notification_event
+after insert on public.notifications
+for each row execute function public.trg_create_notification();
 
-insert into public.business (id, business_name, vapid_public_key, push_vapid_key)
-values (
-  1, 
-  'Logística López Ortiz', 
-  'BCgYgK3ZJwHjR529P7BaTE27ImKc6Cl-BzJSr8h2KrnUeQXth7G2iuAqfS-8BUQ9qAQ8oAMjb76cAXzA3R0MUn8',
-  'BCgYgK3ZJwHjR529P7BaTE27ImKc6Cl-BzJSr8h2KrnUeQXth7G2iuAqfS-8BUQ9qAQ8oAMjb76cAXzA3R0MUn8'
-)
-on conflict (id) do update
-set 
-  vapid_public_key = excluded.vapid_public_key,
-  push_vapid_key = excluded.push_vapid_key;
+-- =========================
+-- CONFIGURACIÓN (URL)
+-- =========================
+do $$
+begin
+  perform set_config(
+    'app.settings.send_push_url',
+    'https://fkprllkxyjtosjhtikxy.functions.supabase.co/send-push',
+    false
+  );
+exception when others then
+  perform 1;
+end $$;
 
--- NOTA: Para que las notificaciones funcionen realmente, debes configurar la clave PRIVADA en las Edge Functions:
--- VAPID_PRIVATE_KEY=AFSWGqy7fZcFF3f63qgdKGBv474ISmREJOBS6T1UTSk
--- PUBLIC_VAPID_KEY=BCgYgK3ZJwHjR529P7BaTE27ImKc6Cl-BzJSr8h2KrnUeQXth7G2iuAqfS-8BUQ9qAQ8oAMjb76cAXzA3R0MUn8
+-- =========================
+-- CONFIGURACIÓN (SERVICE ROLE TOKEN)
+-- =========================
+select set_config(
+  'app.settings.service_role_token',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTc4ODM3MSwiZXhwIjoyMDc1MzY0MzcxfQ.-y6KYwb6H5pjGWeKLEVxvl4STvj8xpNKiKdd-247pSE',
+  false
+);
+
+
+
+
 
 -- Function to accept order with optional price update
 create or replace function public.accept_order_with_price(

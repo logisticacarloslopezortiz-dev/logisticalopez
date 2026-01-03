@@ -55,25 +55,18 @@ async function sendWebPush(sub: WebPushSubscription, payload: unknown) {
     throw new Error('invalid_vapid_public_key')
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 8000)
-  
-  try {
-    return await webPush.sendNotification(
-      { endpoint: sub.endpoint, keys: sub.keys as unknown as webPush.SubscriptionKeys },
-      JSON.stringify(payload),
-      {
-        vapidDetails: {
-          subject,
-          publicKey: pub,
-          privateKey: priv
-        },
-        TTL: 2592000
-      }
-    )
-  } finally {
-    clearTimeout(timeout)
-  }
+  return await webPush.sendNotification(
+    { endpoint: sub.endpoint, keys: sub.keys as unknown as webPush.SubscriptionKeys },
+    JSON.stringify(payload),
+    {
+      vapidDetails: {
+        subject,
+        publicKey: pub,
+        privateKey: priv
+      },
+      TTL: 2592000
+    }
+  )
 }
 
 interface NotificationEvent {
@@ -108,7 +101,7 @@ async function resolveSubscriptions(targetType: 'user' | 'contact', targetId: st
 }
 
 async function handleEvent(event: NotificationEvent) {
-  // attempts already incremented by RPC
+  // attempts already incremented by RPC, status already set to 'processing'
   const attempts = event.attempts
   
   try {
@@ -234,6 +227,8 @@ async function processPending(limit = 10) {
 }
 
 Deno.serve(async (req: Request) => {
+  console.log('[process-outbox] invoked') // Debug: confirma que la función fue llamada
+  
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
   }
@@ -246,18 +241,23 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ success: false, error: 'unauthorized' }, 401)
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 50_000)
-
   try {
     const url = new URL(req.url)
-    const limit = Math.min(20, Math.max(1, parseInt(url.searchParams.get('limit') || '10')))
+    let limit = parseInt(url.searchParams.get('limit') || '')
+    if (!Number.isFinite(limit) || limit < 1) {
+      try {
+        const j = await req.json()
+        const b = typeof (j as any)?.limit === 'number' ? (j as any).limit : parseInt(String((j as any)?.limit || ''))
+        limit = Number.isFinite(b) && b > 0 ? b : 10
+      } catch (_) {
+        limit = 10
+      }
+    }
+    limit = Math.min(20, Math.max(1, limit))
 
     const result = await processPending(limit)
-    clearTimeout(timeout)
     return jsonResponse({ success: true, ...result })
   } catch (e) {
-    clearTimeout(timeout)
     const msg = e instanceof Error ? e.message : String(e)
     console.error('[process-outbox] Fatal:', msg)
     return jsonResponse({ error: msg }, 500)
