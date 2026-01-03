@@ -139,8 +139,8 @@ async function loadMetrics(collabId) {
   } catch (_) {}
 
   renderWeekly(completed);
-  renderServiceDistribution(orders);
-  renderVehicleDistribution(orders);
+  renderServiceDistribution(orders, collabId);
+  renderVehicleDistribution(orders, collabId);
   await renderUnifiedTable(collabId, completed);
 }
 
@@ -217,11 +217,12 @@ function getWeekCounts(orders) {
   return counts;
 }
 
-function renderServiceDistribution(orders) {
+function renderServiceDistribution(orders, collabId) {
   const ctx = document.getElementById('chartServices');
   if (!ctx || typeof Chart === 'undefined') return;
   const map = {};
   for (const o of (orders || [])) {
+    if (String(o.assigned_to || '') !== String(collabId || '')) continue;
     let s = 'Otros';
     if (o.service && typeof o.service === 'object' && o.service.name) s = o.service.name;
     else if (typeof o.service === 'string') s = o.service;
@@ -237,11 +238,12 @@ function renderServiceDistribution(orders) {
   });
 }
 
-function renderVehicleDistribution(orders) {
+function renderVehicleDistribution(orders, collabId) {
   const ctx = document.getElementById('chartVehicles');
   if (!ctx || typeof Chart === 'undefined') return;
   const map = {};
   for (const o of (orders || [])) {
+    if (String(o.assigned_to || '') !== String(collabId || '')) continue;
     let v = 'Otros';
     if (o.vehicle && typeof o.vehicle === 'object' && o.vehicle.name) v = o.vehicle.name;
     else if (typeof o.vehicle === 'string') v = o.vehicle;

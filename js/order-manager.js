@@ -274,6 +274,52 @@ const OrderManager = {
       updatePayload.status = 'pending';
     }
 
+    // Prevalidar transición con el estado actual antes de RPC
+    try {
+      let pre = null;
+      const nId = this._normalizeOrderId(orderId);
+      if (Number.isFinite(nId)) {
+        const { data } = await supabaseConfig.client
+          .from('orders')
+          .select('tracking_data, id, short_id, status')
+          .eq('id', nId)
+          .maybeSingle();
+        pre = data || null;
+      }
+      if (!pre && typeof orderId === 'string') {
+        const { data } = await supabaseConfig.client
+          .from('orders')
+          .select('tracking_data, id, short_id, status')
+          .eq('short_id', orderId)
+          .maybeSingle();
+        pre = data || null;
+      }
+      if (pre) {
+        const dbs = String(pre.status || '').toLowerCase();
+        let phase = dbs;
+        if (dbs === 'pending') phase = 'pendiente';
+        else if (dbs === 'accepted') phase = 'aceptada';
+        else if (dbs === 'completed') phase = 'entregada';
+        else if (dbs === 'cancelled') phase = 'cancelada';
+        else if (dbs === 'in_progress' || dbs === 'en curso') {
+          if (Array.isArray(pre.tracking_data) && pre.tracking_data.length > 0) {
+            const lt = pre.tracking_data[pre.tracking_data.length - 1];
+            phase = String(lt?.ui_status || 'en_camino_recoger').toLowerCase();
+          } else {
+            phase = 'en_camino_recoger';
+          }
+        }
+        const allowed = STATE_FLOW[phase] || [];
+        if (ns !== 'cancelada' && ns !== 'entregada' && !allowed.includes(ns)) {
+          return { success: false, error: `Transición no permitida desde "${phase}" a "${ns}"` };
+        }
+        if (ns === 'entregada') {
+          const hasRoute = phase === 'en_camino_entregar' || (Array.isArray(pre.tracking_data) && pre.tracking_data.some(e => String(e?.ui_status || '').toLowerCase() === 'en_camino_entregar'));
+          if (!hasRoute) return { success: false, error: 'No puedes completar sin pasar por "En camino a entregar"' };
+        }
+      }
+    } catch (_) {}
+
     // Intentar primero vía RPC para evitar problemas de RLS en SELECT/UPDATE
     try {
       const normalizedId = this._normalizeOrderId(orderId);

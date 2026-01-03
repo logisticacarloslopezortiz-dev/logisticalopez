@@ -623,6 +623,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePrimaryActionButtons(order);
         initActiveMap(order);
         notifications?.success?.('Trabajo iniciado');
+        try {
+          await handleStatusUpdate('cargando', 'Cargando', null);
+        } catch(_){/* no-op */}
       }
     } catch (e) {
       notifications?.error?.(e?.message || 'No se pudo iniciar el trabajo');
@@ -631,7 +634,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   if (btnLoading) btnLoading.addEventListener('click', () => handleStatusUpdate('cargando', 'Cargando', btnLoading));
-  if (btnGoDeliver) btnGoDeliver.addEventListener('click', () => handleStatusUpdate('en_camino_entregar', 'En camino a entregar', btnGoDeliver));
+  if (btnGoDeliver) btnGoDeliver.addEventListener('click', () => {
+    const phase = getUiStatus(currentOrder);
+    if (phase !== 'cargando') {
+      try { notifications?.warning?.('Debes pasar por "Cargando" antes de entregar'); } catch(_){}
+      return;
+    }
+    handleStatusUpdate('en_camino_entregar', 'En camino a entregar', btnGoDeliver);
+  });
   
   if (btnComplete) btnComplete.addEventListener('click', async () => {
     const photos = Array.isArray(currentOrder?.evidence_photos) ? currentOrder.evidence_photos : [];
@@ -641,6 +651,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('evidenceInput')?.focus();
         document.getElementById('activeEvidence')?.scrollIntoView({ behavior: 'smooth' });
       } catch(_) {}
+      return;
+    }
+    const phase = getUiStatus(currentOrder);
+    if (phase !== 'en_camino_entregar') {
+      try { notifications?.warning?.('Debes estar "En camino a entregar" para completar'); } catch(_){}
       return;
     }
     if (confirm('¿Seguro que deseas completar esta solicitud?')) {
