@@ -211,14 +211,17 @@ $$;
 -- Generador de short_id
 create or replace function public.generate_order_short_id()
 returns text
-language plpgsql set search_path = pg_catalog, public as $$
+language plpgsql
+as $$
 declare
-  random_part text;
-  date_part text;
+  chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  result text := '';
+  i int;
 begin
-  random_part := upper(substring(md5(random()::text) from 1 for 6));
-  date_part := to_char(current_date, 'YYYYMMDD');
-  return 'ORD-' || date_part || '-' || random_part;
+  for i in 1..4 loop
+    result := result || substr(chars, floor(random()*length(chars)+1)::int, 1);
+  end loop;
+  return 'ORD-' || result;
 end;
 $$;
 
@@ -265,6 +268,7 @@ create table if not exists public.orders (
 create index if not exists idx_orders_status on public.orders(status);
 create index if not exists idx_orders_date on public.orders("date");
 create index if not exists idx_orders_short_id on public.orders(short_id);
+create index if not exists idx_orders_short_id_upper on public.orders(upper(short_id));
 create index if not exists idx_orders_assigned_to on public.orders(assigned_to);
 create index if not exists idx_orders_client_id on public.orders(client_id);
 create index if not exists idx_orders_created_at on public.orders(created_at);
@@ -356,7 +360,8 @@ begin
   if s in ('completada','completado','finalizada','terminada','entregado','entregada', 'completed') then return 'completed'; end if;
   if s in ('cancelada','cancelado','anulada', 'cancelled') then return 'cancelled'; end if;
   return 'pending';
-end $$;
+end;
+$$;
 
 -- Migration for orders.status (If exists as TEXT)
 DO $$ BEGIN
@@ -454,11 +459,22 @@ create or replace function public.submit_rating_v2(order_id bigint, service_star
 returns boolean language plpgsql security definer set search_path = pg_catalog, public as $$
 declare exists_order boolean;
 begin
+  -- 1. Verificar si existe la orden
   select exists(select 1 from public.orders where id = order_id) into exists_order;
   if not exists_order then
     return false;
   end if;
 
+  -- 2. Evitar doble calificación
+  if exists (
+    select 1 from public.orders
+    where id = order_id
+    and rating is not null
+  ) then
+    raise exception 'Este pedido ya fue calificado';
+  end if;
+
+  -- 3. Actualizar
   update public.orders
   set rating = jsonb_build_object(
       'service', greatest(1, least(5, service_stars)),
@@ -496,6 +512,45 @@ language sql stable security definer set search_path = pg_catalog, public as $$
   limit greatest(1, limit_count)
 $$;
 grant execute on function public.get_public_testimonials(int) to anon, authenticated;
+
+drop function if exists public.resolve_order_for_rating(text);
+create or replace function public.resolve_order_for_rating(p_code text)
+returns table (
+  id bigint,
+  is_completed boolean
+)
+security definer
+language plpgsql
+as $$
+declare
+  v_clean text;
+begin
+  -- 1. Intentamos convertir a número directamente
+  begin
+    return query
+    select o.id, (o.status = 'completed' or o.completed_at is not null) as is_completed
+    from public.orders o
+    where o.id = p_code::bigint
+    limit 1;
+    
+    if found then return; end if;
+  exception when others then
+    -- No es número, continuamos
+    null;
+  end;
+
+  -- 2. Busqueda por short_id (con/sin prefijo ORD-)
+  v_clean := upper(regexp_replace(trim(p_code), '^ORD-', '', 'i'));
+  
+  return query
+  select o.id, (o.status = 'completed' or o.completed_at is not null) as is_completed
+  from public.orders o
+  where upper(trim(o.short_id)) = v_clean
+     or upper(trim(o.short_id)) = 'ORD-' || v_clean
+  limit 1;
+end;
+$$;
+grant execute on function public.resolve_order_for_rating(text) to anon, authenticated;
 
 -- Push subscriptions
 create table if not exists public.push_subscriptions (
@@ -824,11 +879,20 @@ alter table public.clients enable row level security;
 -- Limpieza
 drop policy if exists public_read_vehicles on public.vehicles;
 drop policy if exists admin_all_access_vehicles on public.vehicles;
+drop policy if exists admin_insert_vehicles on public.vehicles;
+drop policy if exists admin_update_vehicles on public.vehicles;
+drop policy if exists admin_delete_vehicles on public.vehicles;
 drop policy if exists public_read_services on public.services;
 drop policy if exists admin_all_access_services on public.services;
+drop policy if exists admin_insert_services on public.services;
+drop policy if exists admin_update_services on public.services;
+drop policy if exists admin_delete_services on public.services;
 drop policy if exists public_read_profiles on public.profiles;
 drop policy if exists users_update_own_profile on public.profiles;
 drop policy if exists admin_manage_profiles on public.profiles;
+drop policy if exists admin_insert_profiles on public.profiles;
+drop policy if exists admin_update_profiles on public.profiles;
+drop policy if exists admin_delete_profiles on public.profiles;
 drop policy if exists public_insert_pending_orders on public.orders;
 drop policy if exists clients_view_own_orders on public.orders;
 drop policy if exists public_read_pending_orders on public.orders;
@@ -839,19 +903,45 @@ drop policy if exists collaborator_self_manage on public.collaborators;
 drop policy if exists collaborator_self_select on public.collaborators;
 drop policy if exists collaborator_self_update on public.collaborators;
 drop policy if exists admin_manage_collaborators on public.collaborators;
+drop policy if exists collaborator_select_self on public.collaborators;
+drop policy if exists collaborator_update_self on public.collaborators;
+drop policy if exists admin_insert_collaborators on public.collaborators;
+drop policy if exists admin_delete_collaborators on public.collaborators;
 drop policy if exists owner_full_access_business on public.business;
+drop policy if exists owner_select_business on public.business;
+drop policy if exists owner_update_business on public.business;
+drop policy if exists owner_insert_business on public.business;
+drop policy if exists owner_delete_business on public.business;
 drop policy if exists user_manage_own_notifications on public.notifications;
 drop policy if exists admin_manage_notifications on public.notifications;
+drop policy if exists user_select_own_notifications on public.notifications;
+drop policy if exists user_update_own_notifications on public.notifications;
+drop policy if exists user_delete_own_notifications on public.notifications;
+drop policy if exists admin_select_notifications on public.notifications;
+drop policy if exists admin_insert_notifications on public.notifications;
 drop policy if exists user_manage_own_push_subscriptions on public.push_subscriptions;
 drop policy if exists admin_read_push_subscriptions on public.push_subscriptions;
+drop policy if exists user_select_own_push on public.push_subscriptions;
+drop policy if exists user_insert_own_push on public.push_subscriptions;
+drop policy if exists user_update_own_push on public.push_subscriptions;
+drop policy if exists user_delete_own_push on public.push_subscriptions;
 drop policy if exists client_read_own_receipts on public.order_completion_receipts;
 drop policy if exists collaborator_manage_assigned_receipts on public.order_completion_receipts;
+drop policy if exists collaborator_select_assigned_receipts on public.order_completion_receipts;
 drop policy if exists admin_manage_receipts on public.order_completion_receipts;
+drop policy if exists admin_select_receipts on public.order_completion_receipts;
+drop policy if exists admin_update_receipts on public.order_completion_receipts;
+drop policy if exists admin_delete_receipts on public.order_completion_receipts;
 drop policy if exists owner_admin_all_invoices on public.invoices;
+drop policy if exists admin_select_invoices on public.invoices;
+drop policy if exists admin_insert_invoices on public.invoices;
+drop policy if exists admin_update_invoices on public.invoices;
+drop policy if exists admin_delete_invoices on public.invoices;
 drop policy if exists client_read_own_invoices on public.invoices;
 drop policy if exists function_logs_read_admin on public.function_logs;
 drop policy if exists clients_insert_any on public.clients;
 drop policy if exists clients_select_any on public.clients;
+drop policy if exists clients_select_auth on public.clients;
 
 -- Policies split (Granular)
 
@@ -907,6 +997,7 @@ create policy user_update_own_push on public.push_subscriptions for update using
 create policy user_delete_own_push on public.push_subscriptions for delete using (user_id = auth.uid());
 create policy admin_read_push_subscriptions on public.push_subscriptions for select using (public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
 
+drop policy if exists anon_insert_push_by_contact on public.push_subscriptions;
 create policy anon_insert_push_by_contact on public.push_subscriptions for insert to anon, authenticated with check (client_contact_id is not null);
 
 -- Notifications
@@ -956,6 +1047,10 @@ drop policy if exists admin_select_orders on public.orders;
 drop policy if exists admin_update_orders on public.orders;
 drop policy if exists admin_insert_orders on public.orders;
 drop policy if exists admin_delete_orders on public.orders;
+drop policy if exists orders_insert_public on public.orders;
+drop policy if exists orders_select_policy on public.orders;
+drop policy if exists orders_update_collaborator on public.orders;
+drop policy if exists orders_all_admin on public.orders;
 
 -- 1. Insert (Public)
 create policy orders_insert_public on public.orders for insert with check (
@@ -1486,12 +1581,15 @@ create table if not exists public.collaborator_active_jobs (
 create index if not exists idx_active_jobs_collab on public.collaborator_active_jobs(collaborator_id);
 create index if not exists idx_active_jobs_order on public.collaborator_active_jobs(order_id);
 alter table public.collaborator_active_jobs enable row level security;
+drop policy if exists active_jobs_select on public.collaborator_active_jobs;
 create policy active_jobs_select on public.collaborator_active_jobs for select using (
   collaborator_id = auth.uid() or public.is_owner(auth.uid()) or public.is_admin(auth.uid())
 );
+drop policy if exists active_jobs_insert on public.collaborator_active_jobs;
 create policy active_jobs_insert on public.collaborator_active_jobs for insert with check (
   collaborator_id = auth.uid() or public.is_owner(auth.uid()) or public.is_admin(auth.uid())
 );
+drop policy if exists active_jobs_delete on public.collaborator_active_jobs;
 create policy active_jobs_delete on public.collaborator_active_jobs for delete using (
   collaborator_id = auth.uid() or public.is_owner(auth.uid()) or public.is_admin(auth.uid())
 );

@@ -629,18 +629,30 @@ async function generatePDF(order) {
 }
 
 async function sendRatingLink(order){
-  const code = String(order.short_id || order.id || '').trim();
-  const link = `https://logisticalopezortiz.com/calificar.html?pedido=${encodeURIComponent(code)}`;
+  let shortCode = String(order.short_id || '').trim();
+  if (!shortCode) {
+    try {
+      const { data } = await supabaseConfig.client
+        .from('orders')
+        .select('short_id')
+        .eq('id', order.id)
+        .maybeSingle();
+      if (data?.short_id) shortCode = String(data.short_id).trim();
+    } catch(_) {}
+  }
+  // Fallback extremo: si no hay short_id, usa id, pero siempre muestra texto con #
+  const displayCode = shortCode || String(order.id || '').trim();
+  const link = `https://logisticalopezortiz.com/calificar.html?pedido=${encodeURIComponent(shortCode || displayCode)}`;
   const phone = String(order.phone || '').replace(/\D/g, '');
   const hasPhone = phone.length >= 8;
   const email = order.client_email || order.email || '';
   if (hasPhone) {
-    const msg = encodeURIComponent(`Hola ${order.name || ''}, por favor califica nuestro servicio: ${link}`);
+    const msg = encodeURIComponent(`Hola ${order.name || ''}, por favor califica nuestro servicio #${displayCode}: ${link}`);
     const wa = `https://wa.me/${phone}?text=${msg}`;
     window.open(wa, '_blank');
   } else if (email) {
     const subj = encodeURIComponent('Califica nuestro servicio');
-    const body = encodeURIComponent(`Hola ${order.name || ''}, por favor califica nuestro servicio: ${link}`);
+    const body = encodeURIComponent(`Hola ${order.name || ''}, por favor califica nuestro servicio #${displayCode}: ${link}`);
     window.location.href = `mailto:${email}?subject=${subj}&body=${body}`;
   } else {
     try { await navigator.clipboard.writeText(link); } catch(_) {}

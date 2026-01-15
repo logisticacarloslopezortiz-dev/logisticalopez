@@ -5,213 +5,262 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Calificar Servicio</title>
   <meta name="theme-color" content="#1E405A" />
-  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
-  <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="img/android-chrome-192x192.png" />
-  <link rel="icon" type="image/png" sizes="512x512" href="img/android-chrome-512x512.png" />
+
   <link href="css/tailwind.min.css" rel="stylesheet">
   <link href="css/custom-styles.css" rel="stylesheet">
+
   <style>
-    :root{ --color-primario:#1E405A; --color-secundario:#1E8A95; --color-acento:#FBBF24; }
-    .text-azulOscuro{ color: var(--color-primario); }
+    :root{ --color-primario:#1E405A; --color-secundario:#1E8A95; }
     .bg-azulClaro{ background: linear-gradient(90deg,var(--color-secundario), #06b6d4); }
     .btn-primary{ background-color: var(--color-primario); color:#fff; }
     .btn-primary:hover{ background-color:#163346; }
-    .btn-acento{ background-color: var(--color-acento); color:#1f2937; }
-    .btn-acento:hover{ filter: brightness(0.95); }
   </style>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
+
 <body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
-  <div class="w-full max-w-md">
-    <div class="bg-azulClaro rounded-t-xl p-4 flex items-center gap-3">
-      <img src="img/1vertical.png" alt="LLO" class="h-10 w-10 rounded"/>
-      <div>
-        <h1 class="text-white text-xl font-bold">Logística López Ortiz</h1>
-        <p class="text-white/90 text-sm">Califica tu servicio</p>
-      </div>
+
+<div class="w-full max-w-md">
+  
+  <!-- Encabezado similar a seguimiento -->
+  <div class="text-center mb-8">
+    <div class="mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4 bg-gray-100">
+      <i data-lucide="star" class="w-10 h-10 text-yellow-500"></i>
     </div>
-    <div class="bg-white rounded-b-xl shadow-lg p-6">
-      <p class="text-gray-600 mb-4">Tu opinión nos ayuda a mejorar. Toma 30 segundos.</p>
-    <form id="orderLookupForm" class="hidden space-y-3 mb-4">
-      <label class="block text-sm font-medium text-gray-700">ID de seguimiento</label>
-      <input id="lookupInput" type="text" class="w-full border rounded-lg p-2" placeholder="Ej: TLC01 o UUID" maxlength="40" />
-      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg py-2">Buscar pedido</button>
-      <div id="lookupResult" class="hidden mt-2 text-sm"></div>
-    </form>
-    <form id="ratingForm" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Calificación del Servicio</label>
-        <select id="serviceRating" class="w-full border rounded-lg p-2" required>
-          <option value="">Selecciona…</option>
-          <option value="5">5 - Excelente</option>
-          <option value="4">4 - Muy bueno</option>
-          <option value="3">3 - Bueno</option>
-          <option value="2">2 - Regular</option>
-          <option value="1">1 - Malo</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Calificación del Colaborador</label>
-        <select id="collabRating" class="w-full border rounded-lg p-2" required>
-          <option value="">Selecciona…</option>
-          <option value="5">5 - Excelente</option>
-          <option value="4">4 - Muy bueno</option>
-          <option value="3">3 - Bueno</option>
-          <option value="2">2 - Regular</option>
-          <option value="1">1 - Malo</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">¿Qué tal fue la experiencia con la página y el proceso de su solicitud?</label>
-        <textarea id="comment" class="w-full border rounded-lg p-2" rows="4" placeholder="Describe tu experiencia"></textarea>
-      </div>
-      <button type="submit" class="w-full btn-primary text-white font-semibold rounded-lg py-2">Enviar Calificación</button>
-    </form>
-    <div id="result" class="hidden mt-4 p-3 rounded-lg text-sm"></div>
-    </div>
+    <h1 class="text-3xl font-bold text-gray-900">Calificar Servicio</h1>
+    <p class="text-gray-600 mt-2">Ingresa el ID de tu orden para calificar.</p>
   </div>
 
-  <script src="vendor/supabase.umd.js"></script>
-  <script src="js/supabase-config.js"></script>
+  <div class="bg-white rounded-2xl shadow-xl p-8">
+    
+    <!-- BUSCAR PEDIDO (Estilo Seguimiento) -->
+    <div id="searchSection" class="space-y-6">
+      <div class="relative">
+        <i data-lucide="hash" class="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+        <input 
+          type="text" 
+          id="lookupInput" 
+          name="orderId" 
+          autocomplete="off" 
+          inputmode="text" 
+          class="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow uppercase" 
+          placeholder="Ej: ORD-23H4" 
+          maxlength="40" 
+          aria-label="ID de pedido"
+        >
+      </div>
+      
+      <button id="searchBtn" class="w-full py-4 rounded-xl font-semibold text-white transition-transform transform hover:scale-105 btn-primary">
+        Buscar Pedido
+      </button>
 
-  <script>
-document.addEventListener('DOMContentLoaded', async () => {
-  if (!window.supabaseConfig?.client) {
-    alert('Error de configuración. Intenta más tarde.');
-    return;
-  }
+      <div id="lookupResult" class="hidden p-3 rounded-lg text-center text-sm font-medium"></div>
+    </div>
+
+    <!-- FORM CALIFICACIÓN -->
+    <form id="ratingForm" class="hidden space-y-6 mt-6 border-t pt-6">
+      
+      <div class="text-center mb-4">
+        <h2 class="text-lg font-semibold text-gray-800">Orden #<span id="displayOrderId"></span></h2>
+        <span class="inline-block px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Completada</span>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Califica el Servicio</label>
+          <select id="serviceRating" class="w-full pl-4 pr-10 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500" required>
+            <option value="">Seleccionar...</option>
+            <option value="5">⭐⭐⭐⭐⭐ - Excelente</option>
+            <option value="4">⭐⭐⭐⭐ - Muy bueno</option>
+            <option value="3">⭐⭐⭐ - Bueno</option>
+            <option value="2">⭐⭐ - Regular</option>
+            <option value="1">⭐ - Malo</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Califica al Colaborador</label>
+          <select id="collabRating" class="w-full pl-4 pr-10 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500" required>
+            <option value="">Seleccionar...</option>
+            <option value="5">⭐⭐⭐⭐⭐ - Excelente</option>
+            <option value="4">⭐⭐⭐⭐ - Muy bueno</option>
+            <option value="3">⭐⭐⭐ - Bueno</option>
+            <option value="2">⭐⭐ - Regular</option>
+            <option value="1">⭐ - Malo</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Comentario (Opcional)</label>
+          <textarea
+            id="comment"
+            rows="3"
+            class="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+            placeholder="¿Qué te pareció el servicio?"
+          ></textarea>
+        </div>
+      </div>
+
+      <button id="submitBtn" class="w-full py-4 rounded-xl font-semibold text-white transition-transform transform hover:scale-105 bg-green-600 hover:bg-green-700">
+        Enviar Calificación
+      </button>
+    </form>
+    
+    <div id="result" class="hidden mt-4 p-3 rounded-lg text-center text-sm font-medium"></div>
+
+    <div class="text-center mt-6">
+      <a href="index.html" class="text-sm hover:underline text-gray-500">
+        &larr; Volver al inicio
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<script src="vendor/supabase.umd.js"></script>
+<script src="js/supabase-config.js"></script>
+
+<script>
+  lucide.createIcons();
+
+  document.addEventListener('DOMContentLoaded', async () => {
 
   const supabase = supabaseConfig.client;
 
-  const params = new URLSearchParams(location.search);
-  const rawParam = (params.get('pedido') || '').trim();
-
-  const form = document.getElementById('ratingForm');
-  const result = document.getElementById('result');
-  const lookupForm = document.getElementById('orderLookupForm');
   const lookupInput = document.getElementById('lookupInput');
+  const searchBtn = document.getElementById('searchBtn');
   const lookupResult = document.getElementById('lookupResult');
-  const submitBtn = form.querySelector('button[type="submit"]');
+  const ratingForm = document.getElementById('ratingForm');
+  const result = document.getElementById('result');
+  const searchSection = document.getElementById('searchSection');
+  const displayOrderId = document.getElementById('displayOrderId');
 
   let orderId = null;
-  let isSubmitting = false;
 
-  // -----------------------------
-  // UTIL
-  // -----------------------------
-  const showMsg = (el, msg, type = 'info') => {
-    const map = {
-      success: 'bg-green-100 text-green-800',
-      error: 'bg-red-100 text-red-800',
-      warn: 'bg-yellow-100 text-yellow-800',
-      info: 'bg-blue-100 text-blue-800'
-    };
-    el.className = `mt-4 p-3 rounded-lg text-sm ${map[type] || map.info}`;
+  const showMsg = (el, msg, type) => {
+    el.className = `p-3 rounded-lg text-center text-sm font-medium ${type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`;
     el.textContent = msg;
     el.classList.remove('hidden');
   };
 
-  const resolveOrderId = async (value) => {
-    const isNumeric = /^\d+$/.test(value);
-    let q = supabase.from('orders').select('id');
+  const hideMsg = (el) => el.classList.add('hidden');
 
-    if (isNumeric) {
-      // Si es numérico, buscamos en ID o short_id
-      q = q.or(`id.eq.${value},short_id.eq.${value}`);
-    } else {
-      // Si no es numérico, solo buscamos en short_id (evita error de tipo bigint en id)
-      q = q.eq('short_id', value);
+  async function resolveOrder(inputVal) {
+    // Usamos el mismo RPC robusto que el backend
+    const { data, error } = await supabase.rpc(
+      'resolve_order_for_rating',
+      { p_code: inputVal }
+    );
+    if (error || !data?.length) return null;
+    return data[0];
+  }
+
+  const handleSearch = async () => {
+    hideMsg(lookupResult);
+    const val = lookupInput.value.trim();
+    
+    if (!val) {
+      showMsg(lookupResult, 'Por favor ingresa un ID.', 'error');
+      return;
     }
 
-    const { data, error } = await q.maybeSingle();
-    if (error || !data?.id) return null;
-    return data.id;
-  };
+    searchBtn.disabled = true;
+    searchBtn.textContent = 'Buscando...';
 
-  // -----------------------------
-  // SI NO VIENE POR URL
-  // -----------------------------
-  if (!rawParam) {
-    form.classList.add('hidden');
-    lookupForm.classList.remove('hidden');
-
-    lookupForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      lookupResult.classList.add('hidden');
-
-      const v = lookupInput.value.trim();
-      if (!v) return;
-
-      const id = await resolveOrderId(v);
-      if (!id) {
+    try {
+      const order = await resolveOrder(val);
+      
+      if (!order) {
         showMsg(lookupResult, 'No encontramos el pedido. Verifica el ID.', 'error');
         return;
       }
 
-      orderId = id;
-      showMsg(lookupResult, 'Pedido encontrado. Puedes calificar.', 'success');
-      lookupForm.classList.add('hidden');
-      form.classList.remove('hidden');
-    });
+      if (!order.is_completed) {
+        showMsg(lookupResult, 'El pedido aún está en proceso. Podrás calificarlo al finalizar.', 'error');
+        return;
+      }
 
-    return;
-  }
+      // Éxito
+      orderId = order.id;
+      displayOrderId.textContent = val.toUpperCase();
+      
+      // Ocultar búsqueda y mostrar form (animación simple)
+      searchBtn.classList.add('hidden');
+      lookupInput.disabled = true;
+      ratingForm.classList.remove('hidden');
+      lookupResult.classList.add('hidden');
 
-  // -----------------------------
-  // SI VIENE POR URL
-  // -----------------------------
-  orderId = await resolveOrderId(rawParam);
-  if (!orderId) {
-    form.classList.add('hidden');
-    lookupForm.classList.remove('hidden');
-    showMsg(lookupResult, 'No encontramos el pedido. Verifica el ID.', 'error');
-    return;
-  }
+    } catch (err) {
+      console.error(err);
+      showMsg(lookupResult, 'Error de conexión. Intenta nuevamente.', 'error');
+    } finally {
+      searchBtn.disabled = false;
+      searchBtn.textContent = 'Buscar Pedido';
+    }
+  };
 
-  // -----------------------------
-  // SUBMIT RATING
-  // -----------------------------
-  form.addEventListener('submit', async (e) => {
+  searchBtn.addEventListener('click', handleSearch);
+  
+  lookupInput.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') handleSearch();
+  });
+
+  ratingForm.addEventListener('submit', async e => {
     e.preventDefault();
-    if (isSubmitting) return;
+    hideMsg(result);
 
     const s = Number(document.getElementById('serviceRating').value);
     const c = Number(document.getElementById('collabRating').value);
     const comment = document.getElementById('comment').value.trim();
+    const btn = document.getElementById('submitBtn');
 
     if (!s || !c) {
-      showMsg(result, 'Debes seleccionar ambas calificaciones.', 'warn');
+      showMsg(result, 'Por favor selecciona ambas calificaciones.', 'error');
       return;
     }
 
-    if (comment && comment.length < 10) {
-      showMsg(result, 'El comentario debe tener al menos 10 caracteres.', 'warn');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    const { error } = await supabase.rpc('submit_rating_v2', {
+      order_id: orderId,
+      service_stars: s,
+      collab_stars: c,
+      comment
+    });
+
+    if (error) {
+      // Si ya fue calificado (mensaje del RPC) u otro error
+      showMsg(result, error.message || 'Error al guardar la calificación.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Enviar Calificación';
       return;
     }
 
-    try {
-      isSubmitting = true;
-      submitBtn.disabled = true;
-
-      const { error } = await supabase.rpc('submit_rating_v2', {
-        order_id: orderId,
-        service_stars: s,
-        collab_stars: c,
-        comment
-      });
-
-      if (error) throw error;
-
-      showMsg(result, '¡Gracias! Tu calificación fue registrada.', 'success');
-      form.classList.add('hidden');
-
-    } catch (err) {
-      showMsg(result, err.message || 'Error al guardar calificación.', 'error');
-      isSubmitting = false;
-      submitBtn.disabled = false;
-    }
+    ratingForm.classList.add('hidden');
+    searchSection.classList.add('hidden'); // Ocultar todo el bloque de búsqueda
+    
+    // Mostrar mensaje final de éxito en el contenedor principal o reemplazando todo
+    result.className = 'mt-6 p-6 bg-green-50 border border-green-200 rounded-xl text-center';
+    result.innerHTML = `
+      <div class="flex flex-col items-center justify-center">
+        <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+          <i data-lucide="check" class="w-8 h-8 text-green-600"></i>
+        </div>
+        <h3 class="text-xl font-bold text-green-800 mb-2">¡Gracias por tu opinión!</h3>
+        <p class="text-green-700">Nos ayudas a mejorar nuestro servicio.</p>
+        <button onclick="window.location.reload()" class="mt-6 px-6 py-2 bg-white border border-green-200 rounded-lg text-green-700 hover:bg-green-50 font-medium transition-colors">
+          Calificar otro pedido
+        </button>
+      </div>
+    `;
+    result.classList.remove('hidden');
+    lucide.createIcons();
   });
+
 });
 </script>
+
 </body>
+
 </html>

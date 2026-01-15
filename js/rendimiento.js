@@ -51,6 +51,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  if (validation?.collaborator) {
+    setText('sidebarCollabName', validation.collaborator.name || 'Colaborador');
+    setText('sidebarCollabMatricula', validation.collaborator.matricula || '');
+  } else {
+    try {
+      const { data: collab } = await supabaseConfig.client
+        .from('collaborators')
+        .select('name, matricula')
+        .eq('id', userId)
+        .maybeSingle();
+      if (collab) {
+        setText('sidebarCollabName', collab.name || 'Colaborador');
+        setText('sidebarCollabMatricula', collab.matricula || '');
+      }
+    } catch (_) {}
+  }
+
   if (!validation?.isValid) {
     console.warn('[AUTH] Validación fallida:', validation?.error);
 
@@ -126,16 +143,16 @@ async function loadMetrics(collabId) {
     const mine = orders.filter(o => o.assigned_to === collabId);
 
     completed = mine.filter(o =>
-      String(o.status || '').toLowerCase() === 'completed'
+      ['completed', 'completada', 'entregada'].includes(String(o.status || '').toLowerCase())
     );
 
-    if (!document.getElementById('metricAssigned')?.textContent) {
+    if (!document.getElementById('metricAssigned')?.textContent || document.getElementById('metricAssigned').textContent === '0') {
       setText('metricAssigned', mine.length);
     }
-    if (!document.getElementById('metricCompleted')?.textContent) {
+    if (!document.getElementById('metricCompleted')?.textContent || document.getElementById('metricCompleted').textContent === '0') {
       setText('metricCompleted', completed.length);
     }
-    if (!document.getElementById('metricAvgTime')?.textContent) {
+    if (!document.getElementById('metricAvgTime')?.textContent || document.getElementById('metricAvgTime').textContent === '0h') {
       setText('metricAvgTime', formatAvgTime(completed));
     }
   } catch (_) {}
@@ -172,6 +189,19 @@ async function loadMetrics(collabId) {
     const avg = ratings.length ? (ratings.reduce((a,b)=>a+b,0) / ratings.length) : 0;
     const val = avg ? `${avg.toFixed(1)}★` : '—';
     setText('myAvgRating', val);
+  } catch (_) {}
+
+  // Save to Cache
+  try {
+    const cacheData = {
+      metrics: {
+        assigned: document.getElementById('metricAssigned')?.textContent,
+        completed: document.getElementById('metricCompleted')?.textContent,
+        avgTime: document.getElementById('metricAvgTime')?.textContent
+      },
+      completed: completed
+    };
+    localStorage.setItem('tlc_rendimiento_cache_' + collabId, JSON.stringify(cacheData));
   } catch (_) {}
 
   renderWeekly(completed);
@@ -312,7 +342,7 @@ function countThisMonth(orders) {
 function renderRecentTable(completed) {
   const body = document.getElementById('recentTable');
   if (!body) return;
-  const rows = (completed || []).slice(-10).reverse().map(o => {
+  const rows = (completed || []).slice(0, 10).map(o => {
     const id = o.short_id ? String(o.short_id) : (o.id ? `#${o.id}` : '—');
     const cliente = o.name || 'Cliente';
     const serv = (o.service && o.service.name) ? o.service.name : (o.service || '—');

@@ -51,12 +51,10 @@
     <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
       <a href="panel-colaborador.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="clipboard-list" class="w-5 h-5"></i> <span class="sidebar-text">Solicitudes</span></a>
       <a href="rendimiento.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="bar-chart-3" class="w-5 h-5"></i> <span class="sidebar-text">Rendimiento</span></a>
-      <button id="collabCollapseBtnNav" class="flex items-center gap-3 px-4 py-3 rounded-lg text-left"><i data-lucide="panel-left-close" class="w-5 h-5"></i> <span class="sidebar-text">Colapsar</span></button>
-      <button id="collabLogoutBtnNav" class="flex items-center gap-3 px-4 py-3 rounded-lg text-left"><i data-lucide="log-out" class="w-5 h-5"></i> <span class="sidebar-text">Cerrar Sesión</span></button>
+      <button id="collabCollapseBtnNav" class="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-[var(--amarillo)] hover:text-[var(--azul)] text-white"><i data-lucide="panel-left-close" class="w-5 h-5"></i> <span class="sidebar-text">Colapsar</span></button>
+      <button id="collabLogoutBtnNav" class="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-[var(--amarillo)] hover:text-[var(--azul)] text-white"><i data-lucide="log-out" class="w-5 h-5"></i> <span class="sidebar-text">Cerrar Sesión</span></button>
     </nav>
     <div class="sidebar-footer p-4">
-      <button id="sidebar-toggle" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-sm"><i id="sidebar-toggle-icon" data-lucide="panel-left-close" class="w-5 h-5"></i><span class="sidebar-text font-medium">Colapsar</span></button>
-      <button id="logout-button" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg mt-2 text-sm"><i data-lucide="log-out" class="w-5 h-5"></i><span class="sidebar-text font-medium">Cerrar Sesión</span></button>
     </div>
   </aside>
   <main id="main-content" class="main-content p-6 max-w-7xl mx-auto">
@@ -128,6 +126,10 @@
                 <div class="bg-white p-3 rounded-lg shadow-sm border">
                   <p class="text-xs text-gray-500 font-medium">Dirección Origen</p>
                   <p id="activeJobPickup" class="text-sm text-gray-800 break-words"></p>
+                </div>
+                <div class="bg-white p-3 rounded-lg shadow-sm border">
+                  <p class="text-xs text-gray-500 font-medium">Dirección Destino</p>
+                  <p id="activeJobDelivery" class="text-sm text-gray-800 break-words"></p>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow-sm border">
                   <p class="text-xs text-gray-500 font-medium">Vehículo</p>

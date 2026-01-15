@@ -113,6 +113,23 @@ const OrderManager = {
       return await this.actualizarEstadoPedido(orderId, 'aceptada', additionalData);
     }
 
+    // Prevalidar que el colaborador no tenga otra orden activa
+    try {
+      const collabId = additionalData?.collaborator_id || null;
+      if (collabId) {
+        const { data: conflicts } = await supabaseConfig.client
+          .from('orders')
+          .select('id,status')
+          .eq('assigned_to', collabId)
+          .in('status', ['accepted', 'in_progress'])
+          .limit(1);
+        if (Array.isArray(conflicts) && conflicts.length > 0) {
+          this._toast('Ya tienes una orden activa', 'error');
+          return { success: false, data: null, error: 'Ya tienes una orden activa' };
+        }
+      }
+    } catch (_) {}
+
     const hasPrice = typeof additionalData?.estimated_price === 'number' && !isNaN(additionalData.estimated_price);
     const fnName = 'accept_order_with_price';
     const rpcPayload = { p_order_id: normalizedId, p_price: hasPrice ? additionalData.estimated_price : null };
@@ -128,8 +145,13 @@ const OrderManager = {
           hint: error.hint, 
           code: error.code
         });
-        this._toast(`RPC error: ${error.message || 'falló'}. Aplicando fallback…`, 'warning');
-        return await this.actualizarEstadoPedido(orderId, 'aceptada', additionalData);
+        const msg = String(error?.message || '');
+        if (/ya tienes una orden activa/i.test(msg) || String(error?.code || '') === 'P0001') {
+          this._toast('Ya tienes una orden activa', 'error');
+          return { success: false, data: null, error: msg };
+        }
+        this._toast(`RPC error: ${error.message || 'falló'}`, 'warning');
+        return { success: false, data: null, error: error.message || 'RPC falló' };
       }
 
       console.log('[OrderManager] RPC accept_order OK', data);
@@ -137,8 +159,8 @@ const OrderManager = {
       return { success: true, data, error: null };
     } catch (error) {
       console.error('[OrderManager] Exception en RPC accept_order:', error);
-      this._toast(`Error inesperado: ${error.message || 'falló'}. Aplicando fallback…`, 'warning');
-      return await this.actualizarEstadoPedido(orderId, 'aceptada', additionalData);
+      this._toast(`Error inesperado: ${error.message || 'falló'}`, 'warning');
+      return { success: false, data: null, error: error.message || 'Excepción RPC' };
     }
   },
 
@@ -359,7 +381,11 @@ const OrderManager = {
       console.warn('[OrderManager] RPC update_order_status falló, aplicando flujo directo:', {
         message: rpcError?.message, details: rpcError?.details, hint: rpcError?.hint, code: rpcError?.code
       });
-      // Si falla RPC, continuar con el flujo directo (SELECT + UPDATE)
+      // Si falla RPC en aceptación, NO aplicar flujo directo para respetar regla de negocio
+      if (ns === 'aceptada' || ns === 'accepted') {
+        return { success: false, error: rpcError?.message || 'No se pudo aceptar la orden' };
+      }
+      // Para otros estados, continuar con el flujo directo (SELECT + UPDATE)
     } catch (rpcEx) {
       console.warn('[OrderManager] Excepción en RPC update_order_status, aplicando flujo directo:', rpcEx?.message);
       // Continuar con el flujo directo

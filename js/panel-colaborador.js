@@ -737,6 +737,21 @@ document.addEventListener('DOMContentLoaded', () => {
       overlay.classList.remove('hidden');
       overlay.classList.add('flex');
     }
+    
+    // CACHE FIRST: Cargar datos locales inmediatamente
+    try {
+      const cached = localStorage.getItem('tlc_collab_orders_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          orders = parsed;
+          renderOrders();
+          // Si hay cache, ocultamos overlay temporalmente mientras carga lo nuevo en background
+          if (overlay) overlay.classList.add('hidden');
+        }
+      }
+    } catch (_) {}
+
     try {
       const ok = await ensureAuthOrRedirect();
       if (!ok) return;
@@ -798,6 +813,9 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Filtrar órdenes no finalizadas (ya filtradas en SQL)
       orders = rawOrders.filter(o => !isFinalOrder(o));
+      
+      // Guardar en cache
+      try { localStorage.setItem('tlc_collab_orders_cache', JSON.stringify(orders)); } catch(_) {}
 
       renderOrders();
 
@@ -916,11 +934,20 @@ function renderOrders() {
             const { data: { session } } = await supabaseConfig.client.auth.getSession();
             const userId = session?.user?.id;
             if (!userId) throw new Error('Sesión inválida');
-            const v = await supabaseConfig.validateActiveCollaborator?.(userId);
-            if (v && !v.isValid) throw new Error('Sesión inválida');
+        const v = await supabaseConfig.validateActiveCollaborator?.(userId);
+        if (v && !v.isValid) throw new Error('Sesión inválida');
 
-            const res = await OrderManager.acceptOrder(o.id, { collaborator_id: userId });
-            if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
+        // Bloquear aceptación local si ya existe un trabajo activo asignado
+        const hasActive = orders.some(x => x.assigned_to === userId && !isFinalOrder(x));
+        if (hasActive) {
+          notifications?.error?.('Ya tienes una orden activa');
+          btn.disabled = false;
+          btn.textContent = 'Aceptar';
+          return;
+        }
+
+        const res = await OrderManager.acceptOrder(o.id, { collaborator_id: userId });
+        if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
 
             notifications?.success?.('Orden aceptada');
             try {
@@ -1206,11 +1233,53 @@ function renderOrders() {
     window.location.href = 'login-colaborador.html';
   });
   if (collapseBtnNav) collapseBtnNav.addEventListener('click', () => {
-    const footerToggle = document.getElementById('sidebar-toggle');
-    if (footerToggle) { try { footerToggle.click(); } catch(_){} return; }
     const sidebar = document.getElementById('sidebar');
-    if (sidebar) sidebar.classList.toggle('md:translate-x-0');
+    const mainContent = document.getElementById('main-content');
+    const sidebarTexts = document.querySelectorAll('.sidebar-text');
+    
+    // Check current state
+    const isCollapsed = sidebar.classList.contains('w-20');
+    
+    if (isCollapsed) {
+        // Expand
+        sidebar.classList.remove('w-20');
+        sidebar.classList.add('w-64');
+        if (mainContent) {
+          mainContent.classList.remove('md:ml-20');
+          mainContent.classList.add('md:ml-64');
+        }
+        sidebarTexts.forEach(el => el.classList.remove('hidden'));
+    } else {
+        // Collapse
+        sidebar.classList.add('w-20');
+        sidebar.classList.remove('w-64');
+        if (mainContent) {
+          mainContent.classList.add('md:ml-20');
+          mainContent.classList.remove('md:ml-64');
+        }
+        sidebarTexts.forEach(el => el.classList.add('hidden'));
+    }
+    try { localStorage.setItem('sidebarCollapsed', !isCollapsed); } catch(_) {}
   });
+
+  // Apply initial sidebar state
+  try {
+    if (localStorage.getItem('sidebarCollapsed') === 'true') {
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        const sidebarTexts = document.querySelectorAll('.sidebar-text');
+        
+        if (sidebar && window.innerWidth >= 768) {
+            sidebar.classList.add('w-20');
+            sidebar.classList.remove('w-64');
+            if (mainContent) {
+                mainContent.classList.add('md:ml-20');
+                mainContent.classList.remove('md:ml-64');
+            }
+            sidebarTexts.forEach(el => el.classList.add('hidden'));
+        }
+    }
+  } catch(_) {}
 
   // Ajuste: reforzar sesión antes de aceptar órdenes
   (function strengthenAcceptFlow(){
