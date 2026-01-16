@@ -39,11 +39,15 @@ Deno.serve(async (req: Request) => {
   if (!user_id && !contact_id) return jsonResponse({ success: false, error: 'missing_target' }, 400, req)
 
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 9000)
     const resp = await fetch(`${FUNCTIONS_BASE}/send-notification`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_ROLE}` },
-      body: JSON.stringify(user_id ? { user_id, notification: payload } : { contact_id, notification: payload })
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_ROLE}`, 'Accept': 'application/json' },
+      body: JSON.stringify(user_id ? { user_id, notification: payload } : { contact_id, notification: payload }),
+      signal: controller.signal
     })
+    clearTimeout(timeout)
     const data = await resp.json().catch(() => ({}))
     if (resp.ok && data && data.success) {
       return jsonResponse({ success: true, delegated: true, data }, 200, req)

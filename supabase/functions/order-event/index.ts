@@ -69,13 +69,20 @@ async function resolveOrderId(id: unknown) {
 
 async function sendTo(target: { user_id?: string; contact_id?: string }, notification: any) {
   const body = target.user_id ? { user_id: target.user_id, notification } : { contact_id: target.contact_id, notification }
-  const resp = await fetch(`${FUNCTIONS_BASE}/send-notification`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_ROLE}` },
-    body: JSON.stringify(body)
-  })
-  const data = await resp.json().catch(() => ({}))
-  return { ok: resp.ok, data }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 9000)
+  try {
+    const resp = await fetch(`${FUNCTIONS_BASE}/send-notification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_ROLE}`, 'Accept': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+    const data = await resp.json().catch(() => ({}))
+    return { ok: resp.ok, data }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -137,24 +144,33 @@ Deno.serve(async (req: Request) => {
       const cid = String((c as any).id || '').trim()
       addTarget('user', cid)
     }
+    const jobs: Array<{ t: { type: 'user' | 'contact'; id: string }; title: string; bodyStr: string; p: Promise<{ ok: boolean; data: any }> }> = []
     for (const t of uniqueTargets.values()) {
       const role = t.type === 'contact' ? 'cliente' : (t.id === ownerId ? 'admin' as const : 'colaborador' as const)
       const tpl = await getTemplate('created', role)
       const title = tpl.title.replace('{{id}}', String(orderKey))
       const bodyStr = tpl.body.replace('{{id}}', String(orderKey))
       const payload = { title, body: bodyStr, icon: absolutize('/img/android-chrome-192x192.png'), badge: absolutize('/img/favicon-32x32.png'), data: { orderId: resolvedId, short_id: ord?.short_id || null, url } }
-      const res = await sendTo(t.type === 'user' ? { user_id: t.id } : { contact_id: t.id }, payload)
-      targets++
-      if (res.ok) sent++
-      try {
-        await supabase.rpc('dispatch_notification', {
-          p_user_id: t.type === 'user' ? t.id : null,
-          p_contact_id: t.type === 'contact' ? t.id : null,
-          p_title: title,
-          p_body: bodyStr,
-          p_data: { orderId: resolvedId }
-        })
-      } catch (_) {}
+      const p = sendTo(t.type === 'user' ? { user_id: t.id } : { contact_id: t.id }, payload).catch(() => ({ ok: false, data: null }))
+      jobs.push({ t, title, bodyStr, p })
+    }
+    targets = uniqueTargets.size
+    const results = await Promise.allSettled(jobs.map(j => j.p))
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]
+      if (r.status === 'fulfilled' && r.value && r.value.ok) {
+        sent++
+        const j = jobs[i]
+        try {
+          await supabase.rpc('dispatch_notification', {
+            p_user_id: j.t.type === 'user' ? j.t.id : null,
+            p_contact_id: j.t.type === 'contact' ? j.t.id : null,
+            p_title: j.title,
+            p_body: j.bodyStr,
+            p_data: { orderId: resolvedId }
+          })
+        } catch (_) {}
+      }
     }
     return jsonResponse({ success: true, event: 'created', targets, sent })
   }
