@@ -15,14 +15,92 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/admin-panel-styles.css?v=20251204">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-
-  <!-- Scripts de Supabase (cargados primero) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js?v=20251204"></script>
+  <style>
+    .login-hero {
+      position: relative;
+      height: 96px;
+      margin-bottom: 1.5rem;
+    }
+    .login-hero-line {
+      position: absolute;
+      left: 1.25rem;
+      right: 1.25rem;
+      top: 50%;
+      height: 4px;
+      border-radius: 9999px;
+      background: linear-gradient(to right, #22c55e, #0ea5e9, #6366f1);
+      opacity: 0.9;
+    }
+    .login-hero-stops {
+      position: absolute;
+      left: 1.25rem;
+      right: 1.25rem;
+      top: 50%;
+      transform: translateY(-170%);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+    .login-hero-stop {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+      background-color: rgba(15, 23, 42, 0.85);
+      color: #f9fafb;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .login-hero-truck {
+      position: absolute;
+      top: 50%;
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #22c55e, #0ea5e9);
+      color: white;
+      font-size: 1.25rem;
+      box-shadow: 0 18px 35px rgba(15, 23, 42, 0.5);
+      transform: translate(-50%, -50%);
+      animation: login-truck-move 6s ease-in-out infinite;
+    }
+    @keyframes login-truck-move {
+      0% {
+        left: 12%;
+      }
+      50% {
+        left: 88%;
+      }
+      100% {
+        left: 12%;
+      }
+    }
+    .tilt-card {
+      transform-style: preserve-3d;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+  </style>
 </head>
 <body class="bg-[#0C375D] flex justify-center items-center h-screen">
 
-  <main class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+  <main class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md tilt-card">
+    <div class="login-hero">
+      <div class="login-hero-line"></div>
+      <div class="login-hero-stops">
+        <span class="login-hero-stop">Recogida</span>
+        <span class="login-hero-stop">En ruta</span>
+        <span class="login-hero-stop">Entrega</span>
+      </div>
+      <div class="login-hero-truck">
+        <i data-lucide="truck" class="w-5 h-5"></i>
+      </div>
+    </div>
     <div class="flex flex-col items-center mb-6">
       <img src="img/1vertical.png" alt="Logo de la empresa" class="w-24 h-24 object-contain mb-3">
       <h1 class="text-2xl font-bold text-center text-azulOscuro">Panel LLO - Login</h1>
@@ -83,8 +161,6 @@
     // --- INICIO: Lógica de Login Mejorada ---
 
     document.addEventListener('DOMContentLoaded', () => {
-      // --- INICIO: Verificación de sesión con Supabase ---
-      // En lugar de usar localStorage, verificamos la sesión real de Supabase.
       const urlParams = new URLSearchParams(window.location.search);
       const redirectTo = urlParams.get('redirect') || 'inicio.html';
 
@@ -110,17 +186,13 @@
       // --- INICIO: Lógica de Login con Supabase ---
       loginForm.addEventListener('submit', async (event) => {
         event.preventDefault();
-        errorMsg.classList.add('hidden'); // Ocultar error previo
+        errorMsg.classList.add('hidden');
 
         const username = usernameInput.value;
         const password = passwordInput.value;
         
-        // Reemplaza la simulación con la lógica de Supabase
         try {
-          // --- INICIO: Lógica de Login Segura con Supabase Auth ---
           console.log('Intentando iniciar sesión con:', username);
-          
-          // Iniciar sesión con Supabase Auth
           const { data: authData, error } = await supabaseConfig.client.auth.signInWithPassword({
             email: username,
             password: password,
@@ -133,7 +205,6 @@
             const appRoles = (user?.app_metadata?.roles || user?.app_metadata?.role || []);
             const isServiceRole = appRoles.includes('service_role');
 
-            // Usar RPC para una verificación de rol segura en el backend.
             const { data: isAdmin, error: rpcError } = await supabaseConfig.client.rpc('is_admin');
 
             if (rpcError) {
@@ -159,11 +230,25 @@
           }
           errorMsg.classList.remove('hidden');
         }
-        // --- FIN: Lógica de Login Segura con Supabase Auth ---
       });
-      // --- FIN: Lógica de Login con Supabase ---
+      const tiltElement = document.querySelector('.tilt-card');
+      if (tiltElement) {
+        const maxRotate = 10;
+        tiltElement.addEventListener('mousemove', (event) => {
+          const rect = tiltElement.getBoundingClientRect();
+          const x = (event.clientX - rect.left) / rect.width - 0.5;
+          const y = (event.clientY - rect.top) / rect.height - 0.5;
+          const rotateX = (-y * maxRotate).toFixed(2);
+          const rotateY = (x * maxRotate).toFixed(2);
+          tiltElement.style.transform = "rotateX(" + rotateX + "deg) rotateY(" + rotateY + "deg)";
+          tiltElement.style.boxShadow = "0 20px 40px rgba(15, 23, 42, 0.45)";
+        });
+        tiltElement.addEventListener('mouseleave', () => {
+          tiltElement.style.transform = "rotateX(0deg) rotateY(0deg)";
+          tiltElement.style.boxShadow = "";
+        });
+      }
     });
-    // --- FIN: Lógica de Login Mejorada ---
   </script>
   <script src="js/pwa.js?v=20251204"></script>
 

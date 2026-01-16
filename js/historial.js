@@ -150,7 +150,7 @@
 
     const loadHistory = async () => {
       const client = supabaseConfig.client;
-      let orders = [];rating, 
+      let orders = [];
       let err = null;
       const STATUS_OK = ['completed', 'cancelled'];
 
@@ -163,7 +163,7 @@
         histPageState.pageSize = size > 0 ? size : 15;
         const start = (histPageState.currentPage - 1) * histPageState.pageSize;
         const end = start + histPageState.pageSize - 1;
-        const sel = 'id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to, service:services(name), vehicle:vehicles(name)';
+        const sel = 'id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to,rating, service:services(name), vehicle:vehicles(name)';
         const resp = await (supabaseConfig.withAuthRetry?.(() => client
           .from('orders')
           .select(sel, { count: 'exact' })
@@ -183,7 +183,7 @@
         try {
           const { data } = await client
             .from('orders')
-            .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to, service:services(name), vehicle:vehicles(name)');
+            .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to,rating, service:services(name), vehicle:vehicles(name)');
           const filtered = (data || []).filter(o => STATUS_OK.includes(String(o.status || '').toLowerCase()));
           orders = filtered.sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime());
           err = null;
@@ -196,7 +196,7 @@
           if (pub) {
             const resp2 = await pub
               .from('orders')
-              .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to, service:services(name), vehicle:vehicles(name)', { count: 'exact' })
+              .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to,rating, service:services(name), vehicle:vehicles(name)', { count: 'exact' })
               .in('status', STATUS_OK)
               .order('completed_at', { ascending: false })
               .range(0, histPageState.pageSize - 1);
