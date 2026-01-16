@@ -431,7 +431,7 @@
 
       const { data: orders } = await supabaseConfig.client
         .from('orders')
-        .select('id, status, created_at, completed_at, service:services(name), vehicle:vehicles(name)')
+        .select('id, status, created_at, completed_at, rating, customer_comment, service:services(name), vehicle:vehicles(name)')
         .eq('assigned_to', id)
         .order('created_at', { ascending: false });
       const arr = Array.isArray(orders) ? orders : [];
@@ -441,6 +441,56 @@
       activeEl.textContent = String(active.length);
       const successRate = arr.length > 0 ? Math.round((completed.length / arr.length) * 100) : 0;
       successEl.textContent = `${successRate}%`;
+
+      // Renderizar lista de calificaciones
+      const ratingsListEl = document.getElementById('modalRatingsList');
+      if (ratingsListEl) {
+        ratingsListEl.innerHTML = '';
+        const ratedOrders = completed.filter(o => {
+          const r = o.rating || {};
+          const stars = Number(r.stars || r.service || 0);
+          const comment = o.customer_comment || r.comment;
+          return stars > 0 || !!comment;
+        });
+
+        if (ratedOrders.length === 0) {
+          ratingsListEl.innerHTML = '<p class="text-gray-500 text-center py-4 text-sm">No hay calificaciones registradas.</p>';
+        } else {
+          ratedOrders.forEach(o => {
+            const r = o.rating || {};
+            const stars = Number(r.stars || r.service || 0);
+            const comment = o.customer_comment || r.comment || 'Sin comentario';
+            const serviceName = o.service?.name || 'Servicio';
+            const dateStr = new Date(o.completed_at || o.created_at).toLocaleDateString('es-ES');
+
+            // Generar estrellas
+            let starsHtml = '';
+            for (let i = 1; i <= 5; i++) {
+              if (i <= stars) {
+                starsHtml += '<i class="fas fa-star text-yellow-400 text-xs"></i>';
+              } else {
+                starsHtml += '<i class="far fa-star text-gray-300 text-xs"></i>';
+              }
+            }
+
+            const item = document.createElement('div');
+            item.className = 'bg-gray-50 p-3 rounded-lg border border-gray-100';
+            item.innerHTML = `
+              <div class="flex justify-between items-start mb-1">
+                <div>
+                  <p class="font-semibold text-gray-800 text-sm">${serviceName}</p>
+                  <p class="text-xs text-gray-500">Orden #${o.id} • ${dateStr}</p>
+                </div>
+                <div class="flex space-x-0.5">
+                  ${starsHtml}
+                </div>
+              </div>
+              <p class="text-gray-600 text-sm mt-2 italic">"${comment}"</p>
+            `;
+            ratingsListEl.appendChild(item);
+          });
+        }
+      }
 
       // Tiempo promedio: diferencia created_at → completed_at en horas
       const avgMs = completed

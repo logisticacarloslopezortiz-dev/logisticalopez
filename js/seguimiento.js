@@ -57,11 +57,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!x) return 'Pendiente';
     if (x === 'created') return 'Orden Recibida';
     if (x === 'pending' || x === 'pendiente') return 'Pendiente';
-    if (x === 'accepted' || x === 'aceptada') return 'Aceptada';
+    if (x === 'accepted' || x === 'aceptada' || x === 'assigned') return 'Aceptada';
     if (x === 'in_progress' || x === 'en curso') return 'En curso';
-    if (x === 'en_camino_recoger') return 'En camino a recoger';
-    if (x === 'cargando') return 'Cargando';
-    if (x === 'en_camino_entregar') return 'En camino a entregar';
+    if (x === 'en_camino_recoger' || x === 'en camino a recoger') return 'En camino a recoger';
+    if (x === 'cargando' || x === 'loading') return 'Cargando';
+    if (x === 'en_camino_entregar' || x === 'en camino a entregar') return 'En camino a entregar';
+    if (x === 'en_origen' || x === 'en origen') return 'En origen';
+    if (x === 'en_destino' || x === 'en destino') return 'En destino';
     if (x === 'completed' || x === 'completada' || x === 'entregado' || x === 'entregada') return 'Completada';
     if (x === 'cancelled' || x === 'cancelada') return 'Cancelada';
     if (x === 'delay' || x.includes('retraso')) return 'Retraso por tapón';
@@ -158,7 +160,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Limpiar clases de estado anteriores y añadir la nueva
     orderStatus.className = 'status-badge';
-    const statusEs = toSpanishStatus(order.status);
+    
+    let statusToDisplay = order.status;
+    // Si está en progreso, intentamos obtener el estado más detallado del historial
+    if ((order.status === 'in_progress' || order.status === 'En proceso') && Array.isArray(order.tracking_data) && order.tracking_data.length > 0) {
+      const last = order.tracking_data[order.tracking_data.length - 1];
+      if (last.ui_status) statusToDisplay = last.ui_status;
+      else if (last.status) statusToDisplay = last.status;
+    }
+
+    const statusEs = toSpanishStatus(statusToDisplay);
     const statusClass = `status-${(statusEs || 'Pendiente').replace(/\s+/g, '-')}`;
     orderStatus.classList.add(statusClass);
     orderStatus.textContent = statusEs;
@@ -265,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Normalizar y ordenar por fecha (soporta claves 'at' y 'date')
     const normalized = history.map(h => ({
-      status: toSpanishStatus(h.status || h.new_status || h.label || 'Pendiente'),
+      status: toSpanishStatus(h.ui_status || h.status || h.new_status || h.label || 'Pendiente'),
       notes: h.notes || h.comment || null,
       timestamp: h.at || h.date || h.timestamp || h.time || new Date().toISOString()
     })).filter(h => !!h.status);

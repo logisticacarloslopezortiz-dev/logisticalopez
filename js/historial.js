@@ -48,8 +48,21 @@
         const colaborador = completadoPor && completadoPor !== colaboradorAsignado ? `${colaboradorAsignado} → ${completadoPor}` : colaboradorAsignado;
         const precio = (o.monto_cobrado != null && o.monto_cobrado !== '') ? `RD$ ${Number(o.monto_cobrado).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
         const evidenceCount = Array.isArray(o.evidence_photos) ? o.evidence_photos.length : 0;
+        
+        let rowClass = 'bg-white';
+        const st = String(o.status || '').toLowerCase();
+        if (st === 'completed' || st === 'completada' || st === 'entregado' || st === 'entregada') {
+             // Si tiene calificación (o.rating no es null/undefined) -> verde
+             // Si NO tiene calificación -> amarillo
+             if (o.rating) {
+                 rowClass = 'bg-green-100 hover:bg-green-200';
+             } else {
+                 rowClass = 'bg-yellow-100 hover:bg-yellow-200';
+             }
+        }
+
         return `
-          <tr>
+          <tr class="${rowClass} border-b">
             <td class="table-cell">${id}</td>
             <td class="table-cell">${o.name || ''}</td>
             <td class="table-cell">${service}</td>
@@ -137,7 +150,7 @@
 
     const loadHistory = async () => {
       const client = supabaseConfig.client;
-      let orders = [];
+      let orders = [];rating, 
       let err = null;
       const STATUS_OK = ['completed', 'cancelled'];
 
