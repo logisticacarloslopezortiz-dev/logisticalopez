@@ -1614,6 +1614,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Si llegamos aquí, savedOrder está presente (puede no traer ID si hubo fallback RLS)
+        try {
+          const oid = savedOrder?.id ?? savedOrder?.short_id;
+          if (oid && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+            await supabaseConfig.client.functions.invoke('order-event', {
+              body: { event: 'created', orderId: oid }
+            });
+          }
+        } catch (e) {
+          console.warn('No se pudo emitir evento order-created:', e?.message || e);
+        }
         const displayCode = (savedOrder && (savedOrder.short_id || savedOrder.id)) ? (savedOrder.short_id || savedOrder.id) : null;
         
         // ✅ ACTUALIZACIÓN TARDÍA DE SUSCRIPCIÓN PUSH (RPC)

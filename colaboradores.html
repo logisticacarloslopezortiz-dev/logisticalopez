@@ -178,10 +178,10 @@
     </div>
   </main>
   <!-- Modal de Métricas -->
-  <div id="metricsModal" class="fixed inset-0 z-50 hidden">
+  <div id="metricsModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
     <div class="absolute inset-0 bg-black bg-opacity-50"></div>
-    <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-6xl flex items-center justify-center">
-      <div class="w-full bg-white rounded-xl shadow-2xl p-6 animate-fade-in-up">
+    <div class="relative z-10 min-h-full px-4 py-6 mx-auto max-w-6xl flex items-start justify-center">
+      <div class="w-full bg-white rounded-xl shadow-2xl p-6 animate-fade-in-up max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-6">
           <div class="flex items-center gap-3">
             <div id="modalCollabAvatar" class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg">C</div>
@@ -193,6 +193,28 @@
           <button id="closeMetricsModal" class="text-gray-500 hover:text-gray-700">
             <i data-lucide="x" class="w-6 h-6"></i>
           </button>
+        </div>
+
+        <!-- Controles del reporte -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          <div class="flex items-center gap-2">
+            <label for="modalRange" class="text-sm text-gray-600">Rango:</label>
+            <select id="modalRange" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <option value="7">Últimos 7 días</option>
+              <option value="30" selected>Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="all">Todo</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="modalToggleCharts" type="checkbox" checked class="rounded border-gray-300">
+            <label for="modalToggleCharts" class="text-sm text-gray-600">Mostrar gráficos</label>
+          </div>
+          <div class="flex items-center md:justify-end">
+            <button id="modalExportCsv" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm text-gray-800">
+              Exportar CSV
+            </button>
+          </div>
         </div>
 
         <!-- Métricas Principales -->
@@ -216,7 +238,7 @@
         </div>
 
         <!-- Gráficos y Estadísticas -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div id="modalChartsSection" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <!-- Actividad Semanal -->
           <div class="bg-white p-6 rounded-xl shadow-lg">
             <h4 class="text-lg font-semibold text-gray-800 mb-4">Actividad Semanal</h4>
@@ -256,7 +278,7 @@
         <!-- Ratings List Section -->
         <div class="mt-8">
           <h4 class="text-lg font-bold text-gray-800 mb-4">Historial de Calificaciones</h4>
-          <div id="modalRatingsList" class="space-y-4 max-h-60 overflow-y-auto pr-2">
+          <div id="modalRatingsList" class="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
             <!-- Ratings will be injected here -->
             <p class="text-gray-500 text-center py-4">Cargando calificaciones...</p>
           </div>

@@ -360,8 +360,8 @@ entrypoint = "./functions/delete-user/index.ts"
 # static_files = [ "./functions/delete-user/*.html" ]
 
 [functions.send-notification]
-enabled = false
-verify_jwt = true
+enabled = true
+verify_jwt = false
 import_map = "./functions/send-notification/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

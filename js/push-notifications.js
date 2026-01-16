@@ -333,6 +333,23 @@ window.pushNotifications = {
             throw error;
         }
     },
+    
+    async sendEdgeNotification({ toUserId, title, body, data }) {
+        try {
+            const client = supabaseConfig?.client;
+            if (!client || !client.functions || typeof client.functions.invoke !== 'function') {
+                throw new Error('Supabase Functions no disponible');
+            }
+            const { data: resp, error } = await client.functions.invoke('send-notification', {
+                body: { toUserId, title, body, data }
+            });
+            if (error) throw error;
+            return resp;
+        } catch (e) {
+            console.error('Edge notification error:', e);
+            throw e;
+        }
+    },
 
     get isEnabled() {
         return window.pushManager.isSubscribed;

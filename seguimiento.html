@@ -12,17 +12,18 @@
     .tracking-timeline-dot {
       position: absolute;
       top: 50%;
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
       border-radius: 9999px;
-      background-color: #ffffff;
-      border: 3px solid #0ea5e9;
-      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.35);
+      background-color: #0C375D;
+      border: 2px solid #0C375D;
+      box-shadow: 0 0 0 4px rgba(12, 55, 93, 0.35);
       transform: translate(-50%, -50%);
       animation: tracking-dot-move 5s ease-in-out infinite;
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
     }
     @keyframes tracking-dot-move {
       0% {
@@ -91,7 +92,8 @@
           <div class="relative h-2 rounded-full bg-gray-200 overflow-hidden">
             <div class="absolute inset-0 bg-gradient-to-r from-emerald-400 via-sky-500 to-indigo-500 opacity-90"></div>
             <div class="tracking-timeline-dot">
-              <i data-lucide="truck" class="w-4 h-4 text-sky-600"></i>
+              <i data-lucide="truck" class="w-5 h-5 text-white"></i>
+              <img src="img/2vertical.png" alt="LLO" class="absolute -bottom-1 -right-1 w-4 h-4 rounded-sm border border-white bg-white">
             </div>
           </div>
         </div>

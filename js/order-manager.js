@@ -222,6 +222,16 @@ const OrderManager = {
     // ✅ CORRECCIÓN: Asegurar que la sesión esté fresca ANTES de cualquier operación.
     // Esto previene los errores 401 por token expirado.
     await supabaseConfig.ensureFreshSession();
+    try {
+      if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+        const payload = { orderId, status: newStatus, collaborator_id: additionalData?.collaborator_id || null, extra: additionalData || {} };
+        const { data, error } = await supabaseConfig.client.functions.invoke('order-event', { body: payload });
+        if (!error && data && (data.success || data?.data?.success)) {
+          this._toast('Estado actualizado', 'success');
+          return { success: true, data, error: null };
+        }
+      }
+    } catch (_) {}
 
     const normalizedId = this._normalizeOrderId(orderId);
     const isNumeric = Number.isFinite(normalizedId);
@@ -571,6 +581,14 @@ const OrderManager = {
       }
       */
 
+      try {
+        if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+          const resolvedId = usedFilter?.val ?? orderId;
+          const payload = { orderId: resolvedId, status: ns, collaborator_id: additionalData?.collaborator_id || updatePayload?.assigned_to || null, extra: additionalData || {} };
+          await supabaseConfig.client.functions.invoke('order-event', { body: payload });
+        }
+      } catch (_) {}
+
       return { success: true, error: null };
 
     } catch (error) {
@@ -580,6 +598,9 @@ const OrderManager = {
     }
   }
 };
+
+async function notifyClientForOrder(orderId, newStatus) {}
+
 
 // Exportar a entorno global para consumo desde panel-colaborador
 try { if (typeof window !== 'undefined') { window.OrderManager = OrderManager; } } catch (_) {}

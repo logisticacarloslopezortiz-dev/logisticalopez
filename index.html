@@ -51,19 +51,68 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "name": "Logística López Ortiz",
-    "image": "https://logisticalopezortiz.com/img/android-chrome-512x512.png",
-    "@id": "https://logisticalopezortiz.com/",
-    "url": "https://logisticalopezortiz.com/",
-    "telephone": "+1-829-729-3822",
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": "San Cristóbal",
-      "addressLocality": "San Cristóbal",
-      "addressCountry": "DO"
-    },
-    "sameAs": "https://www.instagram.com/logisticalopezortizrd"
+    "@graph": [
+      {
+        "@type": "LocalBusiness",
+        "name": "Logística López Ortiz",
+        "image": "https://logisticalopezortiz.com/img/android-chrome-512x512.png",
+        "@id": "https://logisticalopezortiz.com/",
+        "url": "https://logisticalopezortiz.com/",
+        "telephone": "+1-829-729-3822",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "San Cristóbal",
+          "addressLocality": "San Cristóbal",
+          "addressCountry": "DO"
+        },
+        "sameAs": "https://www.instagram.com/logisticalopezortizrd"
+      },
+      {
+        "@type": "WebSite",
+        "url": "https://logisticalopezortiz.com/",
+        "name": "Logística López Ortiz",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://logisticalopezortiz.com/?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "ItemList",
+        "itemListElement": [
+          {
+            "@type": "SiteNavigationElement",
+            "position": 1,
+            "name": "Servicios",
+            "description": "Mudanzas, Carga Pesada, Fletes y Grúas",
+            "url": "https://logisticalopezortiz.com/#servicios"
+            "url": "https://logisticalopezortiz.com/servicios-transporte.html"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 2,
+            "name": "Solicitar Servicio",
+            "description": "Cotiza y solicita tu transporte ahora",
+            "url": "https://logisticalopezortiz.com/cliente.html"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 3,
+            "name": "Seguimiento",
+            "description": "Rastrea tu orden en tiempo real",
+            "url": "https://logisticalopezortiz.com/seguimiento.html"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 4,
+            "name": "Colaboradores",
+            "description": "Únete a nuestro equipo de transportistas",
+            "url": "https://logisticalopezortiz.com/#colaboradores"
+            "url": "https://logisticalopezortiz.com/colaboradores.html"
+          }
+        ]
+      }
+    ]
   }
   </script>
 
@@ -93,10 +142,12 @@
       <nav class="hidden md:flex items-center gap-6">
         <div class="flex gap-6 text-sm font-semibold">
           <a href="#nosotros" class="relative group">
+          <a href="nosotros.html" class="relative group">
             <span class="text-gray-700 hover:text-azulOscuro transition-colors">Nosotros</span>
             <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
           </a>
           <a href="#servicios" class="relative group">
+          <a href="servicios-transporte.html" class="relative group">
             <span class="text-gray-700 hover:text-azulOscuro transition-colors">Servicios</span>
             <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
           </a>
@@ -110,6 +161,8 @@
           </a>
           <a href="#colaboradores" class="relative group">
             <span class="text-gray-700 hover:text-azulOscuro transition-colors">Colaboración</span>
+          <a href="contacto.html" class="relative group">
+            <span class="text-gray-700 hover:text-azulOscuro transition-colors">Contacto</span>
             <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-acento group-hover:w-full transition-all duration-300"></span>
           </a>
         </div>
@@ -141,10 +194,12 @@
       <div class="container mx-auto py-4 px-6 space-y-4">
         <nav class="flex flex-col gap-3">
           <a href="#nosotros" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
+          <a href="nosotros.html" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
             <i class="fa-solid fa-users text-azulClaro group-hover:text-acento transition-colors"></i>
             <span class="font-medium">Nosotros</span>
           </a>
           <a href="#servicios" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
+          <a href="servicios-transporte.html" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
             <i class="fa-solid fa-truck-fast text-azulClaro group-hover:text-acento transition-colors"></i>
             <span class="font-medium">Servicios</span>
           </a>
@@ -159,6 +214,9 @@
           <a href="#colaboradores" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
             <i class="fa-solid fa-hands-helping text-azulClaro group-hover:text-acento transition-colors"></i>
             <span class="font-medium">Colaboración</span>
+          <a href="contacto.html" class="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg group transition-colors">
+            <i class="fa-solid fa-envelope text-azulClaro group-hover:text-acento transition-colors"></i>
+            <span class="font-medium">Contacto</span>
           </a>
         </nav>
         

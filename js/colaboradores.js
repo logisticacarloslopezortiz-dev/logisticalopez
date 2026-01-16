@@ -413,6 +413,7 @@
     try {
       await ensureChartJsLoaded();
       const modal = document.getElementById('metricsModal');
+      const overlay = modal?.querySelector('.absolute.inset-0');
       const nameEl = document.getElementById('modalCollabName');
       const emailEl = document.getElementById('modalCollabEmail');
       const avatarEl = document.getElementById('modalCollabAvatar');
@@ -422,6 +423,10 @@
       const avgTimeEl = document.getElementById('modalAvgTime');
       const timeStatsEl = document.getElementById('modalTimeStats');
       const vehicleStatsEl = document.getElementById('modalVehicleStats');
+      const rangeEl = document.getElementById('modalRange');
+      const chartsSection = document.getElementById('modalChartsSection');
+      const toggleChartsEl = document.getElementById('modalToggleCharts');
+      const exportCsvEl = document.getElementById('modalExportCsv');
       const collab = allCollaborators.find(c => String(c.id) === String(id));
       if (!collab) return;
 
@@ -435,11 +440,22 @@
         .eq('assigned_to', id)
         .order('created_at', { ascending: false });
       const arr = Array.isArray(orders) ? orders : [];
-      const completed = arr.filter(o => ['completada', 'completed', 'entregado', 'entregada'].includes(String(o.status).toLowerCase()));
-      const active = arr.filter(o => !['completada', 'completed', 'entregado', 'entregada', 'cancelada', 'cancelled'].includes(String(o.status).toLowerCase()));
+      const now = Date.now();
+      const selectedRange = (rangeEl && rangeEl.value) ? rangeEl.value : '30';
+      function withinRange(dStr) {
+        if (selectedRange === 'all') return true;
+        const days = Number(selectedRange) || 30;
+        if (!dStr) return false;
+        const t = new Date(dStr).getTime();
+        if (!Number.isFinite(t)) return false;
+        return (now - t) <= days * 24 * 3600 * 1000;
+      }
+      const filtered = arr.filter(o => withinRange(o.completed_at || o.created_at));
+      const completed = filtered.filter(o => ['completada', 'completed', 'entregado', 'entregada'].includes(String(o.status).toLowerCase()));
+      const active = filtered.filter(o => !['completada', 'completed', 'entregado', 'entregada', 'cancelada', 'cancelled'].includes(String(o.status).toLowerCase()));
       completedEl.textContent = String(completed.length);
       activeEl.textContent = String(active.length);
-      const successRate = arr.length > 0 ? Math.round((completed.length / arr.length) * 100) : 0;
+      const successRate = filtered.length > 0 ? Math.round((completed.length / filtered.length) * 100) : 0;
       successEl.textContent = `${successRate}%`;
 
       // Renderizar lista de calificaciones
@@ -514,7 +530,7 @@
 
       // Estadísticas de vehículos
       const vehCount = new Map();
-      arr.forEach(o => { const key = o.vehicle?.name || '—'; vehCount.set(key, (vehCount.get(key)||0)+1); });
+      filtered.forEach(o => { const key = o.vehicle?.name || '—'; vehCount.set(key, (vehCount.get(key)||0)+1); });
       vehicleStatsEl.innerHTML = Array.from(vehCount.entries()).map(([k,v]) => `<div class="flex items-center justify-between"><span class="text-gray-600">${k}</span><span class="font-semibold">${v}</span></div>`).join('');
 
       // Gráfico semanal
@@ -528,7 +544,7 @@
 
       // Gráfico de servicios
       const svcCount = new Map();
-      arr.forEach(o => { const key = o.service?.name || '—'; svcCount.set(key, (svcCount.get(key)||0)+1); });
+      filtered.forEach(o => { const key = o.service?.name || '—'; svcCount.set(key, (svcCount.get(key)||0)+1); });
       const labels = Array.from(svcCount.keys());
       const dataVals = Array.from(svcCount.values());
       const ctxS = document.getElementById('modalServicesChart');
@@ -544,6 +560,41 @@
       document.body.classList.add('overflow-hidden');
       const closeBtn = document.getElementById('closeMetricsModal');
       if (closeBtn) closeBtn.onclick = () => { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); };
+      if (overlay) overlay.addEventListener('click', () => { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); }, { once: true });
+      if (rangeEl) rangeEl.onchange = () => window.viewMetrics(String(id));
+      if (toggleChartsEl && chartsSection) {
+        chartsSection.classList.toggle('hidden', !toggleChartsEl.checked);
+        toggleChartsEl.onchange = () => chartsSection.classList.toggle('hidden', !toggleChartsEl.checked);
+      }
+      if (exportCsvEl) {
+        exportCsvEl.onclick = () => {
+          const rows = filtered.map(o => ({
+            id: o.id,
+            status: o.status,
+            created_at: o.created_at,
+            completed_at: o.completed_at || '',
+            rating_stars: Number((o.rating || {}).stars || (o.rating || {}).service || 0),
+            comment: o.customer_comment || (o.rating || {}).comment || '',
+            service: o.service?.name || '',
+            vehicle: o.vehicle?.name || ''
+          }));
+          const header = ['id','status','created_at','completed_at','rating_stars','comment','service','vehicle'];
+          const csv = [header.join(','), ...rows.map(r => header.map(h => {
+            const val = String(r[h] ?? '');
+            const safe = `"${val.replace(/"/g,'""')}"`;
+            return safe;
+          }).join(','))].join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `rendimiento_${collab.name || id}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        };
+      }
     } catch (e) { console.error('Error al abrir métricas:', e); }
   };
 
