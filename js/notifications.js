@@ -322,6 +322,39 @@ class NotificationSystem {
             }
         }
     }
+
+    // Suscribirse a notificaciones en tiempo real desde Supabase
+    subscribeToUserNotifications(userId) {
+        if (!userId || !window.supabaseConfig || !window.supabaseConfig.client) return;
+
+        // Evitar duplicar suscripción
+        if (this.subscription) {
+             window.supabaseConfig.client.removeChannel(this.subscription);
+        }
+
+        console.log('Suscribiendo a notificaciones para usuario:', userId);
+        this.subscription = window.supabaseConfig.client
+            .channel('public:notifications:' + userId)
+            .on('postgres_changes', { 
+                event: 'INSERT', 
+                schema: 'public', 
+                table: 'notifications', 
+                filter: `user_id=eq.${userId}` 
+            }, (payload) => {
+                const newNotif = payload.new;
+                if (newNotif) {
+                    this.show(newNotif.body, 'info', 10000, { 
+                        title: newNotif.title,
+                        data: newNotif.data
+                    });
+                    
+                    // Si es una notificación push, el SW también la manejará, pero aquí aseguramos que se vea en la app abierta
+                    const audio = new Audio('/sounds/notification.mp3'); // Asegúrate de tener este archivo o usa uno genérico
+                    try { audio.play(); } catch(e) {}
+                }
+            })
+            .subscribe();
+    }
 }
 
 // Instancia global

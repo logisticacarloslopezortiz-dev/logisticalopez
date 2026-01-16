@@ -1042,6 +1042,11 @@ function renderOrders() {
       if (uid) {
         // ✅ AUTOMATIZACIÓN: Registrar push al cargar
         registerCollaboratorPush(uid);
+        
+        // Suscribirse a notificaciones personales
+        if (window.notifications && window.notifications.subscribeToUserNotifications) {
+           window.notifications.subscribeToUserNotifications(uid);
+        }
 
         const ch = supabaseConfig.client.channel('orders-collab-v2');
         ch.on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async (payload) => {

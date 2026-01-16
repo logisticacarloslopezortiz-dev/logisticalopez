@@ -435,8 +435,8 @@
         .eq('assigned_to', id)
         .order('created_at', { ascending: false });
       const arr = Array.isArray(orders) ? orders : [];
-      const completed = arr.filter(o => String(o.status).toLowerCase() === 'completada');
-      const active = arr.filter(o => !['completada','cancelada'].includes(String(o.status).toLowerCase()));
+      const completed = arr.filter(o => ['completada', 'completed', 'entregado', 'entregada'].includes(String(o.status).toLowerCase()));
+      const active = arr.filter(o => !['completada', 'completed', 'entregado', 'entregada', 'cancelada', 'cancelled'].includes(String(o.status).toLowerCase()));
       completedEl.textContent = String(completed.length);
       activeEl.textContent = String(active.length);
       const successRate = arr.length > 0 ? Math.round((completed.length / arr.length) * 100) : 0;
@@ -502,7 +502,14 @@
 
       // Horario simple: conteo por día de la semana para órdenes completadas
       const counts = [0,0,0,0,0,0,0];
-      completed.forEach(o => { const d = new Date(o.completed_at); const idx = (d.getDay() || 7) - 1; counts[idx] += 1; });
+      completed.forEach(o => { 
+        const dStr = o.completed_at || o.created_at;
+        if (!dStr) return;
+        const d = new Date(dStr); 
+        if (isNaN(d.getTime())) return;
+        const idx = (d.getDay() || 7) - 1; 
+        counts[idx] += 1; 
+      });
       timeStatsEl.innerHTML = counts.map((c,i) => `<div class="flex items-center justify-between"><span class="text-gray-600">${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][i]}</span><span class="font-semibold">${c}</span></div>`).join('');
 
       // Estadísticas de vehículos

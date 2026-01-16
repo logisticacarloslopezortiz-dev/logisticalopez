@@ -938,6 +938,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 document.addEventListener('admin-session-ready', (e) => {
   if (!e.detail?.isAdmin) { return; }
+  
+  // Suscribirse a notificaciones personales
+  if (e.detail.userId && window.notifications) {
+    window.notifications.subscribeToUserNotifications(e.detail.userId);
+  }
+  
   initAdminOrdersPage();
 }, { once: true });
 

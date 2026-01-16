@@ -57,7 +57,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.tlcAdminReady = adminReady; // Flag global para scripts que carguen tarde
   document.dispatchEvent(
     new CustomEvent('admin-session-ready', {
-      detail: { isAdmin: adminReady }
+      detail: { 
+        isAdmin: adminReady,
+        userId: (adminReady && typeof session !== 'undefined') ? session.user.id : null 
+      }
     })
   );
 
