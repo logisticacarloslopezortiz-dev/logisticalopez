@@ -60,3 +60,37 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+
+const CACHE_NAME = 'tlc-static-v1';
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.hostname.endsWith('.supabase.co')) return;
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const net = await fetch(req);
+        const cache = await caches.open(CACHE_NAME);
+        try { await cache.put(req, net.clone()); } catch (_){}
+        return net;
+      } catch (_) {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(req);
+        return cached || Response.error();
+      }
+    })());
+    return;
+  }
+  const isStatic = /\.(?:js|css|png|jpg|jpeg|svg|ico|webp|gif|woff2?|ttf|eot|html)$/.test(url.pathname);
+  if (!isStatic) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(req);
+    const fetched = fetch(req).then(async (net) => {
+      try { await cache.put(req, net.clone()); } catch (_){}
+      return net;
+    }).catch(() => cached);
+    return cached || fetched;
+  })());
+});

@@ -6,6 +6,8 @@ const SERVICE_ROLE = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '').trim()
 const FUNCTIONS_BASE = SUPABASE_URL ? SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') : ''
 const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { autoRefreshToken: false, persistSession: false } })
+const ORDER_EVENT_SECRET = (Deno.env.get('ORDER_EVENT_SECRET') || '').trim()
+const SEND_NOTIFICATION_SECRET = (Deno.env.get('SEND_NOTIFICATION_SECRET') || '').trim()
 
 function absolutize(url: string): string {
   try {
@@ -74,7 +76,7 @@ async function sendTo(target: { user_id?: string; contact_id?: string }, notific
   try {
     const resp = await fetch(`${FUNCTIONS_BASE}/send-notification`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_ROLE}`, 'Accept': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SEND_NOTIFICATION_SECRET}`, 'Accept': 'application/json' },
       body: JSON.stringify(body),
       signal: controller.signal
     })
@@ -88,14 +90,25 @@ async function sendTo(target: { user_id?: string; contact_id?: string }, notific
 Deno.serve(async (req: Request) => {
   const cors = handleCors(req)
   if (cors) return cors
+  console.log('[order-event] REQUEST', { method: req.method, url: req.url })
   if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
   if (!SUPABASE_URL || !SERVICE_ROLE) return jsonResponse({ success: false, error: 'server_misconfigured' }, 500)
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+  if (!ORDER_EVENT_SECRET || authHeader !== `Bearer ${ORDER_EVENT_SECRET}`) {
+    console.log('[order-event] unauthorized request')
+    return jsonResponse({ success: false, error: 'unauthorized' }, 401)
+  }
   let body: any = {}
-  try { body = await req.json() } catch { return jsonResponse({ success: false, error: 'invalid_json' }, 400) }
-  const eventType = String(body?.event || '').trim() || 'status_changed'
+  try { body = await req.json() } catch (err) { console.error('[order-event] invalid JSON', err); return jsonResponse({ success: false, error: 'Invalid JSON body' }, 400) }
+  console.log('[order-event] BODY', body)
+  const eventType = String(body?.event || '').trim()
   const rawOrderId = body?.orderId
   const collaborator_id = String(body?.collaborator_id || '').trim() || null
   const extra = typeof body?.extra === 'object' ? body.extra : {}
+  if (!eventType || !rawOrderId) {
+    console.log('[order-event] missing parameters', body)
+    return jsonResponse({ success: false, error: 'Missing event or orderId' }, 400)
+  }
 
   async function getTemplate(event: 'created' | 'status_changed', role: 'cliente' | 'colaborador' | 'admin', status?: string) {
     try {
@@ -125,6 +138,7 @@ Deno.serve(async (req: Request) => {
   let sent = 0
   let targets = 0
 
+  try {
   if (eventType === 'created') {
     const uniqueTargets = new Map<string, { type: 'user' | 'contact'; id: string }>()
     const addTarget = (type: 'user' | 'contact', id?: string) => {
@@ -201,4 +215,8 @@ Deno.serve(async (req: Request) => {
     try { await supabase.rpc('dispatch_notification', { p_user_id: clientUserId || null, p_contact_id: clientUserId ? null : contactId, p_title: payload.title, p_body: payload.body, p_data: { orderId: resolvedId } }) } catch (_) {}
   }
   return jsonResponse({ success: true, event: 'status_changed', updated: !!rpcData, targets, sent })
+  } catch (err) {
+    console.error('[order-event] fatal error', err)
+    return jsonResponse({ success: false, error: 'internal error' }, 500)
+  }
 })

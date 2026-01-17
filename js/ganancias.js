@@ -47,6 +47,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function fetchCompletedOrders() {
     ui.loadingOverlay.classList.remove('hidden');
     try {
+      const raw = localStorage.getItem('tlc_earnings_orders_cache');
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached)) {
+          allOrders = cached.map(o => ({
+            ...o,
+            monto_cobrado: parseFloat(o.monto_cobrado) || 0,
+            completed_at: new Date(o.completed_at)
+          })).filter(order => order.monto_cobrado > 0 && !isNaN(order.completed_at.getTime()));
+          ui.loadingOverlay.classList.add('hidden');
+        }
+      }
+    } catch (_) {}
+    try {
       const COMPLETED = ['completed'];
       let data = null; let error = null;
       try {
@@ -98,6 +112,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         monto_cobrado: parseFloat(order.monto_cobrado) || 0,
         completed_at: new Date(order.completed_at)
       })).filter(order => order.monto_cobrado > 0 && !isNaN(order.completed_at.getTime()));
+      try {
+        const toStore = (data || []).map(order => ({
+          id: order.id,
+          status: order.status,
+          completed_at: order.completed_at,
+          monto_cobrado: order.monto_cobrado,
+          completed_by: order.completed_by,
+          assigned_to: order.assigned_to,
+          service: order.service
+        }));
+        localStorage.setItem('tlc_earnings_orders_cache', JSON.stringify(toStore));
+      } catch (_) {}
 
     } catch (error) {
       console.error('Error al obtener las órdenes:', error);
@@ -491,6 +517,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function initialize() {
+    try {
+      const raw = localStorage.getItem('tlc_earnings_orders_cache');
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached)) {
+          allOrders = cached.map(o => ({
+            ...o,
+            monto_cobrado: parseFloat(o.monto_cobrado) || 0,
+            completed_at: new Date(o.completed_at)
+          })).filter(order => order.monto_cobrado > 0 && !isNaN(order.completed_at.getTime()));
+        }
+      }
+    } catch (_) {}
+    updateStatCards();
+    renderChart();
+    await renderFinance(session);
     await Promise.all([fetchCompletedOrders(), fetchCollaborators()]);
     updateStatCards();
     renderChart();

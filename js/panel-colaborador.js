@@ -828,6 +828,39 @@ document.addEventListener('DOMContentLoaded', () => {
         overlay.classList.remove('flex');
       }
     }
+    try {
+      const { data: { session } } = await supabaseConfig.client.auth.getSession();
+      const uid = session?.user?.id;
+      if (uid) setupRealtimeForCollaborator(uid);
+    } catch (_) {}
+  }
+
+  function setupRealtimeForCollaborator(userId) {
+    try { if (window.__collabOrdersChannel) supabaseConfig.client.removeChannel(window.__collabOrdersChannel); } catch(_) {}
+    try {
+      window.__collabOrdersChannel = supabaseConfig.client
+        .channel('collab-orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${userId}` }, (payload) => {
+          const { eventType, new: newRecord, old: oldRecord } = payload || {};
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const idx = orders.findIndex(o => o.id === newRecord.id);
+            if (idx === -1) {
+              orders.unshift(newRecord);
+            } else {
+              orders[idx] = { ...orders[idx], ...newRecord };
+            }
+            try { localStorage.setItem('tlc_collab_orders_cache', JSON.stringify(orders)); } catch(_) {}
+            renderOrders();
+          } else if (eventType === 'DELETE') {
+            const id = oldRecord?.id;
+            if (!id) return;
+            orders = orders.filter(o => o.id !== id);
+            try { localStorage.setItem('tlc_collab_orders_cache', JSON.stringify(orders)); } catch(_) {}
+            renderOrders();
+          }
+        })
+        .subscribe();
+    } catch (e) { console.warn('Realtime no disponible en panel-colaborador:', e); }
   }
 
 function renderOrders() {

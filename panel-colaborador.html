@@ -4,8 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Panel del Colaborador</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0C375D">
   <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
   <link rel="stylesheet" href="css/admin-panel-styles.css?v=20251215">
+  
+  <!-- ✅ PWA & Performance Optimizations -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0C375D">
+  <link rel="apple-touch-icon" href="img/android-chrome-192x192.png">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://unpkg.com">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -33,9 +43,17 @@
       background: rgba(255, 255, 255, 0.95) !important;
       backdrop-filter: blur(10px);
     }
+    /* Indicador Offline */
+    #offline-indicator { transition: transform 0.3s ease; }
+    #offline-indicator.hidden-indicator { transform: translateY(-100%); }
   </style>
 </head>
 <body class="bg-gray-100">
+  <!-- Indicador de Estado de Red -->
+  <div id="offline-indicator" class="hidden-indicator fixed top-0 left-0 w-full bg-red-600 text-white text-center py-1 z-50 text-xs font-bold shadow-md">
+    ⚠️ Sin conexión a internet
+  </div>
+
   <button id="mobileSidebarToggle" class="fixed top-4 left-4 z-40 p-2 rounded-md bg-white shadow-md md:hidden" aria-label="Abrir menú" title="Abrir menú"><i data-lucide="menu" class="w-6 h-6 text-gray-800"></i></button>
   <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden md:hidden"></div>
   <aside id="sidebar" class="fixed top-0 left-0 h-screen w-64 z-30 flex flex-col transition-all duration-300 ease-in-out transform -translate-x-full md:translate-x-0">
@@ -68,9 +86,28 @@
       </div>
     </div>
 
-    <div id="continueActiveBanner" class="hidden mb-4 rounded-lg border bg-yellow-50 text-[var(--azul)] p-4 flex items-center justify-between">
-      <div class="text-sm font-semibold">Tienes un trabajo activo</div>
-      <button id="continueActiveBtn" class="px-3 py-2 bg-[var(--azul)] text-white rounded-lg">Continuar orden</button>
+    <!-- Banner Mejorado: Continuar Orden -->
+    <div id="continueActiveBanner" class="hidden mb-6 rounded-xl border border-yellow-200 bg-yellow-50 text-[var(--azul)] p-4 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in relative overflow-hidden">
+      <div class="absolute left-0 top-0 w-1 h-full bg-[var(--amarillo)]"></div>
+      <div class="flex items-center gap-4 w-full sm:w-auto">
+        <div class="p-3 bg-yellow-100 rounded-full text-yellow-700 shadow-sm shrink-0">
+          <i data-lucide="briefcase" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="text-base font-bold text-gray-900">Tienes un trabajo en curso</div>
+          <div id="bannerActiveStatus" class="text-sm text-gray-600 font-medium mt-0.5 flex items-center gap-2">
+            <span class="relative flex h-2.5 w-2.5">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+            </span>
+            <span id="bannerStatusText">En progreso...</span>
+          </div>
+        </div>
+      </div>
+      <button id="continueActiveBtn" class="w-full sm:w-auto px-6 py-3 bg-[var(--azul)] hover:bg-[#0a2e4d] text-white rounded-lg font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+        <span>Continuar Orden</span>
+        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+      </button>
     </div>
 
     <div id="ordersGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
@@ -152,8 +189,10 @@
         <div class="rounded-xl border shadow-sm bg-gradient-to-br from-white to-gray-50">
           <div class="px-4 py-3 bg-gradient-to-r from-[var(--azul)] to-[var(--azul-claro)] text-white font-semibold rounded-t-xl">Evidencia Fotográfica</div>
           <div class="p-4">
-            <div class="flex items-center gap-3 mb-3">
-              <input type="file" id="evidenceInput" accept="image/*" multiple class="block w-full text-sm text-gray-700 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-[var(--azul)] focus:border-transparent" />
+            <div class="flex flex-col gap-2 mb-3">
+              <label class="text-sm font-medium text-gray-700">Subir fotos (Se comprimen automáticamente)</label>
+              <input type="file" id="evidenceInput" accept="image/*" multiple class="block w-full text-sm text-gray-700 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-[var(--azul)] focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+              <p id="compressionStatus" class="text-xs text-green-600 font-medium hidden">⚡ Optimizando imágenes para subida rápida...</p>
             </div>
             <div id="evidencePreview" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
             <div id="activeEvidence" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
@@ -249,5 +288,113 @@
     <script src="js/notifications.js?v=20251231"></script>
     <script src="js/order-manager.js?v=20251231"></script>
     <script src="js/panel-colaborador.js?v=20251231"></script>
+
+    <!-- ⚡ Script de Optimización Autónoma (Compresión y Offline) -->
+    <script>
+      (function() {
+        // 1. Detección Offline/Online
+        const indicator = document.getElementById('offline-indicator');
+        function updateOnlineStatus() {
+          if (navigator.onLine) {
+            indicator.classList.add('hidden-indicator');
+          } else {
+            indicator.classList.remove('hidden-indicator');
+          }
+        }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus();
+
+        // 2. Compresión de Imágenes en el Cliente (Canvas)
+        // Esto reduce una imagen de 5MB a ~200KB antes de subirla, ahorrando datos y tiempo.
+        const fileInput = document.getElementById('evidenceInput');
+        const statusMsg = document.getElementById('compressionStatus');
+
+        if (fileInput) {
+          fileInput.addEventListener('change', async function(e) {
+            if (!e.target.files.length) return;
+            
+            statusMsg.classList.remove('hidden');
+            const dataTransfer = new DataTransfer();
+            
+            for (let i = 0; i < e.target.files.length; i++) {
+              const file = e.target.files[i];
+              if (!file.type.startsWith('image/')) {
+                dataTransfer.items.add(file);
+                continue;
+              }
+              try {
+                const compressedFile = await compressImage(file);
+                dataTransfer.items.add(compressedFile);
+              } catch (err) {
+                console.error('Error comprimiendo', err);
+                dataTransfer.items.add(file); // Fallback al original
+              }
+            }
+            
+            fileInput.files = dataTransfer.files;
+            statusMsg.textContent = "✅ Imágenes listas para subir (Optimizadas)";
+            setTimeout(() => statusMsg.classList.add('hidden'), 3000);
+          });
+        }
+
+        function compressImage(file) {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+              const img = new Image();
+              img.src = event.target.result;
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1280; // Full HD es suficiente para evidencia
+                const scaleSize = MAX_WIDTH / img.width;
+                const width = (scaleSize < 1) ? MAX_WIDTH : img.width;
+                const height = (scaleSize < 1) ? img.height * scaleSize : img.height;
+                
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob((blob) => {
+                  if (!blob) { reject(new Error('Canvas is empty')); return; }
+                  const newFile = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+                  resolve(newFile);
+                }, 'image/jpeg', 0.7); // Calidad 70% - Balance perfecto
+              };
+              img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+          });
+        }
+
+        // 3. Actualizar estado en el Banner "Continuar Orden"
+        // Intenta leer del localStorage si el JS principal guardó el estado, o espera a que cargue.
+        function updateBannerStatus() {
+          try {
+            const activeJob = localStorage.getItem('activeJobData'); // Asumiendo que guardas esto
+            if (activeJob) {
+              const job = JSON.parse(activeJob);
+              const statusText = document.getElementById('bannerStatusText');
+              if (statusText && job.status) {
+                // Traducir estado técnico a legible
+                const map = {
+                  'accepted': 'Aceptada - Ir a recoger',
+                  'in_progress': 'En curso',
+                  'en_camino_recoger': 'En camino a recoger',
+                  'cargando': 'Cargando',
+                  'en_camino_entregar': 'En camino a entregar'
+                };
+                statusText.textContent = map[job.status] || job.status;
+              }
+            }
+          } catch(e) {}
+        }
+        // Ejecutar al cargar y periódicamente por si cambia
+        updateBannerStatus();
+        setInterval(updateBannerStatus, 2000);
+      })();
+    </script>
 </body>
 </html>

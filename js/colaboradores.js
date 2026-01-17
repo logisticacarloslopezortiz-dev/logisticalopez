@@ -635,6 +635,15 @@
       const first = allCollaborators[0];
       if (first) viewMetrics(String(first.id));
     });
+    try {
+      if (window.__collabRealtimeChannel) supabaseConfig.client.removeChannel(window.__collabRealtimeChannel);
+      window.__collabRealtimeChannel = supabaseConfig.client
+        .channel('public:collaborators')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborators' }, async () => {
+          await loadCollaborators();
+        })
+        .subscribe();
+    } catch (e) { console.warn('Realtime no disponible en colaboradores:', e); }
   }
 
   document.addEventListener('admin-session-ready', (e) => {

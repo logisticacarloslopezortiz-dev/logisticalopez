@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rendimiento del Colaborador</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0C375D">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <link rel="stylesheet" href="css/admin-panel-styles.css">
@@ -163,14 +165,14 @@
           <tbody id="unifiedTable" class="divide-y divide-gray-100"></tbody>
         </table>
       </div>
-      <div id="rendPagination" class="flex items-center justify-between mt-4">
+      <div id="rendPagination" class="flex flex-col md:flex-row items-stretch md:items-center justify-between mt-4 gap-3">
         <div class="text-sm text-gray-600">Mostrando <span id="rendShowingRange">0–0</span> de <span id="rendTotalCount">0</span></div>
-        <div class="flex items-center gap-2" aria-label="Paginación">
-          <button id="rendFirst" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Primera</button>
-          <button id="rendPrev" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Anterior</button>
-          <div id="rendPages" class="flex items-center gap-1"></div>
-          <button id="rendNext" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Siguiente</button>
-          <button id="rendLast" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">Última</button>
+        <div class="flex flex-wrap w-full md:w-auto items-center gap-2" aria-label="Paginación">
+          <button id="rendFirst" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm w-full md:w-auto">Primera</button>
+          <button id="rendPrev" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm w-full md:w-auto">Anterior</button>
+          <div id="rendPages" class="flex flex-wrap w-full md:w-auto items-center gap-1"></div>
+          <button id="rendNext" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm w-full md:w-auto">Siguiente</button>
+          <button id="rendLast" class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm w-full md:w-auto">Última</button>
         </div>
       </div>
     </section>

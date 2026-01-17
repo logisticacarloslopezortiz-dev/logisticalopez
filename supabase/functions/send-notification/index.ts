@@ -9,6 +9,7 @@ const VAPID_PRIVATE_KEY = (Deno.env.get('VAPID_PRIVATE_KEY') || '').trim()
 const VAPID_SUBJECT = (Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com').trim()
 const SITE_BASE = (Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com').trim()
 const supabase = createClient(Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', { auth: { autoRefreshToken: false, persistSession: false } })
+const SEND_NOTIFICATION_SECRET = (Deno.env.get('SEND_NOTIFICATION_SECRET') || '').trim()
 function absolutize(url: string): string {
   try {
     if (!url) return SITE_BASE + '/'
@@ -49,6 +50,7 @@ function validateRequest(body: any) {
   const badge = absolutize(n?.badge || '/img/favicon-32x32.png')
   const dataObj = (typeof n?.data === 'object' && n?.data) ? n.data : {}
   const url = absolutize((dataObj as any)?.url || '/')
+  if (!bodyText.trim()) throw new Error('missing_notification_body')
   return { user_id, contact_id, payload: { title, body: bodyText, icon, badge, data: { ...dataObj, url } } }
 }
 async function handleExpired(endpoint: string) {
@@ -57,12 +59,23 @@ async function handleExpired(endpoint: string) {
 Deno.serve(async (req: Request) => {
   console.log('[send-notification] START')
   if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
-  const srvRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
   const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
-  if (!srvRole || authHeader !== `Bearer ${srvRole}`) return jsonResponse({ success: false, error: 'unauthorized' }, 401)
+  if (!SEND_NOTIFICATION_SECRET || authHeader !== `Bearer ${SEND_NOTIFICATION_SECRET}`) return jsonResponse({ success: false, error: 'unauthorized' }, 401)
   try {
     const body = await req.json().catch(() => ({}))
-    const { user_id, contact_id, payload } = validateRequest(body)
+    let user_id = ''
+    let contact_id = ''
+    let payload: any
+    try {
+      const validated = validateRequest(body)
+      user_id = validated.user_id
+      contact_id = validated.contact_id
+      payload = validated.payload
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg === 'missing_notification_body') return jsonResponse({ success: false, error: 'missing_body' }, 400)
+      return jsonResponse({ success: false, error: msg }, 400)
+    }
     console.log('[send-notification] Target', { user_id, contact_id })
     if (!user_id && !contact_id) return jsonResponse({ success: false, error: 'missing_target' }, 400)
     const query = supabase.from('push_subscriptions').select('endpoint, keys')
@@ -83,19 +96,18 @@ Deno.serve(async (req: Request) => {
       const auth = String((keys?.auth || (rawKeys?.auth)) || '').trim()
       if (!endpoint || !p256 || !auth) { failed++; continue }
       try {
-        console.log('[send-notification] Sending to', endpoint)
+        console.log('[send-notification] Sending push')
         await sendPush({ endpoint, keys: { p256dh: p256, auth } }, payload)
         sent++
-        try { await supabase.from('notification_logs').insert({ user_id: user_id || null, payload, success: true, error_message: null }) } catch (_) {}
       } catch (err) {
         failed++
         const statusCode = (err as any)?.statusCode as number | undefined
         const msg = (err instanceof Error) ? (err.message || 'unknown_error') : (String(err) || 'unknown_error')
         console.error('[send-notification] Push error', msg)
         if (statusCode === 404 || statusCode === 410) await handleExpired(endpoint)
-        try { await supabase.from('notification_logs').insert({ user_id: user_id || null, payload, success: false, error_message: msg }) } catch (_) {}
       }
     }
+    try { await supabase.from('notification_logs').insert({ user_id: user_id || null, payload, success: sent > 0, error_message: failed ? `${failed} failed` : null }) } catch (_) {}
     return jsonResponse({ success: sent > 0, sent, failed }, 200)
   } catch (error) {
     const msg = error instanceof Error ? (error.message || 'unknown_error') : (String(error) || 'unknown_error')

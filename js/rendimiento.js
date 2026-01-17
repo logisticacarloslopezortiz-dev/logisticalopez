@@ -98,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadMetrics(userId);
   setupAutoRefresh(userId);
+  setupRealtime(userId);
 });
 
 /* ==============================
@@ -494,6 +495,17 @@ function setupAutoRefresh(collabId) {
   }, 30000);
 }
 
+function setupRealtime(collabId) {
+  try { if (window.__rendRealtimeChannel) supabaseConfig.client.removeChannel(window.__rendRealtimeChannel); } catch(_) {}
+  try {
+    window.__rendRealtimeChannel = supabaseConfig.client
+      .channel('rendimiento-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${collabId}` }, async () => {
+        await loadMetrics(collabId);
+      })
+      .subscribe();
+  } catch (e) { console.warn('Realtime no disponible en rendimiento:', e); }
+}
 function groupByMonth(orders) {
   const map = {};
   for (const o of (orders || [])) {
