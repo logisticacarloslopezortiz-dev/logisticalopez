@@ -17,7 +17,8 @@ function absolutize(url: string): string {
 }
 
 Deno.serve(async (req: Request) => {
-  console.log('[notify-user-push] START', { method: req.method, url: req.url })
+  const correlationId = req.headers.get('x-correlation-id') || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))
+  console.log('[notify-user-push] START', { method: req.method, url: req.url, correlation_id: correlationId })
   const cors = handleCors(req)
   if (cors) { console.log('[notify-user-push] CORS preflight'); return cors }
   if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405, req)
@@ -26,7 +27,7 @@ Deno.serve(async (req: Request) => {
   if (!SEND_NOTIFICATION_SECRET || authHeader !== `Bearer ${SEND_NOTIFICATION_SECRET}`) { console.warn('[notify-user-push] Unauthorized'); return jsonResponse({ success: false, error: 'unauthorized' }, 401, req) }
 
   let body: any = {}
-  try { body = await req.json(); console.log('[notify-user-push] BODY', body) } catch { console.error('[notify-user-push] Invalid JSON'); return jsonResponse({ success: false, error: 'invalid_json' }, 400, req) }
+  try { body = await req.json(); console.log('[notify-user-push] BODY', { body, correlation_id: correlationId }) } catch { console.error('[notify-user-push] Invalid JSON', { correlation_id: correlationId }); return jsonResponse({ success: false, error: 'invalid_json' }, 400, req) }
 
   const user_id = String(body?.user_id || '').trim()
   const contact_id = String(body?.contact_id || '').trim()
@@ -43,14 +44,14 @@ Deno.serve(async (req: Request) => {
   if (!user_id && !contact_id) return jsonResponse({ success: false, error: 'missing_target' }, 400, req)
 
   try {
-    console.log('[notify-user-push] Delegating', { target: user_id || contact_id })
+    console.log('[notify-user-push] Delegating', { target: user_id || contact_id, correlation_id: correlationId })
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 9000)
     let resp: Response
     try {
       resp = await fetch(`${FUNCTIONS_BASE}/send-notification`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SEND_NOTIFICATION_SECRET}`, 'Accept': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SEND_NOTIFICATION_SECRET}`, 'Accept': 'application/json', 'X-Correlation-Id': correlationId },
         body: JSON.stringify(user_id ? { user_id, notification: payload } : { contact_id, notification: payload }),
         signal: controller.signal
       })
@@ -58,17 +59,17 @@ Deno.serve(async (req: Request) => {
       clearTimeout(timeout)
     }
     const data = await resp.json().catch(() => ({}))
-    console.log('[notify-user-push] send-notification response', { status: resp.status, ok: resp.ok, data })
+    console.log('[notify-user-push] send-notification response', { status: resp.status, ok: resp.ok, data, correlation_id: correlationId })
     if (resp.ok && data && data.success) {
-      return jsonResponse({ success: true, delegated: true, data }, 200, req)
+      return jsonResponse({ success: true, delegated: true, data, correlation_id: correlationId }, 200, req)
     } else {
       try { await supabase.from('notification_logs').insert({ user_id: user_id || null, payload, success: false, error_message: String(data?.error || 'delegate_failed') }) } catch (_) {}
-      return jsonResponse({ success: false, error: 'delegate_failed' }, 502, req)
+      return jsonResponse({ success: false, error: 'delegate_failed', correlation_id: correlationId }, 502, req)
     }
   } catch (e) {
     const msg = e instanceof Error ? (e.message || 'unknown_error') : String(e)
-    console.error('[notify-user-push] ERROR', msg)
+    console.error('[notify-user-push] ERROR', msg, { correlation_id: correlationId })
     try { await supabase.from('notification_logs').insert({ user_id: user_id || null, payload, success: false, error_message: msg }) } catch (_) {}
-    return jsonResponse({ success: false, error: msg }, 500, req)
+    return jsonResponse({ success: false, error: msg, correlation_id: correlationId }, 500, req)
   }
 })

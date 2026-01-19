@@ -1,4 +1,45 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // --- FUNCIÓN DE NOTIFICACIÓN POR CORREO (MEJORA) ---
+  window.sendStatusEmail = async function(order, status) {
+    const messages = {
+      'asignado': '¡Buenas noticias! Un colaborador ha aceptado tu orden y se prepara para el servicio.',
+      'accepted': '¡Buenas noticias! Un colaborador ha aceptado tu orden y se prepara para el servicio.',
+      'en_camino_recoger': 'El colaborador va en camino al punto de recogida.',
+      'cargando': 'El colaborador ha llegado y está cargando su pedido.',
+      'en_camino_entregar': 'Su carga va en camino hacia el destino de entrega.',
+      'entregada': 'Su orden ha sido entregada con éxito. ¡Gracias por confiar en Logística López Ortiz!',
+      'completada': 'Su orden ha sido completada exitosamente.',
+      'cancelada': 'Su orden ha sido cancelada. Contacte a soporte para más detalles.'
+    };
+
+    const msg = messages[status] || `El estado de su orden ha cambiado a: ${status}`;
+    const clientEmail = order.client_email || order.email; // Intenta obtener el email
+
+    if (clientEmail) {
+      try {
+        // Evitar errores CORS en desarrollo/local (solo enviar en producción)
+        const host = String(window.location.hostname || '').toLowerCase();
+        if (host.includes('localhost') || host === '127.0.0.1') {
+          console.warn('⚠️ Omitiendo envío de correo en localhost para evitar errores CORS.');
+          return;
+        }
+
+        // Invocar función de Supabase para enviar correo
+        const { error } = await supabaseConfig.client.functions.invoke('send-order-email', {
+          body: {
+            to: clientEmail,
+            subject: `Actualización de Orden #${order.id} - Logística López Ortiz`,
+            html: `<div style="font-family: sans-serif; color: #333;"><h2>Actualización de su Orden #${order.id}</h2><p>${msg}</p><p>Puede ver el seguimiento en tiempo real aquí:</p><a href="https://logisticalopezortiz.com/seguimiento.html?orderId=${order.id}" style="background-color: #0C375D; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Seguimiento</a></div>`
+          }
+        });
+        if (error) throw error;
+        console.log(`📧 Correo enviado a ${clientEmail} para estado: ${status}`);
+      } catch (e) {
+        console.error('Error enviando correo:', e);
+      }
+    }
+  };
+
   // Elementos del DOM
   const grid = document.getElementById('ordersGrid');
   const overlay = document.getElementById('loadingOverlay');
@@ -62,12 +103,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let orders = [];
   let currentOrder = null;
   let __iconsTimer = null;
-  let __authSub = null;
   let activeMap = null;
   let activePickupMarker = null;
   let activeDeliveryMarker = null;
-
-  // --- Utilidades ---
 
   // Prevenir XSS escapando HTML
   const escapeHtml = (unsafe) => {
@@ -91,6 +129,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (v === 'en_camino_entregar') return 'En camino a entregar';
     return v;
   }
+
+  // --- MÓDULOS DE GESTIÓN ---
+
+  const UI = {
+    showLoading() {
+      if (grid) {
+        grid.innerHTML = Array(3).fill(0).map(() => `
+          <div class="bg-white rounded-2xl shadow p-4 space-y-3 animate-pulse">
+            <div class="flex justify-between">
+              <div class="h-6 bg-gray-200 rounded w-1/4"></div>
+              <div class="h-6 bg-gray-200 rounded w-1/6"></div>
+            </div>
+            <div class="h-4 bg-gray-200 rounded w-3/4"></div>
+            <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+            <div class="h-10 bg-gray-200 rounded w-full mt-4"></div>
+          </div>
+        `).join('');
+      }
+    },
+    hideLoading() {
+      if (overlay) overlay.classList.add('hidden');
+    },
+    disableButtons(disabled = true) {
+      const btns = document.querySelectorAll('button');
+      btns.forEach(b => b.disabled = disabled);
+    }
+  };
+
+  // --- Utilidades ---
 
   // --- Notificaciones Push (Automatización) ---
   function urlBase64ToUint8Array(base64String) {
@@ -363,18 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Trabajo Activo ---
 
-  function setActiveJobStorage(orderOrId){
-    const id = typeof orderOrId === 'object' ? orderOrId?.id : orderOrId;
-    try { localStorage.setItem('tlc_active_job_id', String(id)); } catch(_){}
-  }
-
-  function clearActiveJobStorage(){
-    try { 
-      localStorage.removeItem('tlc_active_job_id'); 
-      localStorage.removeItem('tlc_active_job_state');
-    } catch(_){}
-  }
-
   async function openActiveJob(order) {
     if (!order || !order.id) {
       console.error('[ActiveJob] Orden inválida:', order);
@@ -411,10 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (evidencePreview) evidencePreview.innerHTML = '';
     
-    setActiveJobStorage(order.id);
     updatePrimaryActionButtons(order);
-    
-    try { localStorage.setItem('tlc_active_job_state', getUiStatus(order)); } catch(_){ }
     
     if (btnVerOrigen) btnVerOrigen.onclick = () => openGoogleMaps(order.pickup);
     if (btnVerDestino) btnVerDestino.onclick = () => openGoogleMaps(order.delivery);
@@ -431,7 +483,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeActiveJob() {
     currentOrder = null;
     showView('grid');
-    clearActiveJobStorage();
     fetchOrdersForCollaborator(); // Recargar lista al salir
   }
 
@@ -569,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       if (window.__updatingOrder) return;
       window.__updatingOrder = true;
-      if (btn) btn.disabled = true;
+      UI.disableButtons(true);
 
       const { data: { user } } = await supabaseConfig.client.auth.getUser();
       if (!user?.id) throw new Error('Sesión inválida');
@@ -596,6 +647,9 @@ document.addEventListener('DOMContentLoaded', () => {
       currentOrder.status = 'in_progress';
       currentOrder.tracking_data = nextTracking;
 
+      // ✅ ENVIAR CORREO AL CLIENTE
+      if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, newStatus);
+
       notifications?.success?.(successMsg);
 
       if (newStatus === 'cargando') {
@@ -607,11 +661,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       updatePrimaryActionButtons(currentOrder);
-      try { localStorage.setItem('tlc_active_job_state', newStatus); } catch (_) {}
     } catch (e) {
       notifications?.error?.(e?.message || 'No se pudo actualizar');
     } finally {
-      if (btn) btn.disabled = false;
+      UI.disableButtons(false);
       window.__updatingOrder = false;
     }
   }
@@ -648,8 +701,11 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const { error } = await supabaseConfig.completeOrderWork(currentOrder.id);
         if (error) throw error;
+        
+        // ✅ ENVIAR CORREO DE COMPLETADO
+        if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, 'entregada');
+
         notifications?.success?.('Solicitud completada');
-        clearActiveJobStorage();
         closeActiveJob();
         document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
         fetchOrdersForCollaborator();
@@ -669,7 +725,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await OrderManager.cancelActiveJob(currentOrder.id);
       if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
       notifications?.success?.('Solicitud cancelada');
-      clearActiveJobStorage();
       closeActiveJob();
       document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
       fetchOrdersForCollaborator();
@@ -732,25 +787,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Carga de Datos ---
 
-  async function fetchOrdersForCollaborator() {
-    if (overlay) {
-      overlay.classList.remove('hidden');
-      overlay.classList.add('flex');
+  async function fetchOrdersForCollaborator(isBackground = false) {
+    if (!isBackground) {
+      UI.showLoading();
     }
-    
-    // CACHE FIRST: Cargar datos locales inmediatamente
-    try {
-      const cached = localStorage.getItem('tlc_collab_orders_cache');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
-          orders = parsed;
-          renderOrders();
-          // Si hay cache, ocultamos overlay temporalmente mientras carga lo nuevo en background
-          if (overlay) overlay.classList.add('hidden');
-        }
-      }
-    } catch (_) {}
 
     try {
       const ok = await ensureAuthOrRedirect();
@@ -814,8 +854,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Filtrar órdenes no finalizadas (ya filtradas en SQL)
       orders = rawOrders.filter(o => !isFinalOrder(o));
       
-      // Guardar en cache
-      try { localStorage.setItem('tlc_collab_orders_cache', JSON.stringify(orders)); } catch(_) {}
 
       renderOrders();
 
@@ -823,45 +861,45 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Error in fetchOrdersForCollaborator:', e);
       notifications?.error?.('Error cargando solicitudes.');
     } finally {
-      if (overlay) {
-        overlay.classList.add('hidden');
-        overlay.classList.remove('flex');
-      }
+      UI.hideLoading();
     }
     try {
       const { data: { session } } = await supabaseConfig.client.auth.getSession();
       const uid = session?.user?.id;
-      if (uid) setupRealtimeForCollaborator(uid);
+      if (uid) RealtimeManager.init(uid);
     } catch (_) {}
   }
 
-  function setupRealtimeForCollaborator(userId) {
-    try { if (window.__collabOrdersChannel) supabaseConfig.client.removeChannel(window.__collabOrdersChannel); } catch(_) {}
-    try {
-      window.__collabOrdersChannel = supabaseConfig.client
-        .channel('collab-orders')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${userId}` }, (payload) => {
-          const { eventType, new: newRecord, old: oldRecord } = payload || {};
-          if (eventType === 'INSERT' || eventType === 'UPDATE') {
-            const idx = orders.findIndex(o => o.id === newRecord.id);
-            if (idx === -1) {
-              orders.unshift(newRecord);
-            } else {
-              orders[idx] = { ...orders[idx], ...newRecord };
-            }
-            try { localStorage.setItem('tlc_collab_orders_cache', JSON.stringify(orders)); } catch(_) {}
-            renderOrders();
-          } else if (eventType === 'DELETE') {
-            const id = oldRecord?.id;
-            if (!id) return;
-            orders = orders.filter(o => o.id !== id);
-            try { localStorage.setItem('tlc_collab_orders_cache', JSON.stringify(orders)); } catch(_) {}
-            renderOrders();
+  // --- GESTOR DE REALTIME MEJORADO ---
+  const RealtimeManager = {
+    channel: null,
+    
+    init(userId) {
+      if (this.channel) {
+        supabaseConfig.client.removeChannel(this.channel);
+      }
+
+      this.channel = supabaseConfig.client.channel('collab_dashboard_v3')
+        // Escuchar mis órdenes asignadas
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${userId}` }, this.handleEvent.bind(this))
+        // Escuchar nuevas órdenes pendientes (disponibles para todos)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `status=eq.pending` }, this.handleEvent.bind(this))
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Realtime conectado');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.warn('⚠️ Error en Realtime, reintentando en 5s...');
+            setTimeout(() => this.init(userId), 5000);
           }
-        })
-        .subscribe();
-    } catch (e) { console.warn('Realtime no disponible en panel-colaborador:', e); }
-  }
+        });
+    },
+
+    async handleEvent(payload) {
+      console.log('[Realtime] Evento recibido:', payload.eventType);
+      // Refrescar en segundo plano para mantener la UI actualizada
+      await fetchOrdersForCollaborator(true);
+    }
+  };
 
 function renderOrders() {
     const total = orders.length;
@@ -983,6 +1021,10 @@ function renderOrders() {
         if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
 
             notifications?.success?.('Orden aceptada');
+            
+            // ✅ ENVIAR CORREO DE ACEPTACIÓN
+            if(window.sendStatusEmail) window.sendStatusEmail(o, 'accepted');
+
             try {
               const { data: updatedOrder } = await supabaseConfig.client
                 .from('orders')
@@ -1033,11 +1075,14 @@ function renderOrders() {
         currentOrder.status = 'accepted';
         currentOrder.assigned_to = userId;
         currentOrder.tracking_data = []; // Iniciar vacío
+        
+        // ✅ ENVIAR CORREO DE ACEPTACIÓN
+        if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, 'accepted');
+
         closeModal();
         try { notifications?.info?.('Orden aceptada. Pulsa "En camino a recoger" para iniciar.'); } catch(_){}
         try {
           openActiveJob(currentOrder);
-          setActiveJobStorage(currentOrder.id);
           updatePrimaryActionButtons(currentOrder);
           updateProgressBar(getUiStatus(currentOrder));
         } catch(_){}
@@ -1081,60 +1126,8 @@ function renderOrders() {
            window.notifications.subscribeToUserNotifications(uid);
         }
 
-        const ch = supabaseConfig.client.channel('orders-collab-v2');
-        ch.on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async (payload) => {
-          const isNewPending = payload.eventType === 'INSERT' && String(payload.new.status || '').toLowerCase() === 'pending';
-          const isMyOrder = payload.new?.assigned_to === uid || payload.old?.assigned_to === uid;
-          const isUnassigned = payload.new?.assigned_to === null;
-          
-          if (isNewPending || isMyOrder || isUnassigned) {
-             await fetchOrdersForCollaborator();
-             // Protección: Evitar resetear vista activa al asignar orden
-             if (currentOrder && payload.eventType === 'UPDATE' && payload.new?.assigned_to) {
-               Object.assign(currentOrder, {
-                 ...payload.new,
-                 service: currentOrder.service,
-                 vehicle: currentOrder.vehicle
-               });
-               return;
-             }
-             // Si la orden activa cambió, actualizar vista activa
-             if (currentOrder && payload.new && payload.new.id === currentOrder.id) {
-               const s = String(payload.new.status || '').toLowerCase();
-               if (s === 'cancelled' || s === 'completed') {
-                 try { notifications?.warning?.(s === 'cancelled' ? 'Orden cancelada' : 'Orden completada'); } catch(_){}
-                 clearActiveJobStorage();
-                 closeActiveJob();
-               } else {
-               Object.assign(currentOrder, {
-                 ...payload.new,
-                 service: currentOrder.service,
-                 vehicle: currentOrder.vehicle
-               });
-               if (activeView && !activeView.classList.contains('hidden')) {
-                 updatePrimaryActionButtons(currentOrder);
-                 updateProgressBar(getUiStatus(currentOrder));
-               }
-               }
-             }
-          }
-        });
-        try {
-          ch.subscribe((status) => {
-            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              // Fallback: polling cada 30s si Realtime falla
-              if (!window.__ordersPolling) {
-                window.__ordersPolling = setInterval(fetchOrdersForCollaborator, 30000);
-              }
-            }
-          });
-        } catch (_) {
-          if (!window.__ordersPolling) {
-            window.__ordersPolling = setInterval(fetchOrdersForCollaborator, 30000);
-          }
-        }
-        
-        window.addEventListener('beforeunload', () => { try { ch.unsubscribe(); } catch(_){} });
+        // Inicializar Realtime optimizado
+        RealtimeManager.init(uid);
       }
     } catch(e) { console.error("Realtime error", e); }
 
@@ -1143,58 +1136,10 @@ function renderOrders() {
       const active = await supabaseConfig.getActiveJobOrder();
       if (active) {
         openActiveJob(active);
-        setActiveJobStorage(active.id);
       }
     } catch(_){}
 
     await fetchOrdersForCollaborator();
-
-     // --- CONTINUIDAD DE SESIÓN ---
-     if (!localStorage.getItem('tlc_active_job_id')) {
-       try {
-         const { data: { user } } = await supabaseConfig.client.auth.getSession();
-         if (user?.id) {
-           // ✅ CORRECCIÓN: Solo restaurar órdenes realmente activas
-          const activeOrder = orders.find(o => o.assigned_to === user.id && !isFinalOrder(o));
-           
-           if (activeOrder) {
-             console.log('[Continuidad] Orden activa encontrada en DB, restaurando sesión:', activeOrder.id);
-             setActiveJobStorage(activeOrder.id);
-             try { localStorage.setItem('tlc_active_job_state', getUiStatus(activeOrder)); } catch(_){}
-           }
-         }
-       } catch (e) {
-         console.error('[Continuidad] Error buscando orden activa:', e);
-       }
-     }
-
-    // Recuperar sesión activa de localStorage si existe
-    try {
-      const storedId = localStorage.getItem('tlc_active_job_id');
-      if (storedId) {
-        // Buscar en las ordenes cargadas o fetch individual
-        let o = orders.find(x => String(x.id) === storedId);
-        if (!o) {
-           const { data } = await supabaseConfig.client
-             .from('orders')
-             .select('*,service:services(name),vehicle:vehicles(name)')
-             .eq('id', storedId)
-             .single();
-           if (data) o = data;
-        }
-        
-        if (o) {
-          const { data: { session } } = await supabaseConfig.client.auth.getSession();
-          const uid = session?.user?.id;
-          if (isFinalOrder(o) || (uid && o.assigned_to !== uid)) {
-             clearActiveJobStorage();
-             if (continueBanner) continueBanner.classList.add('hidden');
-          } else {
-             if (continueBanner) continueBanner.classList.remove('hidden');
-          }
-        }
-      }
-    } catch(_){}
   };
 
   init();
@@ -1202,36 +1147,20 @@ function renderOrders() {
   // Listeners de Banner "Continuar"
   if (continueBtn) continueBtn.addEventListener('click', async () => {
     try {
-      const storedId = localStorage.getItem('tlc_active_job_id');
-      if (!storedId) return;
-      
-      // Buscar orden fresca
-      const dresp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
-             .from('orders')
-             .select('*,service:services(name),vehicle:vehicles(name)')
-             .eq('id', storedId)
-             .single()) || supabaseConfig.client
-             .from('orders')
-             .select('*,service:services(name),vehicle:vehicles(name)')
-             .eq('id', storedId)
-             .single());
-      const { data, error } = dresp;
-             
-      if (error || !data) {
-        notifications?.error?.("La orden ya no está disponible");
-        clearActiveJobStorage();
+      const active = await supabaseConfig.getActiveJobOrder();
+      if (!active) {
+        notifications?.error?.("No hay orden activa disponible");
         continueBanner.classList.add('hidden');
         return;
       }
-
-      if (isFinalOrder(data)) {
+      
+      if (isFinalOrder(active)) {
         notifications?.info?.("Esta orden ya fue finalizada");
-        clearActiveJobStorage();
         continueBanner.classList.add('hidden');
         return;
       }
       
-      openContinueModal(data);
+      openContinueModal(active);
     } catch(_){}
   });
 
@@ -1240,18 +1169,7 @@ function renderOrders() {
   
   if (confirmContinueBtn) confirmContinueBtn.addEventListener('click', async () => {
     try {
-      const storedId = localStorage.getItem('tlc_active_job_id');
-      if (!storedId) return;
-      
-      const { data } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
-             .from('orders')
-             .select('*,service:services(name),vehicle:vehicles(name)')
-             .eq('id', storedId)
-             .single()) || supabaseConfig.client
-             .from('orders')
-             .select('*,service:services(name),vehicle:vehicles(name)')
-             .eq('id', storedId)
-             .single());
+      const data = await supabaseConfig.getActiveJobOrder();
              
       if (!data) return;
       
@@ -1267,7 +1185,7 @@ function renderOrders() {
     try {
       await supabaseConfig.client.auth.signOut();
     } catch(_) {}
-    try { localStorage.removeItem('userRole'); localStorage.removeItem('tlc_active_job_id'); localStorage.removeItem('tlc_active_job_state'); } catch(_){}
+    try { localStorage.removeItem('userRole'); } catch(_){}
     window.location.href = 'login-colaborador.html';
   });
   if (collapseBtnNav) collapseBtnNav.addEventListener('click', () => {

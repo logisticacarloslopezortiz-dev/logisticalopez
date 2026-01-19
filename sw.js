@@ -1,4 +1,4 @@
-// Service Worker para TLC Logística
+// Service Worker para llo Logística
 // Manejo de notificaciones push y caché básico
 
 self.addEventListener('install', (event) => {

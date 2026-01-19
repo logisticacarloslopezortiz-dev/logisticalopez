@@ -16,9 +16,10 @@
 
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <link rel="stylesheet" href="css/admin-panel-styles.css">
+  <link rel="stylesheet" href="vendor/leaflet.css" />
+  <script src="vendor/leaflet.js"></script>
 </head>
 <body class="bg-gray-100">
 
@@ -35,7 +36,10 @@
     <!-- Header del Sidebar -->
     <div class="sidebar-header flex items-center justify-center py-6 px-4">
       <img src="img/1vertical.png" alt="LLO" class="sidebar-logo w-11 h-11 object-contain rounded-xl shadow-lg bg-white border-2 border-white">
-      <h2 class="text-xl font-bold text-white ml-3 sidebar-text">Admin</h2>
+      <div class="ml-3">
+        <h2 class="text-xl font-bold text-white"><span id="sidebarAdminName" class="sidebar-text">Admin</span></h2>
+        <p class="text-sm text-white/80 sidebar-text">Administrador</p>
+      </div>
     </div>
     <!-- Navegación -->
     <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
@@ -136,6 +140,16 @@
       </form>
       <div id="colabMsg" class="text-sm mt-4"></div>
       <p class="text-xs text-gray-500 mt-3">Los colaboradores podrán iniciar sesión en login-colaborador.html con su correo y contraseña.</p>
+    </div>
+    
+    <div class="card p-6 mb-8">
+      <h2 class="text-xl font-bold text-turquoise flex items-center gap-3 mb-4">
+        <span class="bg-yellow-400 p-2 rounded-lg">
+          <i data-lucide="map" class="w-5 h-5 text-white"></i>
+        </span>
+        Mapa de Colaboradores en Tiempo Real
+      </h2>
+      <div id="collaboratorsMap" class="w-full h-[420px] rounded-xl border border-gray-200 overflow-hidden"></div>
     </div>
     
     <!-- Lista de colaboradores -->
@@ -336,6 +350,19 @@
     </div>
   </div>
 
+  <div id="collaboratorMapModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black bg-opacity-50"></div>
+    <div class="relative z-10 min-h-full px-4 py-6 mx-auto max-w-4xl flex items-start justify-center">
+      <div class="w-full bg-white rounded-xl shadow-2xl p-6 max-h-[85vh] overflow-hidden">
+        <div class="flex items-center justify-between mb-4">
+          <h3 id="collabMapTitle" class="text-xl font-semibold text-gray-900">Ubicación del colaborador</h3>
+          <button id="closeCollabMapModal" class="text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-6 h-6"></i></button>
+        </div>
+        <div id="collaboratorMapDetail" class="w-full h-[520px] rounded-xl border border-gray-200 overflow-hidden"></div>
+      </div>
+    </div>
+  </div>
+ 
   
 
   <!-- Chart.js se cargará bajo demanda desde JS -->
@@ -344,16 +371,14 @@
   <script src="js/sidebar.js"></script>
   <script src="js/logging.js"></script>
   <script src="js/colaboradores.js"></script>
-  <script src="js/pwa.js"></script>
   <script>
-    // Añadir funcionalidad al botón de generar contraseña
+    lucide.createIcons();
     document.getElementById('generatePasswordBtn').addEventListener('click', () => {
       const passwordInput = document.getElementById('colaboradorPassword');
-      // Genera una contraseña aleatoria simple
       const newPassword = Math.random().toString(36).slice(-8);
       passwordInput.value = newPassword;
-      passwordInput.type = 'text'; // Mostrar la contraseña generada
-      setTimeout(() => { passwordInput.type = 'password'; }, 2000); // Ocultarla después de 2 segundos
+      passwordInput.type = 'text';
+      setTimeout(() => { passwordInput.type = 'password'; }, 2000);
     });
   </script>
 </body>

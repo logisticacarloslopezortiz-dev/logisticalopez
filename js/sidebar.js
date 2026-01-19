@@ -59,10 +59,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     new CustomEvent('admin-session-ready', {
       detail: { 
         isAdmin: adminReady,
-        userId: (adminReady && typeof session !== 'undefined') ? session.user.id : null 
+        userId: null 
       }
     })
   );
+
+  // --- Mostrar nombre del administrador en el sidebar header ---
+  async function setSidebarAdminName() {
+    try {
+      const headerNameEl = document.getElementById('sidebarAdminName');
+      if (!headerNameEl) return;
+      const { data: { session } } = await supabaseConfig.client.auth.getSession();
+      if (!session) return;
+      const user = session.user;
+      let adminName = '';
+      try {
+        const { data: collab } = await supabaseConfig.client
+          .from('collaborators')
+          .select('name')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (collab && collab.name) adminName = String(collab.name).trim();
+      } catch(_) {}
+      if (!adminName) {
+        if (user.user_metadata?.full_name) {
+          adminName = String(user.user_metadata.full_name).trim();
+        } else if (user.email) {
+          adminName = String(user.email).split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+      }
+      headerNameEl.textContent = adminName || 'Admin';
+    } catch (e) {
+      // no-op
+    }
+  }
+  if (adminReady) { setSidebarAdminName(); }
 
     // --- El resto de la lógica de UI del sidebar continúa aquí ---
     const sidebar = document.getElementById('sidebar');

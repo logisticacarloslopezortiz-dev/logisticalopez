@@ -10,6 +10,44 @@ let __initialized = false;
 let selectedOrderIdForPrice = null;
 let __lucideTimer = null;
 const ORDER_STATUS = Object.freeze({ PENDIENTE: 'Pendiente', ACEPTADA: 'Aceptada', EN_CURSO: 'En curso', COMPLETADA: 'entregada', CANCELADA: 'cancelada' });
+let __collaboratorsById = {};
+
+function getCollaboratorIdFromOrder(o) {
+  if (!o) return null;
+
+  // 1. Asignación directa
+  if (o.assigned_to) return o.assigned_to;
+
+  // 2. Tracking (cuando el colaborador toma la orden)
+  if (Array.isArray(o.tracking_data) && o.tracking_data.length) {
+    const last = o.tracking_data[o.tracking_data.length - 1];
+    if (last?.collaborator_id) return last.collaborator_id;
+  }
+
+  // 3. Fallbacks
+  if (o.driver_id) return o.driver_id;
+  if (o.completed_by) return o.completed_by;
+
+  return null;
+}
+
+async function resolveCollaboratorName(order) {
+  const cid = getCollaboratorIdFromOrder(order);
+  if (!cid) return null;
+
+  if (__collaboratorsById?.[cid]) {
+    return __collaboratorsById[cid].name;
+  }
+
+  try {
+    const { data } = await supabaseConfig.client.from('collaborators').select('id,name').eq('id', cid).maybeSingle();
+    if (data) {
+      __collaboratorsById[cid] = data;
+      return data.name;
+    }
+  } catch (_) {}
+  return null;
+}
 
 function formatUiStatus(s) {
   const v = String(s || '').toLowerCase();
@@ -39,36 +77,12 @@ const AppState = {
     } else {
       allOrders.unshift(merged);
     }
-    const updatedOrder = merged;
-    const idxVis = filteredOrders.findIndex(o => o.id === id);
-    const visible = isVisibleStatus(updatedOrder.status);
-
-    if (idxVis !== -1) {
-      if (visible) {
-        filteredOrders[idxVis] = updatedOrder;
-        updateRow(updatedOrder);
-      } else {
-        filteredOrders.splice(idxVis, 1);
-        removeRowDom(id);
-      }
-    } else {
-      if (visible) {
-        const insertIdx = findInsertIndex(filteredOrders, updatedOrder);
-        filteredOrders.splice(insertIdx, 0, updatedOrder);
-        insertRowDom(updatedOrder, insertIdx);
-      }
-    }
-    updateDashboardPanels();
+    filterOrders();
   },
   
   delete(id) {
     allOrders = allOrders.filter(o => o.id !== id);
-    const idxVis = filteredOrders.findIndex(o => o.id === id);
-    if (idxVis !== -1) {
-      filteredOrders.splice(idxVis, 1);
-      removeRowDom(id);
-    }
-    updateDashboardPanels();
+    filterOrders();
   }
 };
 
@@ -114,6 +128,7 @@ async function loadCollaborators() {
     console.error("Error al cargar colaboradores:", error);
     return [];
   }
+  try { __collaboratorsById = Object.fromEntries((data || []).map(c => [c.id, c])); } catch(_) {}
   return data;
 }
 
@@ -508,13 +523,22 @@ async function assignSelectedCollaborator(){
     notifications.error('Colaborador no encontrado.'); 
     return; 
   }
-  const updateData = {
-    assigned_to: collaboratorId,
-    assigned_at: new Date().toISOString()
-  };
+  try {
+    const { data: conflicts } = await supabaseConfig.client
+      .from('orders')
+      .select('id,status')
+      .eq('assigned_to', collaboratorId)
+      .in('status', ['accepted', 'in_progress'])
+      .limit(1);
+    if (Array.isArray(conflicts) && conflicts.length > 0) {
+      notifications.error('El colaborador ya tiene una orden activa.');
+      return;
+    }
+  } catch(_) {}
+  const updateData = { collaborator_id: collaboratorId, assigned_at: new Date().toISOString() };
 
   // Usar OrderManager para centralizar lógica y tracking
-  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, 'En curso', updateData);
+  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, 'Aceptada', updateData);
 
   if (!success) {
     notifications.error('Error de asignación', error?.message || 'No se pudo asignar el pedido.');
@@ -522,10 +546,12 @@ async function assignSelectedCollaborator(){
     // Actualizar el array local para reflejar el cambio inmediatamente
     const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
     if (orderIndex !== -1) {
-      allOrders[orderIndex] = { ...allOrders[orderIndex], ...updateData, status: 'En curso' };
+      const merged = { ...allOrders[orderIndex], assigned_to: collaboratorId, status: 'Aceptada' };
+      allOrders[orderIndex] = merged;
+      AppState.update({ id: Number(selectedOrderIdForAssign), assigned_to: collaboratorId, status: 'Aceptada' });
     }
     filterOrders();
-    notifications.success(`Pedido asignado a ${col.name} y marcado como "En curso".`);
+    notifications.success(`Pedido asignado a ${col.name} y marcado como "Aceptada".`);
   }
   
   closeAssignModal();
@@ -608,6 +634,8 @@ function renderCardHtml(o) {
     'Completada': 'bg-green-100 text-green-800',
     'Cancelada': 'bg-red-100 text-red-800'
   }[o.status] || 'bg-gray-100 text-gray-800';
+  const collabId = getCollaboratorIdFromOrder(o);
+  const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || '';
 
   return `
     <div class="flex justify-between items-start mb-2">
@@ -628,6 +656,7 @@ function renderCardHtml(o) {
         <p class="text-gray-900">${o.date} ${o.time || ''}</p>
       </div>
     </div>
+    ${collabName ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${collabName}</div>` : ''}
     <div class="flex justify-end gap-2">
       ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
         `<button class="px-3 py-1 rounded bg-gray-100 text-gray-700 text-xs" onclick="showServiceDetails('${o.id}')">Detalles</button>` : ''}
@@ -647,6 +676,8 @@ function renderRowHtml(o){
     'Completada': 'bg-green-100 text-green-800',
     'Cancelada': 'bg-red-100 text-red-800'
   }[displayStatus] || 'bg-gray-100 text-gray-800';
+  const collabId = getCollaboratorIdFromOrder(o);
+  const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || '';
   return `
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
     <td class="px-6 py-4 whitespace-nowrap">
@@ -667,7 +698,9 @@ function renderRowHtml(o){
     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><div>${o.date}</div><div class="text-gray-500">${o.time}</div></td>
     <td class="px-6 py-4 whitespace-nowrap">
       <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">\n        <option value="Pendiente" ${formatUiStatus(o.status) === 'Pendiente' ? 'selected' : ''}>Pendiente</option>\n        <option value="Aceptada" ${formatUiStatus(o.status) === 'Aceptada' ? 'selected' : ''}>Aceptada</option>\n        <option value="En curso" ${formatUiStatus(o.status) === 'En curso' ? 'selected' : ''}>En curso</option>\n        <option value="entregada" ${formatUiStatus(o.status) === 'entregada' ? 'selected' : ''}>Completada</option>\n        <option value="cancelada" ${formatUiStatus(o.status) === 'cancelada' ? 'selected' : ''}>Cancelada</option>\n      </select>
-      ${o.collaborator?.name ? `<div class="mt-1 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${o.collaborator.name}</div>` : ''}
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+      ${collabName ? `<div class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${collabName}</div>` : '<span class="text-gray-400 text-xs">Sin asignar</span>'}
     </td>
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
       <button onclick="openPriceModal('${o.id}')" class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 transition-colors">\n        <span class="font-semibold text-green-700">${o.monto_cobrado ? `$${Number(o.monto_cobrado).toLocaleString('es-DO')}` : 'Confirmar'}</span>\n        <div class="text-xs text-gray-500">${o.metodo_pago || 'No especificado'}</div>\n      </button>
@@ -759,6 +792,8 @@ async function handleRealtimeUpdate(payload) {
     // Usar AppState para actualizar/insertar
     AppState.update(orderObj);
     
+    resolveCollaboratorName(orderObj).then(() => updateRow(orderObj));
+
     if (eventType === 'INSERT' && window.notifications) {
       notifications.info(`Cliente: ${orderObj.name}.`, { title: `Nueva Solicitud #${orderObj.id}`, duration: 10000 });
     }
@@ -867,6 +902,7 @@ async function initAdminOrdersPage() {
   __initialized = true;
   await loadOrders();
   await loadAdminInfo();
+  await loadCollaborators();
   checkVapidStatus();
   setupRealtime();
   refreshLucide();

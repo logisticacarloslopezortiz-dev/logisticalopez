@@ -33,7 +33,10 @@
     <!-- Header del Sidebar -->
     <div class="sidebar-header flex items-center justify-center py-6 px-4">
       <img src="img/1vertical.png" alt="LLO" class="sidebar-logo w-11 h-11 object-contain rounded-xl shadow-lg bg-white border-2 border-white">
-      <h2 class="text-xl font-bold text-white ml-3 sidebar-text">Admin</h2>
+      <div class="ml-3">
+        <h2 class="text-xl font-bold text-white"><span id="sidebarAdminName" class="sidebar-text">Admin</span></h2>
+        <p class="text-sm text-white/80 sidebar-text">Administrador</p>
+      </div>
     </div>
     <!-- Navegación -->
     <nav class="flex-1 flex flex-col gap-2 py-4 px-4">
@@ -71,6 +74,7 @@
         </div>
         <div>
           <p class="font-semibold text-gray-800" id="adminName">Administrador</p>
+          <p class="text-sm text-gray-500">Administrador</p>
           <div class="flex items-center gap-1">
             <div class="w-2 h-2 bg-green-500 rounded-full"></div>
             <span class="text-xs text-green-600 font-medium">Activo</span>
@@ -157,6 +161,7 @@
               <th class="table-header">Ruta</th>
               <th class="table-header" onclick="sortTable('date')">Fecha/Hora <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
               <th class="table-header" onclick="sortTable('status')">Estado</th>
+              <th class="table-header">Colaborador</th>
               <th class="table-header">Monto Cobrado</th>
             </tr>
           </thead>
@@ -320,6 +325,126 @@
   <!-- Lógica principal de la página de inicio -->
   <script src="js/inicio.js?v=20251220"></script>
   
+  <!-- ⚡ Script de Gestión de Órdenes y Tiempo Real (Corrección Colaborador) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      let driversMap = {}; // Mapa para nombres de colaboradores
+
+      // 1. Poblar select de colaboradores desde Supabase para el Modal de Asignación
+      const assignSelect = document.getElementById('assignSelect');
+      const supaClient = (window.supabaseConfig && window.supabaseConfig.client) ? window.supabaseConfig.client : null;
+      if (supaClient && typeof supaClient.from === 'function') {
+        const { data: drivers } = await supaClient
+          .from('collaborators') 
+          .select('id, name, status')
+          .order('created_at', { ascending: false });
+        if (drivers) {
+          if (assignSelect) assignSelect.innerHTML = '<option value="">Seleccionar colaborador...</option>';
+          drivers.forEach(d => {
+            driversMap[d.id] = d.name;
+            if (assignSelect) {
+              const statusIcon = d.status === 'activo' ? '🟢' : (d.status === 'ocupado' ? '🔴' : '⚪');
+              const option = document.createElement('option');
+              option.value = d.id;
+              option.textContent = `${statusIcon} ${d.name} (${d.status || 'N/A'})`;
+              assignSelect.appendChild(option);
+            }
+          });
+        }
+      }
+
+      // 2. ⚡ RENDERIZADO Y TIEMPO REAL (Tabla de Pedidos)
+      const ordersTableBody = document.getElementById('ordersTableBody');
+      
+      async function fetchAndRenderOrders() {
+        const client = (window.supabaseConfig && window.supabaseConfig.client) ? window.supabaseConfig.client : null;
+        if (!client || typeof client.from !== 'function') return;
+        const { data: orders, error } = await client
+          .from('orders')
+          .select('id,name,phone,status,pickup,delivery,service:services(name),vehicle:vehicles(name),created_at,assigned_to')
+          .in('status', ['pending','accepted','in_progress'])
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (!error && orders) {
+            renderOrders(orders);
+        }
+      }
+
+      function renderOrders(orders) {
+        if (!ordersTableBody) return;
+        ordersTableBody.innerHTML = '';
+        
+        orders.forEach(order => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-gray-50 transition-colors cursor-pointer';
+            
+            // Estilos de estado
+            let statusClass = 'bg-gray-100 text-gray-800';
+            const s = String(order.status || '').toLowerCase();
+            if (s === 'pending') statusClass = 'bg-yellow-100 text-yellow-800';
+            else if (s === 'accepted') statusClass = 'bg-blue-100 text-blue-800';
+            else if (s === 'in_progress') statusClass = 'bg-purple-100 text-purple-800';
+            else if (s === 'completed') statusClass = 'bg-green-100 text-green-800';
+            else if (s === 'cancelled') statusClass = 'bg-red-100 text-red-800';
+
+            // Formateo de fecha
+            const date = new Date(order.created_at);
+            const dateStr = date.toLocaleDateString();
+            const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            // Resolver nombre del chofer (prioridad: nombre guardado > mapa > sin asignar)
+            const driverId = order.driver_id || order.assigned_to;
+            const driverName = order.nombre_chofer || driversMap[driverId] || null;
+
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#${order.id.toString().slice(-4)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div class="font-medium text-gray-900">${order.name || 'Cliente'}</div>
+                    <div class="text-xs text-gray-400">${order.phone || ''}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.service?.name || '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.vehicle?.name || '-'}</td>
+                <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                    ${order.pickup ? String(order.pickup).split(',')[0] : '...'} ➝ ${order.delivery ? String(order.delivery).split(',')[0] : '...'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${dateStr} <span class="text-xs text-gray-400">${timeStr}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
+                        ${s === 'pending' ? 'pendiente' : s === 'accepted' ? 'asignado' : s === 'in_progress' ? 'en_curso' : s === 'completed' ? 'completado' : s === 'cancelled' ? 'cancelado' : (order.status || '')}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${driverName ? `<span class="flex items-center gap-1 text-blue-600 font-medium"><i data-lucide="user" class="w-3 h-3"></i> ${driverName}</span>` : '<span class="text-gray-400 italic text-xs">Sin asignar</span>'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">
+                    $${order.precio ? order.precio.toLocaleString() : '0.00'}
+                </td>
+            `;
+            
+            // Abrir modal al hacer click (usa tu función existente o fallback)
+            tr.onclick = () => { 
+                if(window.openAssignModal) window.openAssignModal(order); 
+            };
+            ordersTableBody.appendChild(tr);
+        });
+        if(window.lucide) lucide.createIcons();
+      }
+
+      // Suscripción a cambios en tiempo real
+      const rtClient = (window.supabaseConfig && window.supabaseConfig.client) ? window.supabaseConfig.client : null;
+      rtClient &&
+      rtClient.channel('custom-all-channel')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+          fetchAndRenderOrders(); // Recargar tabla cuando haya cambios
+        })
+        .subscribe();
+
+      // Carga inicial
+      fetchAndRenderOrders();
+    });
+  </script>
 </body>
 </html>
-

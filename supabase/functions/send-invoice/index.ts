@@ -36,6 +36,39 @@ type BusinessDataMinimal = {
   rnc?: string;
 };
 
+function wrapLongText(text: string | undefined | null, max = 60): string {
+  const t = String(text || '').trim();
+  if (!t) return '';
+  const words = t.split(/\s+/);
+  let line = '';
+  let result = '';
+  for (const word of words) {
+    if ((line + word).length > max) {
+      result += line + '\n';
+      line = word + ' ';
+    } else {
+      line += word + ' ';
+    }
+  }
+  return (result + line).trim();
+}
+
+function buildInvoiceData(order: OrderDataMinimal) {
+  return {
+    invoiceNumber: `INV-${order.short_id || order.id}`,
+    clientName: order.name || 'Cliente',
+    clientEmail: order.client_email || order.email || '',
+    clientPhone: order.phone || '',
+    rnc: null as string | null,
+    serviceName: order.service?.name || 'Servicio',
+    description: wrapLongText((order as any)?.service?.description || '', 70),
+    route: wrapLongText(`${order.pickup || ''} → ${order.delivery || ''}`, 60),
+    amount: Number(order.monto_cobrado || 0),
+    paymentMethod: order.metodo_pago || 'Pendiente',
+    date: new Date((order as any)?.created_at || Date.now()).toLocaleDateString('es-DO')
+  };
+}
+
 // ✅ NUEVO: Función para generar el PDF en memoria en el servidor
 async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDataMinimal): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
@@ -69,21 +102,44 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
   y -= 30;
 
   // Tabla de detalles
-  
   const table = {
     x: 50,
     y: y,
     width: width - 100,
-    rowHeight: 20,
     col1: 150,
     col2: width - 100 - 150,
   };
 
+  const lineHeight = 12;
+  function wrapByWidth(text: string, f: typeof font, size: number, maxWidth: number) {
+    const words = String(text || '').split(/\s+/);
+    const lines: string[] = [];
+    let current = '';
+    for (const w of words) {
+      const test = current ? current + ' ' + w : w;
+      const width = f.widthOfTextAtSize(test, size);
+      if (width > maxWidth && current) {
+        lines.push(current);
+        current = w;
+      } else {
+        current = test;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
   const drawRow = (label: string, value: string, isHeader = false) => {
-    page.drawText(label, { x: table.x + 5, y: table.y - table.rowHeight / 1.5, font: isHeader ? boldFont : font, size: 10 });
-    page.drawText(value, { x: table.x + table.col1 + 5, y: table.y - table.rowHeight / 1.5, font: isHeader ? boldFont : font, size: 10 });
-    page.drawRectangle({ x: table.x, y: table.y - table.rowHeight, width: table.width, height: table.rowHeight, borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 });
-    table.y -= table.rowHeight;
+    const labelY = table.y - lineHeight;
+    page.drawText(label, { x: table.x + 5, y: labelY, font: isHeader ? boldFont : font, size: 10 });
+    const lines = wrapByWidth(value, font, 10, table.col2 - 10);
+    const totalHeight = Math.max(lineHeight, lines.length * lineHeight + 6);
+    let vY = table.y - lineHeight;
+    for (const line of lines) {
+      page.drawText(line, { x: table.x + table.col1 + 5, y: vY, font: isHeader ? boldFont : font, size: 10 });
+      vY -= lineHeight;
+    }
+    page.drawRectangle({ x: table.x, y: table.y - totalHeight, width: table.width, height: totalHeight, borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 0.5 });
+    table.y -= totalHeight;
   };
 
   drawRow('Descripción', 'Detalle', true);
@@ -91,6 +147,8 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
   drawRow('Vehículo', order.vehicle?.name || 'N/A');
   drawRow('Origen', order.pickup || 'N/A');
   drawRow('Destino', order.delivery || 'N/A');
+  const routeText = `${order.pickup || ''} → ${order.delivery || ''}`;
+  drawRow('Ruta', routeText);
   drawRow('Fecha y Hora', `${order.date || ''} ${order.time || ''}`);
   drawRow('Estado Actual', order.status || 'N/A');
   drawRow('Método de Pago', order.metodo_pago || 'No especificado');
@@ -107,6 +165,9 @@ async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfU
   const replyTo = Deno.env.get('RESEND_REPLY_TO') || defaultFrom;
   const orderIdForDisplay = order.short_id || order.id;
   const trackingLink = `https://logisticalopezortiz.com/seguimiento.html`;
+  const normalized = buildInvoiceData(order);
+  const routeHtml = wrapLongText(normalized.route, 60).split('\n').map(l => l.trim()).join('<br>');
+  const descHtml = wrapLongText(normalized.description, 70).split('\n').map(l => l.trim()).join('<br>');
 
   if (!apiKey) {
     logDebug('RESEND_API_KEY not set');
@@ -137,6 +198,14 @@ async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfU
           <p style="color: #555555; line-height: 1.6;">Tu factura ha sido generada.</p>
           <p style="color: #555555; line-height: 1.6;"><strong>Número de Factura:</strong> ${invoiceNumber}</p>
           <p style="color: #555555; line-height: 1.6;"><strong>Total:</strong> ${(order.monto_cobrado || 0).toLocaleString('es-DO', { style: 'currency', currency: 'DOP' })}</p>
+          <div style="margin-top:14px; padding:12px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px;">
+            <p style="margin:0 0 8px 0; color:#374151; font-weight:600;">Servicio</p>
+            <p style="margin:0; color:#374151; white-space:normal; word-break:break-word; overflow-wrap:break-word; line-height:1.4;">${normalized.serviceName}</p>
+            <p style="margin:12px 0 8px 0; color:#374151; font-weight:600;">Descripción</p>
+            <p style="margin:0; color:#374151; white-space:normal; word-break:break-word; overflow-wrap:break-word; line-height:1.4;">${descHtml}</p>
+            <p style="margin:12px 0 8px 0; color:#374151; font-weight:600;">Ruta</p>
+            <p style="margin:0; color:#374151; white-space:normal; word-break:break-word; overflow-wrap:break-word; line-height:1.4;">${routeHtml}</p>
+          </div>
           
           <p style="color: #555555; line-height: 1.6; margin-top: 20px;">Puede ver y descargar su factura desde el siguiente enlace seguro:</p>
           <p style="margin: 20px 0;">
@@ -229,7 +298,7 @@ Deno.serve(async (req: Request) => {
     const q = supabase
       .from('orders')
       // ✅ NUEVO: Seleccionar también los nombres de las tablas relacionadas
-      .select('*, service:services(name), vehicle:vehicles(name)');
+      .select('*, service:services(name, description), vehicle:vehicles(name)');
     const { data: order, error: orderError } = isNumericId
       ? await q.eq('id', Number(orderId)).single()
       : await q.eq('short_id', String(orderId)).single();

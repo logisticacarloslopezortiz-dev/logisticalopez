@@ -1,11 +1,13 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { handleCors, jsonResponse } from '../cors-config.ts'
 
 const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') || '').trim()
 const SERVICE_ROLE = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '').trim()
+const ANON_KEY = (Deno.env.get('SUPABASE_ANON_KEY') || '').trim()
 const FUNCTIONS_BASE = SUPABASE_URL ? SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') : ''
 const SITE_BASE = Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com'
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { autoRefreshToken: false, persistSession: false } })
+const supabase: SupabaseClient = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { autoRefreshToken: false, persistSession: false } })
+const supabaseAnon: SupabaseClient | null = ANON_KEY ? createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } }) : null
 const ORDER_EVENT_SECRET = (Deno.env.get('ORDER_EVENT_SECRET') || '').trim()
 const SEND_NOTIFICATION_SECRET = (Deno.env.get('SEND_NOTIFICATION_SECRET') || '').trim()
 
@@ -88,25 +90,55 @@ async function sendTo(target: { user_id?: string; contact_id?: string }, notific
 }
 
 Deno.serve(async (req: Request) => {
+  const correlationId = req.headers.get('x-correlation-id') || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))
   const cors = handleCors(req)
   if (cors) return cors
-  console.log('[order-event] REQUEST', { method: req.method, url: req.url })
+  console.log('[order-event] REQUEST', { method: req.method, url: req.url, correlation_id: correlationId })
   if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
   if (!SUPABASE_URL || !SERVICE_ROLE) return jsonResponse({ success: false, error: 'server_misconfigured' }, 500)
   const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
-  if (!ORDER_EVENT_SECRET || authHeader !== `Bearer ${ORDER_EVENT_SECRET}`) {
-    console.log('[order-event] unauthorized request')
+
+  let callerId: string | null = null
+  let isAdmin = false
+  let authMode: 'secret' | 'user' | 'none' = 'none'
+
+  if (ORDER_EVENT_SECRET && authHeader === `Bearer ${ORDER_EVENT_SECRET}`) {
+    authMode = 'secret'
+    isAdmin = true
+  } else if (authHeader?.toLowerCase().startsWith('bearer ')) {
+    authMode = 'user'
+    const token = authHeader.slice(7)
+    try {
+      const { data, error } = await supabase.auth.getUser(token)
+      if (error || !data?.user?.id) {
+        console.log('[order-event] invalid user token', { correlation_id: correlationId })
+        return jsonResponse({ success: false, error: 'unauthorized' }, 401)
+      }
+      callerId = String(data.user.id)
+      const { data: collab } = await supabase
+        .from('collaborators')
+        .select('role')
+        .eq('id', callerId)
+        .maybeSingle()
+      const role = String(collab?.role || '').toLowerCase().trim()
+      isAdmin = ['admin', 'administrador', 'superadmin'].includes(role)
+    } catch (e) {
+      console.log('[order-event] user auth error', e instanceof Error ? e.message : String(e), { correlation_id: correlationId })
+      return jsonResponse({ success: false, error: 'unauthorized' }, 401)
+    }
+  } else {
+    console.log('[order-event] unauthorized request', { correlation_id: correlationId })
     return jsonResponse({ success: false, error: 'unauthorized' }, 401)
   }
   let body: any = {}
-  try { body = await req.json() } catch (err) { console.error('[order-event] invalid JSON', err); return jsonResponse({ success: false, error: 'Invalid JSON body' }, 400) }
-  console.log('[order-event] BODY', body)
+  try { body = await req.json() } catch (err) { console.error('[order-event] invalid JSON', err, { correlation_id: correlationId }); return jsonResponse({ success: false, error: 'Invalid JSON body' }, 400) }
+  console.log('[order-event] BODY', { body, correlation_id: correlationId })
   const eventType = String(body?.event || '').trim()
   const rawOrderId = body?.orderId
   const collaborator_id = String(body?.collaborator_id || '').trim() || null
   const extra = typeof body?.extra === 'object' ? body.extra : {}
   if (!eventType || !rawOrderId) {
-    console.log('[order-event] missing parameters', body)
+    console.log('[order-event] missing parameters', { body, correlation_id: correlationId })
     return jsonResponse({ success: false, error: 'Missing event or orderId' }, 400)
   }
 
@@ -139,6 +171,20 @@ Deno.serve(async (req: Request) => {
   let targets = 0
 
   try {
+  // Permission checks:
+  // - secret mode → full access
+  // - user mode:
+  //    - created → only admin
+  //    - status_changed → admin or assigned collaborator
+  if (authMode === 'user') {
+    if (eventType === 'created' && !isAdmin) {
+      return jsonResponse({ success: false, error: 'forbidden' }, 403)
+    }
+    if (eventType !== 'created' && !(isAdmin || (callerId && String(ord?.assigned_to || '').trim() === callerId))) {
+      return jsonResponse({ success: false, error: 'forbidden' }, 403)
+    }
+  }
+
   if (eventType === 'created') {
     const uniqueTargets = new Map<string, { type: 'user' | 'contact'; id: string }>()
     const addTarget = (type: 'user' | 'contact', id?: string) => {
@@ -165,7 +211,7 @@ Deno.serve(async (req: Request) => {
       const title = tpl.title.replace('{{id}}', String(orderKey))
       const bodyStr = tpl.body.replace('{{id}}', String(orderKey))
       const payload = { title, body: bodyStr, icon: absolutize('/img/android-chrome-192x192.png'), badge: absolutize('/img/favicon-32x32.png'), data: { orderId: resolvedId, short_id: ord?.short_id || null, url } }
-      const p = sendTo(t.type === 'user' ? { user_id: t.id } : { contact_id: t.id }, payload).catch(() => ({ ok: false, data: null }))
+      const p = sendTo(t.type === 'user' ? { user_id: t.id } : { contact_id: t.id }, payload, correlationId).catch(() => ({ ok: false, data: null }))
       jobs.push({ t, title, bodyStr, p })
     }
     targets = uniqueTargets.size
@@ -186,7 +232,7 @@ Deno.serve(async (req: Request) => {
         } catch (_) {}
       }
     }
-    return jsonResponse({ success: true, event: 'created', targets, sent })
+    return jsonResponse({ success: true, event: 'created', targets, sent, correlation_id: correlationId })
   }
 
   const rpcPayload = { order_id: resolvedId, new_status: body?.status, collaborator_id, extra }
@@ -199,7 +245,7 @@ Deno.serve(async (req: Request) => {
   if (String(ord?.assigned_to || collaborator_id || '').trim()) {
     const t = await getTemplate('status_changed', 'colaborador', uiStatus)
     const payload = { title: t.title.replace('{{id}}', String(orderKey)), body: t.body.replace('{{id}}', String(orderKey)), icon: absolutize('/img/android-chrome-192x192.png'), badge: absolutize('/img/favicon-32x32.png'), data: { status: uiStatus, orderId: orderKey, url } }
-    const res = await sendTo({ user_id: String(ord?.assigned_to || collaborator_id) }, payload)
+    const res = await sendTo({ user_id: String(ord?.assigned_to || collaborator_id) }, payload, correlationId)
     targets++
     if (res.ok) sent++
     try { await supabase.rpc('dispatch_notification', { p_user_id: String(ord?.assigned_to || collaborator_id), p_contact_id: null, p_title: payload.title, p_body: payload.body, p_data: { orderId: resolvedId } }) } catch (_) {}
@@ -209,14 +255,14 @@ Deno.serve(async (req: Request) => {
   if (clientUserId || contactId) {
     const t = await getTemplate('status_changed', 'cliente', uiStatus)
     const payload = { title: t.title.replace('{{id}}', String(orderKey)), body: t.body.replace('{{id}}', String(orderKey)), icon: absolutize('/img/android-chrome-192x192.png'), badge: absolutize('/img/favicon-32x32.png'), data: { status: uiStatus, orderId: orderKey, url } }
-    const res = await sendTo(clientUserId ? { user_id: clientUserId } : { contact_id: contactId }, payload)
+    const res = await sendTo(clientUserId ? { user_id: clientUserId } : { contact_id: contactId }, payload, correlationId)
     targets++
     if (res.ok) sent++
     try { await supabase.rpc('dispatch_notification', { p_user_id: clientUserId || null, p_contact_id: clientUserId ? null : contactId, p_title: payload.title, p_body: payload.body, p_data: { orderId: resolvedId } }) } catch (_) {}
   }
-  return jsonResponse({ success: true, event: 'status_changed', updated: !!rpcData, targets, sent })
+  return jsonResponse({ success: true, event: 'status_changed', updated: !!rpcData, targets, sent, correlation_id: correlationId })
   } catch (err) {
-    console.error('[order-event] fatal error', err)
+    console.error('[order-event] fatal error', err, { correlation_id: correlationId })
     return jsonResponse({ success: false, error: 'internal error' }, 500)
   }
 })

@@ -681,6 +681,15 @@ if (!window.supabaseConfig) {
     } catch (e) { return { error: e }; }
   }
   };
+  try {
+    if (typeof window.supabase !== 'undefined' &&
+        window.supabase &&
+        typeof window.supabase.from !== 'function' &&
+        mainClient &&
+        typeof mainClient.from === 'function') {
+      window.supabase = mainClient;
+    }
+  } catch (_) {}
 } // end if guard
 
 // Exportar referencia (por compatibilidad con scripts que ya lo usan)

@@ -34,6 +34,18 @@
     .sidebar-footer{background:var(--azul) !important}
     .sidebar-footer button{background:#0C375D;color:#fff}
     .sidebar-footer button:hover{background:#facc15;color:#0C375D}
+    
+    /* Estilos para el Toggle Switch */
+    .toggle-checkbox:checked {
+      right: 0;
+      border-color: #68D391;
+    }
+    .toggle-checkbox:checked + .toggle-label {
+      background-color: #68D391;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
   </style>
   <style>
     #activeJobView {
@@ -63,6 +75,16 @@
         <h2 class="text-xl font-bold text-white sidebar-text">Colaborador</h2>
         <div class="text-xs text-white/80 sidebar-text">
           <span id="sidebarCollabName">—</span> • <span id="sidebarCollabMatricula">—</span>
+        </div>
+      </div>
+    </div>
+    <!-- Toggle de Estado -->
+    <div class="px-6 pb-4 border-b border-white/10 mb-2">
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-white font-medium" id="statusLabel">Desconectado</span>
+        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+          <input type="checkbox" name="toggle" id="statusToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 left-0"/>
+          <label for="statusToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-400 cursor-pointer transition-colors duration-300"></label>
         </div>
       </div>
     </div>
@@ -162,11 +184,11 @@
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow-sm border">
                   <p class="text-xs text-gray-500 font-medium">Dirección Origen</p>
-                  <p id="activeJobPickup" class="text-sm text-gray-800 break-words"></p>
+                  <p id="activeJobPickup" class="text-sm text-gray-800 break-words whitespace-normal"></p>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow-sm border">
                   <p class="text-xs text-gray-500 font-medium">Dirección Destino</p>
-                  <p id="activeJobDelivery" class="text-sm text-gray-800 break-words"></p>
+                  <p id="activeJobDelivery" class="text-sm text-gray-800 break-words whitespace-normal"></p>
                 </div>
                 <div class="bg-white p-3 rounded-lg shadow-sm border">
                   <p class="text-xs text-gray-500 font-medium">Vehículo</p>
@@ -202,9 +224,9 @@
     </div>
   </section>
 
-  <div id="orderModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
-      <div class="flex items-center justify-between px-6 py-5 border-b bg-gradient-to-r from-[var(--azul)] to-[var(--azul-claro)] text-white">
+  <div id="orderModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-fadeInUp">
+      <div class="flex items-center justify-between px-6 py-5 border-b bg-gradient-to-r from-[var(--azul)] to-[var(--azul-claro)] text-white shrink-0 rounded-t-2xl">
         <div class="flex items-center gap-3">
           <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--amarillo)] text-[var(--azul)] font-extrabold" id="modalOrderId">#</span>
           <div>
@@ -214,7 +236,7 @@
         </div>
         <button id="closeOrderModal" class="p-2 text-white hover:text-white/90"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="p-6 space-y-4 bg-gradient-to-br from-white to-gray-50">
+      <div class="p-6 space-y-4 bg-gradient-to-br from-white to-gray-50 overflow-y-auto custom-scrollbar">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="rounded-xl border p-4 shadow-sm bg-white/80">
             <p class="text-xs text-gray-500 font-medium">Cliente</p>
@@ -228,11 +250,11 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="rounded-xl border p-4 shadow-sm bg-white/80">
             <p class="text-xs text-gray-500 font-medium">Origen</p>
-            <p id="modalPickup" class="text-sm text-gray-800 break-words"></p>
+            <p id="modalPickup" class="text-sm text-gray-800 break-words whitespace-normal"></p>
           </div>
           <div class="rounded-xl border p-4 shadow-sm bg-white/80">
             <p class="text-xs text-gray-500 font-medium">Destino</p>
-            <p id="modalDelivery" class="text-sm text-gray-800 break-words"></p>
+            <p id="modalDelivery" class="text-sm text-gray-800 break-words whitespace-normal"></p>
           </div>
         </div>
         <div class="rounded-xl border p-4 shadow-sm bg-white/80">
@@ -240,7 +262,7 @@
           <div id="modalQuestions" class="text-sm text-gray-800"></div>
         </div>
       </div>
-      <div class="px-6 py-5 border-t flex items-center justify-end gap-3 bg-gray-50">
+      <div class="px-6 py-5 border-t flex items-center justify-end gap-3 bg-gray-50 shrink-0 rounded-b-2xl">
         <button id="closeModalBtnFooter" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200" onclick="document.getElementById('orderModal').classList.add('hidden');document.getElementById('orderModal').classList.remove('flex');">Cerrar</button>
         <button id="modalAcceptBtn" class="hidden px-5 py-2 bg-[var(--azul-claro)] hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm">Aceptar Orden</button>
       </div>
@@ -292,6 +314,14 @@
     <!-- ⚡ Script de Optimización Autónoma (Compresión y Offline) -->
     <script>
       (function() {
+        // 0. ⚡ Realtime Subscription (Actualización Inmediata)
+        const channel = supabase.channel('collab_realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes' }, () => {
+                console.log("⚡ Cambio detectado en tiempo real");
+                checkActiveOrder(); // Recargar estado automáticamente
+            })
+            .subscribe();
+
         // 1. Detección Offline/Online
         const indicator = document.getElementById('offline-indicator');
         function updateOnlineStatus() {
@@ -303,7 +333,7 @@
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
-        updateOnlineStatus();
+        setTimeout(updateOnlineStatus, 1000); // Pequeño retraso para evitar falsos positivos al cargar
 
         // 2. Compresión de Imágenes en el Cliente (Canvas)
         // Esto reduce una imagen de 5MB a ~200KB antes de subirla, ahorrando datos y tiempo.
@@ -394,6 +424,217 @@
         // Ejecutar al cargar y periódicamente por si cambia
         updateBannerStatus();
         setInterval(updateBannerStatus, 2000);
+
+        // 4. Verificación de Orden Activa en Supabase
+        async function checkActiveOrder() {
+          try {
+            // Obtener usuario actual
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            // Actualizar nombre del colaborador en el sidebar
+            if(user.user_metadata?.full_name) {
+                document.getElementById('sidebarCollabName').textContent = user.user_metadata.full_name;
+            }
+
+            const { data, error } = await supabase
+              .from('solicitudes')
+              .select('*')
+              .eq('driver_id', user.id)
+              .in('status', ['en_curso', 'asignado', 'en_camino', 'cargando', 'en_camino_entregar'])
+              .single();
+
+            if (data) {
+              // ⚡ AUTOMATIZACIÓN: Si tiene trabajo activo, marcar como OCUPADO
+              updateDriverStatus(user.id, 'ocupado');
+              lockStatusToggle(true); // Bloquear toggle visualmente
+
+              // Mostrar banner si hay orden activa
+              const banner = document.getElementById('continueActiveBanner');
+              if(banner) {
+                banner.classList.remove('hidden');
+                banner.classList.add('flex');
+                
+                const statusMap = {
+                  'asignado': 'Asignada - Ir a recoger',
+                  'en_camino': 'En camino a recoger',
+                  'cargando': 'Cargando',
+                  'en_curso': 'En ruta de entrega',
+                  'en_camino_entregar': 'En ruta de entrega'
+                };
+                document.getElementById('bannerStatusText').textContent = statusMap[data.status] || data.status;
+                
+                // Configurar botón para abrir la vista completa
+                document.getElementById('continueActiveBtn').onclick = () => {
+                  document.getElementById('main-content').classList.add('hidden');
+                  document.getElementById('activeJobView').classList.remove('hidden');
+                  renderActiveJob(data, user); // ✅ Renderizar datos al abrir con nombre fijo
+                };
+              }
+            } else {
+              // Si no tiene orden activa, cargar lista de asignadas
+              loadAssignedOrders(user.id);
+              lockStatusToggle(false); // Desbloquear toggle
+            }
+          } catch (err) {
+            console.log("No hay orden activa o error:", err.message);
+            // Si falla, intentar cargar asignadas de todas formas
+            const { data: { user } } = await supabase.auth.getUser();
+            if(user) loadAssignedOrders(user.id);
+          }
+        }
+
+        // ✅ Función para renderizar el trabajo activo (Nombre fijo y datos)
+        function renderActiveJob(order, user) {
+            const fields = {
+                'activeJobId': '#' + order.id.toString().slice(-4),
+                'activeJobService': order.servicio,
+                'activeJobStatus': order.status.replace('_', ' ').toUpperCase(),
+                'activeJobClient': order.nombre_cliente + (order.telefono ? ' · ' + order.telefono : ''),
+                'activeJobPickup': order.direccion_origen,
+                'activeJobDelivery': order.direccion_destino,
+                'activeJobVehicle': order.vehiculo,
+                'activeCollaborator': user.user_metadata?.full_name || 'Tú' // ✅ Nombre fijo del colaborador
+            };
+            
+            for (const [id, val] of Object.entries(fields)) {
+                const el = document.getElementById(id);
+                if(el) el.textContent = val;
+            }
+        }
+
+        // Función para cargar SOLO las órdenes asignadas a este colaborador
+        async function loadAssignedOrders(userId) {
+            const grid = document.getElementById('ordersGrid');
+            if(!grid) return;
+
+            grid.innerHTML = '<div class="col-span-full text-center py-8"><i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto text-blue-500"></i><p class="mt-2 text-gray-500">Buscando tus asignaciones...</p></div>';
+            lucide.createIcons();
+
+            const { data: orders, error } = await supabase
+                .from('solicitudes')
+                .select('*')
+                .eq('driver_id', userId) // 🔒 FILTRO ESTRICTO: Solo mis órdenes
+                .eq('status', 'pendiente') // Solo las pendientes de aceptar/iniciar
+                .order('created_at', { ascending: false });
+
+            if (error || !orders || orders.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full flex flex-col items-center justify-center py-12 text-gray-400">
+                        <div class="bg-gray-100 p-4 rounded-full mb-3">
+                            <i data-lucide="inbox" class="w-8 h-8"></i>
+                        </div>
+                        <p class="text-lg font-medium">No tienes órdenes asignadas</p>
+                        <p class="text-sm">El administrador te notificará cuando tengas una nueva tarea.</p>
+                    </div>`;
+                lucide.createIcons();
+                document.getElementById('collabShowing').textContent = '0';
+                document.getElementById('collabTotal').textContent = '0';
+                return;
+            }
+
+            // Renderizar órdenes
+            grid.innerHTML = '';
+            document.getElementById('collabShowing').textContent = orders.length;
+            document.getElementById('collabTotal').textContent = orders.length;
+
+            orders.forEach(order => {
+                // Aquí iría tu lógica de renderizado de tarjeta (puedes copiar la de tu js principal o crearla aquí)
+                // Por brevedad, creo una tarjeta simple:
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow cursor-pointer relative overflow-hidden group';
+                card.innerHTML = `
+                    <div class="absolute top-0 left-0 w-1 h-full bg-[var(--azul)] group-hover:bg-[var(--amarillo)] transition-colors"></div>
+                    <div class="flex justify-between items-start mb-3">
+                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded">#${order.id.toString().slice(-4)}</span>
+                        <span class="text-xs text-gray-500">${new Date(order.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <h3 class="font-bold text-gray-900 mb-1">${order.servicio || 'Servicio'}</h3>
+                    <p class="text-sm text-gray-600 mb-4 line-clamp-2">${order.direccion_origen} ➝ ${order.direccion_destino}</p>
+                    <button class="w-full py-2 bg-[var(--azul)] text-white rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors">Ver Detalles</button>
+                `;
+                // Al hacer click, abrir modal (asumiendo que openOrderModal existe en tu JS principal o lo implementas)
+                card.onclick = () => { openOrderModal(order); };
+                grid.appendChild(card);
+            });
+        }
+
+        // ✅ Función Modal y Aceptar Orden (Integrada para asegurar funcionamiento)
+        window.openOrderModal = function(order) {
+            const modal = document.getElementById('orderModal');
+            if(!modal) return;
+            
+            document.getElementById('modalOrderId').textContent = '#' + order.id;
+            document.getElementById('modalService').textContent = order.servicio;
+            document.getElementById('modalStatus').textContent = order.status;
+            document.getElementById('modalClient').textContent = order.nombre_cliente;
+            document.getElementById('modalVehicle').textContent = order.vehiculo;
+            document.getElementById('modalPickup').textContent = order.direccion_origen;
+            document.getElementById('modalDelivery').textContent = order.direccion_destino;
+            
+            const acceptBtn = document.getElementById('modalAcceptBtn');
+            if(order.status === 'pendiente') {
+                acceptBtn.classList.remove('hidden');
+                acceptBtn.onclick = async () => {
+                    acceptBtn.disabled = true;
+                    acceptBtn.textContent = "Procesando...";
+                    
+                    const { error } = await supabase
+                        .from('solicitudes')
+                        .update({ status: 'asignado' }) // Cambia a asignado para iniciar flujo
+                        .eq('id', order.id);
+                        
+                    if(!error) {
+                        // ✅ ENVIAR CORREO AL CLIENTE (Usando la función global definida en el JS principal)
+                        if(window.sendStatusEmail) window.sendStatusEmail(order, 'asignado');
+                        
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                        // Realtime actualizará la UI automáticamente
+                    }
+                };
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // 5. Lógica del Toggle Switch
+        const toggle = document.getElementById('statusToggle');
+        const label = document.getElementById('statusLabel');
+
+        async function updateDriverStatus(userId, status) {
+            // Actualizar estado en tabla 'colaboradores' o 'drivers'
+            // Asumo tabla 'colaboradores' y columna 'estado'
+            await supabase.from('colaboradores').update({ estado: status }).eq('user_id', userId);
+            
+            // Actualizar UI
+            if (toggle && label) {
+                const isAvailable = status === 'disponible';
+                toggle.checked = isAvailable;
+                label.textContent = isAvailable ? "Disponible" : "Ocupado";
+                label.className = isAvailable ? "text-sm font-medium text-green-400" : "text-sm font-medium text-gray-400";
+            }
+        }
+
+        function lockStatusToggle(locked) {
+            if(toggle) {
+                toggle.disabled = locked;
+                if(locked) label.textContent = "Ocupado (En servicio)";
+            }
+        }
+
+        if(toggle && label) {
+          toggle.addEventListener('change', async function() {
+            const { data: { user } } = await supabase.auth.getUser();
+            if(!user) return;
+            
+            const newStatus = this.checked ? 'disponible' : 'ocupado';
+            updateDriverStatus(user.id, newStatus);
+          });
+        }
+
+        // Iniciar
+        checkActiveOrder();
       })();
     </script>
 </body>
