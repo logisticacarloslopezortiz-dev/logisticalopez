@@ -716,11 +716,11 @@
       }
       await refreshGlobalCollaboratorsPositions();
       try {
-        if (window.__ordersRealtimeChannel) supabaseConfig.client.removeChannel(window.__ordersRealtimeChannel);
-        window.__ordersRealtimeChannel = supabaseConfig.client
-          .channel('public:orders:positions')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async () => {
-            await refreshGlobalCollaboratorsPositions();
+        if (window.__locationsRealtimeChannel) supabaseConfig.client.removeChannel(window.__locationsRealtimeChannel);
+        window.__locationsRealtimeChannel = supabaseConfig.client
+          .channel('public:collaborator_locations')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborator_locations' }, payload => {
+            if (payload.new) updateMarker(payload.new);
           })
           .subscribe();
       } catch (_) {}
@@ -739,28 +739,39 @@
       return null;
     }
 
+    function updateMarker(location) {
+      if (!location || !location.lat || !location.lng) return;
+      const id = location.collaborator_id;
+      const latlng = [location.lat, location.lng];
+      
+      // Find collaborator info for popup
+      const col = allCollaborators.find(c => String(c.id) === String(id));
+      const name = col ? col.name : 'Colaborador';
+      
+      if (__globalMarkers.has(id)) {
+        __globalMarkers.get(id).setLatLng(latlng).setPopupContent(name);
+      } else {
+        const marker = L.marker(latlng, {
+          icon: L.divIcon({
+            className: 'pulse-marker',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+          })
+        }).addTo(__globalMap).bindPopup(name);
+        __globalMarkers.set(id, marker);
+      }
+    }
+
     async function refreshGlobalCollaboratorsPositions() {
       try {
-        const { data: orders } = await supabaseConfig.client
-          .from('orders')
-          .select('id,status,assigned_to,tracking_data,service:services(name)')
-          .in('status', ['in_progress']);
-        const arr = Array.isArray(orders) ? orders : [];
-        const byCollab = new Map();
-        for (const o of arr) {
-          if (!o.assigned_to) continue;
-          const pos = extractLatestLatLng(o.tracking_data);
-          if (!pos) continue;
-          byCollab.set(String(o.assigned_to), { pos, service: o.service?.name || '' });
-        }
-        for (const [cid, info] of byCollab.entries()) {
-          const marker = __globalMarkers.get(cid);
-          if (marker) {
-            marker.setLatLng([info.pos.lat, info.pos.lng]).bindPopup(info.service || 'En curso');
-          } else {
-            const m = L.marker([info.pos.lat, info.pos.lng]).addTo(__globalMap).bindPopup(info.service || 'En curso');
-            __globalMarkers.set(cid, m);
-          }
+        const { data: locations } = await supabaseConfig.client
+          .from('collaborator_locations')
+          .select('collaborator_id, lat, lng, updated_at');
+        
+        const arr = Array.isArray(locations) ? locations : [];
+        
+        for (const loc of arr) {
+          updateMarker(loc);
         }
       } catch (_) {}
     }
@@ -780,22 +791,41 @@
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
           mapEl.__map = map;
         }
-        const { data: orders } = await supabaseConfig.client
-          .from('orders')
-          .select('id,status,assigned_to,tracking_data')
-          .eq('assigned_to', collabId)
-          .in('status', ['in_progress'])
-          .order('updated_at', { ascending: false })
-          .limit(1);
-        const pos = extractLatestLatLng((orders && orders[0] && orders[0].tracking_data) || []);
-        if (pos) {
-          if (mapEl.__marker) {
-            mapEl.__marker.setLatLng([pos.lat, pos.lng]);
-          } else {
-            mapEl.__marker = L.marker([pos.lat, pos.lng]).addTo(map);
-          }
-          map.setView([pos.lat, pos.lng], 14);
+        
+        // Try to get live location first
+        const { data: loc } = await supabaseConfig.client
+          .from('collaborator_locations')
+          .select('lat, lng')
+          .eq('collaborator_id', collabId)
+          .maybeSingle();
+
+        if (loc && loc.lat && loc.lng) {
+             if (mapEl.__marker) {
+                mapEl.__marker.setLatLng([loc.lat, loc.lng]);
+             } else {
+                mapEl.__marker = L.marker([loc.lat, loc.lng]).addTo(map);
+             }
+             map.setView([loc.lat, loc.lng], 14);
+        } else {
+            // Fallback to last order
+            const { data: orders } = await supabaseConfig.client
+              .from('orders')
+              .select('id,status,assigned_to,tracking_data')
+              .eq('assigned_to', collabId)
+              .in('status', ['in_progress'])
+              .order('updated_at', { ascending: false })
+              .limit(1);
+            const pos = extractLatestLatLng((orders && orders[0] && orders[0].tracking_data) || []);
+            if (pos) {
+              if (mapEl.__marker) {
+                mapEl.__marker.setLatLng([pos.lat, pos.lng]);
+              } else {
+                mapEl.__marker = L.marker([pos.lat, pos.lng]).addTo(map);
+              }
+              map.setView([pos.lat, pos.lng], 14);
+            }
         }
+        
         try {
           if (map) setTimeout(() => { try { map.invalidateSize(); } catch(_){ } }, 200);
         } catch (_) {}

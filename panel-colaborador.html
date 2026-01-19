@@ -142,7 +142,7 @@
     </div>
   </main>
 
-  <section id="activeJobView" class="hidden max-w-7xl mx-auto h-[calc(100vh-2rem)] overflow-hidden p-4">
+  <section id="activeJobView" class="hidden max-w-7xl mx-auto min-h-[calc(100vh-2rem)] overflow-y-auto p-4">
     <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
       <div class="px-6 py-6 border-b bg-gradient-to-r from-[var(--azul)] to-[var(--azul-claro)] text-white">
         <div class="flex items-center justify-between">
@@ -158,7 +158,7 @@
         </div>
       </div>
       <div class="p-6 space-y-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div class="md:col-span-2 space-y-6 overflow-y-auto pr-2">
             <div class="rounded-xl border shadow-sm">
               <div class="px-4 py-3 bg-gradient-to-r from-[var(--turquesa)] to-[var(--azul-claro)] text-white font-semibold rounded-t-xl">Acciones</div>
@@ -316,7 +316,7 @@
       (function() {
         // 0. ⚡ Realtime Subscription (Actualización Inmediata)
         const channel = supabase.channel('collab_realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes' }, () => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
                 console.log("⚡ Cambio detectado en tiempo real");
                 checkActiveOrder(); // Recargar estado automáticamente
             })
@@ -438,15 +438,17 @@
             }
 
             const { data, error } = await supabase
-              .from('solicitudes')
-              .select('*')
-              .eq('driver_id', user.id)
-              .in('status', ['en_curso', 'asignado', 'en_camino', 'cargando', 'en_camino_entregar'])
-              .single();
+              .from('orders')
+              .select('*, service:services(name), vehicle:vehicles(name)')
+              .eq('assigned_to', user.id)
+              .in('status', ['pending', 'accepted', 'in_progress'])
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
             if (data) {
               // ⚡ AUTOMATIZACIÓN: Si tiene trabajo activo, marcar como OCUPADO
-              updateDriverStatus(user.id, 'ocupado');
+              updateDriverStatus(user.id, 'busy');
               lockStatusToggle(true); // Bloquear toggle visualmente
 
               // Mostrar banner si hay orden activa
@@ -456,13 +458,10 @@
                 banner.classList.add('flex');
                 
                 const statusMap = {
-                  'asignado': 'Asignada - Ir a recoger',
-                  'en_camino': 'En camino a recoger',
-                  'cargando': 'Cargando',
-                  'en_curso': 'En ruta de entrega',
-                  'en_camino_entregar': 'En ruta de entrega'
+                  'accepted': 'Aceptada - Ir a recoger',
+                  'in_progress': 'En curso'
                 };
-                document.getElementById('bannerStatusText').textContent = statusMap[data.status] || data.status;
+                document.getElementById('bannerStatusText').textContent = statusMap[String(data.status).toLowerCase()] || data.status;
                 
                 // Configurar botón para abrir la vista completa
                 document.getElementById('continueActiveBtn').onclick = () => {
@@ -487,13 +486,13 @@
         // ✅ Función para renderizar el trabajo activo (Nombre fijo y datos)
         function renderActiveJob(order, user) {
             const fields = {
-                'activeJobId': '#' + order.id.toString().slice(-4),
-                'activeJobService': order.servicio,
-                'activeJobStatus': order.status.replace('_', ' ').toUpperCase(),
-                'activeJobClient': order.nombre_cliente + (order.telefono ? ' · ' + order.telefono : ''),
-                'activeJobPickup': order.direccion_origen,
-                'activeJobDelivery': order.direccion_destino,
-                'activeJobVehicle': order.vehiculo,
+                'activeJobId': '#' + String(order.id),
+                'activeJobService': (order?.service?.name || ''),
+                'activeJobStatus': String(order.status || '').replace('_', ' ').toUpperCase(),
+                'activeJobClient': (order.name || '') + (order.phone ? ' · ' + order.phone : ''),
+                'activeJobPickup': order.pickup || '',
+                'activeJobDelivery': order.delivery || '',
+                'activeJobVehicle': (order?.vehicle?.name || ''),
                 'activeCollaborator': user.user_metadata?.full_name || 'Tú' // ✅ Nombre fijo del colaborador
             };
             
@@ -512,10 +511,10 @@
             lucide.createIcons();
 
             const { data: orders, error } = await supabase
-                .from('solicitudes')
-                .select('*')
-                .eq('driver_id', userId) // 🔒 FILTRO ESTRICTO: Solo mis órdenes
-                .eq('status', 'pendiente') // Solo las pendientes de aceptar/iniciar
+                .from('orders')
+                .select('*, service:services(name), vehicle:vehicles(name)')
+                .eq('assigned_to', userId)
+                .in('status', ['pending', 'accepted'])
                 .order('created_at', { ascending: false });
 
             if (error || !orders || orders.length === 0) {
@@ -546,11 +545,11 @@
                 card.innerHTML = `
                     <div class="absolute top-0 left-0 w-1 h-full bg-[var(--azul)] group-hover:bg-[var(--amarillo)] transition-colors"></div>
                     <div class="flex justify-between items-start mb-3">
-                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded">#${order.id.toString().slice(-4)}</span>
+                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded">#${String(order.id)}</span>
                         <span class="text-xs text-gray-500">${new Date(order.created_at).toLocaleDateString()}</span>
                     </div>
-                    <h3 class="font-bold text-gray-900 mb-1">${order.servicio || 'Servicio'}</h3>
-                    <p class="text-sm text-gray-600 mb-4 line-clamp-2">${order.direccion_origen} ➝ ${order.direccion_destino}</p>
+                    <h3 class="font-bold text-gray-900 mb-1">${order?.service?.name || 'Servicio'}</h3>
+                    <p class="text-sm text-gray-600 mb-4 line-clamp-2">${order.pickup || ''} ➝ ${order.delivery || ''}</p>
                     <button class="w-full py-2 bg-[var(--azul)] text-white rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors">Ver Detalles</button>
                 `;
                 // Al hacer click, abrir modal (asumiendo que openOrderModal existe en tu JS principal o lo implementas)
@@ -565,28 +564,28 @@
             if(!modal) return;
             
             document.getElementById('modalOrderId').textContent = '#' + order.id;
-            document.getElementById('modalService').textContent = order.servicio;
+            document.getElementById('modalService').textContent = order?.service?.name || '';
             document.getElementById('modalStatus').textContent = order.status;
-            document.getElementById('modalClient').textContent = order.nombre_cliente;
-            document.getElementById('modalVehicle').textContent = order.vehiculo;
-            document.getElementById('modalPickup').textContent = order.direccion_origen;
-            document.getElementById('modalDelivery').textContent = order.direccion_destino;
+            document.getElementById('modalClient').textContent = order.name || '';
+            document.getElementById('modalVehicle').textContent = order?.vehicle?.name || '';
+            document.getElementById('modalPickup').textContent = order.pickup || '';
+            document.getElementById('modalDelivery').textContent = order.delivery || '';
             
             const acceptBtn = document.getElementById('modalAcceptBtn');
-            if(order.status === 'pendiente') {
+            if(String(order.status || '').toLowerCase() === 'pending') {
                 acceptBtn.classList.remove('hidden');
                 acceptBtn.onclick = async () => {
                     acceptBtn.disabled = true;
                     acceptBtn.textContent = "Procesando...";
                     
                     const { error } = await supabase
-                        .from('solicitudes')
-                        .update({ status: 'asignado' }) // Cambia a asignado para iniciar flujo
+                        .from('orders')
+                        .update({ status: 'accepted' })
                         .eq('id', order.id);
                         
                     if(!error) {
                         // ✅ ENVIAR CORREO AL CLIENTE (Usando la función global definida en el JS principal)
-                        if(window.sendStatusEmail) window.sendStatusEmail(order, 'asignado');
+                        if(window.sendStatusEmail) window.sendStatusEmail(order, 'accepted');
                         
                         modal.classList.add('hidden');
                         modal.classList.remove('flex');
@@ -605,11 +604,11 @@
         async function updateDriverStatus(userId, status) {
             // Actualizar estado en tabla 'colaboradores' o 'drivers'
             // Asumo tabla 'colaboradores' y columna 'estado'
-            await supabase.from('colaboradores').update({ estado: status }).eq('user_id', userId);
+            await supabase.from('collaborators').update({ status }).eq('id', userId);
             
             // Actualizar UI
             if (toggle && label) {
-                const isAvailable = status === 'disponible';
+                const isAvailable = status === 'available';
                 toggle.checked = isAvailable;
                 label.textContent = isAvailable ? "Disponible" : "Ocupado";
                 label.className = isAvailable ? "text-sm font-medium text-green-400" : "text-sm font-medium text-gray-400";
@@ -628,7 +627,7 @@
             const { data: { user } } = await supabase.auth.getUser();
             if(!user) return;
             
-            const newStatus = this.checked ? 'disponible' : 'ocupado';
+            const newStatus = this.checked ? 'available' : 'busy';
             updateDriverStatus(user.id, newStatus);
           });
         }

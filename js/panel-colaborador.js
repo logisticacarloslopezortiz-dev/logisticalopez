@@ -1094,6 +1094,35 @@ function renderOrders() {
     });
   }
 
+  async function startLocationTracking(uid) {
+    if (!uid || !navigator.geolocation) return;
+    
+    const options = {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 5000
+    };
+
+    navigator.geolocation.watchPosition(async (pos) => {
+      try {
+        await supabaseConfig.client
+          .from('collaborator_locations')
+          .upsert({
+            collaborator_id: uid,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            speed: pos.coords.speed,
+            heading: pos.coords.heading,
+            updated_at: new Date()
+          }, { onConflict: 'collaborator_id' });
+      } catch (e) {
+        console.error('Error updating location:', e);
+      }
+    }, (err) => {
+      console.warn('Geolocation error:', err);
+    }, options);
+  }
+
   const init = async () => {
     const ok = await ensureAuthOrRedirect();
     if (!ok) return;
@@ -1120,6 +1149,9 @@ function renderOrders() {
       if (uid) {
         // ✅ AUTOMATIZACIÓN: Registrar push al cargar
         registerCollaboratorPush(uid);
+        
+        // Iniciar tracking de ubicación
+        startLocationTracking(uid);
         
         // Suscribirse a notificaciones personales
         if (window.notifications && window.notifications.subscribeToUserNotifications) {

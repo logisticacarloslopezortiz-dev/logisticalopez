@@ -17,7 +17,41 @@ CREATE TABLE IF NOT EXISTS public.business (
     push_vapid_key text,
     created_at timestamptz DEFAULT now()
 );
+-- Create collaborator_locations table for real-time tracking
+CREATE TABLE IF NOT EXISTS public.collaborator_locations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  collaborator_id uuid REFERENCES public.collaborators(id) ON DELETE CASCADE,
+  lat double precision NOT NULL,
+  lng double precision NOT NULL,
+  speed double precision,
+  heading double precision,
+  updated_at timestamptz DEFAULT now(),
+  CONSTRAINT unique_collaborator_location UNIQUE (collaborator_id)
+);
 
+-- Enable Realtime for this table
+-- Note: You might need to run this in the Supabase Dashboard > Database > Replication
+-- ALTER PUBLICATION supabase_realtime ADD TABLE public.collaborator_locations;
+
+-- RLS Policies
+ALTER TABLE public.collaborator_locations ENABLE ROW LEVEL SECURITY;
+
+-- Collaborators can upsert their own location
+CREATE POLICY "Collaborators can upsert their own location"
+ON public.collaborator_locations
+FOR INSERT
+WITH CHECK (auth.uid() = collaborator_id);
+
+CREATE POLICY "Collaborators can update their own location"
+ON public.collaborator_locations
+FOR UPDATE
+USING (auth.uid() = collaborator_id);
+
+-- Everyone (authenticated) can view locations (Adjust as needed for privacy)
+CREATE POLICY "Authenticated users can view locations"
+ON public.collaborator_locations
+FOR SELECT
+USING (auth.role() = 'authenticated')
 -- 2.2 NOTIFICATIONS
 CREATE TABLE IF NOT EXISTS public.notifications (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
