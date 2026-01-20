@@ -3,6 +3,7 @@ let currentStep = 1;
 let selectedService = null; // Ahora será un objeto {id, name}
 let serviceQuestions = {};
 let modalFilledByService = {}; // Mapa: servicio.id -> modal completado
+const DRAFT_KEY = 'tlc_draft_order';
 
 function getClientId() {
   let clientId = localStorage.getItem('client_id');
@@ -28,6 +29,19 @@ function escapeHtml(input) {
     };
     return entityMap[s];
   });
+}
+
+function normalizeError(err) {
+  return {
+    message: err?.message || 'Error desconocido',
+    code: err?.code || null,
+    hint: err?.hint || null,
+    details: err?.details || null
+  };
+}
+
+function getSafeCoords(point) {
+  return point?.latlng ? { lat: point.latlng.lat, lng: point.latlng.lng } : null;
 }
 
 /**
@@ -112,6 +126,41 @@ async function getPushSubscription() {
     return null;
   }
 }
+
+// --- Push Flow Centralizado ---
+const PushFlow = {
+  async resolve(options = {}) {
+    const { timeout = 8000 } = options;
+    let permissionPromise = null;
+    let pushSubscription = null;
+
+    try {
+      // 1. Request Permission
+      permissionPromise = requestNotificationPermission();
+      const perm = await Promise.race([
+        permissionPromise,
+        new Promise(r => setTimeout(() => r('timeout'), timeout))
+      ]);
+
+      if (perm === 'granted') {
+        notify('info', 'Activando notificaciones...', { title: 'Permiso Concedido' });
+        
+        // 2. Get Subscription
+        let pushPromise = (window.pushManager && typeof window.pushManager.subscribe === 'function')
+          ? window.pushManager.subscribe()
+          : getPushSubscription();
+
+        pushSubscription = await Promise.race([
+          pushPromise,
+          new Promise(r => setTimeout(() => r(null), timeout))
+        ]);
+      }
+    } catch (e) {
+      console.warn('PushFlow error:', e);
+    }
+    return { permissionPromise, pushSubscription };
+  }
+};
 
 // Variables para el mapa
 let map;
@@ -316,7 +365,11 @@ async function loadServices() {
   document.querySelectorAll('.service-item').forEach(card => {
     card.addEventListener('click', function() {
       // Reiniciar estado de selección y validación de modal por servicio
-      if (selectedService && selectedService.id) { modalFilledByService[selectedService.id] = false; }
+      const newId = this.dataset.serviceId;
+      if (selectedService?.id !== newId) {
+        serviceQuestions = {}; // Limpiar preguntas al cambiar servicio
+        modalFilledByService[newId] = false;
+      }
       document.querySelectorAll('.service-item').forEach(c => {
         c.classList.remove('selected', 'border-azulClaro', 'shadow-lg');
         c.querySelector('.check-indicator').classList.add('hidden', 'scale-0');
@@ -522,8 +575,8 @@ function displayOrderSummary() {
   // Obtener datos del mapa en el momento de mostrar el resumen
   const distEl = document.getElementById('distance-value');
   const distance = distEl ? distEl.textContent : '--';
-  const originCoords = MapState.origin?.marker ? MapState.origin.marker.getLatLng() : null;
-  const destinationCoords = MapState.destination?.marker ? MapState.destination.marker.getLatLng() : null;
+  const originCoords = getSafeCoords(MapState.origin);
+  const destinationCoords = getSafeCoords(MapState.destination);
 
   const dateEl = document.getElementById('orderDate');
   const timeEl = document.getElementById('orderTime');
@@ -730,7 +783,7 @@ async function initMap() {
   // Helpers de búsqueda
   async function forwardGeocode(q){
     try{
-      const { data, error } = await supabaseConfig.client.functions.invoke('forward-geocode', { body: { q, countrycodes: 'do', lang: 'es', addressdetails: 1 } });
+      const { data, error } = await supabaseConfig.client.functions.invoke('forward-geocode', { body: { q, countrycodes: 'do', lang: 'es', addressdetails: 1, limit: 1 } });
       if (error) return null;
       const res = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
       if (Array.isArray(res) && res.length > 0){
@@ -744,37 +797,67 @@ async function initMap() {
 async function searchPlace(query) {
   const q = String(query || '').trim();
   if (!q || q.length < 3) return null;
+  
+  // 1. Intentar geocodificación principal
   let res = await forwardGeocode(q);
   if (res) return res;
+
+  // 2. Fallback a Photon (OpenStreetMap) con soporte mejorado para calles/barrios
   try {
-    const qSan = q.replace(/[^\p{L}\s]/gu, '').trim();
+    const qSan = q.replace(/[^\p{L}\s0-9,-]/gu, '').trim();
     if (!qSan || qSan.length < 3) return null;
-    const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(qSan) + '&lang=es&limit=1';
+    
+    // Añadir contexto de país si no está presente para mejorar precisión
+    const qContext = qSan.toLowerCase().includes('dominicana') ? qSan : `${qSan}, República Dominicana`;
+    
+    const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(qContext) + '&lang=es&limit=1';
     const r = await fetch(url);
     if (r.ok) {
       const j = await r.json();
       const f = j.features?.[0];
-      if (f) return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: f.properties.name || q };
+      if (f) {
+        // Construir etiqueta más descriptiva
+        const props = f.properties;
+        const label = [props.name, props.street, props.city, props.state].filter(Boolean).join(', ') || q;
+        return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label };
+      }
     }
   } catch(_){ }
   return null;
 }
 
   const inputLastResult = new WeakMap();
+  // MEJORA: Autocompletado silencioso con debounce optimizado
   const previewSearch = debounce(async (inputEl) => {
     const q = (inputEl && inputEl.value ? inputEl.value : '').trim();
+    if (q.length < 4) return; // Evitar búsquedas muy cortas
+
     const res = await searchPlace(q);
     if (!res) return;
     const latlng = L.latLng(res.lat, res.lng);
-    if (rdBounds && !rdBounds.contains(latlng)) { notify('error', 'Fuera de RD'); return; }
+    
+    // MEJORA: Eliminadas notificaciones rojas (silencioso)
+    if (rdBounds && !rdBounds.contains(latlng)) { 
+      console.debug('Resultado fuera de RD ignorado:', latlng);
+      return; 
+    }
+    
     inputLastResult.set(inputEl, res);
-    map.setView(latlng, 16);
+    
+    // MEJORA: UX fluida con animación
+    map.flyTo(latlng, 16, { animate: true, duration: 1.2 });
+    
     if (!MapState.preview) {
-      MapState.preview = L.marker(latlng, { icon: previewIcon, opacity: 0.6 }).addTo(map);
+      MapState.preview = L.marker(latlng, { icon: previewIcon, opacity: 0.7, interactive: true }).addTo(map);
+      // MEJORA: Selección automática al hacer click en el preview
+      MapState.preview.on('click', () => confirmPoint(latlng, res.label));
     } else {
       MapState.preview.setLatLng(latlng);
+      MapState.preview.setOpacity(0.7);
+      MapState.preview.off('click');
+      MapState.preview.on('click', () => confirmPoint(latlng, res.label));
     }
-  }, 400);
+  }, 500);
 
   async function confirmSearch(inputEl) {
     const q = (inputEl && inputEl.value ? inputEl.value : '').trim();
@@ -1145,6 +1228,30 @@ function copyToClipboard(text) {
   }
 }
 
+function saveDraft() {
+  try {
+    const draft = {
+      step: currentStep,
+      client: {
+        name: document.getElementById('clientName')?.value,
+        phone: document.getElementById('clientPhone')?.value,
+        email: document.getElementById('clientEmail')?.value,
+      },
+      service: selectedService,
+      questions: serviceQuestions
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch(_) {}
+}
+
+function restoreDraftIfExists() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    // Lógica de restauración simplificada (opcional)
+  } catch(_) {}
+}
+
 // Inicialización cuando el DOM esté listo
 document.addEventListener('DOMContentLoaded', function() {
   
@@ -1325,14 +1432,10 @@ document.addEventListener('DOMContentLoaded', function() {
     nextBtn.addEventListener('click', () => {
       if (!validateCurrentStep()) return;
 
-      // Si estamos en el paso 2, reiniciamos la validación del modal para el servicio actual
-      if (currentStep === 2 && selectedService?.id) {
-        modalFilledByService[selectedService.id] = false;
-      }
-      
       if(currentStep < steps.length) {
         currentStep++;
         showStep(currentStep);
+        saveDraft(); // Guardado temporal
       }
     });
   }
@@ -1353,27 +1456,6 @@ document.addEventListener('DOMContentLoaded', function() {
     serviceForm.addEventListener('submit', async function(e) {
       e.preventDefault();
 
-      // ✅ SECUENCIA DE ENVÍO: 1. Permiso -> 2. Suscripción -> 3. Enviar Orden
-      console.log('Iniciando secuencia de envío: 1. Permiso -> 2. Suscripción -> 3. Orden');
-
-      // ✅ 1. Pedir y esperar permiso de notificaciones (con timeout para no bloquear)
-      let permissionPromise = null;
-      try {
-        permissionPromise = requestNotificationPermission();
-        // Esperar máximo 8s al usuario
-        const perm = await Promise.race([
-          permissionPromise,
-          new Promise(r => setTimeout(() => r('timeout'), 8000))
-        ]);
-
-        if (perm === 'granted') {
-          notify('info', 'Activando notificaciones para tu solicitud...', { title: 'Notificaciones activadas' });
-        } else if (perm === 'timeout') {
-          console.log('Timeout esperando permiso de notificaciones. Continuando envío...');
-        }
-      } catch (err) {
-        console.warn('No se pudo solicitar el permiso de notificaciones:', err);
-      }
       if (!validateCurrentStep()) return;
 
       if (hasSubmittedOrder) {
@@ -1409,8 +1491,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Construir el objeto de la orden para Supabase
         const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
-        const originCoords = MapState.origin?.latlng || null;
-        const destinationCoords = MapState.destination?.latlng || null;
+        const originCoords = getSafeCoords(MapState.origin);
+        const destinationCoords = getSafeCoords(MapState.destination);
+
+        // 1. Push Flow Centralizado
+        const { permissionPromise, pushSubscription } = await PushFlow.resolve();
+
         const orderData = {
           // Datos del cliente (Paso 1)
           name: (document.getElementById('clientName') || { value: '' }).value,
@@ -1468,40 +1554,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         baseOrder.client_id = userId || null;
 
-        // ✅ OBTENER SUSCRIPCIÓN ANTES DE CONSTRUIR EL PAYLOAD
-        let pushSubscription = null;
-        let pushPromise = null;
-        try {
-          // Usar el gestor centralizado si está disponible
-          if (window.pushManager && typeof window.pushManager.subscribe === 'function') {
-             pushPromise = window.pushManager.subscribe();
-          } else {
-             pushPromise = getPushSubscription();
-          }
-          
-          // Esperar la suscripción con un margen mayor para que el usuario responda al prompt
-          pushSubscription = await Promise.race([
-            pushPromise,
-            new Promise(resolve => setTimeout(() => resolve(null), 8000)) // Timeout de 8 segundos
-          ]);
-          if (pushSubscription) {
-            console.log('Suscripción push obtenida y será enviada con la orden.');
-            // Intentar guardar la suscripción en el servidor (Best Effort)
-            // Esto cumple con "Guardar push_subscription antes del submit"
-            if (window.pushManager && typeof window.pushManager.saveSubscriptionToServer === 'function') {
-                try {
-                    console.log('Intentando guardar suscripción antes de enviar orden (Pre-Submit Save)...');
-                    await window.pushManager.saveSubscriptionToServer(pushSubscription);
-                } catch (preSaveErr) {
-                    console.warn('No se pudo guardar suscripción previa (posible falta de contact_id, se intentará con la orden):', preSaveErr);
-                    // Continuamos igual para enviar la orden
-                }
-            }
-          }
-        } catch (e) {
-          console.warn('No se pudo obtener la suscripción push (no bloqueante):', e);
-        }
-        // Fallback de suscripción se guarda post-creación en orders.push_subscription
 
         const origin_coords2 = orderData.origin_coords;
         const destination_coords2 = orderData.destination_coords;
@@ -1627,25 +1679,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const displayCode = (savedOrder && (savedOrder.short_id || savedOrder.id)) ? (savedOrder.short_id || savedOrder.id) : null;
         
         // ✅ ACTUALIZACIÓN TARDÍA DE SUSCRIPCIÓN PUSH (RPC)
-        // Caso A: La promesa de suscripción estaba en curso pero tardó más que el timeout de envío
-        if (!pushSubscription && pushPromise && savedOrder && savedOrder.id) {
-          pushPromise.then(async (lateSub) => {
-            if (lateSub) {
-              console.log('Suscripción push obtenida tardíamente (Caso A). Actualizando orden vía RPC...');
-              try {
-                await supabaseConfig.client.rpc('update_push_subscription_by_order', {
-                  p_order_id: savedOrder.id,
-                  p_push_subscription: lateSub
-                });
-                console.log('Orden actualizada con suscripción push (late update A).');
-              } catch (err) {
-                console.error('Error en update late push subscription A:', err);
-              }
-            }
-          }).catch(err => {
-            console.debug('Late push subscription promise A failed/ignored:', err);
-          });
-        }
         
         // Caso B: El usuario aprobó el permiso TARDE (después del timeout de permiso)
         if (!pushSubscription && permissionPromise && savedOrder && savedOrder.id) {
@@ -1697,6 +1730,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // No solicitar notificaciones push automáticamente después del envío
+        localStorage.removeItem(DRAFT_KEY);
 
       } catch (error) {
         // Log detallado del error para debugging
@@ -1741,4 +1775,5 @@ document.addEventListener('DOMContentLoaded', function() {
   if (steps && steps.length > 0) {
     showStep(currentStep);
   }
+  restoreDraftIfExists();
 });

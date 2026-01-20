@@ -67,11 +67,16 @@ document.addEventListener('DOMContentLoaded', () => {
                   const v = await supabaseConfig.validateActiveCollaborator(data.user.id);
                   if (!v?.isValid) {
                     await supabaseConfig.client.auth.signOut();
-                    const msg = v?.error === 'Collaborator is not active'
-                      ? 'Tu cuenta ha sido desactivada. Contacta al administrador.'
-                      : v?.error === 'Invalid role for this panel'
-                        ? 'No tienes permisos de colaborador para este panel.'
-                        : 'No estás registrado como colaborador.';
+                    
+                    let msg = 'No estás registrado como colaborador.';
+                    if (v?.error === 'Collaborator is not active') {
+                      msg = 'Tu cuenta ha sido desactivada. Contacta al administrador.';
+                    } else if (v?.error === 'Invalid role for this panel') {
+                      msg = 'No tienes permisos de colaborador para este panel.';
+                    } else if (v?.error) {
+                      msg = `Error de validación: ${v.error}`;
+                    }
+                    
                     errorMsg.textContent = msg;
                     errorMsg.classList.remove('hidden');
                     return;

@@ -746,6 +746,17 @@
       
       // Find collaborator info for popup
       const col = allCollaborators.find(c => String(c.id) === String(id));
+      
+      // Filtrar colaboradores inactivos o no encontrados
+      if (!col || col.status !== 'activo') {
+         // Si existe marker, eliminarlo
+         if (__globalMarkers.has(id)) {
+           __globalMap.removeLayer(__globalMarkers.get(id));
+           __globalMarkers.delete(id);
+         }
+         return;
+      }
+
       const name = col ? col.name : 'Colaborador';
       
       if (__globalMarkers.has(id)) {
@@ -769,70 +780,112 @@
           .select('collaborator_id, lat, lng, updated_at');
         
         const arr = Array.isArray(locations) ? locations : [];
+        const activeIds = new Set(arr.map(l => String(l.collaborator_id)));
         
+        // Eliminar markers obsoletos
+        for (const id of __globalMarkers.keys()) {
+          if (!activeIds.has(String(id))) {
+            const m = __globalMarkers.get(id);
+            if(m) __globalMap.removeLayer(m);
+            __globalMarkers.delete(id);
+          }
+        }
+
         for (const loc of arr) {
           updateMarker(loc);
         }
       } catch (_) {}
     }
 
-    window.viewLocation = async function(collabId) {
-      try {
-        const modal = document.getElementById('collaboratorMapModal');
-        const closeBtn = document.getElementById('closeCollabMapModal');
-        const title = document.getElementById('collabMapTitle');
-        const mapEl = document.getElementById('collaboratorMapDetail');
-        const c = allCollaborators.find(x => String(x.id) === String(collabId));
-        if (title) title.textContent = c ? `Ubicación de ${c.name}` : 'Ubicación del colaborador';
-        modal.classList.remove('hidden');
-        let map = mapEl.__map || null;
-        if (!map) {
-          map = L.map(mapEl).setView([18.4861, -69.9312], 12);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
-          mapEl.__map = map;
-        }
-        
-        // Try to get live location first
-        const { data: loc } = await supabaseConfig.client
-          .from('collaborator_locations')
-          .select('lat, lng')
-          .eq('collaborator_id', collabId)
-          .maybeSingle();
+    let __collabDetailMap = null;
+    let __collabDetailMarker = null;
+    let __detailChannel = null;
 
-        if (loc && loc.lat && loc.lng) {
-             if (mapEl.__marker) {
-                mapEl.__marker.setLatLng([loc.lat, loc.lng]);
-             } else {
-                mapEl.__marker = L.marker([loc.lat, loc.lng]).addTo(map);
-             }
-             map.setView([loc.lat, loc.lng], 14);
-        } else {
-            // Fallback to last order
-            const { data: orders } = await supabaseConfig.client
-              .from('orders')
-              .select('id,status,assigned_to,tracking_data')
-              .eq('assigned_to', collabId)
-              .in('status', ['in_progress'])
-              .order('updated_at', { ascending: false })
-              .limit(1);
-            const pos = extractLatestLatLng((orders && orders[0] && orders[0].tracking_data) || []);
-            if (pos) {
-              if (mapEl.__marker) {
-                mapEl.__marker.setLatLng([pos.lat, pos.lng]);
-              } else {
-                mapEl.__marker = L.marker([pos.lat, pos.lng]).addTo(map);
-              }
-              map.setView([pos.lat, pos.lng], 14);
+    window.viewLocation = async function(collabId) {
+      const modal = document.getElementById('collaboratorMapModal');
+      const closeBtn = document.getElementById('closeCollabMapModal');
+      const title = document.getElementById('collabMapTitle');
+      const mapEl = document.getElementById('collaboratorMapDetail');
+
+      const c = allCollaborators.find(x => String(x.id) === String(collabId));
+      if (title) title.textContent = c ? `Ubicación de ${c.name}` : 'Ubicación del colaborador';
+
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+
+      // 🧹 LIMPIAR MAPA ANTERIOR SI EXISTE
+      if (__collabDetailMap) {
+        __collabDetailMap.remove();
+        __collabDetailMap = null;
+        __collabDetailMarker = null;
+      }
+      if (__detailChannel) {
+        supabaseConfig.client.removeChannel(__detailChannel);
+        __detailChannel = null;
+      }
+
+      // 🗺️ CREAR MAPA LIMPIO
+      __collabDetailMap = L.map(mapEl).setView([18.4861, -69.9312], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(__collabDetailMap);
+
+      // 📍 UBICACIÓN EN TIEMPO REAL (SNAPSHOT INICIAL)
+      const { data: loc } = await supabaseConfig.client
+        .from('collaborator_locations')
+        .select('lat, lng')
+        .eq('collaborator_id', collabId)
+        .maybeSingle();
+
+      if (loc?.lat && loc?.lng) {
+        __collabDetailMarker = L.marker([loc.lat, loc.lng]).addTo(__collabDetailMap);
+        __collabDetailMap.setView([loc.lat, loc.lng], 15);
+      }
+
+      // 📡 SUSCRIPCIÓN REALTIME (MEJORA PRO)
+      __detailChannel = supabaseConfig.client
+        .channel(`collab_detail:${collabId}`)
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'collaborator_locations', 
+          filter: `collaborator_id=eq.${collabId}` 
+        }, payload => {
+          if (payload.new && payload.new.lat && payload.new.lng) {
+            const { lat, lng } = payload.new;
+            if (__collabDetailMarker) {
+              __collabDetailMarker.setLatLng([lat, lng]);
+            } else {
+              __collabDetailMarker = L.marker([lat, lng]).addTo(__collabDetailMap);
             }
-        }
-        
-        try {
-          if (map) setTimeout(() => { try { map.invalidateSize(); } catch(_){ } }, 200);
-        } catch (_) {}
-        if (closeBtn) {
-          closeBtn.onclick = () => { modal.classList.add('hidden'); };
-        }
-      } catch (_) {}
+            // Opcional: Centrar mapa si se desea seguimiento automático
+            // __collabDetailMap.panTo([lat, lng]);
+          }
+        })
+        .subscribe();
+
+      // 🧠 Forzar recálculo de tamaño
+      setTimeout(() => {
+        try { __collabDetailMap.invalidateSize(); } catch (_) {}
+      }, 250);
+
+      // ❌ CERRAR MODAL CORRECTAMENTE
+      if (closeBtn) {
+        closeBtn.onclick = () => {
+          modal.classList.add('hidden');
+          document.body.classList.remove('overflow-hidden');
+
+          if (__collabDetailMap) {
+            __collabDetailMap.remove();
+            __collabDetailMap = null;
+            __collabDetailMarker = null;
+          }
+          if (__detailChannel) {
+            supabaseConfig.client.removeChannel(__detailChannel);
+            __detailChannel = null;
+          }
+        };
+      }
     };
   }); // End DOMContentLoaded
 

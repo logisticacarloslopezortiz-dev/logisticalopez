@@ -1,43 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // --- FUNCIÓN DE NOTIFICACIÓN POR CORREO (MEJORA) ---
-  window.sendStatusEmail = async function(order, status) {
-    const messages = {
-      'asignado': '¡Buenas noticias! Un colaborador ha aceptado tu orden y se prepara para el servicio.',
-      'accepted': '¡Buenas noticias! Un colaborador ha aceptado tu orden y se prepara para el servicio.',
-      'en_camino_recoger': 'El colaborador va en camino al punto de recogida.',
-      'cargando': 'El colaborador ha llegado y está cargando su pedido.',
-      'en_camino_entregar': 'Su carga va en camino hacia el destino de entrega.',
-      'entregada': 'Su orden ha sido entregada con éxito. ¡Gracias por confiar en Logística López Ortiz!',
-      'completada': 'Su orden ha sido completada exitosamente.',
-      'cancelada': 'Su orden ha sido cancelada. Contacte a soporte para más detalles.'
-    };
-
-    const msg = messages[status] || `El estado de su orden ha cambiado a: ${status}`;
-    const clientEmail = order.client_email || order.email; // Intenta obtener el email
-
-    if (clientEmail) {
-      try {
-        // Evitar errores CORS en desarrollo/local (solo enviar en producción)
-        const host = String(window.location.hostname || '').toLowerCase();
-        if (host.includes('localhost') || host === '127.0.0.1') {
-          console.warn('⚠️ Omitiendo envío de correo en localhost para evitar errores CORS.');
-          return;
-        }
-
-        // Invocar función de Supabase para enviar correo
-        const { error } = await supabaseConfig.client.functions.invoke('send-order-email', {
-          body: {
-            to: clientEmail,
-            subject: `Actualización de Orden #${order.id} - Logística López Ortiz`,
-            html: `<div style="font-family: sans-serif; color: #333;"><h2>Actualización de su Orden #${order.id}</h2><p>${msg}</p><p>Puede ver el seguimiento en tiempo real aquí:</p><a href="https://logisticalopezortiz.com/seguimiento.html?orderId=${order.id}" style="background-color: #0C375D; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Ver Seguimiento</a></div>`
-          }
-        });
-        if (error) throw error;
-        console.log(`📧 Correo enviado a ${clientEmail} para estado: ${status}`);
-      } catch (e) {
-        console.error('Error enviando correo:', e);
-      }
-    }
+  // --- FUNCIÓN DE NOTIFICACIÓN POR CORREO (ELIMINADA) ---
+  // Se ha migrado al backend (Trigger SQL) para evitar duplicados y mejorar seguridad.
+  window.sendStatusEmail = function() {
+    console.log('sendStatusEmail está obsoleto. El backend maneja los correos.');
   };
 
   // Elementos del DOM
@@ -99,6 +64,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnVerOrigen = document.getElementById('btnVerOrigen');
   const btnVerDestino = document.getElementById('btnVerDestino');
 
+  // Modal Confirmación Custom
+  const confirmModal = document.getElementById('confirmationModal');
+  const confirmMessage = document.getElementById('confirmMessage');
+  const confirmYesBtn = document.getElementById('confirmYesBtn');
+  const confirmNoBtn = document.getElementById('confirmNoBtn');
+  let _confirmCallback = null;
+
+  function showConfirm(msg, callback) {
+    if (confirmMessage) confirmMessage.textContent = msg;
+    _confirmCallback = callback;
+    if (confirmModal) {
+        confirmModal.classList.remove('hidden');
+        confirmModal.classList.add('flex');
+    } else {
+        // Fallback si no existe el modal en HTML
+        if (confirm(msg)) callback();
+    }
+  }
+
+  function hideConfirm() {
+    if (confirmModal) {
+        confirmModal.classList.add('hidden');
+        confirmModal.classList.remove('flex');
+    }
+    _confirmCallback = null;
+  }
+
+  if (confirmYesBtn) confirmYesBtn.onclick = () => {
+    if (_confirmCallback) _confirmCallback();
+    hideConfirm();
+  };
+  
+  if (confirmNoBtn) confirmNoBtn.onclick = hideConfirm;
+
   // Estado Local
   let orders = [];
   let currentOrder = null;
@@ -152,8 +151,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (overlay) overlay.classList.add('hidden');
     },
     disableButtons(disabled = true) {
-      const btns = document.querySelectorAll('button');
-      btns.forEach(b => b.disabled = disabled);
+      // Deshabilitar solo botones de acción principales para evitar bloqueo total
+      const selectors = [
+        '#btnGoPickup', '#btnLoading', '#btnGoDeliver', '#btnComplete', '#btnCancel',
+        '#modalAcceptBtn', '#confirmContinueBtn'
+      ];
+      selectors.forEach(sel => {
+        const el = document.querySelector(sel);
+        if (el) el.disabled = disabled;
+      });
     }
   };
 
@@ -520,7 +526,18 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateProgressBar(status){
     const bar = document.getElementById('jobProgressBar');
     if (!bar) return;
-    const map = { pendiente: 0, accepted: 15, en_camino_recoger: 25, cargando: 50, en_camino_entregar: 75, entregada: 100 };
+    // Ajuste de porcentajes: entregada 90%, completed 100%
+    const map = { 
+      pendiente: 0, 
+      accepted: 15, 
+      en_camino_recoger: 25, 
+      cargando: 50, 
+      en_camino_entregar: 75, 
+      entregada: 90, 
+      completed: 100, 
+      completada: 100,
+      cancelled: 100
+    };
     // Normalizar status
     const s = String(status || '').toLowerCase();
     bar.style.width = (map[s] || 0) + '%';
@@ -538,9 +555,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    if (['entregada', 'completada', 'cancelada'].includes(phase)) {
-      // Si la orden ya finalizó, no mostrar botones de acción
-      updateProgressBar(phase);
+    // Usar estado DB para determinar finalización
+    const dbStatus = String(order?.status || '').toLowerCase();
+    if (dbStatus === 'completed' || dbStatus === 'cancelled') {
+      // Si la orden ya finalizó (DB), no mostrar botones de acción
+      updateProgressBar(dbStatus === 'completed' ? 'completed' : 'cancelled');
       return;
     }
 
@@ -647,8 +666,8 @@ document.addEventListener('DOMContentLoaded', () => {
       currentOrder.status = 'in_progress';
       currentOrder.tracking_data = nextTracking;
 
-      // ✅ ENVIAR CORREO AL CLIENTE
-      if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, newStatus);
+      // Correo eliminado de frontend (Trigger SQL)
+      // if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, newStatus);
 
       notifications?.success?.(successMsg);
 
@@ -696,14 +715,14 @@ document.addEventListener('DOMContentLoaded', () => {
       try { notifications?.warning?.('Debes estar "En camino a entregar" para completar'); } catch(_){}
       return;
     }
-    if (confirm('¿Seguro que deseas completar esta solicitud?')) {
+    showConfirm('¿Seguro que deseas completar esta solicitud?', async () => {
       btnComplete.disabled = true;
       try {
         const { error } = await supabaseConfig.completeOrderWork(currentOrder.id);
         if (error) throw error;
         
-        // ✅ ENVIAR CORREO DE COMPLETADO
-        if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, 'entregada');
+        // Correo eliminado de frontend (Trigger SQL)
+        // if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, 'entregada');
 
         notifications?.success?.('Solicitud completada');
         closeActiveJob();
@@ -714,25 +733,26 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally {
         btnComplete.disabled = false;
       }
-    }
+    });
   });
   
   if (btnCancel) btnCancel.addEventListener('click', async () => {
     if (!currentOrder?.id) return;
-    if (!confirm('¿Seguro que deseas cancelar esta solicitud?')) return;
-    btnCancel.disabled = true;
-    try {
-      const res = await OrderManager.cancelActiveJob(currentOrder.id);
-      if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
-      notifications?.success?.('Solicitud cancelada');
-      closeActiveJob();
-      document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
-      fetchOrdersForCollaborator();
-    } catch (e) {
-      notifications?.error?.(e?.message || 'No se pudo cancelar');
-    } finally {
-      btnCancel.disabled = false;
-    }
+    showConfirm('¿Seguro que deseas cancelar esta solicitud?', async () => {
+      btnCancel.disabled = true;
+      try {
+        const res = await OrderManager.cancelActiveJob(currentOrder.id);
+        if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
+        notifications?.success?.('Solicitud cancelada');
+        closeActiveJob();
+        document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
+        fetchOrdersForCollaborator();
+      } catch (e) {
+        notifications?.error?.(e?.message || 'No se pudo cancelar');
+      } finally {
+        btnCancel.disabled = false;
+      }
+    });
   });
 
   if (backToListBtn) backToListBtn.addEventListener('click', closeActiveJob);
@@ -829,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (!allOrders || allOrders.length === 0) {
         orders = [];
-        renderOrders();
+        renderOrdersHTML();
         return;
       }
       
@@ -855,7 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
       orders = rawOrders.filter(o => !isFinalOrder(o));
       
 
-      renderOrders();
+      renderOrdersHTML();
 
     } catch (e) {
       console.error('Error in fetchOrdersForCollaborator:', e);
@@ -901,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-function renderOrders() {
+function renderOrdersHTML() {
     const total = orders.length;
     if (totalEl) totalEl.textContent = String(total);
     if (showingEl) showingEl.textContent = String(total);
@@ -988,66 +1008,67 @@ function renderOrders() {
         __iconsTimer = setTimeout(() => window.lucide.createIcons(), 50);
       }
     } catch (_) {}
+  }
 
-    if (!grid.__delegated) {
-      grid.__delegated = true;
-      grid.addEventListener('click', async (e) => {
-        const btn = e.target.closest('button');
-        if (!btn) return;
-        const o = orders.find(x => String(x.id) === btn.dataset.id);
-        if (!o) return;
-        if (btn.classList.contains('btn-open')) { openModal(o); return; }
-        if (btn.classList.contains('btn-accept')) {
-          try {
-            btn.disabled = true;
-            btn.textContent = '...';
-            await supabaseConfig.ensureFreshSession?.();
-            const { data: { session } } = await supabaseConfig.client.auth.getSession();
-            const userId = session?.user?.id;
-            if (!userId) throw new Error('Sesión inválida');
-        const v = await supabaseConfig.validateActiveCollaborator?.(userId);
-        if (v && !v.isValid) throw new Error('Sesión inválida');
+  function bindOrderEvents() {
+    if (!grid || grid.__delegated) return;
+    grid.__delegated = true;
+    grid.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const o = orders.find(x => String(x.id) === btn.dataset.id);
+      if (!o) return;
+      if (btn.classList.contains('btn-open')) { openModal(o); return; }
+      if (btn.classList.contains('btn-accept')) {
+        try {
+          btn.disabled = true;
+          btn.textContent = '...';
+          await supabaseConfig.ensureFreshSession?.();
+          const { data: { session } } = await supabaseConfig.client.auth.getSession();
+          const userId = session?.user?.id;
+          if (!userId) throw new Error('Sesión inválida');
+          const v = await supabaseConfig.validateActiveCollaborator?.(userId);
+          if (v && !v.isValid) throw new Error('Sesión inválida');
 
-        // Bloquear aceptación local si ya existe un trabajo activo asignado
-        const hasActive = orders.some(x => x.assigned_to === userId && !isFinalOrder(x));
-        if (hasActive) {
-          notifications?.error?.('Ya tienes una orden activa');
-          btn.disabled = false;
-          btn.textContent = 'Aceptar';
-          return;
-        }
-
-        const res = await OrderManager.acceptOrder(o.id, { collaborator_id: userId });
-        if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
-
-            notifications?.success?.('Orden aceptada');
-            
-            // ✅ ENVIAR CORREO DE ACEPTACIÓN
-            if(window.sendStatusEmail) window.sendStatusEmail(o, 'accepted');
-
-            try {
-              const { data: updatedOrder } = await supabaseConfig.client
-                .from('orders')
-                .select('*,service:services(name,description),vehicle:vehicles(name)')
-                .eq('id', o.id)
-                .single();
-              if (updatedOrder) Object.assign(o, updatedOrder);
-            } catch (_) {}
-
-            o.status = 'accepted';
-            o.tracking_data = []; // Iniciar vacío para que el estado sea 'accepted' puro
-            setTimeout(() => { try { openActiveJob(o); } catch(_){} }, 100);
-            try { notifications?.info?.('Pulsa "En camino a recoger" para iniciar el trabajo'); } catch(_){}
-          } catch (err) {
-            notifications?.error?.(err?.message || 'No se pudo aceptar la orden');
+          // Bloquear aceptación local si ya existe un trabajo activo asignado
+          const hasActive = orders.some(x => x.assigned_to === userId && !isFinalOrder(x));
+          if (hasActive) {
+            notifications?.error?.('Ya tienes una orden activa');
             btn.disabled = false;
             btn.textContent = 'Aceptar';
+            return;
           }
-          return;
+
+          const res = await OrderManager.acceptOrder(o.id, { collaborator_id: userId });
+          if (!res?.success) throw new Error(res?.error || 'Error al aceptar');
+
+          notifications?.success?.('Orden aceptada');
+          
+          // Correo eliminado de frontend (Trigger SQL)
+          // if(window.sendStatusEmail) window.sendStatusEmail(o, 'accepted');
+
+          try {
+            const { data: updatedOrder } = await supabaseConfig.client
+              .from('orders')
+              .select('*,service:services(name,description),vehicle:vehicles(name)')
+              .eq('id', o.id)
+              .single();
+            if (updatedOrder) Object.assign(o, updatedOrder);
+          } catch (_) {}
+
+          o.status = 'accepted';
+          o.tracking_data = []; // Iniciar vacío para que el estado sea 'accepted' puro
+          setTimeout(() => { try { openActiveJob(o); } catch(_){} }, 100);
+          try { notifications?.info?.('Pulsa "En camino a recoger" para iniciar el trabajo'); } catch(_){}
+        } catch (err) {
+          notifications?.error?.(err?.message || 'No se pudo aceptar la orden');
+          btn.disabled = false;
+          btn.textContent = 'Aceptar';
         }
-        if (btn.classList.contains('btn-continue')) { openActiveJob(o); return; }
-      });
-    }
+        return;
+      }
+      if (btn.classList.contains('btn-continue')) { openActiveJob(o); return; }
+    });
   }
 
   // --- Inicialización ---
@@ -1076,8 +1097,8 @@ function renderOrders() {
         currentOrder.assigned_to = userId;
         currentOrder.tracking_data = []; // Iniciar vacío
         
-        // ✅ ENVIAR CORREO DE ACEPTACIÓN
-        if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, 'accepted');
+        // Correo eliminado de frontend (Trigger SQL)
+        // if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, 'accepted');
 
         closeModal();
         try { notifications?.info?.('Orden aceptada. Pulsa "En camino a recoger" para iniciar.'); } catch(_){}
@@ -1175,6 +1196,7 @@ function renderOrders() {
   };
 
   init();
+  bindOrderEvents();
 
   // Listeners de Banner "Continuar"
   if (continueBtn) continueBtn.addEventListener('click', async () => {

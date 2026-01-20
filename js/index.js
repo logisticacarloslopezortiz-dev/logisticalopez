@@ -114,38 +114,138 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const grid = document.getElementById('testimonialsGrid');
+  const track = document.getElementById('testimonialsTrack');
   const empty = document.getElementById('testimonialsEmpty');
-  if (!grid) return;
-  const client = (window.supabaseConfig && (window.supabaseConfig.getPublicClient ? window.supabaseConfig.getPublicClient() : window.supabaseConfig.client)) || null;
+  if (!track) return;
+
+  // Esperar a que Supabase esté listo
+  if (window.supabaseConfig && window.supabaseConfig.ensureSupabaseReady) {
+    await window.supabaseConfig.ensureSupabaseReady();
+  }
+
+  let client = null;
+  try {
+    // Usar ensureSupabaseReady garantiza que client ya debería estar instanciado,
+    // pero mantenemos la lógica defensiva.
+    client = (window.supabaseConfig && (window.supabaseConfig.getPublicClient ? window.supabaseConfig.getPublicClient() : window.supabaseConfig.client)) || null;
+  } catch (e) {
+    console.warn('Supabase client init failed:', e);
+  }
+
   if (!client) {
+    // Fallback si falla el cliente: intentar leer localStorage o mostrar vacío
+    console.warn('Supabase client not available for testimonials');
+    // Si tienes datos mock, podrías usarlos aquí
     empty && empty.classList.remove('hidden');
     return;
   }
+
   let items = [];
   try {
+    // Intentar primero por RPC
     const { data, error } = await client.rpc('get_public_testimonials', { limit_count: 10 });
-    if (!error && Array.isArray(data)) items = data;
-  } catch (_) {}
+    if (!error && Array.isArray(data)) {
+      items = data;
+    } else {
+      // Fallback a select directo si RPC falla (por ejemplo, si no se ha creado aún)
+      // Esto ayuda a que no se rompa totalmente si el usuario no ha corrido el SQL
+      console.warn('RPC get_public_testimonials failed, trying direct select:', error);
+      const { data: tableData, error: tableError } = await client
+        .from('testimonials')
+        .select('*')
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .limit(10);
+        
+      if (!tableError && tableData) items = tableData;
+    }
+  } catch (err) {
+    console.error('Error fetching testimonials:', err);
+  }
+
   if (!items.length) {
     empty && empty.classList.remove('hidden');
     return;
   }
+
   const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const html = items.map(it => {
-    const stars = Math.max(0, Math.min(5, parseInt(it.stars || 0, 10)));
-    const starsHtml = Array.from({ length: 5 }).map((_, i) => `<i class="fas fa-star ${i < stars ? 'text-yellow-400' : 'text-gray-300'}"></i>`).join('');
+  
+  // Generar tarjetas con diseño mejorado y dinámico
+  const generateCard = (it, index) => {
+    const stars = Math.max(0, Math.min(5, parseInt(it.stars || 5, 10)));
+    const starsHtml = Array.from({ length: 5 }).map((_, i) => 
+      `<i class="fas fa-star ${i < stars ? 'text-yellow-400' : 'text-gray-300'} text-xs"></i>`
+    ).join('');
+    
     const comment = esc(it.comment || '');
     const name = esc(it.client_name || 'Cliente');
+    const initial = name.charAt(0).toUpperCase();
+    
+    // Formatear fecha
+    let dateStr = '';
+    try {
+      if (it.created_at) {
+        const d = new Date(it.created_at);
+        dateStr = d.toLocaleDateString('es-DO', { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+    } catch(_) {}
+
+    // Colores aleatorios más vibrantes para el avatar y bordes
+    const colors = [
+      { bg: 'bg-blue-100', text: 'text-blue-600', border: 'border-l-4 border-blue-500', icon: 'text-blue-400' },
+      { bg: 'bg-green-100', text: 'text-green-600', border: 'border-l-4 border-green-500', icon: 'text-green-400' },
+      { bg: 'bg-purple-100', text: 'text-purple-600', border: 'border-l-4 border-purple-500', icon: 'text-purple-400' },
+      { bg: 'bg-yellow-100', text: 'text-yellow-600', border: 'border-l-4 border-yellow-500', icon: 'text-yellow-400' },
+      { bg: 'bg-pink-100', text: 'text-pink-600', border: 'border-l-4 border-pink-500', icon: 'text-pink-400' },
+      { bg: 'bg-indigo-100', text: 'text-indigo-600', border: 'border-l-4 border-indigo-500', icon: 'text-indigo-400' },
+      { bg: 'bg-red-100', text: 'text-red-600', border: 'border-l-4 border-red-500', icon: 'text-red-400' },
+      { bg: 'bg-teal-100', text: 'text-teal-600', border: 'border-l-4 border-teal-500', icon: 'text-teal-400' },
+    ];
+    const theme = colors[index % colors.length];
+
     return `
-      <div class="bg-white rounded-xl shadow-md border border-gray-200 p-6 text-left">
-        <div class="flex items-center gap-2 mb-3 text-lg">${starsHtml}</div>
-        <p class="text-gray-700 mb-4">${comment}</p>
-        <div class="text-sm text-gray-500 font-semibold">${name}</div>
+      <div class="w-[300px] md:w-[350px] bg-white rounded-xl shadow-lg p-6 flex-shrink-0 ${theme.border} transform transition-all hover:-translate-y-2 hover:shadow-2xl duration-300 mx-4 flex flex-col justify-between h-full relative overflow-hidden group">
+        <!-- Elemento decorativo de fondo -->
+        <div class="absolute -right-6 -top-6 w-24 h-24 rounded-full ${theme.bg} opacity-20 group-hover:scale-150 transition-transform duration-500"></div>
+        
+        <div>
+          <div class="flex items-center gap-4 mb-4 relative z-10">
+              <div class="w-12 h-12 rounded-full ${theme.bg} ${theme.text} flex items-center justify-center text-xl font-bold shadow-sm ring-2 ring-white">
+                ${initial}
+              </div>
+              <div>
+                  <h4 class="font-bold text-gray-800 text-base leading-tight">${name}</h4>
+                  <div class="flex items-center gap-1 mt-1">${starsHtml}</div>
+              </div>
+          </div>
+          <div class="relative z-10">
+            <i class="fas fa-quote-left ${theme.icon} text-3xl absolute -top-3 -left-1 opacity-20"></i>
+            <p class="text-gray-600 text-sm italic leading-relaxed pl-6 relative z-10 min-h-[60px]">"${comment}"</p>
+          </div>
+        </div>
+        
+        <div class="flex justify-between items-center pt-4 mt-4 border-t border-gray-100 relative z-10">
+            <span class="text-xs text-gray-500 font-medium flex items-center gap-1">
+              <i class="far fa-calendar-alt"></i> ${dateStr}
+            </span>
+            <div class="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-full">
+               <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600">Verificado</span>
+               <i class="fas fa-check-circle text-blue-500 text-xs"></i>
+            </div>
+        </div>
       </div>
     `;
-  }).join('');
-  grid.innerHTML = html;
+  };
+
+  const html = items.map(generateCard).join('');
+  
+  // Duplicar el contenido suficientes veces para asegurar el loop infinito suave
+  // Si hay pocos items, duplicamos más veces
+  let content = html;
+  if (items.length < 5) content += html + html + html; 
+  else content += html;
+
+  track.innerHTML = content;
 });
 
 // --- Animaciones con IntersectionObserver centralizadas ---

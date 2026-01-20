@@ -167,7 +167,7 @@
       supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
         if (session) {
           // Si hay una sesión activa, verificar si es admin antes de redirigir.
-          supabaseConfig.client.rpc('is_admin').then(({ data: isAdmin }) => {
+          supabaseConfig.client.rpc('is_admin', { uid: session.user.id }).then(({ data: isAdmin }) => {
             if (isAdmin) {
               console.log(`Sesión activa de admin encontrada, redirigiendo a: ${redirectTo}`);
               window.location.href = redirectTo;
@@ -205,7 +205,7 @@
             const appRoles = (user?.app_metadata?.roles || user?.app_metadata?.role || []);
             const isServiceRole = appRoles.includes('service_role');
 
-            const { data: isAdmin, error: rpcError } = await supabaseConfig.client.rpc('is_admin');
+            const { data: isAdmin, error: rpcError } = await supabaseConfig.client.rpc('is_admin', { uid: user.id });
 
             if (rpcError) {
               console.error('Error en RPC is_admin:', rpcError);

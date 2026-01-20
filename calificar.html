@@ -205,6 +205,15 @@
     if (e.key === 'Enter') handleSearch();
   });
 
+  // ✅ AUTO-BÚSQUEDA DESDE URL
+  const params = new URLSearchParams(window.location.search);
+  const autoId = params.get('pedido') || params.get('orderId') || params.get('id');
+  if (autoId) {
+    lookupInput.value = autoId;
+    // Pequeño retraso para asegurar que la UI esté lista
+    setTimeout(handleSearch, 100);
+  }
+
   ratingForm.addEventListener('submit', async e => {
     e.preventDefault();
     hideMsg(result);

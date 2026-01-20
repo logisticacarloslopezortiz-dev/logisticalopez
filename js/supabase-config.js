@@ -105,66 +105,55 @@ if (!window.supabaseConfig) {
   // Garantiza que Supabase UMD esté cargado y clientes inicializados
   ensureSupabaseReady: async function() {
     try {
-      if (this.client && typeof this.client.from === 'function') return;
+      // 1. Verificar si window.supabase ya existe o esperar activamente
       if (typeof supabase === 'undefined' || !supabase?.createClient) {
-        await new Promise((resolve) => {
-          const existing = document.querySelector('script[src*="supabase.umd.js"]');
-          if (existing) {
-            existing.addEventListener('load', () => resolve());
-            // Si ya está cargado, resolver inmediatamente
-            if (typeof supabase !== 'undefined') return resolve();
-            return;
-          }
-          const s = document.createElement('script');
-          s.src = 'vendor/supabase.umd.js';
-          s.async = false;
-          s.onload = () => resolve();
-          s.onerror = () => resolve();
-          document.head.appendChild(s);
-        });
+        // Si no hay script en el DOM, inyectarlo (aunque debería estar en HTML)
+        if (!document.querySelector('script[src*="supabase-js"]') && !document.querySelector('script[src*="supabase.umd.js"]')) {
+           const s = document.createElement('script');
+           s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+           s.defer = true;
+           document.head.appendChild(s);
+        }
+        
+        // Esperar hasta 5 segundos a que cargue
+        let retries = 0;
+        while (typeof supabase === 'undefined' && retries < 50) {
+           await new Promise(r => setTimeout(r, 100));
+           retries++;
+        }
       }
-      if (!this.client && typeof supabase !== 'undefined' && supabase?.createClient) {
+
+      // Si falló la carga crítica
+      if (typeof supabase === 'undefined' || !supabase?.createClient) {
+        console.error('CRITICAL: Supabase JS failed to load after waiting.');
+        return;
+      }
+
+      // 2. Inicializar cliente principal si falta
+      if (!this.client) {
         try {
           this.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
             auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
             functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
           });
-        } catch (e) { console.error('Error re-inicializando cliente principal de Supabase:', e); }
+        } catch (e) { console.error('Error init main client:', e); }
       }
-      if (!this._publicClient && typeof supabase !== 'undefined' && supabase?.createClient) {
+      
+      // 3. Inicializar cliente público (ANÓNIMO) si falta
+      if (!this._publicClient) {
         try {
           this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' },
+            auth: { 
+              autoRefreshToken: false, 
+              persistSession: false, 
+              detectSessionInUrl: false, 
+              storageKey: 'sb-tlc-public' // IMPORTANTE: Storage aislado para no leer sesión de usuario
+            },
             functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
           });
-        } catch (e) { console.warn('No se pudo crear public client:', e); }
+        } catch (e) { console.warn('Error init public client:', e); }
       }
-      let retries = 0;
-      while (
-        !(this.client && typeof this.client.from === 'function') &&
-        !(this._publicClient && typeof this._publicClient.from === 'function') &&
-        retries < 20
-      ) {
-        await new Promise(r => setTimeout(r, 100));
-        retries++;
-        if (!this.client && typeof supabase !== 'undefined' && supabase?.createClient) {
-          try {
-            this.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-              auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
-              functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
-            });
-          } catch (_) {}
-        }
-        if (!this._publicClient && typeof supabase !== 'undefined' && supabase?.createClient) {
-          try {
-            this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-              auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' },
-              functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
-            });
-          } catch (_) {}
-        }
-      }
-    } catch (_) { /* no-op */ }
+    } catch (err) { console.error('ensureSupabaseReady error:', err); }
   },
 
   // Fallback REST (PostgREST) para lecturas públicas cuando el cliente no está disponible
@@ -231,21 +220,34 @@ if (!window.supabaseConfig) {
 
   // Crea un cliente público (anon) para consultas que no requieran la sesión del usuario
   getPublicClient() {
-    // Reutilizar cliente público cacheado para evitar múltiples GoTrueClient con mismo storageKey
+    // Si ya existe, devolverlo
     if (this._publicClient) return this._publicClient;
-    try {
-      if (typeof supabase !== 'undefined' && supabase?.createClient) {
+
+    // Intentar crearlo si supabase está disponible
+    if (typeof supabase !== 'undefined' && supabase?.createClient) {
+      try {
         this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' },
+          auth: { 
+            autoRefreshToken: false, 
+            persistSession: false, 
+            detectSessionInUrl: false, 
+            storageKey: 'sb-tlc-public' // Storage aislado
+          },
           functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
         });
         return this._publicClient;
+      } catch (e) {
+        console.error('Error creando public client de Supabase:', e);
       }
-      throw new Error('Supabase JS no cargado');
-    } catch (e) {
-      console.error('Error creando public client de Supabase:', e);
-      return this.client; // fallback al cliente principal
+    } else {
+        console.error('Supabase JS no cargado al llamar getPublicClient');
     }
+
+    // Fallback: si tenemos client principal, usarlo (riesgo de JWT expired si el usuario tiene sesión caducada)
+    // Es mejor devolver null o el principal que romper, pero advertimos
+    if (this.client) return this.client;
+    
+    return null;
   },
 
   // --- INICIO: Funciones de acceso a datos ---
@@ -616,16 +618,19 @@ if (!window.supabaseConfig) {
         return { isValid: false, collaborator: null, error: 'Collaborator not found' };
       }
       
-      // Validar que el status sea 'activo'
-      if (String(collab.status || '').trim().toLowerCase() !== 'activo') {
-        console.warn(`Collaborator ${userId} has status: ${collab.status}`);
+      // Validar que el status sea 'activo' (permitir variantes comunes)
+      const status = String(collab.status || '').trim().toLowerCase();
+      const validStatuses = ['activo', 'active', 'available', 'busy', 'true', '1', 'on'];
+      
+      if (!validStatuses.includes(status)) {
+        console.warn(`Collaborator ${userId} has invalid status: "${collab.status}" (normalized: "${status}")`);
         return { isValid: false, collaborator: collab, error: 'Collaborator is not active' };
       }
       
       // Validar que el role sea 'colaborador' o 'administrador'
       const role = String(collab.role || '').trim().toLowerCase();
-      if (role !== 'colaborador' && role !== 'administrador') {
-        console.warn(`Collaborator ${userId} has role: ${collab.role}`);
+      if (role !== 'colaborador' && role !== 'administrador' && role !== 'admin') {
+        console.warn(`Collaborator ${userId} has invalid role: "${collab.role}"`);
         return { isValid: false, collaborator: collab, error: 'Invalid role for this panel' };
       }
       

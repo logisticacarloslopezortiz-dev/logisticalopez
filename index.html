@@ -46,6 +46,16 @@
   <link href="css/animations.css" rel="stylesheet"> <!-- Animaciones personalizadas -->
   
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+  
+  <style>
+    /* Animación de galería infinita */
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .animate-marquee { animation: marquee 60s linear infinite; }
+    .hover\:pause:hover { animation-play-state: paused; }
+  </style>
 
   <!-- ✅ Schema.org Markup (JSON-LD) para Google -->
   <script type="application/ld+json">
@@ -386,46 +396,22 @@
   </section>
 
   <section id="testimonios" class="py-16 lg:py-24 bg-white">
-    <div class="max-w-7xl mx-auto px-6">
+    <div class="max-w-7xl mx-auto px-6 text-center mb-12">
       <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-4 animate-on-scroll">Qué opinan nuestros clientes</h3>
-      <p class="max-w-2xl text-gray-600 mb-10 animate-on-scroll">Experiencias reales que destacan puntualidad, cuidado y comunicación clara en cada servicio.</p>
-      <div id="testimonialsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <article class="rounded-2xl border border-gray-100 shadow-sm p-6 bg-white animate-on-scroll">
-          <div class="flex items-center gap-4 mb-4">
-            <img src="https://i.pravatar.cc/100?img=13" alt="Avatar de cliente" class="w-12 h-12 rounded-full object-cover" referrerpolicy="no-referrer">
-            <div>
-              <h4 class="font-semibold text-gray-900">María Fernández</h4>
-              <div class="text-yellow-500 text-sm">
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-regular fa-star"></i>
-              </div>
-            </div>
-          </div>
-          <p class="text-gray-700 leading-relaxed">Excelente experiencia. El equipo fue puntual y el seguimiento en tiempo real me dio mucha tranquilidad. ¡Recomendados!</p>
-          <div class="mt-4 text-xs text-gray-500">Servicio: Flete Santo Domingo → San Cristóbal · Enero 2025</div>
-        </article>
-        <article class="rounded-2xl border border-gray-100 shadow-sm p-6 bg-white animate-on-scroll" data-anim-delay="0.15s">
-          <div class="flex items-center gap-4 mb-4">
-            <img src="https://i.pravatar.cc/100?img=32" alt="Avatar de cliente" class="w-12 h-12 rounded-full object-cover" referrerpolicy="no-referrer">
-            <div>
-              <h4 class="font-semibold text-gray-900">José Martínez</h4>
-              <div class="text-yellow-500 text-sm">
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-                <i class="fa-solid fa-star"></i>
-              </div>
-            </div>
-          </div>
-          <p class="text-gray-700 leading-relaxed">Muy profesionales y cuidadosos con la carga. Me gustó que avisan cada etapa y cumplen el tiempo estimado.</p>
-          <div class="mt-4 text-xs text-gray-500">Servicio: Mudanza residencial · Febrero 2025</div>
-        </article>
+      <p class="max-w-2xl mx-auto text-gray-600 animate-on-scroll">Experiencias reales que destacan puntualidad, cuidado y comunicación clara en cada servicio.</p>
+    </div>
+    
+    <!-- Galería Animada -->
+    <div class="relative w-full overflow-hidden">
+      <!-- Degradados laterales para efecto suave -->
+      <div class="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"></div>
+      <div class="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none"></div>
+      
+      <div id="testimonialsTrack" class="flex gap-6 w-max animate-marquee hover:pause px-4 pb-8">
+        <!-- Los testimonios se inyectan aquí vía JS -->
       </div>
     </div>
+    <div id="testimonialsEmpty" class="hidden text-center text-gray-500">No hay testimonios disponibles.</div>
   </section>
 
   <!-- Colaboradores -->
@@ -525,7 +511,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   <script src="js/supabase-config.js" defer></script>
-  <script src="js/index.js"></script>
+  <script src="js/index.js" defer></script>
   <script src="js/push-notifications.js" defer></script>
   <script src="js/pwa.js"></script>
 </body>

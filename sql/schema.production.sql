@@ -17,41 +17,7 @@ CREATE TABLE IF NOT EXISTS public.business (
     push_vapid_key text,
     created_at timestamptz DEFAULT now()
 );
--- Create collaborator_locations table for real-time tracking
-CREATE TABLE IF NOT EXISTS public.collaborator_locations (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  collaborator_id uuid REFERENCES public.collaborators(id) ON DELETE CASCADE,
-  lat double precision NOT NULL,
-  lng double precision NOT NULL,
-  speed double precision,
-  heading double precision,
-  updated_at timestamptz DEFAULT now(),
-  CONSTRAINT unique_collaborator_location UNIQUE (collaborator_id)
-);
 
--- Enable Realtime for this table
--- Note: You might need to run this in the Supabase Dashboard > Database > Replication
--- ALTER PUBLICATION supabase_realtime ADD TABLE public.collaborator_locations;
-
--- RLS Policies
-ALTER TABLE public.collaborator_locations ENABLE ROW LEVEL SECURITY;
-
--- Collaborators can upsert their own location
-CREATE POLICY "Collaborators can upsert their own location"
-ON public.collaborator_locations
-FOR INSERT
-WITH CHECK (auth.uid() = collaborator_id);
-
-CREATE POLICY "Collaborators can update their own location"
-ON public.collaborator_locations
-FOR UPDATE
-USING (auth.uid() = collaborator_id);
-
--- Everyone (authenticated) can view locations (Adjust as needed for privacy)
-CREATE POLICY "Authenticated users can view locations"
-ON public.collaborator_locations
-FOR SELECT
-USING (auth.role() = 'authenticated')
 -- 2.2 NOTIFICATIONS
 CREATE TABLE IF NOT EXISTS public.notifications (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -164,6 +130,159 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='tracking_data') THEN
         ALTER TABLE public.orders ADD COLUMN tracking_data jsonb DEFAULT '[]'::jsonb;
     END IF;
+END $$;
+
+-- Idempotency blocks for other tables (safe migrations)
+DO $$
+BEGIN
+  -- Notifications
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='id') THEN
+    ALTER TABLE public.notifications ADD COLUMN id uuid DEFAULT gen_random_uuid();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='created_at') THEN
+    ALTER TABLE public.notifications ADD COLUMN created_at timestamptz DEFAULT now();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='user_id') THEN
+    ALTER TABLE public.notifications ADD COLUMN user_id uuid;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='contact_id') THEN
+    ALTER TABLE public.notifications ADD COLUMN contact_id uuid;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='title') THEN
+    ALTER TABLE public.notifications ADD COLUMN title text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='body') THEN
+    ALTER TABLE public.notifications ADD COLUMN body text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='read') THEN
+    ALTER TABLE public.notifications ADD COLUMN "read" boolean DEFAULT false;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notifications' AND column_name='data') THEN
+    ALTER TABLE public.notifications ADD COLUMN data jsonb DEFAULT '{}'::jsonb;
+  END IF;
+
+  -- Push Subscriptions
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='push_subscriptions' AND column_name='id') THEN
+    ALTER TABLE public.push_subscriptions ADD COLUMN id uuid DEFAULT gen_random_uuid();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='push_subscriptions' AND column_name='created_at') THEN
+    ALTER TABLE public.push_subscriptions ADD COLUMN created_at timestamptz DEFAULT now();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='push_subscriptions' AND column_name='user_id') THEN
+    ALTER TABLE public.push_subscriptions ADD COLUMN user_id uuid;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='push_subscriptions' AND column_name='endpoint') THEN
+    ALTER TABLE public.push_subscriptions ADD COLUMN endpoint text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='push_subscriptions' AND column_name='keys') THEN
+    ALTER TABLE public.push_subscriptions ADD COLUMN keys jsonb;
+  END IF;
+
+  -- Notification Logs
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_logs' AND column_name='id') THEN
+    ALTER TABLE public.notification_logs ADD COLUMN id uuid DEFAULT gen_random_uuid();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_logs' AND column_name='created_at') THEN
+    ALTER TABLE public.notification_logs ADD COLUMN created_at timestamptz DEFAULT now();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_logs' AND column_name='user_id') THEN
+    ALTER TABLE public.notification_logs ADD COLUMN user_id uuid;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_logs' AND column_name='payload') THEN
+    ALTER TABLE public.notification_logs ADD COLUMN payload jsonb DEFAULT '{}'::jsonb;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_logs' AND column_name='success') THEN
+    ALTER TABLE public.notification_logs ADD COLUMN success boolean DEFAULT false;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_logs' AND column_name='error_message') THEN
+    ALTER TABLE public.notification_logs ADD COLUMN error_message text;
+  END IF;
+
+  -- Business
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='business' AND column_name='id') THEN
+    ALTER TABLE public.business ADD COLUMN id int DEFAULT 1;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='business' AND column_name='business_name') THEN
+    ALTER TABLE public.business ADD COLUMN business_name text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='business' AND column_name='vapid_public_key') THEN
+    ALTER TABLE public.business ADD COLUMN vapid_public_key text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='business' AND column_name='push_vapid_key') THEN
+    ALTER TABLE public.business ADD COLUMN push_vapid_key text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='business' AND column_name='created_at') THEN
+    ALTER TABLE public.business ADD COLUMN created_at timestamptz DEFAULT now();
+  END IF;
+
+  -- Collaborators
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='id') THEN
+    ALTER TABLE public.collaborators ADD COLUMN id uuid;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='created_at') THEN
+    ALTER TABLE public.collaborators ADD COLUMN created_at timestamptz DEFAULT now();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='name') THEN
+    ALTER TABLE public.collaborators ADD COLUMN name text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='email') THEN
+    ALTER TABLE public.collaborators ADD COLUMN email text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='phone') THEN
+    ALTER TABLE public.collaborators ADD COLUMN phone text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='matricula') THEN
+    ALTER TABLE public.collaborators ADD COLUMN matricula text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='status') THEN
+    ALTER TABLE public.collaborators ADD COLUMN status text DEFAULT 'activo';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='commission_percent') THEN
+    ALTER TABLE public.collaborators ADD COLUMN commission_percent numeric DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='push_subscription') THEN
+    ALTER TABLE public.collaborators ADD COLUMN push_subscription jsonb;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collaborators' AND column_name='role') THEN
+    ALTER TABLE public.collaborators ADD COLUMN role text DEFAULT 'colaborador';
+  END IF;
+
+  -- Services
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='services' AND column_name='id') THEN
+    ALTER TABLE public.services ADD COLUMN id bigint;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='services' AND column_name='created_at') THEN
+    ALTER TABLE public.services ADD COLUMN created_at timestamptz DEFAULT now();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='services' AND column_name='name') THEN
+    ALTER TABLE public.services ADD COLUMN name text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='services' AND column_name='description') THEN
+    ALTER TABLE public.services ADD COLUMN description text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='services' AND column_name='base_price') THEN
+    ALTER TABLE public.services ADD COLUMN base_price numeric DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='services' AND column_name='display_order') THEN
+    ALTER TABLE public.services ADD COLUMN display_order int DEFAULT 0;
+  END IF;
+
+  -- Vehicles
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vehicles' AND column_name='id') THEN
+    ALTER TABLE public.vehicles ADD COLUMN id bigint;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vehicles' AND column_name='created_at') THEN
+    ALTER TABLE public.vehicles ADD COLUMN created_at timestamptz DEFAULT now();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vehicles' AND column_name='name') THEN
+    ALTER TABLE public.vehicles ADD COLUMN name text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vehicles' AND column_name='description') THEN
+    ALTER TABLE public.vehicles ADD COLUMN description text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vehicles' AND column_name='capacity') THEN
+    ALTER TABLE public.vehicles ADD COLUMN capacity text;
+  END IF;
 END $$;
 
 -- ==========================================
@@ -529,7 +648,7 @@ language sql stable security definer set search_path = pg_catalog, public as $$
     from public.collaborators
     where id = uid
       and lower(role) = 'administrador'
-      and status = 'activo'
+      and lower(status) in ('activo','active','available','busy')
   );
 $$;
 
@@ -816,28 +935,7 @@ end;
 $$;
 grant execute on function public.submit_rating_v2(bigint, int, int, text) to anon, authenticated;
 
--- RPC: Testimonios públicos
-create or replace function public.get_public_testimonials(limit_count int default 10)
-returns table (
-  order_id bigint,
-  stars int,
-  comment text,
-  client_name text
-)
-language sql stable security definer set search_path = pg_catalog, public as $$
-  select 
-    o.id as order_id,
-    coalesce((o.rating->>'service')::int, (o.rating->>'stars')::int, null) as stars,
-    nullif(o.customer_comment,'') as comment,
-    nullif(o.name,'') as client_name
-  from public.orders o
-  where o.customer_comment is not null 
-    and trim(o.customer_comment) <> ''
-    and coalesce((o.rating->>'stars')::int, 0) >= 4
-  order by o.completed_at desc nulls last, o.created_at desc
-  limit greatest(1, limit_count)
-$$;
-grant execute on function public.get_public_testimonials(int) to anon, authenticated;
+-- (deprecated implementation removed to avoid return type conflicts)
 
 drop function if exists public.resolve_order_for_rating(text);
 create or replace function public.resolve_order_for_rating(p_code text)
@@ -1884,3 +1982,86 @@ create trigger trg_create_active_job
 after update of status on public.orders
 for each row
 execute function public.create_active_job_on_start();
+
+
+-- Create collaborator_locations table for real-time tracking
+CREATE TABLE IF NOT EXISTS public.collaborator_locations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  collaborator_id uuid REFERENCES public.collaborators(id) ON DELETE CASCADE,
+  lat double precision NOT NULL,
+  lng double precision NOT NULL,
+  speed double precision,
+  heading double precision,
+  updated_at timestamptz DEFAULT now(),
+  CONSTRAINT unique_collaborator_location UNIQUE (collaborator_id)
+);
+
+-- Enable Realtime for this table
+-- Note: You might need to run this in the Supabase Dashboard > Database > Replication
+-- ALTER PUBLICATION supabase_realtime ADD TABLE public.collaborator_locations;
+
+-- RLS Policies
+ALTER TABLE public.collaborator_locations ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies to avoid duplicate errors on re-run
+DROP POLICY IF EXISTS "Collaborators can upsert their own location" ON public.collaborator_locations;
+DROP POLICY IF EXISTS "Collaborators can update their own location" ON public.collaborator_locations;
+DROP POLICY IF EXISTS "Authenticated users can view locations" ON public.collaborator_locations;
+
+-- Collaborators can upsert their own location
+CREATE POLICY "Collaborators can upsert their own location"
+ON public.collaborator_locations
+FOR INSERT
+WITH CHECK (auth.uid() = collaborator_id);
+
+CREATE POLICY "Collaborators can update their own location"
+ON public.collaborator_locations
+FOR UPDATE
+USING (auth.uid() = collaborator_id);
+
+-- Everyone (authenticated) can view locations (Adjust as needed for privacy)
+CREATE POLICY "Authenticated users can view locations"
+ON public.collaborator_locations
+FOR SELECT
+USING (auth.role() = 'authenticated');
+
+-- 1. Create testimonials table
+CREATE TABLE IF NOT EXISTS public.testimonials (
+    id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    created_at timestamptz DEFAULT now(),
+    client_name text NOT NULL,
+    comment text NOT NULL,
+    stars int DEFAULT 5,
+    is_public boolean DEFAULT true,
+    display_order int DEFAULT 0,
+    avatar_url text -- Optional, for future use
+);
+
+-- 2. Enable RLS
+ALTER TABLE public.testimonials ENABLE ROW LEVEL SECURITY;
+
+-- 3. Create Policy for Public Read
+DROP POLICY IF EXISTS "Public can view testimonials" ON public.testimonials;
+CREATE POLICY "Public can view testimonials"
+ON public.testimonials
+FOR SELECT
+USING (is_public = true);
+
+-- 4. Grant access to anon and authenticated
+GRANT SELECT ON public.testimonials TO anon, authenticated;
+
+DROP FUNCTION IF EXISTS public.get_public_testimonials(int);
+CREATE OR REPLACE FUNCTION public.get_public_testimonials(limit_count int DEFAULT 10)
+RETURNS SETOF public.testimonials
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT *
+  FROM public.testimonials
+  WHERE is_public = true
+  ORDER BY display_order ASC, created_at DESC
+  LIMIT limit_count;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_public_testimonials(int) TO anon, authenticated;
+
