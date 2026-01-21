@@ -102,58 +102,22 @@ if (!window.supabaseConfig) {
     return res;
   },
 
-  // Garantiza que Supabase UMD esté cargado y clientes inicializados
+  // Garantiza que Supabase UMD esté cargado y clientes inicializados (sin inyección dinámica)
   ensureSupabaseReady: async function() {
-    try {
-      // 1. Verificar si window.supabase ya existe o esperar activamente
-      if (typeof supabase === 'undefined' || !supabase?.createClient) {
-        // Si no hay script en el DOM, inyectarlo (aunque debería estar en HTML)
-        if (!document.querySelector('script[src*="supabase-js"]') && !document.querySelector('script[src*="supabase.umd.js"]')) {
-           const s = document.createElement('script');
-           s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-           s.defer = true;
-           document.head.appendChild(s);
-        }
-        
-        // Esperar hasta 5 segundos a que cargue
-        let retries = 0;
-        while (typeof supabase === 'undefined' && retries < 50) {
-           await new Promise(r => setTimeout(r, 100));
-           retries++;
-        }
-      }
-
-      // Si falló la carga crítica
-      if (typeof supabase === 'undefined' || !supabase?.createClient) {
-        console.error('CRITICAL: Supabase JS failed to load after waiting.');
-        return;
-      }
-
-      // 2. Inicializar cliente principal si falta
-      if (!this.client) {
-        try {
-          this.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
-            functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
-          });
-        } catch (e) { console.error('Error init main client:', e); }
-      }
-      
-      // 3. Inicializar cliente público (ANÓNIMO) si falta
-      if (!this._publicClient) {
-        try {
-          this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            auth: { 
-              autoRefreshToken: false, 
-              persistSession: false, 
-              detectSessionInUrl: false, 
-              storageKey: 'sb-tlc-public' // IMPORTANTE: Storage aislado para no leer sesión de usuario
-            },
-            functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
-          });
-        } catch (e) { console.warn('Error init public client:', e); }
-      }
-    } catch (err) { console.error('ensureSupabaseReady error:', err); }
+    if (typeof window.supabase === 'undefined' || !window.supabase?.createClient) {
+      throw new Error('Supabase JS no está cargado. Verifica el script UMD en index.html');
+    }
+    if (!this.client) {
+      this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
+        functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
+      });
+    }
+    if (!this._publicClient) {
+      this._publicClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+      });
+    }
   },
 
   // Fallback REST (PostgREST) para lecturas públicas cuando el cliente no está disponible
@@ -620,7 +584,7 @@ if (!window.supabaseConfig) {
       
       // Validar que el status sea 'activo' (permitir variantes comunes)
       const status = String(collab.status || '').trim().toLowerCase();
-      const validStatuses = ['activo', 'active', 'available', 'busy', 'true', '1', 'on'];
+      const validStatuses = ['activo', 'active'];
       
       if (!validStatuses.includes(status)) {
         console.warn(`Collaborator ${userId} has invalid status: "${collab.status}" (normalized: "${status}")`);

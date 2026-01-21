@@ -648,7 +648,7 @@ language sql stable security definer set search_path = pg_catalog, public as $$
     from public.collaborators
     where id = uid
       and lower(role) = 'administrador'
-      and lower(status) in ('activo','active','available','busy')
+      and lower(status) in ('activo','active')
   );
 $$;
 
@@ -851,6 +851,25 @@ create index if not exists idx_notifications_user_read_at on public.notification
 
 -- Ajustes para comisiones
 alter table public.collaborators add column if not exists commission_percent numeric default 0.10;
+
+-- Disponibilidad dinámica del colaborador (no confundir con activación)
+alter table public.collaborators add column if not exists availability text default 'available';
+create index if not exists idx_collaborators_availability on public.collaborators(availability);
+
+-- Normalizar estados incorrectos previamente guardados en 'status'
+do $$
+begin
+  -- Copiar availability desde status cuando estaba mal usado
+  update public.collaborators
+     set availability = lower(status)
+   where lower(status) in ('available','busy')
+     and (availability is null or availability not in ('available','busy'));
+
+  -- Volver status a 'activo' cuando estaba en 'available'/'busy'
+  update public.collaborators
+     set status = 'activo'
+   where lower(status) in ('available','busy');
+end $$;
 
 -- RPC: Datos del panel del colaborador
 create or replace function public.get_collaborator_dashboard_data(collab_id uuid, period_start date, period_end date)

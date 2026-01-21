@@ -471,7 +471,7 @@
 
             if (data) {
               // ⚡ AUTOMATIZACIÓN: Si tiene trabajo activo, marcar como OCUPADO
-              updateDriverStatus(user.id, 'busy');
+              updateDriverAvailability(user.id, 'busy');
               lockStatusToggle(true); // Bloquear toggle visualmente
 
               // Mostrar banner si hay orden activa
@@ -624,14 +624,13 @@
         const toggle = document.getElementById('statusToggle');
         const label = document.getElementById('statusLabel');
 
-        async function updateDriverStatus(userId, status) {
-            // Actualizar estado en tabla 'colaboradores' o 'drivers'
-            // Asumo tabla 'colaboradores' y columna 'estado'
-            await supabase.from('collaborators').update({ status }).eq('id', userId);
+        async function updateDriverAvailability(userId, availability) {
+            // Actualizar disponibilidad dinámica sin tocar 'status' (activación)
+            await supabase.from('collaborators').update({ availability }).eq('id', userId);
             
             // Actualizar UI
             if (toggle && label) {
-                const isAvailable = status === 'available';
+                const isAvailable = availability === 'available';
                 toggle.checked = isAvailable;
                 label.textContent = isAvailable ? "Disponible" : "Ocupado";
                 label.className = isAvailable ? "text-sm font-medium text-green-400" : "text-sm font-medium text-gray-400";
@@ -650,8 +649,8 @@
             const { data: { user } } = await supabase.auth.getUser();
             if(!user) return;
             
-            const newStatus = this.checked ? 'available' : 'busy';
-            updateDriverStatus(user.id, newStatus);
+            const newAvailability = this.checked ? 'available' : 'busy';
+            updateDriverAvailability(user.id, newAvailability);
           });
         }
 

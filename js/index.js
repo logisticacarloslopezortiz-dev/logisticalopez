@@ -75,6 +75,14 @@ window.addEventListener('scroll', () => {
   }
 });
 
+let supabaseReadyPromise = null;
+async function ensureSupabaseOnce() {
+  if (!supabaseReadyPromise && window.supabaseConfig?.ensureSupabaseReady) {
+    supabaseReadyPromise = window.supabaseConfig.ensureSupabaseReady();
+  }
+  return supabaseReadyPromise;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const heroContainer = document.querySelector('.hero .animate-fadeInUp');
   if (heroContainer) {
@@ -120,47 +128,64 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Esperar a que Supabase esté listo
   if (window.supabaseConfig && window.supabaseConfig.ensureSupabaseReady) {
-    await window.supabaseConfig.ensureSupabaseReady();
+    try {
+      await ensureSupabaseOnce();
+    } catch (e) {
+      console.warn('ensureSupabaseReady falló, usando REST fallback:', e?.message || e);
+    }
   }
 
   let client = null;
-  try {
-    // Usar ensureSupabaseReady garantiza que client ya debería estar instanciado,
-    // pero mantenemos la lógica defensiva.
-    client = (window.supabaseConfig && (window.supabaseConfig.getPublicClient ? window.supabaseConfig.getPublicClient() : window.supabaseConfig.client)) || null;
-  } catch (e) {
-    console.warn('Supabase client init failed:', e);
-  }
-
-  if (!client) {
-    // Fallback si falla el cliente: intentar leer localStorage o mostrar vacío
-    console.warn('Supabase client not available for testimonials');
-    // Si tienes datos mock, podrías usarlos aquí
-    empty && empty.classList.remove('hidden');
-    return;
+  if (window.supabaseConfig) {
+    try {
+      client = window.supabaseConfig.getPublicClient?.() || null;
+    } catch (_) {
+      client = null;
+    }
   }
 
   let items = [];
-  try {
-    // Intentar primero por RPC
-    const { data, error } = await client.rpc('get_public_testimonials', { limit_count: 10 });
-    if (!error && Array.isArray(data)) {
-      items = data;
-    } else {
-      // Fallback a select directo si RPC falla (por ejemplo, si no se ha creado aún)
-      // Esto ayuda a que no se rompa totalmente si el usuario no ha corrido el SQL
-      console.warn('RPC get_public_testimonials failed, trying direct select:', error);
+  if (!client && window.supabaseConfig && typeof window.supabaseConfig.restSelect === 'function') {
+    try {
+      const { data } = await window.supabaseConfig.restSelect('testimonials', {
+        select: '*',
+        'is_public': 'eq.true',
+        'order': 'created_at.desc',
+        'limit': '10'
+      });
+      items = Array.isArray(data) ? data : [];
+    } catch (_) {}
+  }
+
+  if (client && items.length === 0 && typeof client.rpc === 'function') {
+    try {
+      const { data, error } = await client.rpc('get_public_testimonials', { limit_count: 10 });
+      if (!error && Array.isArray(data)) {
+        items = data;
+      } else if (typeof client.from === 'function') {
+        const { data: tableData, error: tableError } = await client
+          .from('testimonials')
+          .select('*')
+          .eq('is_public', true)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        if (!tableError && tableData) items = tableData;
+      }
+    } catch (err) {
+      console.error('Error fetching testimonials:', err);
+    }
+  } else if (client && items.length === 0 && typeof client.from === 'function') {
+    try {
       const { data: tableData, error: tableError } = await client
         .from('testimonials')
         .select('*')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(10);
-        
       if (!tableError && tableData) items = tableData;
+    } catch (err) {
+      console.error('Error fetching testimonials (select only):', err);
     }
-  } catch (err) {
-    console.error('Error fetching testimonials:', err);
   }
 
   if (!items.length) {

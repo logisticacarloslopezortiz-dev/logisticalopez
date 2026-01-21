@@ -11,7 +11,7 @@
   <meta name="author" content="Logística López Ortiz">
   <link rel="canonical" href="https://logisticalopezortiz.com/" />
 
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:*; font-src 'self' data: https://cdnjs.cloudflare.com; manifest-src 'self'; worker-src 'self'; frame-src https://www.google.com https://www.gstatic.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:* https://cdn.jsdelivr.net; font-src 'self' data: https://cdnjs.cloudflare.com; manifest-src 'self'; worker-src 'self'; frame-src https://www.google.com https://www.gstatic.com">
 
   <!-- ✅ Open Graph (para Redes Sociales) -->
   <meta property="og:title" content="Transporte y Logística en República Dominicana | Logística López Ortiz" />
@@ -409,6 +409,28 @@
       
       <div id="testimonialsTrack" class="flex gap-6 w-max animate-marquee hover:pause px-4 pb-8">
         <!-- Los testimonios se inyectan aquí vía JS -->
+        <!-- Skeleton Loading (Placeholder mientras carga) -->
+        <div class="w-80 bg-gray-50 p-6 rounded-xl shadow-sm border border-gray-100 flex-shrink-0">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
+            <div class="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="h-3 bg-gray-200 rounded w-full animate-pulse"></div>
+            <div class="h-3 bg-gray-200 rounded w-5/6 animate-pulse"></div>
+            <div class="h-3 bg-gray-200 rounded w-4/6 animate-pulse"></div>
+          </div>
+        </div>
+        <div class="w-80 bg-gray-50 p-6 rounded-xl shadow-sm border border-gray-100 flex-shrink-0">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-12 h-12 bg-gray-200 rounded-full animate-pulse"></div>
+            <div class="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="h-3 bg-gray-200 rounded w-full animate-pulse"></div>
+            <div class="h-3 bg-gray-200 rounded w-5/6 animate-pulse"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div id="testimonialsEmpty" class="hidden text-center text-gray-500">No hay testimonios disponibles.</div>
@@ -509,10 +531,25 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="js/supabase-config.js" defer></script>
-  <script src="js/index.js" defer></script>
-  <script src="js/push-notifications.js" defer></script>
+  <!-- Script para manejar errores de autenticación de Supabase (Token Inválido) -->
+  <script>
+    window.addEventListener('unhandledrejection', function(event) {
+      // Detectar error de Refresh Token inválido y limpiar sesión para evitar bucle
+      if (event.reason && (
+          (event.reason.message && event.reason.message.includes('Invalid Refresh Token')) ||
+          (event.reason.error_description && event.reason.error_description.includes('Invalid Refresh Token'))
+      )) {
+        console.warn('⚠️ Sesión inválida detectada. Limpiando almacenamiento local...');
+        localStorage.clear(); // Limpia tokens corruptos
+        // No recargamos automáticamente para no molestar, pero la próxima acción requerirá login limpio.
+      }
+    });
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/index.js"></script>
+  <script src="js/push-notifications.js"></script>
   <script src="js/pwa.js"></script>
 </body>
 </html>
