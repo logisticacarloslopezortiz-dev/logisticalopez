@@ -17,23 +17,29 @@
   let filteredOrders = [];
   const filters = { search: '', status: '', collaboratorId: '', dateFrom: '', dateTo: '', service: '', vehicle: '' };
   const histPageState = { currentPage: 1, pageSize: 15 };
+  const DB_STATUS_OK = ['completed','cancelled'];
+  const UI_STATUS_OK = ['completed','completada','entregada','entregado','cancelled','cancelada'];
+  let realtimeTimer = null;
 
     const normalize = (s) => String(s || '').toLowerCase();
 
     const renderTable = (pageNumber = histPageState.currentPage) => {
       histPageState.currentPage = pageNumber;
-      const sorted = filteredOrders.slice().sort((a, b) => {
-        const ta = a.completed_at ? new Date(a.completed_at).getTime() : 0;
-        const tb = b.completed_at ? new Date(b.completed_at).getTime() : 0;
-        return tb - ta;
-      });
-      const total = sorted.length;
-      const start = (histPageState.currentPage - 1) * histPageState.pageSize;
-      const page = sorted.slice(start, start + histPageState.pageSize);
+      const page = filteredOrders;
+      const total = histPageState.totalCount || page.length;
+
       if (totalCountEl) totalCountEl.textContent = String(total);
-      if (showingCountEl) showingCountEl.textContent = page.length > 0 ? `${start + 1}-${start + page.length}` : '0';
+      if (showingCountEl) {
+        if (page.length === 0) {
+          showingCountEl.textContent = '0';
+        } else {
+          const startNum = (histPageState.currentPage - 1) * histPageState.pageSize + 1;
+          const endNum = startNum + page.length - 1;
+          showingCountEl.textContent = `${startNum}-${endNum}`;
+        }
+      }
       
-      if (total === 0) {
+      if (page.length === 0) {
         tableBody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-gray-500">No se encontraron órdenes con esos criterios.</td></tr>`;
         renderPagination();
         return;
@@ -134,7 +140,7 @@
     };
 
     const filterAndRender = () => {
-      histPageState.currentPage = 1;
+      // histPageState.currentPage = 1; // Eliminado para respetar la paginación del servidor
       applyFilters();
       try { window.filteredOrders = filteredOrders.slice(); } catch(_) {}
       renderTable();
@@ -152,7 +158,6 @@
       const client = supabaseConfig.client;
       let orders = [];
       let err = null;
-      const STATUS_OK = ['completed', 'cancelled'];
 
       try {
         setLoading(true);
@@ -167,12 +172,12 @@
         const resp = await (supabaseConfig.withAuthRetry?.(() => client
           .from('orders')
           .select(sel, { count: 'exact' })
-          .in('status', STATUS_OK)
+          .in('status', DB_STATUS_OK)
           .order('completed_at', { ascending: false })
           .range(start, end)) || client
           .from('orders')
           .select(sel, { count: 'exact' })
-          .in('status', STATUS_OK)
+          .in('status', DB_STATUS_OK)
           .order('completed_at', { ascending: false })
           .range(start, end));
         const { data, count, error } = resp;
@@ -184,7 +189,7 @@
           const { data } = await client
             .from('orders')
             .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to,rating, service:services(name), vehicle:vehicles(name)');
-          const filtered = (data || []).filter(o => STATUS_OK.includes(String(o.status || '').toLowerCase()));
+          const filtered = (data || []).filter(o => UI_STATUS_OK.includes(String(o.status || '').toLowerCase()));
           orders = filtered.sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime());
           err = null;
         } catch (e2) { err = e2; }
@@ -197,7 +202,7 @@
             const resp2 = await pub
               .from('orders')
               .select('id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to,rating, service:services(name), vehicle:vehicles(name)', { count: 'exact' })
-              .in('status', STATUS_OK)
+              .in('status', DB_STATUS_OK)
               .order('completed_at', { ascending: false })
               .range(0, histPageState.pageSize - 1);
             orders = resp2.data || [];
@@ -253,17 +258,13 @@
       try {
         if (cli && typeof cli.channel === 'function') {
           const channel = cli.channel('historial-updates');
-          const STATUS_OK = ['completed', 'cancelled'];
           channel
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `status=in.(${STATUS_OK.join(',')})` }, (payload) => {
-              if (!payload.new) return;
-              const idx = allHistoryOrders.findIndex(o => o.id === payload.new.id);
-              if (idx === -1) {
-                allHistoryOrders.unshift(payload.new);
-              } else {
-                allHistoryOrders[idx] = { ...allHistoryOrders[idx], ...payload.new };
-              }
-              filterAndRender();
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `status=in.(${DB_STATUS_OK.join(',')})` }, () => {
+              if (realtimeTimer) return;
+              realtimeTimer = setTimeout(async () => {
+                realtimeTimer = null;
+                await loadHistory();
+              }, 800);
             })
             .subscribe();
         }
@@ -273,27 +274,63 @@
     };
 
     function renderPagination() {
-      const total = histPageState.totalCount || filteredOrders.length;
+      const total = histPageState.totalCount || 0;
       const pages = Math.max(1, Math.ceil(total / histPageState.pageSize));
-      const container = document.getElementById('historyPagination');
+      const container = document.getElementById('histPagination');
       if (!container) return;
-      container.innerHTML = '';
-      const mk = (n, label) => {
-        const b = document.createElement('button');
-        b.textContent = label;
-        b.disabled = n === histPageState.currentPage;
-        b.className = 'px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm m-1';
-        b.addEventListener('click', () => {
-          histPageState.currentPage = n;
-          const sp = new URLSearchParams(location.search);
-          sp.set('page', String(n));
-          history.replaceState({}, '', `${location.pathname}?${sp.toString()}`);
-          renderTable(n);
-        });
-        return b;
+      const btnFirst = document.getElementById('histFirst');
+      const btnPrev = document.getElementById('histPrev');
+      const btnNext = document.getElementById('histNext');
+      const btnLast = document.getElementById('histLast');
+      const pagesEl = document.getElementById('histPages');
+      if (pagesEl) pagesEl.innerHTML = '';
+
+      const goTo = async (n) => {
+        const target = Math.max(1, Math.min(pages, n));
+        if (target === histPageState.currentPage) return;
+        histPageState.currentPage = target;
+        const sp = new URLSearchParams(location.search);
+        sp.set('page', String(target));
+        sp.set('size', String(histPageState.pageSize));
+        history.replaceState({}, '', `${location.pathname}?${sp.toString()}`);
+        await loadHistory();
       };
-      container.appendChild(mk(Math.max(1, histPageState.currentPage - 1), 'Anterior'));
-      container.appendChild(mk(Math.min(pages, histPageState.currentPage + 1), 'Siguiente'));
+
+      if (btnFirst) {
+        btnFirst.disabled = histPageState.currentPage <= 1;
+        btnFirst.onclick = () => goTo(1);
+      }
+      if (btnPrev) {
+        btnPrev.disabled = histPageState.currentPage <= 1;
+        btnPrev.onclick = () => goTo(histPageState.currentPage - 1);
+      }
+      if (btnNext) {
+        btnNext.disabled = histPageState.currentPage >= pages;
+        btnNext.onclick = () => goTo(histPageState.currentPage + 1);
+      }
+      if (btnLast) {
+        btnLast.disabled = histPageState.currentPage >= pages;
+        btnLast.onclick = () => goTo(pages);
+      }
+
+      // Renderizar botones de páginas (ventana alrededor de la actual)
+      const windowSize = 5;
+      const half = Math.floor(windowSize / 2);
+      let start = Math.max(1, histPageState.currentPage - half);
+      let end = Math.min(pages, start + windowSize - 1);
+      if (end - start + 1 < windowSize) {
+        start = Math.max(1, end - windowSize + 1);
+      }
+      if (pagesEl) {
+        for (let n = start; n <= end; n++) {
+          const b = document.createElement('button');
+          b.textContent = String(n);
+          b.className = 'px-3 py-2 rounded text-sm ' + (n === histPageState.currentPage ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200');
+          b.disabled = n === histPageState.currentPage;
+          b.onclick = () => goTo(n);
+          pagesEl.appendChild(b);
+        }
+      }
     }
 
     // Mock de funciones globales si no existen en el HTML, para evitar errores

@@ -338,12 +338,21 @@
     <script>
       (function() {
         // 0. ⚡ Realtime Subscription (Actualización Inmediata)
-        const channel = supabase.channel('collab_realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        try {
+          const client = (window.supabaseConfig && window.supabaseConfig.client) ? window.supabaseConfig.client : null;
+          if (client && typeof client.channel === 'function') {
+            const channel = client.channel('collab_realtime')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
                 console.log("⚡ Cambio detectado en tiempo real");
-                checkActiveOrder(); // Recargar estado automáticamente
-            })
-            .subscribe();
+                checkActiveOrder();
+              })
+              .subscribe();
+          } else {
+            console.warn('Realtime no disponible: cliente Supabase no inicializado');
+          }
+        } catch (e) {
+          console.warn('Error iniciando Realtime:', e?.message || e);
+        }
 
         // 1. Detección Offline/Online
         const indicator = document.getElementById('offline-indicator');

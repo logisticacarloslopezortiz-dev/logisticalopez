@@ -30,8 +30,24 @@ function buildTrackingUrl(orderId?: number | string, shortId?: string): string {
   return `${base}${sep}orderId=${encodeURIComponent(id)}`
 }
 
+function normalizeStatus(raw?: string): string {
+  const s = String(raw || '').toLowerCase().trim().replace(/[\s_-]+/g, ' ')
+  if (!s) return ''
+  if (s.includes('in progress') || s.includes('procesando')) return 'cargando'
+  if (s.includes('in process')) return 'cargando'
+  if (s.includes('in prosend')) return 'cargando'
+  if (s.includes('cargando')) return 'cargando'
+  if (s.includes('en camino') && s.includes('recoger')) return 'en_camino_recoger'
+  if (s.includes('en camino') && s.includes('entregar')) return 'en_camino_entregar'
+  if (s.includes('entregada')) return 'entregada'
+  if (s.includes('completed') || s.includes('completada')) return 'completada'
+  if (s.includes('cancelled') || s.includes('cancelada')) return 'cancelada'
+  if (s.includes('accepted') || s.includes('asignad')) return 'asignado'
+  return ''
+}
+
 function templateForStatus(status?: string, orderId?: number | string, shortId?: string, name?: string) {
-  const s = String(status || '').toLowerCase()
+  const s = normalizeStatus(status)
   // Display Short ID if available, else Order ID
   const displayId = shortId ? `${shortId}` : (orderId ? `#${orderId}` : '')
   
@@ -58,7 +74,7 @@ function templateForStatus(status?: string, orderId?: number | string, shortId?:
   }
   
   const title = titleMap[s] || `Actualización de tu orden`
-  const body = bodyMap[s] || `El estado de tu orden ha cambiado a: ${status || 'actualizado'}.`
+  const body = bodyMap[s] || `El estado de tu orden ha sido actualizado.`
   const url = buildTrackingUrl(orderId, shortId)
   const customer = name ? `${name}` : 'Cliente'
   const subject = `Actualización de Orden ${displayId} - Logística López Ortiz`.trim()
@@ -83,7 +99,8 @@ function templateForStatus(status?: string, orderId?: number | string, shortId?:
               <img 
                 src="https://logisticalopezortiz.com/logo/logo.png" 
                 alt="Logística López Ortiz" 
-                style="max-width:180px;" 
+                width="180"
+                style="display:block;margin:auto;border:0;outline:none;text-decoration:none;"
               />
             </td>
           </tr>
