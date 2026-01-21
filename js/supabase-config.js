@@ -651,13 +651,7 @@ if (!window.supabaseConfig) {
   }
   };
   try {
-    if (typeof window.supabase !== 'undefined' &&
-        window.supabase &&
-        typeof window.supabase.from !== 'function' &&
-        mainClient &&
-        typeof mainClient.from === 'function') {
-      window.supabase = mainClient;
-    }
+    // No modificar window.supabase: debe seguir siendo la librería UMD con createClient disponible
   } catch (_) {}
 } // end if guard
 
