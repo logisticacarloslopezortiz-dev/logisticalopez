@@ -418,7 +418,7 @@ const OrderManager = {
         console.log('[OrderManager] Fetch intento con:', cand);
         const { data, error } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id, status, evidence_photos')
+          .select('tracking_data, id, short_id, status, evidence_photos, name, email, client_email')
           .eq(cand.col, cand.val)
           .maybeSingle();
 
@@ -447,7 +447,7 @@ const OrderManager = {
         if (Number.isFinite(nId)) {
         const { data } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id, status, evidence_photos')
+          .select('tracking_data, id, short_id, status, evidence_photos, name, email, client_email')
           .eq('id', nId)
           .maybeSingle();
           if (data) { currentOrder = data; usedFilter = { col: 'id', val: data.id }; }
@@ -455,7 +455,7 @@ const OrderManager = {
         if (!currentOrder && typeof orderId === 'string') {
         const { data } = await supabaseConfig.client
           .from('orders')
-          .select('tracking_data, id, short_id, status, evidence_photos')
+          .select('tracking_data, id, short_id, status, evidence_photos, name, email, client_email')
           .eq('short_id', orderId)
           .maybeSingle();
           if (data) { currentOrder = data; usedFilter = { col: 'id', val: data.id }; }
@@ -592,8 +592,26 @@ const OrderManager = {
       try {
         if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
           const resolvedId = usedFilter?.val ?? orderId;
-          const payload = { orderId: resolvedId, status: dbStatus2, ui_status: ns, collaborator_id: additionalData?.collaborator_id || updatePayload?.assigned_to || null, extra: additionalData || {} };
+          const payload = { orderId: resolvedId, status: ns, ui_status: ns, collaborator_id: additionalData?.collaborator_id || updatePayload?.assigned_to || null, extra: additionalData || {} };
           await supabaseConfig.client.functions.invoke('order-event', { body: payload });
+        }
+      } catch (_) {}
+
+      try {
+        if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+          const toEmail = currentOrder?.client_email || currentOrder?.email || null;
+          if (toEmail) {
+            const resolvedId = usedFilter?.val ?? orderId;
+            await supabaseConfig.client.functions.invoke('send-order-email', {
+              body: {
+                to: String(toEmail),
+                orderId: resolvedId,
+                shortId: currentOrder?.short_id || null,
+                status: ns,
+                name: currentOrder?.name || null
+              }
+            });
+          }
         }
       } catch (_) {}
 

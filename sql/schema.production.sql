@@ -869,6 +869,12 @@ begin
   update public.collaborators
      set status = 'activo'
    where lower(status) in ('available','busy');
+
+  -- Refuerzo: asegurar que administradores nunca queden con status busy/available
+  update public.collaborators
+     set status = 'activo'
+   where lower(role) = 'administrador'
+     and lower(status) in ('available','busy');
 end $$;
 
 -- RPC: Datos del panel del colaborador

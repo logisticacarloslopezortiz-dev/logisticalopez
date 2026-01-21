@@ -666,8 +666,20 @@ document.addEventListener('DOMContentLoaded', () => {
       currentOrder.status = 'in_progress';
       currentOrder.tracking_data = nextTracking;
 
-      // Correo eliminado de frontend (Trigger SQL)
-      // if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, newStatus);
+      try {
+        const toEmail = currentOrder?.client_email || currentOrder?.email || null;
+        if (toEmail && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+          await supabaseConfig.client.functions.invoke('send-order-email', {
+            body: {
+              to: String(toEmail),
+              orderId: currentOrder.id,
+              shortId: currentOrder?.short_id || null,
+              status: 'in_progress',
+              name: currentOrder?.name || null
+            }
+          });
+        }
+      } catch (_) {}
 
       notifications?.success?.(successMsg);
 
@@ -721,8 +733,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const { error } = await supabaseConfig.completeOrderWork(currentOrder.id);
         if (error) throw error;
         
-        // Correo eliminado de frontend (Trigger SQL)
-        // if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, 'entregada');
+        try {
+          const toEmail = currentOrder?.client_email || currentOrder?.email || null;
+          if (toEmail && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+            await supabaseConfig.client.functions.invoke('send-order-email', {
+              body: {
+                to: String(toEmail),
+                orderId: currentOrder.id,
+                shortId: currentOrder?.short_id || null,
+                status: 'entregada',
+                name: currentOrder?.name || null
+              }
+            });
+          }
+        } catch (_) {}
 
         notifications?.success?.('Solicitud completada');
         closeActiveJob();
@@ -1058,6 +1082,20 @@ function renderOrdersHTML() {
 
           o.status = 'accepted';
           o.tracking_data = []; // Iniciar vacío para que el estado sea 'accepted' puro
+          try {
+            const toEmail = o?.client_email || o?.email || null;
+            if (toEmail && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+              await supabaseConfig.client.functions.invoke('send-order-email', {
+                body: {
+                  to: String(toEmail),
+                  orderId: o.id,
+                  shortId: o?.short_id || null,
+                  status: 'accepted',
+                  name: o?.name || null
+                }
+              });
+            }
+          } catch (_) {}
           setTimeout(() => { try { openActiveJob(o); } catch(_){} }, 100);
           try { notifications?.info?.('Pulsa "En camino a recoger" para iniciar el trabajo'); } catch(_){}
         } catch (err) {
@@ -1097,8 +1135,20 @@ function renderOrdersHTML() {
         currentOrder.assigned_to = userId;
         currentOrder.tracking_data = []; // Iniciar vacío
         
-        // Correo eliminado de frontend (Trigger SQL)
-        // if(window.sendStatusEmail) window.sendStatusEmail(currentOrder, 'accepted');
+        try {
+          const toEmail = currentOrder?.client_email || currentOrder?.email || null;
+          if (toEmail && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+            await supabaseConfig.client.functions.invoke('send-order-email', {
+              body: {
+                to: String(toEmail),
+                orderId: currentOrder.id,
+                shortId: currentOrder?.short_id || null,
+                status: 'accepted',
+                name: currentOrder?.name || null
+              }
+            });
+          }
+        } catch (_) {}
 
         closeModal();
         try { notifications?.info?.('Orden aceptada. Pulsa "En camino a recoger" para iniciar.'); } catch(_){}

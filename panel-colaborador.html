@@ -470,15 +470,11 @@
               .maybeSingle();
 
             if (data) {
-              // ⚡ AUTOMATIZACIÓN: Si tiene trabajo activo, marcar como OCUPADO
-              updateDriverAvailability(user.id, 'busy');
-              lockStatusToggle(true); // Bloquear toggle visualmente
 
               // Mostrar banner si hay orden activa
               const banner = document.getElementById('continueActiveBanner');
               if(banner) {
                 banner.classList.remove('hidden');
-                banner.classList.add('flex');
                 
                 const statusMap = {
                   'accepted': 'Aceptada - Ir a recoger',
@@ -496,7 +492,6 @@
             } else {
               // Si no tiene orden activa, cargar lista de asignadas
               loadAssignedOrders(user.id);
-              lockStatusToggle(false); // Desbloquear toggle
             }
           } catch (err) {
             console.log("No hay orden activa o error:", err.message);
@@ -620,39 +615,7 @@
             modal.classList.add('flex');
         }
 
-        // 5. Lógica del Toggle Switch
-        const toggle = document.getElementById('statusToggle');
-        const label = document.getElementById('statusLabel');
-
-        async function updateDriverAvailability(userId, availability) {
-            // Actualizar disponibilidad dinámica sin tocar 'status' (activación)
-            await supabase.from('collaborators').update({ availability }).eq('id', userId);
-            
-            // Actualizar UI
-            if (toggle && label) {
-                const isAvailable = availability === 'available';
-                toggle.checked = isAvailable;
-                label.textContent = isAvailable ? "Disponible" : "Ocupado";
-                label.className = isAvailable ? "text-sm font-medium text-green-400" : "text-sm font-medium text-gray-400";
-            }
-        }
-
-        function lockStatusToggle(locked) {
-            if(toggle) {
-                toggle.disabled = locked;
-                if(locked) label.textContent = "Ocupado (En servicio)";
-            }
-        }
-
-        if(toggle && label) {
-          toggle.addEventListener('change', async function() {
-            const { data: { user } } = await supabase.auth.getUser();
-            if(!user) return;
-            
-            const newAvailability = this.checked ? 'available' : 'busy';
-            updateDriverAvailability(user.id, newAvailability);
-          });
-        }
+        // Eliminada lógica de ocupado/disponible
 
         // Iniciar
         checkActiveOrder();
