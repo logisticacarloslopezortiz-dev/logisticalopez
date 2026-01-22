@@ -4,9 +4,9 @@ import * as webPush from 'https://esm.sh/jsr/@negrel/webpush'
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
-const VAPID_PUBLIC_KEY = (Deno.env.get('VAPID_PUBLIC_KEY') || '').trim()
-const VAPID_PRIVATE_KEY = (Deno.env.get('VAPID_PRIVATE_KEY') || '').trim()
-const VAPID_SUBJECT = (Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com').trim()
+let VAPID_PUBLIC_KEY = (Deno.env.get('VAPID_PUBLIC_KEY') || '').trim()
+let VAPID_PRIVATE_KEY = (Deno.env.get('VAPID_PRIVATE_KEY') || '').trim()
+let VAPID_SUBJECT = (Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com').trim()
 const SITE_BASE = (Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com').trim()
 const supabase = createClient(Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', { auth: { autoRefreshToken: false, persistSession: false } })
 const SEND_NOTIFICATION_SECRET = (Deno.env.get('SEND_NOTIFICATION_SECRET') || '').trim()
@@ -17,7 +17,21 @@ function absolutize(url: string): string {
     return SITE_BASE + (url.startsWith('/') ? '' : '/') + url
   } catch (_) { return SITE_BASE + '/' }
 }
-function validateVapid() {
+async function hydrateVapidFromDb() {
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) return;
+  try {
+    const { data } = await supabase.from('business').select('vapid_public_key,push_vapid_key').limit(1).maybeSingle()
+    const pub = (data?.vapid_public_key || '').trim()
+    const priv = (data?.push_vapid_key || '').trim()
+    if (pub) VAPID_PUBLIC_KEY = pub
+    if (priv) VAPID_PRIVATE_KEY = priv
+  } catch (_) {}
+}
+
+async function validateVapid() {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
+    await hydrateVapidFromDb()
+  }
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) throw new Error('missing_vapid')
   try {
     const b64 = VAPID_PUBLIC_KEY.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (VAPID_PUBLIC_KEY.length % 4)) % 4)
@@ -26,7 +40,7 @@ function validateVapid() {
   } catch (_) { throw new Error('invalid_vapid_public_key') }
 }
 async function sendPush(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }, payload: unknown) {
-  validateVapid()
+  await validateVapid()
   return await webPush.sendNotification(
     { endpoint: subscription.endpoint, keys: subscription.keys as unknown as webPush.SubscriptionKeys },
     JSON.stringify(payload),

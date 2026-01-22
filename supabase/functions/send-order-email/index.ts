@@ -73,11 +73,14 @@ function templateForStatus(status?: string, orderId?: number | string, shortId?:
     cancelada: 'Tu orden ha sido cancelada. Si esta acción no fue realizada por ti o necesitas más información, nuestro equipo de soporte está disponible para asistirte.'
   }
   
-  const title = titleMap[s] || `Actualización de tu orden`
+  const titleBase = titleMap[s] || `Actualización de tu orden`
+  const title = displayId ? `${titleBase} • Orden ${displayId}` : titleBase
   const body = bodyMap[s] || `El estado de tu orden ha sido actualizado.`
   const url = buildTrackingUrl(orderId, shortId)
   const customer = name ? `${name}` : 'Cliente'
-  const subject = `Actualización de Orden ${displayId} - Logística López Ortiz`.trim()
+  const subject = shortId
+    ? `Actualización de Orden ${shortId} - Logística López Ortiz`
+    : (orderId ? `Actualización de Orden #${orderId} - Logística López Ortiz` : `Actualización de Orden - Logística López Ortiz`)
   
   const html = `
 <!DOCTYPE html>
@@ -161,6 +164,9 @@ function templateForStatus(status?: string, orderId?: number | string, shortId?:
                   logisticalopezortiz.com
                 </a>
               </p>
+              <p style="margin:10px 0 0;color:#6B7280;">
+                No es necesario responder este mensaje.
+              </p>
             </td>
           </tr>
 
@@ -202,7 +208,7 @@ async function sendEmailWithResend(to: string, subject: string, html: string) {
 async function logFn(payload: unknown, level: 'info' | 'error' | 'warning' = 'info', message?: string) {
   try {
     if (!supabase) return
-    await supabase.from('function_logs').insert({
+    supabase.from('function_logs').insert({
       fn_name: 'send-order-email',
       level,
       message: message || null,
@@ -221,12 +227,24 @@ Deno.serve(async (req: Request) => {
     let subject = String(body.subject || '').trim()
     let html = String(body.html || '').trim()
     const orderId = body.orderId
-    const shortId = body.shortId
+    let shortId = body.shortId
     const status = body.status
-    const name = body.name
+    let name = body.name
 
     if (!to) {
       return jsonResponse({ success: false, error: 'missing_to' }, 400, req)
+    }
+
+    if (!shortId && orderId && supabase) {
+      try {
+        const { data: ord } = await supabase
+          .from('orders')
+          .select('short_id,name')
+          .eq('id', orderId)
+          .maybeSingle()
+        if (ord?.short_id) shortId = ord.short_id
+        if (!name && ord?.name) name = ord.name
+      } catch (_) {}
     }
 
     if (!subject || !html) {
@@ -236,13 +254,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const sent = await sendEmailWithResend(to, subject, html)
-    await logFn({ to, orderId, shortId, status, result: sent }, sent.ok ? 'info' : 'error', sent.ok ? 'email_sent' : 'email_failed')
+    logFn({ to, orderId, shortId, status, result: sent }, sent.ok ? 'info' : 'error', sent.ok ? 'email_sent' : 'email_failed')
     if (!sent.ok) {
       return jsonResponse({ success: false, error: sent.error, details: sent.details }, 500, req)
     }
     return jsonResponse({ success: true, id: (sent.data as any)?.id || null }, 200, req)
   } catch (err) {
-    await logFn({ error: String(err) }, 'error', 'fatal_error')
+    logFn({ error: String(err) }, 'error', 'fatal_error')
     return jsonResponse({ success: false, error: 'internal_error' }, 500, req)
   }
 })

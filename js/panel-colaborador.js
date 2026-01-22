@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const shortId = order?.short_id || null;
       const name = order?.name || null;
       let to = null;
-
       let clientId = order?.client_id || null;
       if (!clientId) {
         try {
@@ -31,7 +30,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!to && order?.email) to = order.email;
       if (!to) return;
       const payload = { to, orderId, shortId, status, name };
-      await supabaseConfig.client.functions.invoke('send-order-email', { body: payload });
+      let attempt = 0;
+      const maxAttempts = 3;
+      const trySend = async () => {
+        attempt++;
+        try {
+          const { error } = await supabaseConfig.client.functions.invoke('send-order-email', { body: payload });
+          if (error) throw error;
+          notifications?.success?.('Correo enviado');
+        } catch (e) {
+          if (attempt < maxAttempts) {
+            setTimeout(trySend, attempt * 600);
+          } else {
+            notifications?.warning?.('No se pudo enviar el correo');
+          }
+        }
+      };
+      trySend();
     } catch (_) {}
   };
 
