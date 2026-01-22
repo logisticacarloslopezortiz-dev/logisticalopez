@@ -461,7 +461,7 @@
         async function checkActiveOrder() {
           try {
             // Obtener usuario actual
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await supabaseConfig.client.auth.getUser();
             if (!user) return;
 
             // Actualizar nombre del colaborador en el sidebar
@@ -469,7 +469,7 @@
                 document.getElementById('sidebarCollabName').textContent = user.user_metadata.full_name;
             }
 
-            const { data, error } = await supabase
+            const { data, error } = await supabaseConfig.client
               .from('orders')
               .select('*, service:services(name), vehicle:vehicles(name)')
               .eq('assigned_to', user.id)
@@ -505,7 +505,7 @@
           } catch (err) {
             console.log("No hay orden activa o error:", err.message);
             // Si falla, intentar cargar asignadas de todas formas
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await supabaseConfig.client.auth.getUser();
             if(user) loadAssignedOrders(user.id);
           }
         }
@@ -537,7 +537,7 @@
             grid.innerHTML = '<div class="col-span-full text-center py-8"><i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto text-blue-500"></i><p class="mt-2 text-gray-500">Buscando tus asignaciones...</p></div>';
             lucide.createIcons();
 
-            const { data: orders, error } = await supabase
+            const { data: orders, error } = await supabaseConfig.client
                 .from('orders')
                 .select('*, service:services(name), vehicle:vehicles(name)')
                 .eq('assigned_to', userId)
@@ -605,15 +605,12 @@
                     acceptBtn.disabled = true;
                     acceptBtn.textContent = "Procesando...";
                     
-                    const { error } = await supabase
+                    const { error } = await supabaseConfig.client
                         .from('orders')
                         .update({ status: 'accepted' })
                         .eq('id', order.id);
                         
                     if(!error) {
-                        // ✅ ENVIAR CORREO AL CLIENTE (Usando la función global definida en el JS principal)
-                        if(window.sendStatusEmail) window.sendStatusEmail(order, 'accepted');
-                        
                         modal.classList.add('hidden');
                         modal.classList.remove('flex');
                         // Realtime actualizará la UI automáticamente
