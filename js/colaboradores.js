@@ -33,6 +33,16 @@
     let allCollaborators = [];
     const collabPageState = { data: [], currentPage: 1, pageSize: 15, totalPages: 1 };
 
+    // ✅ CORRECCIÓN DE DISEÑO (CSS OBLIGATORIO)
+    const style = document.createElement('style');
+    style.textContent = `
+      #collaboratorsMap, #collaboratorMapDetail { min-height: 400px; width: 100%; }
+      .leaflet-container { z-index: 10; }
+      .modal { z-index: 50; }
+      .pulse-marker.muted { opacity: 0.4; filter: grayscale(1); }
+    `;
+    document.head.appendChild(style);
+
     // --- LÓGICA PRINCIPAL ---
 
     // Helper para mensajes
@@ -374,6 +384,7 @@
     function closeEditModal(){
       editModal.classList.add('hidden');
       document.body.classList.remove('overflow-hidden');
+      refreshGlobalMapLayout(); // ✅ CORRECCIÓN: Refrescar mapa al cerrar modal
       if (editModal._trapHandler) {
         editModal.removeEventListener('keydown', editModal._trapHandler);
         editModal._trapHandler = null;
@@ -612,8 +623,8 @@
         modal.classList.remove('hidden');
         document.body.classList.add('overflow-hidden');
         const closeBtn = document.getElementById('closeMetricsModal');
-        if (closeBtn) closeBtn.onclick = () => { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); };
-        if (overlay) overlay.addEventListener('click', () => { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); }, { once: true });
+        if (closeBtn) closeBtn.onclick = () => { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); refreshGlobalMapLayout(); };
+        if (overlay) overlay.addEventListener('click', () => { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); refreshGlobalMapLayout(); }, { once: true });
         if (rangeEl) rangeEl.onchange = () => window.viewMetrics(String(id));
         if (toggleChartsEl && chartsSection) {
           chartsSection.classList.toggle('hidden', !toggleChartsEl.checked);
@@ -707,6 +718,18 @@
 
     let __globalMap = null;
     let __globalMarkers = new Map();
+    let __latestLocations = new Map(); // ✅ Almacén local de ubicaciones para filtrado
+    let __mapShowInactive = false;     // ✅ Estado del filtro
+
+    // ✅ CORRECCIÓN 1: Función para invalidar tamaño del mapa global
+    function refreshGlobalMapLayout() {
+      if (__globalMap) {
+        setTimeout(() => {
+          __globalMap.invalidateSize();
+        }, 200);
+      }
+    }
+
     async function initGlobalCollaboratorsMap() {
       const el = document.getElementById('collaboratorsMap');
       if (!el || typeof L === 'undefined') return;
@@ -714,13 +737,43 @@
         __globalMap = L.map(el).setView([18.4861, -69.9312], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(__globalMap);
       }
+      
+      // ✅ CONTROLES DEL MAPA (Filtro y Zoom)
+      const checkbox = document.getElementById('mapShowInactive');
+      if (checkbox) {
+        checkbox.checked = __mapShowInactive;
+        checkbox.addEventListener('change', (e) => {
+          __mapShowInactive = e.target.checked;
+          // Refrescar todos los marcadores usando la caché local
+          __latestLocations.forEach(loc => updateMarker(loc));
+        });
+      }
+      const fitBtn = document.getElementById('mapFitBounds');
+      if (fitBtn) {
+        fitBtn.addEventListener('click', () => {
+          if (__globalMarkers.size > 0) {
+            const group = L.featureGroup(Array.from(__globalMarkers.values()));
+            __globalMap.fitBounds(group.getBounds(), { padding: [50, 50] });
+          }
+        });
+      }
+
+      // ✅ CORRECCIÓN 3: Limpiar mapa global al reabrir/refrescar
+      __globalMarkers.forEach(m => __globalMap.removeLayer(m));
+      __globalMarkers.clear();
+
+      refreshGlobalMapLayout(); // ✅ Asegurar renderizado correcto
+
       await refreshGlobalCollaboratorsPositions();
       try {
         if (window.__locationsRealtimeChannel) supabaseConfig.client.removeChannel(window.__locationsRealtimeChannel);
         window.__locationsRealtimeChannel = supabaseConfig.client
           .channel('public:collaborator_locations')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborator_locations' }, payload => {
-            if (payload.new) updateMarker(payload.new);
+            if (payload.new) {
+              __latestLocations.set(payload.new.collaborator_id, payload.new); // ✅ Actualizar caché
+              updateMarker(payload.new);
+            }
           })
           .subscribe();
       } catch (_) {}
@@ -747,28 +800,45 @@
       // Find collaborator info for popup
       const col = allCollaborators.find(c => String(c.id) === String(id));
       
-      // Filtrar colaboradores inactivos o no encontrados
-      if (!col || col.status !== 'activo') {
-         // Si existe marker, eliminarlo
-         if (__globalMarkers.has(id)) {
-           __globalMap.removeLayer(__globalMarkers.get(id));
-           __globalMarkers.delete(id);
-         }
-         return;
+      // ✅ CORRECCIÓN 2: Mostrar TODOS, diferenciar color (Opción A)
+      const isActive = col?.status === 'activo';
+
+      // ✅ LÓGICA DE FILTRADO
+      if (!isActive && !__mapShowInactive) {
+        // Si no está activo y el filtro está apagado, eliminar si existe y salir
+        if (__globalMarkers.has(id)) {
+          __globalMap.removeLayer(__globalMarkers.get(id));
+          __globalMarkers.delete(id);
+        }
+        return;
       }
 
       const name = col ? col.name : 'Colaborador';
+      const time = location.updated_at ? new Date(location.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+      
+      // ✅ POPUP MEJORADO CON ACCIÓN
+      const popupContent = `
+        <div class="text-center min-w-[120px]">
+          <strong class="block text-sm mb-1">${name}</strong>
+          <span class="text-xs ${isActive ? 'text-green-600 font-medium' : 'text-gray-500'}">${isActive ? 'Activo' : 'Inactivo'} • ${time}</span>
+          <button onclick="window.viewMetrics('${id}')" class="block w-full mt-2 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 py-1 rounded transition-colors">Ver rendimiento</button>
+        </div>
+      `;
+
+      const icon = L.divIcon({
+        className: isActive ? 'pulse-marker' : 'pulse-marker muted',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      });
       
       if (__globalMarkers.has(id)) {
-        __globalMarkers.get(id).setLatLng(latlng).setPopupContent(name);
+        const m = __globalMarkers.get(id);
+        m.setLatLng(latlng).setPopupContent(popupContent);
+        m.setIcon(icon);
       } else {
         const marker = L.marker(latlng, {
-          icon: L.divIcon({
-            className: 'pulse-marker',
-            iconSize: [14, 14],
-            iconAnchor: [7, 7]
-          })
-        }).addTo(__globalMap).bindPopup(name);
+          icon: icon
+        }).addTo(__globalMap).bindPopup(popupContent);
         __globalMarkers.set(id, marker);
       }
     }
@@ -792,6 +862,7 @@
         }
 
         for (const loc of arr) {
+          __latestLocations.set(loc.collaborator_id, loc); // ✅ Llenar caché inicial
           updateMarker(loc);
         }
       } catch (_) {}
@@ -864,9 +935,9 @@
         })
         .subscribe();
 
-      // 🧠 Forzar recálculo de tamaño
+      // ✅ CORRECCIÓN 4: Forzar recálculo de tamaño del mapa del modal
       setTimeout(() => {
-        try { __collabDetailMap.invalidateSize(); } catch (_) {}
+        try { if(__collabDetailMap) __collabDetailMap.invalidateSize(); } catch (_) {}
       }, 250);
 
       // ❌ CERRAR MODAL CORRECTAMENTE
@@ -874,6 +945,7 @@
         closeBtn.onclick = () => {
           modal.classList.add('hidden');
           document.body.classList.remove('overflow-hidden');
+          refreshGlobalMapLayout(); // ✅ Refrescar mapa global al cerrar este modal también
 
           if (__collabDetailMap) {
             __collabDetailMap.remove();

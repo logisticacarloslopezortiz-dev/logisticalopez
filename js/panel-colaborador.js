@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (v === 'en_camino_recoger') return 'En camino a recoger';
     if (v === 'cargando') return 'Cargando';
     if (v === 'en_camino_entregar') return 'En camino a entregar';
-    return v;
+    return 'Actualizada';
   }
 
   // --- MÓDULOS DE GESTIÓN ---
@@ -499,16 +499,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!order) return '';
     const s = String(order.status || '').toLowerCase();
     
-    if (s === 'pending') return 'pendiente';
+    if (s === 'pending') return 'pending';
     if (s === 'accepted') return 'accepted';
-    if (s === 'completed') return 'completada';
-    if (s === 'cancelled') return 'cancelada';
+    if (s === 'completed') return 'completed';
+    if (s === 'cancelled') return 'cancelled';
     
     if (s === 'in_progress' || s === 'en curso') {
       if (Array.isArray(order.tracking_data) && order.tracking_data.length > 0) {
         const last = order.tracking_data[order.tracking_data.length - 1];
         const uiStatus = String(last.ui_status || 'en_camino_recoger').toLowerCase();
-        // Return the specific UI status if it's one of the expected ones
         if (['en_camino_recoger', 'cargando', 'en_camino_entregar', 'entregada'].includes(uiStatus)) {
           return uiStatus;
         }
@@ -528,14 +527,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!bar) return;
     // Ajuste de porcentajes: entregada 90%, completed 100%
     const map = { 
-      pendiente: 0, 
+      pending: 0, 
       accepted: 15, 
       en_camino_recoger: 25, 
       cargando: 50, 
       en_camino_entregar: 75, 
       entregada: 90, 
       completed: 100, 
-      completada: 100,
       cancelled: 100
     };
     // Normalizar status
@@ -666,20 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currentOrder.status = 'in_progress';
       currentOrder.tracking_data = nextTracking;
 
-      try {
-        const toEmail = currentOrder?.client_email || currentOrder?.email || null;
-        if (toEmail && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
-          await supabaseConfig.client.functions.invoke('send-order-email', {
-            body: {
-              to: String(toEmail),
-              orderId: currentOrder.id,
-              shortId: currentOrder?.short_id || null,
-              status: 'in_progress',
-              name: currentOrder?.name || null
-            }
-          });
-        }
-      } catch (_) {}
+      
 
       notifications?.success?.(successMsg);
 
@@ -733,20 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const { error } = await supabaseConfig.completeOrderWork(currentOrder.id);
         if (error) throw error;
         
-        try {
-          const toEmail = currentOrder?.client_email || currentOrder?.email || null;
-          if (toEmail && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
-            await supabaseConfig.client.functions.invoke('send-order-email', {
-              body: {
-                to: String(toEmail),
-                orderId: currentOrder.id,
-                shortId: currentOrder?.short_id || null,
-                status: 'entregada',
-                name: currentOrder?.name || null
-              }
-            });
-          }
-        } catch (_) {}
+        
 
         notifications?.success?.('Solicitud completada');
         closeActiveJob();
@@ -1081,21 +1053,7 @@ function renderOrdersHTML() {
           } catch (_) {}
 
           o.status = 'accepted';
-          o.tracking_data = []; // Iniciar vacío para que el estado sea 'accepted' puro
-          try {
-            const toEmail = o?.client_email || o?.email || null;
-            if (toEmail && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
-              await supabaseConfig.client.functions.invoke('send-order-email', {
-                body: {
-                  to: String(toEmail),
-                  orderId: o.id,
-                  shortId: o?.short_id || null,
-                  status: 'accepted',
-                  name: o?.name || null
-                }
-              });
-            }
-          } catch (_) {}
+          o.tracking_data = [];
           setTimeout(() => { try { openActiveJob(o); } catch(_){} }, 100);
           try { notifications?.info?.('Pulsa "En camino a recoger" para iniciar el trabajo'); } catch(_){}
         } catch (err) {
@@ -1135,20 +1093,7 @@ function renderOrdersHTML() {
         currentOrder.assigned_to = userId;
         currentOrder.tracking_data = []; // Iniciar vacío
         
-        try {
-          const toEmail = currentOrder?.client_email || currentOrder?.email || null;
-          if (toEmail && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
-            await supabaseConfig.client.functions.invoke('send-order-email', {
-              body: {
-                to: String(toEmail),
-                orderId: currentOrder.id,
-                shortId: currentOrder?.short_id || null,
-                status: 'accepted',
-                name: currentOrder?.name || null
-              }
-            });
-          }
-        } catch (_) {}
+        
 
         closeModal();
         try { notifications?.info?.('Orden aceptada. Pulsa "En camino a recoger" para iniciar.'); } catch(_){}

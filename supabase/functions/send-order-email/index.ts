@@ -97,7 +97,7 @@ function templateForStatus(status?: string, orderId?: number | string, shortId?:
           <tr>
             <td style="background-color:#0C375D;padding:24px;text-align:center;">
               <img 
-                src="https://logisticalopezortiz.com/logo/logo.png" 
+                src="${SITE_BASE}/img/1vertical.png" 
                 alt="Logística López Ortiz" 
                 width="180"
                 style="display:block;margin:auto;border:0;outline:none;text-decoration:none;"
