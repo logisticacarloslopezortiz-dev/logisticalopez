@@ -1,8 +1,38 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // --- FUNCIÓN DE NOTIFICACIÓN POR CORREO (ELIMINADA) ---
-  // Se ha migrado al backend (Trigger SQL) para evitar duplicados y mejorar seguridad.
-  window.sendStatusEmail = function() {
-    console.log('sendStatusEmail está obsoleto. El backend maneja los correos.');
+  window.sendStatusEmail = async function(order, status) {
+    try {
+      if (!supabaseConfig?.client) return;
+      const orderId = order?.id;
+      const shortId = order?.short_id || null;
+      const name = order?.name || null;
+      let to = null;
+
+      let clientId = order?.client_id || null;
+      if (!clientId) {
+        try {
+          const { data: full } = await supabaseConfig.client
+            .from('orders')
+            .select('client_id,short_id,name')
+            .eq('id', orderId)
+            .single();
+          clientId = full?.client_id || clientId || null;
+        } catch (_) {}
+      }
+      if (clientId) {
+        try {
+          const { data: profile } = await supabaseConfig.client
+            .from('profiles')
+            .select('email,full_name')
+            .eq('id', clientId)
+            .maybeSingle();
+          to = profile?.email || null;
+        } catch (_) {}
+      }
+      if (!to && order?.email) to = order.email;
+      if (!to) return;
+      const payload = { to, orderId, shortId, status, name };
+      await supabaseConfig.client.functions.invoke('send-order-email', { body: payload });
+    } catch (_) {}
   };
 
   // Elementos del DOM
@@ -667,6 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
 
       notifications?.success?.(successMsg);
+      try { window.sendStatusEmail?.(currentOrder, newStatus); } catch(_){}
 
       if (newStatus === 'cargando') {
         try {
@@ -721,6 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
 
         notifications?.success?.('Solicitud completada');
+        try { window.sendStatusEmail?.(currentOrder, 'completed'); } catch(_){}
         closeActiveJob();
         document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
         fetchOrdersForCollaborator();
@@ -740,6 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await OrderManager.cancelActiveJob(currentOrder.id);
         if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
         notifications?.success?.('Solicitud cancelada');
+        try { window.sendStatusEmail?.(currentOrder, 'cancelled'); } catch(_){}
         closeActiveJob();
         document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
         fetchOrdersForCollaborator();
@@ -1040,8 +1073,7 @@ function renderOrdersHTML() {
 
           notifications?.success?.('Orden aceptada');
           
-          // Correo eliminado de frontend (Trigger SQL)
-          // if(window.sendStatusEmail) window.sendStatusEmail(o, 'accepted');
+          try { window.sendStatusEmail?.(o, 'accepted'); } catch(_){}
 
           try {
             const { data: updatedOrder } = await supabaseConfig.client
@@ -1095,6 +1127,7 @@ function renderOrdersHTML() {
         
         
 
+        try { window.sendStatusEmail?.(currentOrder, 'accepted'); } catch(_){}
         closeModal();
         try { notifications?.info?.('Orden aceptada. Pulsa "En camino a recoger" para iniciar.'); } catch(_){}
         try {
