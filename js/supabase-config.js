@@ -184,34 +184,9 @@ if (!window.supabaseConfig) {
 
   // Crea un cliente público (anon) para consultas que no requieran la sesión del usuario
   getPublicClient() {
-    // Si ya existe, devolverlo
     if (this._publicClient) return this._publicClient;
-
-    // Intentar crearlo si supabase está disponible
-    if (typeof supabase !== 'undefined' && supabase?.createClient) {
-      try {
-        this._publicClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          auth: { 
-            autoRefreshToken: false, 
-            persistSession: false, 
-            detectSessionInUrl: false, 
-            storageKey: 'sb-tlc-public' // Storage aislado
-          },
-          functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
-        });
-        return this._publicClient;
-      } catch (e) {
-        console.error('Error creando public client de Supabase:', e);
-      }
-    } else {
-        console.error('Supabase JS no cargado al llamar getPublicClient');
-    }
-
-    // Fallback: si tenemos client principal, usarlo (riesgo de JWT expired si el usuario tiene sesión caducada)
-    // Es mejor devolver null o el principal que romper, pero advertimos
-    if (this.client) return this.client;
-    
-    return null;
+    try { this.ensureSupabaseReady?.(); } catch(_){}
+    return this._publicClient || this.client || null;
   },
 
   // --- INICIO: Funciones de acceso a datos ---

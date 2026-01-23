@@ -23,11 +23,10 @@ const supabase: any = (SUPABASE_URL && SERVICE_ROLE)
 
 function buildTrackingUrl(orderId?: number | string, shortId?: string): string {
   const base = `${SITE_BASE}/seguimiento.html`
-  // Prefer orderId (PK) for URL, fallback to shortId
-  const id = orderId ? String(orderId).trim() : (shortId ? String(shortId).trim() : '')
-  if (!id) return base
+  const code = shortId ? String(shortId).trim() : ''
+  if (!code) return base
   const sep = base.includes('?') ? '&' : '?'
-  return `${base}${sep}orderId=${encodeURIComponent(id)}`
+  return `${base}${sep}codigo=${encodeURIComponent(code)}`
 }
 
 function normalizeStatus(raw?: string): string {
@@ -49,7 +48,7 @@ function normalizeStatus(raw?: string): string {
 function templateForStatus(status?: string, orderId?: number | string, shortId?: string, name?: string) {
   const s = normalizeStatus(status)
   // Display Short ID if available, else Order ID
-  const displayId = shortId ? `${shortId}` : (orderId ? `#${orderId}` : '')
+  const displayId = shortId ? `#${shortId}` : ''
   
   const titleMap: Record<string, string> = {
     asignado: '¡Orden Asignada!',
@@ -75,12 +74,14 @@ function templateForStatus(status?: string, orderId?: number | string, shortId?:
   
   const titleBase = titleMap[s] || `Actualización de tu orden`
   const title = displayId ? `${titleBase} • Orden ${displayId}` : titleBase
-  const body = bodyMap[s] || `El estado de tu orden ha sido actualizado.`
+  const bodyMain = bodyMap[s] || `El estado de tu orden ha sido actualizado.`
+  const prefix = displayId ? `Tu orden ${displayId} ha sido actualizada.` : ''
+  const body = prefix ? `${prefix} ${bodyMain}` : bodyMain
   const url = buildTrackingUrl(orderId, shortId)
   const customer = name ? `${name}` : 'Cliente'
   const subject = shortId
-    ? `Actualización de Orden ${shortId} - Logística López Ortiz`
-    : (orderId ? `Actualización de Orden #${orderId} - Logística López Ortiz` : `Actualización de Orden - Logística López Ortiz`)
+    ? `Actualización de Orden #${shortId} - Logística López Ortiz`
+    : `Actualización de Orden - Logística López Ortiz`
   
   const html = `
 <!DOCTYPE html>

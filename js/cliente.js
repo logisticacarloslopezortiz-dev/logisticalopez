@@ -1580,102 +1580,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let savedOrder;
         try {
-          // Añadir timeout para evitar quedarnos colgados si el servidor no responde
-          const rpcCall = supabaseConfig.client.rpc('create_order_with_contact', { order_payload: variantA });
-          const res = await Promise.race([
-            rpcCall,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout: create_order')), 15000))
-          ]);
-          const { data: rpcData, error: rpcError } = res || {};
-          if (rpcError) {
-            throw rpcError;
-          }
-          savedOrder = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+          const result = await OrdersService.createOrderAndNotify(variantA);
+          savedOrder = result?.order || null;
         } catch (err) {
-          console.error('Error al guardar la solicitud vía RPC:', err);
-
-          // Fallback: intento de inserción directa en la tabla public.orders (RLS permite inserts Pendiente)
-          try {
-            await supabaseConfig.ensureSupabaseReady?.();
-            const builder = supabaseConfig.client?.from?.('orders');
-            if (builder && typeof builder.insert === 'function') {
-              const { data: insData, error: insError } = await builder
-                .insert({
-                  name: baseOrder.name,
-                  phone: baseOrder.phone,
-                  email: baseOrder.email,
-                  rnc: baseOrder.rnc,
-                  empresa: baseOrder.empresa,
-                  service_id: orderData.service_id,
-                  vehicle_id: orderData.vehicle_id,
-                  service_questions: baseOrder.service_questions,
-                  pickup: baseOrder.pickup,
-                  delivery: baseOrder.delivery,
-                  origin_coords: origin_coords2,
-                  destination_coords: destination_coords2,
-                  date: baseOrder.date,
-                  time: baseOrder.time,
-                  status: 'pending',
-                  estimated_price: null,
-                  tracking_data: baseOrder.tracking_data
-                })
-                .select()
-                .single();
-              if (insError) throw insError;
-              savedOrder = insData;
-              console.log('Fallback insert en orders realizado con éxito.');
-            } else {
-              const { data: insData, error: insError } = await supabaseConfig.restInsert('orders', {
-                name: baseOrder.name,
-                phone: baseOrder.phone,
-                email: baseOrder.email,
-                rnc: baseOrder.rnc,
-                empresa: baseOrder.empresa,
-                service_id: orderData.service_id,
-                vehicle_id: orderData.vehicle_id,
-                service_questions: baseOrder.service_questions,
-                pickup: baseOrder.pickup,
-                delivery: baseOrder.delivery,
-                origin_coords: origin_coords2,
-                destination_coords: destination_coords2,
-                date: baseOrder.date,
-                time: baseOrder.time,
-                status: 'pending',
-                estimated_price: null,
-                tracking_data: baseOrder.tracking_data
-              });
-              if (insError) throw insError;
-              savedOrder = Array.isArray(insData) ? insData[0] : insData;
-              console.log('Fallback insert REST en orders realizado con éxito.');
-            }
-          } catch (fallbackErr) {
-            console.error('Fallback insert en orders falló:', fallbackErr);
-            let errorMsg = 'Hubo un error al enviar tu solicitud. Por favor, inténtalo de nuevo.';
-            if (fallbackErr && typeof fallbackErr === 'object') {
-              if (fallbackErr.message && fallbackErr.message.includes('duplicate key')) {
-                errorMsg = 'Ya existe una solicitud con estos datos. Verifica la información.';
-              } else if (fallbackErr.message) {
-                errorMsg = `Error específico: ${fallbackErr.message}`;
-              } else if (fallbackErr.code) {
-                errorMsg = `Error de código: ${fallbackErr.code}`;
-              }
-            }
-            notify('error', errorMsg, { title: 'Error al Guardar Solicitud' });
-            return;
-          }
+          notify('error', 'No se pudo crear la solicitud. Intenta más tarde.', { title: 'Error al Guardar Solicitud' });
+          return;
         }
 
         // Si llegamos aquí, savedOrder está presente (puede no traer ID si hubo fallback RLS)
-        try {
-          const oid = savedOrder?.id ?? savedOrder?.short_id;
-          if (oid && supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
-            await supabaseConfig.client.functions.invoke('order-event', {
-              body: { event: 'created', orderId: oid }
-            });
-          }
-        } catch (e) {
-          console.warn('No se pudo emitir evento order-created:', e?.message || e);
-        }
+        
         const displayCode = (savedOrder && (savedOrder.short_id || savedOrder.id)) ? (savedOrder.short_id || savedOrder.id) : null;
         
         // ✅ ACTUALIZACIÓN TARDÍA DE SUSCRIPCIÓN PUSH (RPC)

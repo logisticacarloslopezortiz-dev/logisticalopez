@@ -2077,15 +2077,27 @@ GRANT SELECT ON public.testimonials TO anon, authenticated;
 
 DROP FUNCTION IF EXISTS public.get_public_testimonials(int);
 CREATE OR REPLACE FUNCTION public.get_public_testimonials(limit_count int DEFAULT 10)
-RETURNS SETOF public.testimonials
-LANGUAGE sql
-SECURITY DEFINER
+RETURNS TABLE (
+  order_id bigint,
+  stars int,
+  comment text,
+  client_name text,
+  created_at timestamptz
+)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
 AS $$
-  SELECT *
-  FROM public.testimonials
-  WHERE is_public = true
-  ORDER BY display_order ASC, created_at DESC
-  LIMIT limit_count;
+  SELECT
+    o.id AS order_id,
+    COALESCE((o.rating->>'service')::int, (o.rating->>'stars')::int, NULL) AS stars,
+    NULLIF(o.customer_comment, '') AS comment,
+    NULLIF(o.name, '') AS client_name,
+    COALESCE(o.completed_at, o.created_at) AS created_at
+  FROM public.orders o
+  WHERE o.customer_comment IS NOT NULL
+    AND TRIM(o.customer_comment) <> ''
+    AND COALESCE((o.rating->>'stars')::int, (o.rating->>'service')::int, 0) >= 4
+  ORDER BY o.completed_at DESC NULLS LAST, o.created_at DESC
+  LIMIT GREATEST(1, limit_count);
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_public_testimonials(int) TO anon, authenticated;
