@@ -108,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCancel = document.getElementById('btnCancel');
   const btnVerOrigen = document.getElementById('btnVerOrigen');
   const btnVerDestino = document.getElementById('btnVerDestino');
+  let __currentUserId = null;
 
   // Modal Confirmación Custom
   const confirmModal = document.getElementById('confirmationModal');
@@ -372,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Mostrar botón de aceptar solo si es pendiente y no está asignada
     if (modalAcceptBtn) {
-        const isPending = String(order.status || '').toLowerCase() === 'pending' && !order.assigned_to;
+        const isPending = String(order.status || '').toLowerCase() === 'pending' && (!order.assigned_to || order.assigned_to === __currentUserId);
         if (isPending) {
             modalAcceptBtn.classList.remove('hidden');
         } else {
@@ -863,8 +864,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const { data: { session } } = await supabaseConfig.client.auth.getSession();
       const uid = session?.user?.id;
       if (!uid) throw new Error("No user id");
+      __currentUserId = uid;
 
-      // Validar colaborador (opcional, depende de reglas de negocio)
       try {
         const v = await supabaseConfig.validateActiveCollaborator?.(uid);
         if (v && !v.isValid) {
@@ -873,49 +874,25 @@ document.addEventListener('DOMContentLoaded', () => {
           window.location.href = 'login-colaborador.html';
           return;
         }
+        // ❌ ELIMINADO: El frontend ya no necesita saber si puede ver todas las órdenes.
+        // La UI se adapta a los datos que llegan.
+        const titleEl = document.getElementById('collabTitle');
+        if (titleEl) {
+            titleEl.textContent = 'Mis Solicitudes';
+        }
       } catch (e) { console.error("Validacion error", e); }
 
-      // PRIMERO: Verificar qué órdenes existen en general
-      const respAll = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
-        .from('orders')
-        .select('id,status,assigned_to')
-        .limit(10)) || supabaseConfig.client
-        .from('orders')
-        .select('id,status,assigned_to')
-        .limit(10));
-      const { data: allOrders, error: allError } = respAll;
-      
-      // Verificar si hay políticas RLS bloqueando
-      if (allError) {
-        console.error('Cannot access orders table:', allError);
-        throw new Error(`No se puede acceder a la tabla orders: ${allError.message}`);
-      }
-      
-      if (!allOrders || allOrders.length === 0) {
-        orders = [];
-        renderOrdersHTML();
-        return;
-      }
-      
-      // Importante: seleccionar campos necesarios 
-      const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
-        .from('orders')
-        .select('id,short_id,name,phone,status,pickup,delivery,origin_coords,destination_coords,service_questions,estimated_price,service:services(name,description),vehicle:vehicles(name),assigned_to,tracking_data')
-        .or(`assigned_to.eq.${uid},assigned_to.is.null`)
-        .in('status', ['pending', 'accepted', 'in_progress'])
-        .order('created_at', { ascending: false })) || supabaseConfig.client
-        .from('orders')
-        .select('id,short_id,name,phone,status,pickup,delivery,origin_coords,destination_coords,service_questions,estimated_price,service:services(name,description),vehicle:vehicles(name),assigned_to,tracking_data')
-        .or(`assigned_to.eq.${uid},assigned_to.is.null`)
-        .in('status', ['pending', 'accepted', 'in_progress'])
-        .order('created_at', { ascending: false }));
-      const { data, error } = resp;
+      // ✅ REFACTOR: Llamada única a la función RPC que encapsula la lógica de permisos.
+      const { data, error } = await supabaseConfig.client.rpc('get_visible_orders_for_collaborator');
 
-      if (error) throw error;
+      if (error) {
+          console.error('Error fetching visible orders:', error);
+          throw error;
+      }
 
       const rawOrders = data || [];
       
-      // Filtrar órdenes no finalizadas (ya filtradas en SQL)
+      // La RPC ya filtra por estado, pero por si acaso, se mantiene el filtro local.
       orders = rawOrders.filter(o => !isFinalOrder(o));
       
 
@@ -1007,7 +984,7 @@ function renderOrdersHTML() {
 
       // Boton Aceptar solo si está pendiente y no tengo orden activa (o lógica de negocio)
       // Aquí permitimos aceptar si está pendiente.
-      const canAccept = dbStatus === 'pending' && !o.assigned_to;
+      const canAccept = dbStatus === 'pending' && (!o.assigned_to || o.assigned_to === __currentUserId);
       
       return `
         <div class="group bg-white rounded-2xl shadow hover:shadow-lg border border-gray-200 overflow-hidden transition-shadow">

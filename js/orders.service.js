@@ -17,6 +17,9 @@
       const shortId = order?.short_id || null;
       const name = order?.name || null;
       let email_sent = false;
+      /* 
+      // ❌ ELIMINADO: El frontend NO debe enviar emails ni notificaciones.
+      // Esto lo maneja el backend (Trigger -> Outbox -> Edge Function).
       if (to && orderId) {
         try {
           const { error: mailErr } = await client.functions.invoke('send-order-email', { body: { to, orderId, shortId, status: 'pending', name } });
@@ -31,8 +34,9 @@
         if (!error && data && data.success === true) {
           return data;
         }
-      } catch (_) { /* noop: si falla, ya devolvimos éxito con RPC+email */ }
-      return { success: true, order, email_sent, push_sent: false, fallback: true };
+      } catch (_) { } 
+      */
+      return { success: true, order, email_sent: false, push_sent: false, fallback: true };
     }
   };
   try { window.OrdersService = OrdersService; } catch(_) {}

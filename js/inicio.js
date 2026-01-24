@@ -536,9 +536,8 @@ async function assignSelectedCollaborator(){
     }
   } catch(_) {}
   const updateData = { collaborator_id: collaboratorId, assigned_at: new Date().toISOString() };
-
-  // Usar OrderManager para centralizar lógica y tracking
-  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, 'Aceptada', updateData);
+  // Marcar como asignada manteniendo estado PENDIENTE; el colaborador la aceptará luego
+  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, 'Pendiente', updateData);
 
   if (!success) {
     notifications.error('Error de asignación', error?.message || 'No se pudo asignar el pedido.');
@@ -546,12 +545,12 @@ async function assignSelectedCollaborator(){
     // Actualizar el array local para reflejar el cambio inmediatamente
     const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
     if (orderIndex !== -1) {
-      const merged = { ...allOrders[orderIndex], assigned_to: collaboratorId, status: 'Aceptada' };
+      const merged = { ...allOrders[orderIndex], assigned_to: collaboratorId, status: 'Pendiente' };
       allOrders[orderIndex] = merged;
-      AppState.update({ id: Number(selectedOrderIdForAssign), assigned_to: collaboratorId, status: 'Aceptada' });
+      AppState.update({ id: Number(selectedOrderIdForAssign), assigned_to: collaboratorId, status: 'Pendiente' });
     }
     filterOrders();
-    notifications.success(`Pedido asignado a ${col.name} y marcado como "Aceptada".`);
+    notifications.success(`Pedido asignado a ${col.name} y marcado como "Pendiente".`);
   }
   
   closeAssignModal();

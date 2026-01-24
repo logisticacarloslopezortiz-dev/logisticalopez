@@ -547,47 +547,7 @@ const OrderManager = {
       console.log(`[OrderManager] Orden #${orderId} actualizada exitosamente en la BD.`);
       try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
 
-      // 4. Enviar notificaciones push (cliente y roles)
-      // [REFACTOR] Se eliminó la notificación manual desde el frontend para evitar duplicados.
-      // La notificación ahora es manejada exclusivamente por triggers SQL (trg_orders_notify_status).
-      /*
-      // Notificar a administradores del cambio de estado
-      /*
-      try {
-        const rolePayload = {
-          role: 'administrador',
-          orderId: usedFilter?.val ?? orderId,
-          title: 'Estado de orden actualizado',
-          body: `La orden #${usedFilter?.val ?? orderId} cambió a "${newStatus}"`,
-          data: { newStatus, url: `https://logisticalopezortiz.com/inicio.html?orderId=${usedFilter?.val ?? orderId}` }
-        };
-        const adminNotify = await supabaseConfig.client.functions.invoke('notify-role', { body: rolePayload });
-        console.log('[OrderManager] Notificación rol admin:', adminNotify);
-      } catch (e) {
-        console.warn('[OrderManager] No se pudo notificar a administradores:', e?.message || e);
-      }
-      */
-
-      // Notificar al colaborador asignado cuando aplique
-      /*
-      try {
-        const collaboratorId = additionalData?.collaborator_id || updatePayload?.assigned_to || null;
-        if (collaboratorId) {
-          const rolePayload = {
-            role: 'colaborador',
-            orderId: usedFilter?.val ?? orderId,
-            title: 'Actualización de tu trabajo',
-            body: `Tu orden asignada #${usedFilter?.val ?? orderId} cambió a "${newStatus}"`,
-            data: { newStatus },
-            targetIds: [String(collaboratorId)]
-          };
-          const collabNotify = await supabaseConfig.client.functions.invoke('notify-role', { body: rolePayload });
-          console.log('[OrderManager] Notificación rol colaborador:', collabNotify);
-        }
-      } catch (e) {
-        console.warn('[OrderManager] No se pudo notificar a colaborador:', e?.message || e);
-      }
-      */
+      
 
       try {
         if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
@@ -599,6 +559,8 @@ const OrderManager = {
 
       try {
         if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
+          /*
+          // ❌ ELIMINADO: El frontend NO debe enviar emails.
           const toEmail = currentOrder?.client_email || currentOrder?.email || null;
           if (toEmail) {
             const resolvedId = usedFilter?.val ?? orderId;
@@ -612,6 +574,7 @@ const OrderManager = {
               }
             });
           }
+          */
         }
       } catch (_) {}
 
@@ -632,4 +595,3 @@ async function notifyClientForOrder(orderId, newStatus) {}
 try { if (typeof window !== 'undefined') { window.OrderManager = OrderManager; } } catch (_) {}
 try { if (typeof globalThis !== 'undefined') { globalThis.OrderManager = OrderManager; } } catch (_) {}
 try { if (typeof module === 'object' && module && module.exports) { module.exports = OrderManager; } } catch (_) {}
-

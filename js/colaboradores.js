@@ -26,7 +26,27 @@
     const closeEditBtn = document.getElementById('closeEditCollabModal');
     const cancelEditBtn = document.getElementById('cancelEditCollab');
     const resetPasswordBtn = document.getElementById('resetPasswordCollab');
+    const editViewAll = document.getElementById('editCollabViewAll');
     
+    // Función para actualizar estilo visual del checkbox "Ver todas"
+    function updateViewAllStyle() {
+      if (!editViewAll) return;
+      const label = editViewAll.closest('label');
+      if (!label) return;
+      if (editViewAll.checked) {
+        label.classList.remove('bg-gray-50');
+        label.classList.add('bg-green-100', 'border-green-500', 'text-green-800');
+        editViewAll.classList.replace('text-blue-600', 'text-green-600');
+        editViewAll.classList.replace('focus:ring-blue-500', 'focus:ring-green-500');
+      } else {
+        label.classList.add('bg-gray-50');
+        label.classList.remove('bg-green-100', 'border-green-500', 'text-green-800');
+        editViewAll.classList.replace('text-green-600', 'text-blue-600');
+        editViewAll.classList.replace('focus:ring-green-500', 'focus:ring-blue-500');
+      }
+    }
+    if (editViewAll) editViewAll.addEventListener('change', updateViewAllStyle);
+
     const totalColaboradoresEl = document.getElementById('totalColaboradores');
     const colaboradoresActivosEl = document.getElementById('colaboradoresActivos');
 
@@ -139,8 +159,18 @@
         divFlex.appendChild(generateAvatarNode(colab.name));
         const divText = document.createElement('div');
         const divName = document.createElement('div');
-        divName.className = 'font-medium';
+        divName.className = 'font-medium flex items-center gap-2';
         divName.textContent = colab.name;
+        
+        // Indicador visual de permiso "Ver todas"
+        if (colab.puede_ver_todas_las_ordenes) {
+          const eyeBadge = document.createElement('span');
+          eyeBadge.className = 'inline-flex items-center justify-center p-1 bg-green-100 text-green-700 rounded-full';
+          eyeBadge.title = 'Puede ver todas las solicitudes pendientes';
+          eyeBadge.innerHTML = '<i data-lucide="eye" class="w-3 h-3"></i>';
+          divName.appendChild(eyeBadge);
+        }
+
         const divRole = document.createElement('div');
         divRole.className = 'text-sm text-gray-500';
         divRole.textContent = colab.role || 'Colaborador';
@@ -358,6 +388,10 @@
       editPhone.value = colab.phone || '';
       editMatricula.value = colab.matricula || '';
       editPassword.value = '';
+      if (editViewAll) { 
+        editViewAll.checked = !!colab.puede_ver_todas_las_ordenes;
+        updateViewAllStyle();
+      }
       if (editMsg) { editMsg.textContent = ''; editMsg.className = ''; }
       editModal.classList.remove('hidden');
       // Bloquear scroll del body y enfocar el primer campo
@@ -425,6 +459,7 @@
           phone: editPhone.value.trim() || undefined,
           matricula: editMatricula.value.trim() || undefined,
           password: editPassword.value.trim() || undefined,
+          puede_ver_todas_las_ordenes: !!(editViewAll && editViewAll.checked)
         };
         // Limpiar mensajes
         showMsg(editMsg, 'Guardando cambios...', 'info');
@@ -496,7 +531,7 @@
         nameEl.textContent = collab.name || String(id);
         emailEl.textContent = collab.email || '';
         avatarEl.innerHTML = '';
-        avatarEl.appendChild(generateAvatarNode(colab.name || 'C'));
+        avatarEl.appendChild(generateAvatarNode(collab.name || 'C'));
 
         const { data: orders } = await supabaseConfig.client
           .from('orders')

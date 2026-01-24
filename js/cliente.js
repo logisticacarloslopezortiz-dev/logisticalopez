@@ -90,15 +90,12 @@ async function getPushSubscription() {
     const registration = await navigator.serviceWorker.ready;
     let vapidKey = null;
     try {
-      let resp = await supabaseConfig.client.functions.invoke('getVapidKey');
-      if (resp.error || !resp.data?.key) {
-        resp = await supabaseConfig.client.functions.invoke('get-vapid-key');
-      }
-      const { data, error } = resp;
-      if (error) { /* silencio: no mostrar al usuario */ }
+      // ✅ SOLO usamos la función correcta get-vapid-key
+      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key');
+      if (error) { /* silencio */ }
       vapidKey = data?.key || null;
     } catch (e) {
-      // silencio: no mostrar al usuario
+      // silencio
     }
     if (!vapidKey || typeof vapidKey !== 'string') {
       return null;
