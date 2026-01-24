@@ -174,7 +174,23 @@ async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfU
     return { success: false, messageId: null };
   }
 
-  const subject = `✅ Solicitud Aceptada y Factura - Orden #${orderIdForDisplay} | Logística López Ortiz`;
+  const s = String(order.status || '').toLowerCase();
+  let subject = `📄 Factura de tu servicio - Orden #${orderIdForDisplay} | Logística López Ortiz`;
+  let introTitle = 'Tu factura está lista';
+  let introBody = 'Hemos generado la factura de tu servicio. Puedes descargarla desde el enlace.';
+  if (s === 'completed' || s === 'completada' || s === 'entregada') {
+    subject = `✅ Entrega completada y factura - Orden #${orderIdForDisplay} | Logística López Ortiz`;
+    introTitle = '¡Tu servicio fue entregado!';
+    introBody = 'Tu servicio ha sido completado. Adjuntamos tu factura y el enlace de descarga.';
+  } else if (s === 'accepted' || s === 'aceptada' || s === 'in_progress' || s === 'en_camino_recoger' || s === 'cargando' || s === 'en_camino_entregar') {
+    subject = `🔔 Actualización de estado y factura - Orden #${orderIdForDisplay} | Logística López Ortiz`;
+    introTitle = 'Actualización de tu solicitud';
+    introBody = 'Tu solicitud está en curso. Te compartimos tu factura y el enlace de descarga.';
+  } else if (s === 'cancelled' || s === 'cancelada') {
+    subject = `⚠️ Solicitud cancelada - Información y factura | Logística López Ortiz`;
+    introTitle = 'Tu solicitud fue cancelada';
+    introBody = 'Se genera factura solo si aplica. Revisa los detalles y el enlace de descarga.';
+  }
   const html = `
     <div style="background-color: #f4f4f4; padding: 20px; font-family: Arial, sans-serif;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
@@ -182,9 +198,9 @@ async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfU
           <img src="https://logisticalopezortiz.com/img/1vertical.png" alt="Logística López Ortiz" style="max-width: 150px; height: auto;">
         </div>
         <div style="padding: 30px;">
-          <h2 style="color: #1E405A; font-size: 24px; margin-top: 0;">¡Tu solicitud ha sido aceptada!</h2>
+          <h2 style="color: #1E405A; font-size: 24px; margin-top: 0;">${introTitle}</h2>
           <p style="color: #555555; line-height: 1.6;">Hola,</p>
-          <p style="color: #555555; line-height: 1.6;">Nos complace informarte que tu solicitud de servicio ha sido aceptada y está siendo procesada.</p>
+          <p style="color: #555555; line-height: 1.6;">${introBody}</p>
           <p style="color: #555555; line-height: 1.6;">Puedes darle seguimiento en tiempo real usando el siguiente número de orden:</p>
           <div style="background-color: #f0f5f9; border: 1px dashed #1E8A95; padding: 15px; text-align: center; margin: 20px 0; border-radius: 5px;">
             <p style="font-size: 28px; font-weight: bold; color: #1E405A; margin: 0;">${orderIdForDisplay}</p>
@@ -280,7 +296,7 @@ Deno.serve(async (req: Request) => {
     
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
       logDebug('Variables de entorno faltantes');
-      return jsonResponse({ error: 'Error de configuración del servidor' }, 500);
+      return jsonResponse({ error: 'Error de configuración del servidor' }, 500, req);
     }
     
     // Crear cliente de Supabase
@@ -290,7 +306,7 @@ Deno.serve(async (req: Request) => {
     const { orderId, email, contact_id } = await req.json();
     
     if (!orderId) {
-      return jsonResponse({ error: 'Se requiere orderId para generar la factura' }, 400);
+      return jsonResponse({ error: 'Se requiere orderId para generar la factura' }, 400, req);
     }
     
     // Buscar la orden
@@ -305,7 +321,7 @@ Deno.serve(async (req: Request) => {
     
     if (orderError || !order) {
       logDebug('Error al buscar la orden', orderError);
-      return jsonResponse({ error: 'No se encontró la orden especificada' }, 404);
+      return jsonResponse({ error: 'No se encontró la orden especificada' }, 404, req);
     }
     
     // Buscar datos del negocio
@@ -317,7 +333,7 @@ Deno.serve(async (req: Request) => {
     
     if (businessError || !business) {
       logDebug('Error al buscar datos del negocio', businessError);
-      return jsonResponse({ error: 'No se encontraron los datos del negocio' }, 404);
+      return jsonResponse({ error: 'No se encontraron los datos del negocio' }, 404, req);
     }
     
     const pdfBytes = await generateInvoicePDF(order, business);
@@ -327,12 +343,12 @@ Deno.serve(async (req: Request) => {
     const { error: uploadError } = await supabase.storage.from('invoices').upload(filePath, pdfBytes, { contentType: 'application/pdf', upsert: true });
     if (uploadError) {
       logDebug('Error subiendo PDF', uploadError);
-      return jsonResponse({ error: 'No se pudo subir la factura' }, 500);
+      return jsonResponse({ error: 'No se pudo subir la factura' }, 500, req);
     }
     const { data: pub } = supabase.storage.from('invoices').getPublicUrl(filePath);
     const pdfUrl = ((pub as any)?.publicUrl) || '';
     if (!pdfUrl) {
-      return jsonResponse({ error: 'No se pudo obtener la URL pública del PDF' }, 500);
+      return jsonResponse({ error: 'No se pudo obtener la URL pública del PDF' }, 500, req);
     }
     
     // Enviar por email si se proporcionó
@@ -407,7 +423,7 @@ Deno.serve(async (req: Request) => {
     });
     if (invError) {
       logDebug('Error al registrar en invoices', invError);
-      return jsonResponse({ error: 'Factura generada pero no registrada en la tabla invoices' }, 500);
+      return jsonResponse({ error: 'Factura generada pero no registrada en la tabla invoices' }, 500, req);
     }
     
     return jsonResponse({ 
@@ -420,12 +436,12 @@ Deno.serve(async (req: Request) => {
         recipientEmail,
         messageId: emailResult?.messageId
       }
-    });
+    }, 200, req);
     
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error desconocido';
     logDebug('Error al procesar la solicitud', error);
-    return jsonResponse({ error: message }, 500);
+    return jsonResponse({ error: message }, 500, req);
   }
 });
 type QueryBuilder = {

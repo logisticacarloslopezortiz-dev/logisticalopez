@@ -882,8 +882,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (e) { console.error("Validacion error", e); }
 
-      // ✅ REFACTOR: Llamada única a la función RPC que encapsula la lógica de permisos.
-      const { data, error } = await supabaseConfig.client.rpc('get_visible_orders_for_collaborator');
+      // ✅ REFACTOR: Llamada directa usando RLS
+      // Traemos órdenes pendientes (si tenemos permiso) y las asignadas a nosotros.
+      // Supabase filtra automáticamente según la política RLS.
+      const { data, error } = await supabaseConfig.client
+        .from('orders')
+        .select(`
+          id,
+          status,
+          created_at,
+          assigned_to,
+          pickup,
+          delivery,
+          pickup_coords,
+          delivery_coords,
+          name,
+          phone,
+          client_email,
+          service:services(name, description),
+          vehicle:vehicles(name)
+        `)
+        // Filtramos para no traer historial antiguo innecesario, pero dejamos que RLS decida qué pending/assigned vemos.
+        .neq('status', 'cancelled')
+        .neq('status', 'completed') 
+        .order('created_at', { ascending: false });
 
       if (error) {
           console.error('Error fetching visible orders:', error);
@@ -976,7 +998,14 @@ function renderOrdersHTML() {
       const s = status.toLowerCase();
       
       let badge = 'bg-gray-100 text-gray-700';
-      if (s === 'pending') badge = 'bg-yellow-100 text-yellow-700';
+      if (s === 'pending') {
+        if (o.assigned_to === __currentUserId) {
+            badge = 'bg-purple-100 text-purple-800 border border-purple-200'; // ✨ Diferenciador visual
+            status = 'Asignada a ti';
+        } else {
+            badge = 'bg-yellow-100 text-yellow-800 border border-yellow-200';
+        }
+      }
       else if (s === 'aceptada') badge = 'bg-blue-100 text-blue-700';
       else if (s.includes('curso') || s.includes('camino')) badge = 'bg-indigo-100 text-indigo-700';
       else if (s === 'cancelada') badge = 'bg-red-100 text-red-700';

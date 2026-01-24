@@ -655,7 +655,7 @@ DROP FUNCTION IF EXISTS public.update_order_status(bigint, text, uuid, jsonb);
 CREATE OR REPLACE FUNCTION public.update_order_status(
     p_order_id bigint,
     p_new_status text,
-    p_collaborator_id uuid, -- Ignorado, usa auth.uid()
+    p_collaborator_id uuid,
     p_tracking_entry jsonb
 )
 RETURNS jsonb
@@ -666,6 +666,7 @@ DECLARE
     v_updated jsonb;
     v_normalized public.order_status;
     v_uid uuid;
+    v_target_collab uuid;
 BEGIN
     v_uid := auth.uid();
     IF v_uid IS NULL THEN
@@ -677,7 +678,12 @@ BEGIN
     UPDATE public.orders o
     SET
         status = v_normalized,
-        assigned_to = COALESCE(o.assigned_to, v_uid),
+        -- Lógica de asignación corregida:
+        -- Si es Admin y envía ID, asigna a ese ID. Si no, usa lógica estándar (auto-asignar si está null).
+        assigned_to = CASE 
+            WHEN p_collaborator_id IS NOT NULL AND (public.is_admin(v_uid) OR public.is_owner(v_uid)) THEN p_collaborator_id
+            ELSE COALESCE(o.assigned_to, v_uid)
+        END,
         assigned_at = CASE WHEN v_normalized = 'accepted' AND o.assigned_at IS NULL THEN now() ELSE assigned_at END,
         completed_by = CASE WHEN v_normalized = 'completed' THEN v_uid ELSE completed_by END,
         completed_at = CASE WHEN v_normalized = 'completed' THEN now() ELSE completed_at END,
@@ -935,6 +941,7 @@ AS $$
     c.status = 'activo' AND
     o.status IN ('pending', 'accepted', 'in_progress') AND
     (
+      -- Lógica espejo a RLS para consistencia
       (c.puede_ver_todas_las_ordenes = true AND (o.assigned_to IS NULL OR o.assigned_to = auth.uid()))
       OR
       (c.puede_ver_todas_las_ordenes = false AND o.assigned_to = auth.uid())
@@ -1106,6 +1113,18 @@ BEGIN
       jsonb_build_object('new_status', NEW.status)
     );
 
+  ELSIF TG_OP = 'UPDATE' AND OLD.assigned_to IS DISTINCT FROM NEW.assigned_to AND NEW.assigned_to IS NOT NULL THEN
+    INSERT INTO public.notification_events (
+      order_id, event_type, payload
+    ) VALUES (
+      NEW.id,
+      'order_assigned',
+      jsonb_build_object(
+        'collaborator_id', NEW.assigned_to,
+        'new_status', NEW.status
+      )
+    );
+
   ELSIF TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status THEN
     INSERT INTO public.notification_events (
       order_id, event_type, payload
@@ -1122,6 +1141,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+DROP TRIGGER IF EXISTS trg_orders_events ON public.orders;
 DROP TRIGGER IF EXISTS trg_orders_emit_event ON public.orders;
 CREATE TRIGGER trg_orders_events
 AFTER INSERT OR UPDATE OF status
@@ -1206,6 +1226,7 @@ BEGIN
 END;
 $$;
 DROP TRIGGER IF EXISTS trg_events_to_outbox ON public.notification_events;
+DROP TRIGGER IF EXISTS trg_events_outbox ON public.notification_events;
 CREATE TRIGGER trg_events_outbox
 AFTER INSERT ON public.notification_events
 FOR EACH ROW
@@ -1270,91 +1291,135 @@ DO $$ BEGIN
 END $$;
 
 -- Vehicles & Services (Público lectura, Admin escritura)
+DROP POLICY IF EXISTS public_read_vehicles ON public.vehicles;
 CREATE POLICY public_read_vehicles ON public.vehicles FOR SELECT USING (true);
+DROP POLICY IF EXISTS admin_write_vehicles ON public.vehicles;
 CREATE POLICY admin_write_vehicles ON public.vehicles FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS public_read_services ON public.services;
 CREATE POLICY public_read_services ON public.services FOR SELECT USING (true);
+DROP POLICY IF EXISTS admin_write_services ON public.services;
 CREATE POLICY admin_write_services ON public.services FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Profiles (Lectura pública, Update propio, Admin todo)
+DROP POLICY IF EXISTS public_read_profiles ON public.profiles;
 CREATE POLICY public_read_profiles ON public.profiles FOR SELECT USING (true);
+DROP POLICY IF EXISTS users_update_own_profile ON public.profiles;
 CREATE POLICY users_update_own_profile ON public.profiles FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS admin_manage_profiles ON public.profiles;
 CREATE POLICY admin_manage_profiles ON public.profiles FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Collaborators (Lectura pública, Update propio, Admin todo)
+DROP POLICY IF EXISTS public_read_collaborators ON public.collaborators;
 CREATE POLICY public_read_collaborators ON public.collaborators FOR SELECT USING (true);
+DROP POLICY IF EXISTS collaborator_update_self ON public.collaborators;
 CREATE POLICY collaborator_update_self ON public.collaborators FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS admin_manage_collaborators ON public.collaborators;
 CREATE POLICY admin_manage_collaborators ON public.collaborators FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Business (Lectura pública, Admin escritura)
+DROP POLICY IF EXISTS public_read_business ON public.business;
 CREATE POLICY public_read_business ON public.business FOR SELECT USING (true);
+DROP POLICY IF EXISTS admin_write_business ON public.business;
 CREATE POLICY admin_write_business ON public.business FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Orders
 -- 1. Insert (Público, estado pending)
+DROP POLICY IF EXISTS orders_insert_public ON public.orders;
 CREATE POLICY orders_insert_public ON public.orders FOR INSERT WITH CHECK (
   status = 'pending' AND assigned_to IS NULL AND (client_id IS NOT NULL OR client_contact_id IS NOT NULL)
 );
+
+-- Helper function for permissions
+CREATE OR REPLACE FUNCTION public.can_view_all_orders(uid uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT COALESCE(
+    (SELECT puede_ver_todas_las_ordenes
+     FROM public.collaborators
+     WHERE id = uid),
+    false
+  );
+$$;
+
 -- 2. Select (Cliente propio, Colaborador asignado/pendiente/activo, Admin)
 DROP POLICY IF EXISTS orders_select_policy ON public.orders;
 CREATE POLICY orders_select_policy ON public.orders FOR SELECT USING (
   (client_id = auth.uid()) OR
-  (EXISTS (
-    SELECT 1
-    FROM public.collaborators c
-    WHERE c.id = auth.uid() AND c.status = 'activo'
-    AND (
-      (c.puede_ver_todas_las_ordenes = true AND (assigned_to IS NULL OR assigned_to = auth.uid()))
-      OR
-      (c.puede_ver_todas_las_ordenes = false AND assigned_to = auth.uid())
-    )
-  )) OR
+  (
+    -- Colaborador: Ver todas si tiene permiso, o solo las asignadas
+    (public.can_view_all_orders(auth.uid()) AND status = 'pending')
+    OR
+    assigned_to = auth.uid()
+  ) OR
   (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()))
 );
 -- 3. Update (Colaborador asignado, Admin)
+DROP POLICY IF EXISTS orders_update_policy ON public.orders;
 CREATE POLICY orders_update_policy ON public.orders FOR UPDATE USING (
   (assigned_to = auth.uid() AND EXISTS (SELECT 1 FROM public.collaborators c WHERE c.id = auth.uid() AND c.status = 'activo')) OR
   (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()))
 );
 -- 4. Delete (Admin)
+DROP POLICY IF EXISTS orders_delete_admin ON public.orders;
 CREATE POLICY orders_delete_admin ON public.orders FOR DELETE USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Notifications & Push
+DROP POLICY IF EXISTS user_manage_own_notifications ON public.notifications;
 CREATE POLICY user_manage_own_notifications ON public.notifications FOR ALL USING (user_id = auth.uid());
+DROP POLICY IF EXISTS admin_manage_notifications ON public.notifications;
 CREATE POLICY admin_manage_notifications ON public.notifications FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS user_manage_own_push ON public.push_subscriptions;
 CREATE POLICY user_manage_own_push ON public.push_subscriptions FOR ALL USING (user_id = auth.uid());
+DROP POLICY IF EXISTS anon_insert_push ON public.push_subscriptions;
 CREATE POLICY anon_insert_push ON public.push_subscriptions FOR INSERT TO anon, authenticated WITH CHECK (client_contact_id IS NOT NULL AND endpoint LIKE 'https://%');
+DROP POLICY IF EXISTS admin_manage_push ON public.push_subscriptions;
 CREATE POLICY admin_manage_push ON public.push_subscriptions FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Active Jobs & Locations
+DROP POLICY IF EXISTS active_jobs_select ON public.collaborator_active_jobs;
 CREATE POLICY active_jobs_select ON public.collaborator_active_jobs FOR SELECT USING (collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS active_jobs_write ON public.collaborator_active_jobs;
 CREATE POLICY active_jobs_write ON public.collaborator_active_jobs FOR ALL USING (collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Notification Outbox & Events (Admin/System)
+DROP POLICY IF EXISTS admin_all_outbox ON public.notification_outbox;
 CREATE POLICY admin_all_outbox ON public.notification_outbox FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Order Events (Admin read)
+DROP POLICY IF EXISTS admin_read_events ON public.order_events;
 CREATE POLICY admin_read_events ON public.order_events FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS locations_read_auth ON public.collaborator_locations;
 CREATE POLICY locations_read_auth ON public.collaborator_locations FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS locations_write_own ON public.collaborator_locations;
 CREATE POLICY locations_write_own ON public.collaborator_locations FOR ALL USING (collaborator_id = auth.uid());
 
 -- Templates
 -- CREATE POLICY admin_manage_templates ON public.notification_templates FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Testimonials
+DROP POLICY IF EXISTS public_read_testimonials ON public.testimonials;
 CREATE POLICY public_read_testimonials ON public.testimonials FOR SELECT USING (is_public = true);
+DROP POLICY IF EXISTS admin_manage_testimonials ON public.testimonials;
 CREATE POLICY admin_manage_testimonials ON public.testimonials FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Metrics
+DROP POLICY IF EXISTS perf_view_self_admin ON public.collaborator_performance;
 CREATE POLICY perf_view_self_admin ON public.collaborator_performance FOR SELECT USING (collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Clients
+DROP POLICY IF EXISTS clients_insert_any ON public.clients;
 CREATE POLICY clients_insert_any ON public.clients FOR INSERT TO anon, authenticated WITH CHECK (length(coalesce(phone, '')) >= 7 OR length(coalesce(email, '')) >= 5);
+DROP POLICY IF EXISTS clients_select_admin ON public.clients;
 CREATE POLICY clients_select_admin ON public.clients FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Logs
+DROP POLICY IF EXISTS logs_read_admin ON public.function_logs;
 CREATE POLICY logs_read_admin ON public.function_logs FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- Grants

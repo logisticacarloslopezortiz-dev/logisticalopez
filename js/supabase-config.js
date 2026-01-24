@@ -382,10 +382,10 @@ if (!window.supabaseConfig) {
 
       try { await this.ensureSupabaseReady?.(); } catch(_){}
 
-      // 1) Obtener SOLO desde Edge Function unificada
+      // 1) Obtener desde Edge Function unificada
       let key = null;
       try {
-        const resp = await this.client.functions.invoke('getVapidKey');
+        const resp = await this.client.functions.invoke('get-vapid-key');
         if (resp?.data?.key && typeof resp.data.key === 'string') key = resp.data.key;
       } catch(_){}
 

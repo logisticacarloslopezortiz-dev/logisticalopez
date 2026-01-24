@@ -18,7 +18,7 @@ export function corsHeadersForOrigin(origin: string | null): Record<string, stri
   const isAllowed = !!origin && allowedOrigins.has(origin);
   const headers: Record<string, string> = {
     'Access-Control-Allow-Origin': isAllowed ? origin! : '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, Authorization, X-Client-Info, Apikey, Content-Type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, Authorization, X-Client-Info, Apikey, Content-Type, X-Supabase-Client-Platform',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '10'
   };

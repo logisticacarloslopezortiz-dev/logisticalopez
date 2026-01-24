@@ -222,24 +222,9 @@ const OrderManager = {
     // ✅ CORRECCIÓN: Asegurar que la sesión esté fresca ANTES de cualquier operación.
     // Esto previene los errores 401 por token expirado.
     await supabaseConfig.ensureFreshSession();
-    try {
-      const nsEarly = String(newStatus || '').toLowerCase();
-      const dbEarly =
-        (UI_TO_DB_STATUS[nsEarly]) ||
-        (['completada','completed'].includes(nsEarly) ? 'completed' :
-         ['aceptada','accepted'].includes(nsEarly) ? 'accepted' :
-         ['en curso','in_progress'].includes(nsEarly) ? 'in_progress' :
-         ['cancelada','cancelled'].includes(nsEarly) ? 'cancelled' :
-         ['pendiente','pending'].includes(nsEarly) ? 'pending' : newStatus);
-      if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
-        const payload = { orderId, status: dbEarly, ui_status: nsEarly, collaborator_id: additionalData?.collaborator_id || null, extra: additionalData || {} };
-        const { data, error } = await supabaseConfig.client.functions.invoke('order-event', { body: payload });
-        if (!error && data && (data.success || data?.data?.success)) {
-          this._toast('Estado actualizado', 'success');
-          return { success: true, data, error: null };
-        }
-      }
-    } catch (_) {}
+    
+    // ❌ ELIMINADO: Llamada a Edge Function 'order-event' que causaba error CORS.
+    // El sistema ahora usa Triggers de Base de Datos para manejar eventos automáticamente.
 
     const normalizedId = this._normalizeOrderId(orderId);
     const isNumeric = Number.isFinite(normalizedId);
@@ -547,15 +532,6 @@ const OrderManager = {
       console.log(`[OrderManager] Orden #${orderId} actualizada exitosamente en la BD.`);
       try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
 
-      
-
-      try {
-        if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {
-          const resolvedId = usedFilter?.val ?? orderId;
-          const payload = { orderId: resolvedId, status: ns, ui_status: ns, collaborator_id: additionalData?.collaborator_id || updatePayload?.assigned_to || null, extra: additionalData || {} };
-          await supabaseConfig.client.functions.invoke('order-event', { body: payload });
-        }
-      } catch (_) {}
 
       try {
         if (supabaseConfig?.client && typeof supabaseConfig.client.functions?.invoke === 'function') {

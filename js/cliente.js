@@ -1110,16 +1110,16 @@ async function subscribeUserToPush(savedOrder) {
   try {
     const registration = await navigator.serviceWorker.ready;
     
-    // Obtener la clave VAPID válida desde el servidor
+    // Obtener la clave VAPID válida desde el servidor (unificada)
     let vapidKey = null;
     try {
-      const { data, error } = await supabaseConfig.client.functions.invoke('getVapidKey');
+      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key');
       if (error) {
         console.warn('No se pudo obtener VAPID por función:', error.message);
       }
       vapidKey = data?.key || null;
     } catch (e) {
-      console.warn('Fallo al invocar getVapidKey:', e?.message || String(e));
+      console.warn('Fallo al invocar get-vapid-key:', e?.message || String(e));
     }
 
     if (!vapidKey || typeof vapidKey !== 'string') {
