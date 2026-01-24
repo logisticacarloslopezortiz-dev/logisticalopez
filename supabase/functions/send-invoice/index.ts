@@ -161,7 +161,7 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
 async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfUrl: string, invoiceNumber: string, fromEmail?: string) {
   const apiKey = Deno.env.get('RESEND_API_KEY');
   const defaultFrom = 'Logística López Ortiz <facturacion@logisticalopezortiz.com>';
-  const from = defaultFrom;
+  const from = fromEmail || defaultFrom;
   const replyTo = Deno.env.get('RESEND_REPLY_TO') || defaultFrom;
   const orderIdForDisplay = order.short_id || order.id;
   const trackingLink = `https://logisticalopezortiz.com/seguimiento.html`;
@@ -171,6 +171,12 @@ async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfU
 
   if (!apiKey) {
     logDebug('RESEND_API_KEY not set');
+    return { success: false, messageId: null };
+  }
+
+  const isValidEmailLocal = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || ''));
+  if (!isValidEmailLocal(email || '')) {
+    logDebug('Invalid recipient email', email);
     return { success: false, messageId: null };
   }
 
@@ -242,13 +248,16 @@ async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfU
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       logDebug(`Attempting email send (attempt ${attempt}) for order ${orderIdForDisplay}`);
+      const payload: any = { from, to: [email], subject, html };
+      if (replyTo) payload.reply_to = [replyTo];
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: JSON.stringify({ from, to: email, subject, html, reply_to: replyTo })
+        body: JSON.stringify(payload)
       });
 
       const j = await r.json().catch(() => ({}));
@@ -288,6 +297,9 @@ Deno.serve(async (req: Request) => {
   // Manejar solicitudes OPTIONS (preflight CORS)
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405, req);
+  }
   
   try {
     // Obtener variables de entorno
@@ -340,6 +352,7 @@ Deno.serve(async (req: Request) => {
     const invoiceNumber = `INV-${order.short_id || order.id}`;
 
     const filePath = `${order.client_id || 'anon'}/${invoiceNumber}.pdf`;
+    await ensureInvoicesBucket(supabase);
     const { error: uploadError } = await supabase.storage.from('invoices').upload(filePath, pdfBytes, { contentType: 'application/pdf', upsert: true });
     if (uploadError) {
       logDebug('Error subiendo PDF', uploadError);
@@ -347,6 +360,7 @@ Deno.serve(async (req: Request) => {
     }
     const { data: pub } = supabase.storage.from('invoices').getPublicUrl(filePath);
     const pdfUrl = ((pub as any)?.publicUrl) || '';
+    const fileUrl = pdfUrl;
     if (!pdfUrl) {
       return jsonResponse({ error: 'No se pudo obtener la URL pública del PDF' }, 500, req);
     }
@@ -411,6 +425,7 @@ Deno.serve(async (req: Request) => {
       order_id: order.id,
       client_id: resolvedClientId,
       file_path: filePath,
+      file_url: fileUrl,
       total: order.monto_cobrado ?? 0,
       status: 'generada',
       recipient_email: recipientEmail ?? null,
@@ -451,3 +466,25 @@ type QueryBuilder = {
 };
 
 type SupabaseClientLike = SupabaseClient;
+
+async function ensureInvoicesBucket(supabase: SupabaseClientLike): Promise<void> {
+  try {
+    // Try quick check via listBuckets
+    const anySupabase: any = supabase as any;
+    if (anySupabase?.storage?.listBuckets) {
+      const { data: buckets } = await anySupabase.storage.listBuckets();
+      const exists = Array.isArray(buckets) && buckets.some((b: any) => b?.name === 'invoices');
+      if (!exists && anySupabase.storage.createBucket) {
+        await anySupabase.storage.createBucket('invoices', { public: true });
+      }
+      return;
+    }
+  } catch (_) {}
+  // Fallback: attempt create, ignore error if already exists
+  try {
+    const anySupabase: any = supabase as any;
+    if (anySupabase?.storage?.createBucket) {
+      await anySupabase.storage.createBucket('invoices', { public: true });
+    }
+  } catch (_) {}
+}

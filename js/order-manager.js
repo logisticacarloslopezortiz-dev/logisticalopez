@@ -252,6 +252,16 @@ const OrderManager = {
       if (typeof orderId.short_id === 'string') candidates.push({ col: 'short_id', val: orderId.short_id });
     }
 
+    // Validar que tenemos al menos un candidato de filtro
+    if (candidates.length === 0) {
+      const errorMsg = `ID de orden inválido: ${JSON.stringify(orderId)}`;
+      console.error(`[OrderManager] ${errorMsg}`);
+      return {
+        success: false,
+        error: new Error(errorMsg)
+      };
+    }
+
     console.log('[OrderManager] Candidatos de filtro:', candidates);
 
     // Sanitizar additionalData - solo incluir campos válidos de la tabla orders
@@ -285,6 +295,10 @@ const OrderManager = {
       updatePayload.status = db;
       if (db === 'completed') updatePayload.completed_at = new Date().toISOString();
       if (db === 'accepted') updatePayload.assigned_at = new Date().toISOString();
+      if (db === 'pending') {
+        updatePayload.assigned_to = null;
+        updatePayload.assigned_at = null;
+      }
     } else if (['completada', 'completed'].includes(ns)) {
       updatePayload.status = 'completed';
       updatePayload.completed_at = new Date().toISOString();
@@ -297,6 +311,8 @@ const OrderManager = {
       updatePayload.status = 'cancelled';
     } else if (['pendiente', 'pending'].includes(ns)) {
       updatePayload.status = 'pending';
+      updatePayload.assigned_to = null;
+      updatePayload.assigned_at = null;
     }
 
     // Prevalidar transición con el estado actual antes de RPC
@@ -368,8 +384,7 @@ const OrderManager = {
         order_id: normalizedId,
         new_status: ns, // ✅ CORRECCIÓN: Usar ns (siempre lowercase) en lugar de newStatus inconsistente
         collaborator_id: additionalData?.collaborator_id || null,
-        tracking_entry: rpcTrackingEntry,
-        extra: updatePayload
+        tracking_entry: rpcTrackingEntry
       };
 
       console.log('[OrderManager] Intentando RPC update_order_status ->', rpcPayload);

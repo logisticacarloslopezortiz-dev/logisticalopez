@@ -1202,8 +1202,8 @@ begin
   update public.orders o
   set
     status = v_normalized,
-    assigned_to = coalesce(o.assigned_to, v_uid),
-    assigned_at = case when v_normalized = 'accepted' and o.assigned_at is null then now() else assigned_at end,
+    assigned_to = case when v_normalized = 'pending' then null else coalesce(o.assigned_to, v_uid) end,
+    assigned_at = case when v_normalized = 'pending' then null when v_normalized = 'accepted' and o.assigned_at is null then now() else assigned_at end,
     completed_by = case when v_normalized = 'completed' then v_uid else completed_by end,
     completed_at = case when v_normalized = 'completed' then now() else completed_at end,
     -- Optimización: Solo guardar último estado en tracking_data para evitar crecimiento infinito

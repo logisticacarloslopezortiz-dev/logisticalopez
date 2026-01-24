@@ -294,16 +294,20 @@ async function updateOrderStatus(orderId, newStatus) {
   // COMENTARIO: Esta función ahora utiliza el OrderManager centralizado.
   console.log(`[Dueño] Solicitando cambio de estado para orden #${orderId} a "${newStatus}"`);
 
+  // Normalizar el estado recibido del select (puede ser 'Pendiente', 'Aceptada', 'En curso', etc.)
+  const normalizedStatus = String(newStatus || '').toLowerCase();
+
   // El tercer parámetro (additionalData) está vacío porque el dueño solo cambia el estado principal.
-  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, newStatus, {});
+  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, normalizedStatus, {});
 
   if (success) {
     notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
     
-    AppState.update({ id: Number(orderId), status: newStatus });
+    // Usar el status normalizado en la actualización de AppState
+    AppState.update({ id: Number(orderId), status: normalizedStatus });
     refreshLucide();
 
-    if (newStatus === 'entregada') {
+    if (normalizedStatus === 'completada' || normalizedStatus === 'entregada') {
       try { window.location.href = 'historial-solicitudes.html'; } catch (_) {}
     }
 
@@ -475,6 +479,11 @@ async function openAssignModal(orderId){
     invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
   }
 
+  // ✅ CORRECCIÓN: Reasignar siempre el evento onclick del botón confirmar
+  if (assignBtn) {
+    assignBtn.onclick = assignSelectedCollaborator;
+  }
+
   // Copiar enlace directo de seguimiento
   if (copyTrackBtn) {
     copyTrackBtn.onclick = async () => {
@@ -518,7 +527,8 @@ async function assignSelectedCollaborator(){
   }
   
   const colaboradores = await loadCollaborators();
-  const col = colaboradores.find(c => c.id === collaboratorId);
+  // ✅ CORRECCIÓN: Comparar como strings (UUID)
+  const col = colaboradores.find(c => String(c.id) === String(collaboratorId));
   if (!col) { 
     notifications.error('Colaborador no encontrado.'); 
     return; 
@@ -535,9 +545,14 @@ async function assignSelectedCollaborator(){
       return;
     }
   } catch(_) {}
+  if (!selectedOrderIdForAssign) {
+    notifications.error('Error: No se seleccionó ninguna orden.');
+    return;
+  }
+
   const updateData = { collaborator_id: collaboratorId, assigned_at: new Date().toISOString() };
-  // Marcar como asignada manteniendo estado PENDIENTE; el colaborador la aceptará luego
-  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, 'Pendiente', updateData);
+  // ✅ CORRECCIÓN: Usar ORDER_STATUS.PENDIENTE en lugar de minúscula
+  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, ORDER_STATUS.PENDIENTE, updateData);
 
   if (!success) {
     notifications.error('Error de asignación', error?.message || 'No se pudo asignar el pedido.');
@@ -545,12 +560,13 @@ async function assignSelectedCollaborator(){
     // Actualizar el array local para reflejar el cambio inmediatamente
     const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
     if (orderIndex !== -1) {
-      const merged = { ...allOrders[orderIndex], assigned_to: collaboratorId, status: 'Pendiente' };
+      // ✅ CORRECCIÓN: Usar ORDER_STATUS.PENDIENTE para consistencia
+      const merged = { ...allOrders[orderIndex], assigned_to: collaboratorId, status: ORDER_STATUS.PENDIENTE };
       allOrders[orderIndex] = merged;
-      AppState.update({ id: Number(selectedOrderIdForAssign), assigned_to: collaboratorId, status: 'Pendiente' });
+      AppState.update({ id: Number(selectedOrderIdForAssign), assigned_to: collaboratorId, status: ORDER_STATUS.PENDIENTE });
     }
     filterOrders();
-    notifications.success(`Pedido asignado a ${col.name} y marcado como "Pendiente".`);
+    notifications.success(`Pedido asignado a ${col.name} y marcado como "${ORDER_STATUS.PENDIENTE}".`);
   }
   
   closeAssignModal();
@@ -696,7 +712,13 @@ function renderRowHtml(o){
     <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</td>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><div>${o.date}</div><div class="text-gray-500">${o.time}</div></td>
     <td class="px-6 py-4 whitespace-nowrap">
-      <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">\n        <option value="Pendiente" ${formatUiStatus(o.status) === 'Pendiente' ? 'selected' : ''}>Pendiente</option>\n        <option value="Aceptada" ${formatUiStatus(o.status) === 'Aceptada' ? 'selected' : ''}>Aceptada</option>\n        <option value="En curso" ${formatUiStatus(o.status) === 'En curso' ? 'selected' : ''}>En curso</option>\n        <option value="entregada" ${formatUiStatus(o.status) === 'entregada' ? 'selected' : ''}>Completada</option>\n        <option value="cancelada" ${formatUiStatus(o.status) === 'cancelada' ? 'selected' : ''}>Cancelada</option>\n      </select>
+      <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">
+        <option value="${ORDER_STATUS.PENDIENTE}" ${formatUiStatus(o.status) === 'Pendiente' ? 'selected' : ''}>${ORDER_STATUS.PENDIENTE}</option>
+        <option value="${ORDER_STATUS.ACEPTADA}" ${formatUiStatus(o.status) === 'Aceptada' ? 'selected' : ''}>${ORDER_STATUS.ACEPTADA}</option>
+        <option value="${ORDER_STATUS.EN_CURSO}" ${formatUiStatus(o.status) === 'En curso' ? 'selected' : ''}>${ORDER_STATUS.EN_CURSO}</option>
+        <option value="${ORDER_STATUS.COMPLETADA}" ${formatUiStatus(o.status) === 'Completada' ? 'selected' : ''}>Completada</option>
+        <option value="${ORDER_STATUS.CANCELADA}" ${formatUiStatus(o.status) === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
+      </select>
     </td>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
       ${collabName ? `<div class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${collabName}</div>` : '<span class="text-gray-400 text-xs">Sin asignar</span>'}
@@ -911,13 +933,12 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     const assignCancel = document.getElementById('assignCancelBtn');
     const assignCloseX = document.getElementById('assignCloseXBtn');
-    const assignConfirm = document.getElementById('assignConfirmBtn');
     const deleteOrder = document.getElementById('deleteOrderBtn');
     const assignModalBody = document.getElementById('assignModalBody'); // Moved from openAssignModal
 
     if (assignCancel) assignCancel.addEventListener('click', closeAssignModal);
     if (assignCloseX) assignCloseX.addEventListener('click', closeAssignModal);
-    if (assignConfirm) assignConfirm.addEventListener('click', assignSelectedCollaborator);
+    // ✅ NOTA: assignConfirmBtn se asigna dinámicamente en openAssignModal para evitar listeners duplicados
     if (deleteOrder) deleteOrder.addEventListener('click', deleteSelectedOrder);
 
     const priceCancel = document.getElementById('priceCancelBtn');

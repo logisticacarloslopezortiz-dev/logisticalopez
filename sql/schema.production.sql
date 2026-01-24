@@ -678,13 +678,12 @@ BEGIN
     UPDATE public.orders o
     SET
         status = v_normalized,
-        -- Lógica de asignación corregida:
-        -- Si es Admin y envía ID, asigna a ese ID. Si no, usa lógica estándar (auto-asignar si está null).
         assigned_to = CASE 
+            WHEN v_normalized = 'pending' THEN NULL
             WHEN p_collaborator_id IS NOT NULL AND (public.is_admin(v_uid) OR public.is_owner(v_uid)) THEN p_collaborator_id
             ELSE COALESCE(o.assigned_to, v_uid)
         END,
-        assigned_at = CASE WHEN v_normalized = 'accepted' AND o.assigned_at IS NULL THEN now() ELSE assigned_at END,
+        assigned_at = CASE WHEN v_normalized = 'pending' THEN NULL WHEN v_normalized = 'accepted' AND o.assigned_at IS NULL THEN now() ELSE assigned_at END,
         completed_by = CASE WHEN v_normalized = 'completed' THEN v_uid ELSE completed_by END,
         completed_at = CASE WHEN v_normalized = 'completed' THEN now() ELSE completed_at END,
         tracking_data = CASE WHEN p_tracking_entry IS NOT NULL THEN o.tracking_data || p_tracking_entry ELSE o.tracking_data END
