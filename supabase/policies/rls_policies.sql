@@ -55,7 +55,20 @@ for select using (
 );
 
 create policy "collaborator select assigned" on public.orders
-for select using (assigned_to = auth.uid());
+for select using (
+  exists (
+    select 1 from public.collaborators c
+    where c.id = auth.uid()
+      and c.status = 'activo'
+      and (
+        -- Si puede_ver_todas_las_ordenes = true, ve pending SIN asignar Y sus asignadas
+        (c.puede_ver_todas_las_ordenes = true and (status = 'pending' or assigned_to = auth.uid()))
+        OR
+        -- Si puede_ver_todas_las_ordenes = false, solo ve sus asignadas
+        (c.puede_ver_todas_las_ordenes = false and assigned_to = auth.uid())
+      )
+  )
+);
 
 create policy "admin update orders" on public.orders
 for update using (

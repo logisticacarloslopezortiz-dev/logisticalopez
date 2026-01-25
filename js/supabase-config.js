@@ -33,6 +33,8 @@ if (!window.supabaseConfig) {
   window.supabaseConfig = {
     client: mainClient,
     _publicClient: null, // Se inicializa como null y se crea solo cuando se necesita
+    __creatingMain: false,
+    __creatingPublic: false,
     projectUrl: SUPABASE_URL,
     anonKey: SUPABASE_ANON_KEY,
     functionsUrl: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co'),
@@ -108,15 +110,29 @@ if (!window.supabaseConfig) {
       throw new Error('Supabase JS no está cargado. Verifica el script UMD en index.html');
     }
     if (!this.client) {
-      this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
-        functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
-      });
+        if (!this.__creatingMain) {
+          this.__creatingMain = true;
+          try {
+            this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+              auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
+              functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
+            });
+          } finally {
+            this.__creatingMain = false;
+          }
+        }
     }
     if (!this._publicClient) {
-      this._publicClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
-      });
+        if (!this.__creatingPublic) {
+          this.__creatingPublic = true;
+          try {
+            this._publicClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+              auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
+            });
+          } finally {
+            this.__creatingPublic = false;
+          }
+        }
     }
   },
 

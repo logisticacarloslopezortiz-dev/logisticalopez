@@ -1,15 +1,46 @@
 (() => {
 'use strict';
+
+// ============================================
+// CONSTANTES Y CONFIGURACIÓN GLOBAL
+// ============================================
+
+// Estados de órdenes (single source of truth)
+const ORDER_STATUS = Object.freeze({
+  PENDIENTE: 'Pendiente',
+  ACEPTADA: 'Aceptada',
+  EN_CURSO: 'En curso',
+  COMPLETADA: 'Completada',
+  CANCELADA: 'Cancelada'
+});
+
+// Mapeo de estados de base de datos a UI
+const DB_TO_UI_STATUS = Object.freeze({
+  pending: ORDER_STATUS.PENDIENTE,
+  accepted: ORDER_STATUS.ACEPTADA,
+  in_progress: ORDER_STATUS.EN_CURSO,
+  completed: ORDER_STATUS.COMPLETADA,
+  cancelled: ORDER_STATUS.CANCELADA
+});
+
+// Colores por estado (reutilizable en todo el código)
+const STATUS_COLOR = Object.freeze({
+  [ORDER_STATUS.PENDIENTE]: 'bg-yellow-100 text-yellow-800',
+  [ORDER_STATUS.ACEPTADA]: 'bg-blue-100 text-blue-800',
+  [ORDER_STATUS.EN_CURSO]: 'bg-purple-100 text-purple-800',
+  [ORDER_STATUS.COMPLETADA]: 'bg-green-100 text-green-800',
+  [ORDER_STATUS.CANCELADA]: 'bg-red-100 text-red-800'
+});
+
 // Variables globales
 let allOrders = [];
 let filteredOrders = [];
 let sortColumn = 'date';
 let sortDirection = 'desc';
-let selectedOrderIdForAssign = null; // Guardará el ID del pedido a asignar
+let selectedOrderIdForAssign = null;
 let __initialized = false;
 let selectedOrderIdForPrice = null;
 let __lucideTimer = null;
-const ORDER_STATUS = Object.freeze({ PENDIENTE: 'Pendiente', ACEPTADA: 'Aceptada', EN_CURSO: 'En curso', COMPLETADA: 'entregada', CANCELADA: 'cancelada' });
 let __collaboratorsById = {};
 
 function getCollaboratorIdFromOrder(o) {
@@ -50,13 +81,9 @@ async function resolveCollaboratorName(order) {
 }
 
 function formatUiStatus(s) {
-  const v = String(s || '').toLowerCase();
-  if (v === 'pending') return ORDER_STATUS.PENDIENTE;
-  if (v === 'accepted') return ORDER_STATUS.ACEPTADA;
-  if (v === 'in_progress') return ORDER_STATUS.EN_CURSO;
-  if (v === 'completed') return ORDER_STATUS.COMPLETADA;
-  if (v === 'cancelled') return ORDER_STATUS.CANCELADA;
-  return s || ORDER_STATUS.PENDIENTE;
+  if (!s) return ORDER_STATUS.PENDIENTE;
+  const normalized = String(s).toLowerCase();
+  return DB_TO_UI_STATUS[normalized] || s || ORDER_STATUS.PENDIENTE;
 }
 
 function isFinalOrderStatus(s) {
@@ -221,26 +248,26 @@ function sortTable(column, element) {
   }
 }
 
-function refreshLucide(){
+// Agregar debounce a refreshLucide para evitar recrear íconos demasiadas veces
+function refreshLucide() {
   try {
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      if (__lucideTimer) { clearTimeout(__lucideTimer); }
+      if (__lucideTimer) clearTimeout(__lucideTimer);
       __lucideTimer = setTimeout(() => {
         const hasIcons = document.querySelector('[data-lucide]') !== null;
         if (hasIcons) window.lucide.createIcons();
-      }, 100);
+      }, 150); // Debounce de 150ms
     }
-  } catch(_) {}
+  } catch (_) {}
 }
 
-// Función para renderizar pedidos
-function renderOrders(){
+// Función para renderizar pedidos (mejorada con DocumentFragment)
+function renderOrders() {
   const ordersTableBody = document.getElementById('ordersTableBody');
   if (!ordersTableBody) {
     console.error('No se encontró el elemento ordersTableBody');
     return;
   }
-  ordersTableBody.innerHTML = '';
 
   // Actualizar contadores
   const showingCount = document.getElementById('showingCount');
@@ -252,9 +279,8 @@ function renderOrders(){
   updateResumen();
   updateAlerts();
 
-  if(filteredOrders.length === 0){
-    ordersTableBody.innerHTML='<tr><td colspan="9" class="text-center py-6 text-gray-500">No hay pedidos que coincidan con los filtros.</td></tr>';
-    // Render vacío en tarjetas móviles
+  if (filteredOrders.length === 0) {
+    ordersTableBody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-500">No hay pedidos que coincidan con los filtros.</td></tr>';
     const cardContainer = document.getElementById('ordersCardContainer');
     if (cardContainer) {
       cardContainer.innerHTML = '<div class="text-center py-6 text-gray-500"><i data-lucide="package" class="w-6 h-6 text-gray-400"></i> No hay pedidos</div>';
@@ -262,58 +288,80 @@ function renderOrders(){
     return;
   }
 
+  // Usar DocumentFragment para mejor performance
+  const tableFragment = document.createDocumentFragment();
+  const cardContainer = document.getElementById('ordersCardContainer');
+  const cardFragment = cardContainer ? document.createDocumentFragment() : null;
+
   filteredOrders.forEach(o => {
+    // Crear fila de tabla
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-gray-50 transition-colors';
     tr.setAttribute('data-order-id', String(o.id));
     tr.innerHTML = renderRowHtml(o);
-    tr.addEventListener('dblclick', () => openAssignModal(o.id));
-    ordersTableBody.appendChild(tr);
-  });
+    attachRowListeners(tr, o.id);
+    tableFragment.appendChild(tr);
 
-  // Render tarjetas en móvil
-  const cardContainer = document.getElementById('ordersCardContainer');
-  if (cardContainer) {
-    cardContainer.innerHTML = '';
-    filteredOrders.forEach(o => {
+    // Crear tarjeta móvil
+    if (cardFragment) {
       const card = document.createElement('div');
       card.className = 'bg-white rounded-lg shadow p-4';
       card.setAttribute('data-order-id', String(o.id));
       card.innerHTML = renderCardHtml(o);
-      cardContainer.appendChild(card);
-    });
+      cardFragment.appendChild(card);
+    }
+  });
+
+  // Reemplazar DOM de una sola vez
+  ordersTableBody.innerHTML = '';
+  ordersTableBody.appendChild(tableFragment);
+
+  if (cardContainer && cardFragment) {
+    cardContainer.innerHTML = '';
+    cardContainer.appendChild(cardFragment);
   }
+
   refreshLucide();
+}
+
+// Función auxiliar para agregar listeners a filas (prevenir duplicados)
+function attachRowListeners(tr, orderId) {
+  tr.removeEventListener('dblclick', openAssignModal);
+  tr.addEventListener('dblclick', () => openAssignModal(orderId));
 }
 
 // --- Menú de acciones eliminado ---
 
-// --- INICIO: Funciones de Actualización y UI ---
 // Función para actualizar el estado de una orden en Supabase
 async function updateOrderStatus(orderId, newStatus) {
-  // COMENTARIO: Esta función ahora utiliza el OrderManager centralizado.
+  if (!orderId) {
+    console.error('[updateOrderStatus] ID de orden no válido');
+    return;
+  }
+
   console.log(`[Dueño] Solicitando cambio de estado para orden #${orderId} a "${newStatus}"`);
 
-  // Normalizar el estado recibido del select (puede ser 'Pendiente', 'Aceptada', 'En curso', etc.)
+  // Normalizar el estado recibido del select
   const normalizedStatus = String(newStatus || '').toLowerCase();
 
-  // El tercer parámetro (additionalData) está vacío porque el dueño solo cambia el estado principal.
-  const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, normalizedStatus, {});
+  try {
+    const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, normalizedStatus, {});
 
-  if (success) {
-    notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
-    
-    // Usar el status normalizado en la actualización de AppState
-    AppState.update({ id: Number(orderId), status: normalizedStatus });
-    refreshLucide();
+    if (success) {
+      notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
+      AppState.update({ id: Number(orderId), status: normalizedStatus });
+      refreshLucide();
 
-    if (normalizedStatus === 'completada' || normalizedStatus === 'entregada') {
-      try { window.location.href = 'historial-solicitudes.html'; } catch (_) {}
+      if (normalizedStatus === 'completed' || normalizedStatus === 'completada') {
+        try { window.location.href = 'historial-solicitudes.html'; } catch (_) {}
+      }
+    } else {
+      notifications.error('No se pudo actualizar el estado de la orden.', error);
+      await loadOrders(); // Revertir cambios visuales optimistas
     }
-
-  } else {
-    notifications.error('No se pudo actualizar el estado de la orden.', error);
-    // Si falla, recargamos para revertir cualquier cambio visual optimista.
+  } catch (err) {
+    console.error('[updateOrderStatus] Error inesperado:', err);
+    notifications.error('Error al actualizar estado', err?.message || 'Error desconocido');
     await loadOrders();
   }
 }
@@ -359,7 +407,10 @@ function showServiceDetails(orderId) {
 function updateResumen(){
   const today = new Date().toISOString().split('T')[0];
   const todayOrders = allOrders.filter(o => o.date === today);
-  const completedOrders = allOrders.filter(o => String(o.status || '').toLowerCase() === 'completed' || o.status === ORDER_STATUS.COMPLETADA).length;
+  const completedOrders = allOrders.filter(o => {
+    const v = String(o.status || '').toLowerCase();
+    return v === 'completed' || v === 'completada' || o.status === ORDER_STATUS.COMPLETADA;
+  }).length;
   const pendingOrders = allOrders.filter(o => isVisibleStatus(o.status));
   const urgentOrders = pendingOrders.filter(o => {
     const serviceTime = getOrderDate(o) || new Date(8640000000000000);
@@ -406,9 +457,17 @@ function updateAlerts() {
     });
   }
 }
-// Gestión de asignación y eliminación de pedidos desde modal
-async function openAssignModal(orderId){
+// Mejorada con validaciones DR y mejor manejo de errores
+async function openAssignModal(orderId) {
+  // ✅ Validación del ID
+  if (!orderId) {
+    console.error('[openAssignModal] ID de orden no válido');
+    notifications.error('Error', 'ID de orden no válido');
+    return;
+  }
+
   selectedOrderIdForAssign = Number(orderId);
+  
   const modal = document.getElementById('assignModal');
   const modalTitle = document.getElementById('assignModalTitle');
   const body = document.getElementById('assignModalBody');
@@ -416,101 +475,119 @@ async function openAssignModal(orderId){
   const assignBtn = document.getElementById('assignConfirmBtn');
 
   if (!modal || !modalTitle || !body || !select || !assignBtn) {
-    console.error('Elementos del modal de asignación no encontrados en el DOM');
-    if (window.notifications) notifications.error('Error de interfaz', 'No se pudo abrir el modal de asignación.');
+    console.error('[openAssignModal] Elementos del modal no encontrados en el DOM');
+    notifications.error('Error de interfaz', 'No se pudo abrir el modal de asignación.');
     return;
   }
 
   const order = allOrders.find(o => o.id === selectedOrderIdForAssign);
-  if (!order) { if (window.notifications) notifications.error('Orden no encontrada'); return; }
-  const colaboradores = await loadCollaborators();
-
-  modalTitle.textContent = `Gestionar Orden #${order.short_id || order.id}`;
-  const displayClient = [order.name, order.phone || order.email].filter(Boolean).join(' · ');
-  body.innerHTML = `
-    <div class="space-y-1 text-sm text-gray-700">
-      <p><strong>ID:</strong> ${order.short_id || order.id}</p>
-      <p><strong>Cliente:</strong> ${displayClient || 'Anónimo'}</p>
-      <p><strong>Servicio:</strong> ${order.service?.name || 'N/A'}</p>
-      <p><strong>Ruta:</strong> ${order.pickup} → ${order.delivery}</p>
-      <p><strong>Fecha/Hora:</strong> ${order.date} ${order.time || ''}</p>
-      ${order.service_questions && Object.keys(order.service_questions).length > 0 ? `
-        <div class="mt-2 pt-2 border-t">
-          <strong class="block mb-1">Detalles Adicionales:</strong>
-          <div class="text-xs space-y-1">${Object.entries(order.service_questions).map(([q, a]) => `<div><strong>${q.replace(/_/g, ' ')}:</strong> ${a}</div>`).join('')}</div>
-        </div>
-      ` : ''}
-    </div>
-  `;
-
-  select.innerHTML = '';
-  if (colaboradores.length === 0) {
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'No hay colaboradores registrados';
-    select.appendChild(opt);
-    select.disabled = true;
-    assignBtn.disabled = true;
-  } else {
-    colaboradores.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.id; // ✅ CORREGIDO: Usar el ID (UUID) del colaborador
-      opt.textContent = `${c.name} — ${c.role}`;
-      select.appendChild(opt);
-    });
-    select.disabled = false;
-    assignBtn.disabled = false;
+  if (!order) {
+    console.error('[openAssignModal] Orden no encontrada:', selectedOrderIdForAssign);
+    notifications.error('Orden no encontrada');
+    return;
   }
-
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
   
-  // Handlers de botones del modal (solo dinámicos)
-  const whatsappBtn = document.getElementById('whatsappBtn');
-  const invoiceBtn = document.getElementById('generateInvoiceBtn');
-  const copyTrackBtn = document.getElementById('copyTrackingLinkBtn');
-
-  // ✅ CORRECCIÓN: Asignación directa de eventos (elimina uso de cloneNode/replaceWith)
-  if (whatsappBtn) {
-    whatsappBtn.onclick = () => openWhatsApp(order);
+  // ✅ Validar que la orden siga siendo asignable
+  if (isFinalOrderStatus(order.status)) {
+    notifications.warning('Orden completada', 'Esta orden ya está completada o cancelada y no puede ser modificada.');
+    return;
   }
+  
+  try {
+    const colaboradores = await loadCollaborators();
 
-  if (invoiceBtn) {
-    invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
-  }
+    modalTitle.textContent = `Gestionar Orden #${order.short_id || order.id}`;
+    const displayClient = [order.name, order.phone || order.email].filter(Boolean).join(' · ');
+    body.innerHTML = `
+      <div class="space-y-1 text-sm text-gray-700">
+        <p><strong>ID:</strong> ${order.short_id || order.id}</p>
+        <p><strong>Cliente:</strong> ${displayClient || 'Anónimo'}</p>
+        <p><strong>Servicio:</strong> ${order.service?.name || 'N/A'}</p>
+        <p><strong>Ruta:</strong> ${order.pickup} → ${order.delivery}</p>
+        <p><strong>Fecha/Hora:</strong> ${order.date} ${order.time || ''}</p>
+        ${order.service_questions && Object.keys(order.service_questions).length > 0 ? `
+          <div class="mt-2 pt-2 border-t">
+            <strong class="block mb-1">Detalles Adicionales:</strong>
+            <div class="text-xs space-y-1">${Object.entries(order.service_questions).map(([q, a]) => `<div><strong>${q.replace(/_/g, ' ')}:</strong> ${a}</div>`).join('')}</div>
+          </div>
+        ` : ''}
+      </div>
+    `;
 
-  // ✅ CORRECCIÓN: Reasignar siempre el evento onclick del botón confirmar
-  if (assignBtn) {
-    assignBtn.onclick = assignSelectedCollaborator;
-  }
+    select.innerHTML = '';
+    if (colaboradores.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No hay colaboradores registrados';
+      select.appendChild(opt);
+      select.disabled = true;
+      assignBtn.disabled = true;
+    } else {
+      colaboradores.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id; // UUID del colaborador
+        opt.textContent = `${c.name} — ${c.role}`;
+        select.appendChild(opt);
+      });
+      select.disabled = false;
+      assignBtn.disabled = false;
+    }
 
-  // Copiar enlace directo de seguimiento
-  if (copyTrackBtn) {
-    copyTrackBtn.onclick = async () => {
-      const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
-      try { await navigator.clipboard.writeText(url); }
-      catch(_) { if (window.notifications) notifications.warning('No se pudo copiar al portapapeles'); }
-      try {
-        const phone = normalizePhoneDR(order.phone);
-        if (phone) {
-          const msg = `👋 Hola, ${order.name || 'cliente'}. Aquí puedes ver el estado de tu servicio en tiempo real:\n${url}\n\nSi necesitas ayuda, respóndenos por aquí. ¡Gracias por elegirnos! 🚛`;
-          const wa = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-          window.open(wa, '_blank');
-          notifications.success('Enviado por WhatsApp: seguimiento');
-        } else {
-          window.open(url, '_blank');
-          notifications.warning('Número no disponible. Abriendo enlace de seguimiento');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    // ✅ Asignar eventos directamente (sin duplicados)
+    const whatsappBtn = document.getElementById('whatsappBtn');
+    const invoiceBtn = document.getElementById('generateInvoiceBtn');
+    const copyTrackBtn = document.getElementById('copyTrackingLinkBtn');
+
+    if (whatsappBtn) {
+      whatsappBtn.onclick = () => openWhatsApp(order);
+    }
+
+    if (invoiceBtn) {
+      invoiceBtn.onclick = () => generateAndSendInvoice(order.id);
+    }
+
+    if (assignBtn) {
+      assignBtn.onclick = assignSelectedCollaborator;
+    }
+
+    if (copyTrackBtn) {
+      copyTrackBtn.onclick = async () => {
+        const url = `https://logisticalopezortiz.com/seguimiento.html?orderId=${order.short_id || order.id}`;
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch (_) {
+          if (window.notifications) notifications.warning('No se pudo copiar al portapapeles');
         }
-      } catch(_) {
-        window.open(url, '_blank');
-      }
-    };
-  }
+        try {
+          const phone = normalizePhoneDR(order.phone);
+          if (phone) {
+            const msg = `👋 Hola, ${order.name || 'cliente'}. Aquí puedes ver el estado de tu servicio en tiempo real:\n${url}\n\nSi necesitas ayuda, respóndenos por aquí. ¡Gracias por elegirnos! 🚛`;
+            const wa = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+            window.open(wa, '_blank');
+            notifications.success('Enviado por WhatsApp: seguimiento');
+          } else {
+            window.open(url, '_blank');
+            notifications.warning('Número no disponible. Abriendo enlace de seguimiento');
+          }
+        } catch (err) {
+          console.error('[copyTrackBtn] Error:', err);
+          window.open(url, '_blank');
+        }
+      };
+    }
 
-  refreshLucide();
+    refreshLucide();
+  } catch (err) {
+    console.error('[openAssignModal] Error inesperado:', err);
+    notifications.error('Error al abrir modal', err?.message || 'Error desconocido');
+  }
 }
 
-function closeAssignModal(){
+// Mejorada con validaciones
+function closeAssignModal() {
   const modal = document.getElementById('assignModal');
   if (modal) {
     modal.classList.add('hidden');
@@ -519,83 +596,142 @@ function closeAssignModal(){
   selectedOrderIdForAssign = null;
 }
 
-async function assignSelectedCollaborator(){
-  const collaboratorId = document.getElementById('assignSelect').value;
-  if (!collaboratorId) { 
-    notifications.error('Selecciona un colaborador.'); 
-    return; 
+// Mejorada con validaciones y manejo de errores robusto
+async function assignSelectedCollaborator() {
+  const assignBtn = document.getElementById('assignConfirmBtn');
+  const selectEl = document.getElementById('assignSelect');
+
+  // ✅ Validación del colaborador seleccionado
+  if (!selectEl || !selectEl.value) {
+    notifications.error('Selecciona un colaborador.');
+    return;
   }
-  
-  const colaboradores = await loadCollaborators();
-  // ✅ CORRECCIÓN: Comparar como strings (UUID)
-  const col = colaboradores.find(c => String(c.id) === String(collaboratorId));
-  if (!col) { 
-    notifications.error('Colaborador no encontrado.'); 
-    return; 
-  }
-  try {
-    const { data: conflicts } = await supabaseConfig.client
-      .from('orders')
-      .select('id,status')
-      .eq('assigned_to', collaboratorId)
-      .in('status', ['accepted', 'in_progress'])
-      .limit(1);
-    if (Array.isArray(conflicts) && conflicts.length > 0) {
-      notifications.error('El colaborador ya tiene una orden activa.');
-      return;
-    }
-  } catch(_) {}
+
   if (!selectedOrderIdForAssign) {
     notifications.error('Error: No se seleccionó ninguna orden.');
     return;
   }
 
-  const updateData = { collaborator_id: collaboratorId, assigned_at: new Date().toISOString() };
-  // ✅ CORRECCIÓN: Usar ORDER_STATUS.PENDIENTE en lugar de minúscula
-  const { success, error } = await OrderManager.actualizarEstadoPedido(selectedOrderIdForAssign, ORDER_STATUS.PENDIENTE, updateData);
+  const collaboratorId = selectEl.value;
 
-  if (!success) {
-    notifications.error('Error de asignación', error?.message || 'No se pudo asignar el pedido.');
-  } else {
-    // Actualizar el array local para reflejar el cambio inmediatamente
+  // ✅ Indicador visual de carga
+  assignBtn.disabled = true;
+  const originalText = assignBtn.textContent;
+  assignBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin inline-block mr-2"></i>Asignando...';
+  
+  try {
+    refreshLucide();
+  } catch (_) {}
+
+  try {
+    // Validar que el colaborador existe
+    const colaboradores = await loadCollaborators();
+    const col = colaboradores.find(c => String(c.id) === String(collaboratorId));
+    if (!col) {
+      notifications.error('Colaborador no encontrado.');
+      return;
+    }
+
+    // Verificar que el colaborador no tiene órdenes activas
+    try {
+      const { data: conflicts } = await supabaseConfig.client
+        .from('orders')
+        .select('id,status')
+        .eq('assigned_to', collaboratorId)
+        .in('status', ['accepted', 'in_progress'])
+        .limit(1);
+      
+      if (Array.isArray(conflicts) && conflicts.length > 0) {
+        notifications.error('El colaborador ya tiene una orden activa.');
+        return;
+      }
+    } catch (err) {
+      console.warn('[assignSelectedCollaborator] No se pudo verificar conflictos:', err);
+      // Continuar de todas formas
+    }
+
+    // Actualizar la orden
+    const updateData = { collaborator_id: collaboratorId, assigned_at: new Date().toISOString() };
+    const { success, error } = await OrderManager.actualizarEstadoPedido(
+      selectedOrderIdForAssign,
+      ORDER_STATUS.PENDIENTE,
+      updateData
+    );
+
+    if (!success) {
+      notifications.error('Error de asignación', error?.message || 'No se pudo asignar el pedido.');
+      return;
+    }
+
+    // Actualizar estado local
     const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
     if (orderIndex !== -1) {
-      // ✅ CORRECCIÓN: Usar ORDER_STATUS.PENDIENTE para consistencia
-      const merged = { ...allOrders[orderIndex], assigned_to: collaboratorId, status: ORDER_STATUS.PENDIENTE };
+      const merged = {
+        ...allOrders[orderIndex],
+        assigned_to: collaboratorId,
+        status: ORDER_STATUS.PENDIENTE
+      };
       allOrders[orderIndex] = merged;
       AppState.update({ id: Number(selectedOrderIdForAssign), assigned_to: collaboratorId, status: ORDER_STATUS.PENDIENTE });
     }
+
     filterOrders();
-    notifications.success(`Pedido asignado a ${col.name} y marcado como "${ORDER_STATUS.PENDIENTE}".`);
+    notifications.success(`Pedido asignado a ${col.name} correctamente.`);
+    closeAssignModal();
+
+  } catch (err) {
+    console.error('[assignSelectedCollaborator] Error inesperado:', err);
+    notifications.error('Error de asignación', err?.message || 'Error desconocido');
+  } finally {
+    // ✅ GARANTIZAR restauración del botón
+    assignBtn.disabled = false;
+    assignBtn.textContent = originalText;
   }
-  
-  closeAssignModal();
 }
 
-async function deleteSelectedOrder(){
+// Mejorada con validación de ID antes de usar
+async function deleteSelectedOrder() {
+  if (!selectedOrderIdForAssign) {
+    notifications.error('Error', 'No se seleccionó ninguna orden.');
+    return;
+  }
+
   if (!confirm('¿Eliminar esta solicitud?')) return;
-  const { error } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign))
-    || supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign));
-  
-  if (error) {
-    notifications.error('Error al eliminar', error.message);
-  } else {
+
+  try {
+    const { error } = await (supabaseConfig.withAuthRetry?.(() => 
+      supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign)
+    ) || supabaseConfig.client.from('orders').delete().eq('id', selectedOrderIdForAssign));
+    
+    if (error) {
+      notifications.error('Error al eliminar', error.message);
+      return;
+    }
+
     allOrders = allOrders.filter(o => o.id !== selectedOrderIdForAssign);
     filterOrders();
     notifications.success(`La solicitud #${selectedOrderIdForAssign} ha sido eliminada.`);
+    closeAssignModal();
+
+  } catch (err) {
+    console.error('[deleteSelectedOrder] Error inesperado:', err);
+    notifications.error('Error al eliminar', err?.message || 'Error desconocido');
   }
-  closeAssignModal();
 }
 
-// Función para generar y enviar factura
+// Mejorada con try/catch
 async function generateAndSendInvoice(orderId) {
+  if (!orderId) {
+    notifications.error('Error', 'ID de orden no válido');
+    return;
+  }
+
   const order = allOrders.find(o => o.id === Number(orderId));
   if (!order) {
     notifications.error('Orden no encontrada.');
     return;
   }
 
-  // Validar que el cliente tenga un email
   const clientEmail = order.client_email || order.email;
   if (!clientEmail) {
     notifications.error('Cliente sin email', 'Esta orden no tiene un correo electrónico de cliente registrado para enviar la factura.');
@@ -613,11 +749,7 @@ async function generateAndSendInvoice(orderId) {
       throw new Error(error.message || 'Error invocando send-invoice');
     }
 
-    const pdfUrl = (
-      (data && data.data && data.data.pdfUrl) ||
-      (data && data.pdfUrl) ||
-      null
-    );
+    const pdfUrl = (data?.data?.pdfUrl) || (data?.pdfUrl) || null;
 
     if (pdfUrl && typeof pdfUrl === 'string') {
       try {
@@ -630,25 +762,21 @@ async function generateAndSendInvoice(orderId) {
           linkA.rel = 'noopener';
           linkWrap.style.display = 'block';
         }
-      } catch(_) { }
+      } catch (_) {}
     }
 
-    const recipient = (data && data.data && data.data.recipientEmail) || clientEmail;
+    const recipient = (data?.data?.recipientEmail) || clientEmail;
     notifications.success('Factura enviada', `Se envió el correo a ${recipient}`);
+
   } catch (error) {
-    console.error('Error al enviar factura:', error);
+    console.error('[generateAndSendInvoice] Error:', error);
     notifications.error('Error al enviar factura', error.message || 'No se pudo enviar la factura por correo.');
   }
 }
 
 function renderCardHtml(o) {
-  const badge = {
-    'Pendiente': 'bg-yellow-100 text-yellow-800',
-    'Aceptada': 'bg-blue-100 text-blue-800',
-    'En curso': 'bg-purple-100 text-purple-800',
-    'Completada': 'bg-green-100 text-green-800',
-    'Cancelada': 'bg-red-100 text-red-800'
-  }[o.status] || 'bg-gray-100 text-gray-800';
+  const displayStatus = formatUiStatus(o.status);
+  const badgeClass = STATUS_COLOR[displayStatus] || 'bg-gray-100 text-gray-800';
   const collabId = getCollaboratorIdFromOrder(o);
   const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || '';
 
@@ -659,7 +787,7 @@ function renderCardHtml(o) {
         <div class="font-semibold text-gray-900">${o.service?.name || 'N/A'}</div>
         <div class="text-sm text-gray-600 truncate">${o.pickup} → ${o.delivery}</div>
       </div>
-      <span class="px-2 py-1 rounded-full text-xs font-semibold ${badge}">${o.status}</span>
+      <span class="px-2 py-1 rounded-full text-xs font-semibold ${badgeClass}">${displayStatus}</span>
     </div>
     <div class="grid grid-cols-2 gap-3 text-sm mb-3">
       <div>
@@ -682,17 +810,12 @@ function renderCardHtml(o) {
 
  
 
-function renderRowHtml(o){
+function renderRowHtml(o) {
   const displayStatus = formatUiStatus(o.status);
-  const statusColor = {
-    'Pendiente': 'bg-yellow-100 text-yellow-800',
-    'Aceptada': 'bg-blue-100 text-blue-800',
-    'En curso': 'bg-purple-100 text-purple-800',
-    'Completada': 'bg-green-100 text-green-800',
-    'Cancelada': 'bg-red-100 text-red-800'
-  }[displayStatus] || 'bg-gray-100 text-gray-800';
+  const statusColorClass = STATUS_COLOR[displayStatus] || 'bg-gray-100 text-gray-800';
   const collabId = getCollaboratorIdFromOrder(o);
   const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || '';
+
   return `
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
     <td class="px-6 py-4 whitespace-nowrap">
@@ -704,7 +827,9 @@ function renderRowHtml(o){
     <td class="px-6 py-4 whitespace-nowrap">
       <div class="text-sm text-gray-900">${o.service?.name || 'N/A'}</div>
       ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
-        `<button onclick="showServiceDetails(${o.id})" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">\n            <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>Ver detalles\n          </button>`
+        `<button onclick="showServiceDetails(${o.id})" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">
+            <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>Ver detalles
+          </button>`
         : ''
       }
     </td>
@@ -712,19 +837,22 @@ function renderRowHtml(o){
     <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</td>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><div>${o.date}</div><div class="text-gray-500">${o.time}</div></td>
     <td class="px-6 py-4 whitespace-nowrap">
-      <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColor} border-0 focus:ring-2 focus:ring-blue-500">
-        <option value="${ORDER_STATUS.PENDIENTE}" ${formatUiStatus(o.status) === 'Pendiente' ? 'selected' : ''}>${ORDER_STATUS.PENDIENTE}</option>
-        <option value="${ORDER_STATUS.ACEPTADA}" ${formatUiStatus(o.status) === 'Aceptada' ? 'selected' : ''}>${ORDER_STATUS.ACEPTADA}</option>
-        <option value="${ORDER_STATUS.EN_CURSO}" ${formatUiStatus(o.status) === 'En curso' ? 'selected' : ''}>${ORDER_STATUS.EN_CURSO}</option>
-        <option value="${ORDER_STATUS.COMPLETADA}" ${formatUiStatus(o.status) === 'Completada' ? 'selected' : ''}>Completada</option>
-        <option value="${ORDER_STATUS.CANCELADA}" ${formatUiStatus(o.status) === 'Cancelada' ? 'selected' : ''}>Cancelada</option>
+      <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColorClass} border-0 focus:ring-2 focus:ring-blue-500">
+        <option value="${ORDER_STATUS.PENDIENTE}" ${displayStatus === ORDER_STATUS.PENDIENTE ? 'selected' : ''}>${ORDER_STATUS.PENDIENTE}</option>
+        <option value="${ORDER_STATUS.ACEPTADA}" ${displayStatus === ORDER_STATUS.ACEPTADA ? 'selected' : ''}>${ORDER_STATUS.ACEPTADA}</option>
+        <option value="${ORDER_STATUS.EN_CURSO}" ${displayStatus === ORDER_STATUS.EN_CURSO ? 'selected' : ''}>${ORDER_STATUS.EN_CURSO}</option>
+        <option value="${ORDER_STATUS.COMPLETADA}" ${displayStatus === ORDER_STATUS.COMPLETADA ? 'selected' : ''}>${ORDER_STATUS.COMPLETADA}</option>
+        <option value="${ORDER_STATUS.CANCELADA}" ${displayStatus === ORDER_STATUS.CANCELADA ? 'selected' : ''}>${ORDER_STATUS.CANCELADA}</option>
       </select>
     </td>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
       ${collabName ? `<div class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${collabName}</div>` : '<span class="text-gray-400 text-xs">Sin asignar</span>'}
     </td>
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-      <button onclick="openPriceModal('${o.id}')" class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 transition-colors">\n        <span class="font-semibold text-green-700">${o.monto_cobrado ? `$${Number(o.monto_cobrado).toLocaleString('es-DO')}` : 'Confirmar'}</span>\n        <div class="text-xs text-gray-500">${o.metodo_pago || 'No especificado'}</div>\n      </button>
+      <button onclick="openPriceModal('${o.id}')" class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+        <span class="font-semibold text-green-700">${o.monto_cobrado ? `$${Number(o.monto_cobrado).toLocaleString('es-DO')}` : 'Confirmar'}</span>
+        <div class="text-xs text-gray-500">${o.metodo_pago || 'No especificado'}</div>
+      </button>
     </td>
   `;
 }
@@ -748,7 +876,8 @@ function findInsertIndex(list, order){
   return list.length;
 }
 
-function insertRowDom(o, idx){
+// Mejorada para usar replaceWith en lugar de cloneNode
+function insertRowDom(o, idx) {
   const tbl = document.getElementById('ordersTableBody');
   const cards = document.getElementById('ordersCardContainer');
   if (!tbl) return;
@@ -757,9 +886,11 @@ function insertRowDom(o, idx){
   tr.className = 'hover:bg-gray-50 transition-colors';
   tr.setAttribute('data-order-id', String(o.id));
   tr.innerHTML = renderRowHtml(o);
-  tr.addEventListener('dblclick', () => openAssignModal(o.id));
+  attachRowListeners(tr, o.id);
+  
   const ref = tbl.children[idx] || null;
   tbl.insertBefore(tr, ref);
+
   if (cards) {
     const card = document.createElement('div');
     card.className = 'bg-white rounded-lg shadow p-4';
@@ -768,22 +899,26 @@ function insertRowDom(o, idx){
     const refCard = cards.children[idx] || null;
     cards.insertBefore(card, refCard);
   }
+
   refreshLucide();
 }
 
-function updateRow(o){
+// Mejorada para evitar múltiples listeners
+function updateRow(o) {
   const tr = document.querySelector(`tbody#ordersTableBody tr[data-order-id="${String(o.id)}"]`);
   if (tr) {
+    // Actualizar contenido sin recrear el nodo
     tr.innerHTML = renderRowHtml(o);
-    tr.addEventListener('dblclick', () => openAssignModal(o.id));
+    // Volver a agregar listener después de actualizar HTML
+    attachRowListeners(tr, o.id);
   }
-  const cards = document.getElementById('ordersCardContainer');
-  if (cards) {
-    const card = cards.querySelector(`div[data-order-id="${String(o.id)}"]`);
-    if (card) {
-      card.innerHTML = renderCardHtml(o);
-    }
+
+  // Actualizar tarjeta móvil
+  const card = document.querySelector(`#ordersCardContainer div[data-order-id="${String(o.id)}"]`);
+  if (card) {
+    card.innerHTML = renderCardHtml(o);
   }
+
   refreshLucide();
 }
 
@@ -800,33 +935,47 @@ function removeRowDom(orderId){
 
 // --- Lógica de Tiempo Real con Supabase ---
 
+// Manejo mejorado de tiempo real (sin fetches innecesarios)
 async function handleRealtimeUpdate(payload) {
   const { eventType, new: newRecord, old: oldRecord, table } = payload;
   if (table !== 'orders') return;
 
-  if (eventType === 'INSERT' || eventType === 'UPDATE') {
-    let full = null;
-    // Intentar obtener la orden completa para tener las relaciones (service, vehicle, etc.)
-    try { full = await supabaseConfig.getOrderById(newRecord.id); } catch(_) {}
-    const orderObj = full || newRecord;
-    
-    // Usar AppState para actualizar/insertar
-    AppState.update(orderObj);
-    
-    resolveCollaboratorName(orderObj).then(() => updateRow(orderObj));
+  try {
+    if (eventType === 'INSERT' || eventType === 'UPDATE') {
+      // Solo traer datos extra si realmente es necesario
+      let orderObj = newRecord;
 
-    if (eventType === 'INSERT' && window.notifications) {
-      notifications.info(`Cliente: ${orderObj.name}.`, { title: `Nueva Solicitud #${orderObj.id}`, duration: 10000 });
+      // Verificar si falta información crítica (service, vehicle, colaborador)
+      const needsFull = !newRecord.service || !newRecord.vehicle;
+      if (needsFull) {
+        try {
+          const full = await supabaseConfig.getOrderById(newRecord.id);
+          if (full) orderObj = full;
+        } catch (err) {
+          console.warn('[handleRealtimeUpdate] No se pudo traer orden completa, usando record parcial:', err);
+        }
+      }
+
+      AppState.update(orderObj);
+      resolveCollaboratorName(orderObj).then(() => updateRow(orderObj));
+
+      if (eventType === 'INSERT' && window.notifications) {
+        notifications.info(`Cliente: ${orderObj.name || 'Anónimo'}.`, { 
+          title: `Nueva Solicitud #${orderObj.id}`, 
+          duration: 10000 
+        });
+      }
+      return;
     }
-    return;
-  }
 
-  if (eventType === 'DELETE') {
-    const id = oldRecord?.id;
-    if (!id) return;
-    // Usar AppState para eliminar
-    AppState.delete(id);
-    return;
+    if (eventType === 'DELETE') {
+      const id = oldRecord?.id;
+      if (!id) return;
+      AppState.delete(id);
+      return;
+    }
+  } catch (err) {
+    console.error('[handleRealtimeUpdate] Error en actualización en tiempo real:', err);
   }
 }
 
@@ -838,34 +987,65 @@ function setupRealtime() {
     .subscribe();
 }
 
-function openPriceModal(orderId) {
+// Mejorada con mejor manejo de errores
+async function openPriceModal(orderId) {
+  if (!orderId) {
+    console.error('[openPriceModal] ID de orden no válido');
+    notifications.error('Error', 'ID de orden no válido');
+    return;
+  }
+
   selectedOrderIdForPrice = Number(orderId);
   const order = allOrders.find(o => o.id === selectedOrderIdForPrice);
-  if (!order) { notifications.error('Error', 'No se encontró la orden para actualizar el precio.'); return; }
+  
+  if (!order) {
+    notifications.error('Error', 'No se encontró la orden para actualizar el precio.');
+    selectedOrderIdForPrice = null;
+    return;
+  }
+
   const montoEl = document.getElementById('montoCobrado');
   const metodoEl = document.getElementById('metodoPago');
+  
   if (montoEl) montoEl.value = order.monto_cobrado || '';
   if (metodoEl) metodoEl.value = order.metodo_pago || '';
+  
   const modal = document.getElementById('priceModal');
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
 }
 
+// Mejorada con validaciones
 function closePriceModal() {
   const modal = document.getElementById('priceModal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
   selectedOrderIdForPrice = null;
 }
 
+// Mejorada con validaciones y mejor manejo de errores
 async function savePriceData() {
   const montoEl = document.getElementById('montoCobrado');
   const metodoEl = document.getElementById('metodoPago');
+  
   const monto = montoEl ? montoEl.value : '';
   const metodo = metodoEl ? metodoEl.value : '';
-  if (!monto) { notifications.warning('Dato requerido', 'Debes ingresar un monto.'); return; }
+
+  if (!monto) {
+    notifications.warning('Dato requerido', 'Debes ingresar un monto.');
+    return;
+  }
+
+  if (!selectedOrderIdForPrice) {
+    notifications.error('Error', 'ID de orden no válido');
+    return;
+  }
+
   try {
-    if (!selectedOrderIdForPrice) throw new Error('ID de orden no válido');
     const updated = await OrderManager.setOrderAmount(selectedOrderIdForPrice, monto, metodo);
     
     AppState.update({
@@ -877,22 +1057,30 @@ async function savePriceData() {
     refreshLucide();
     notifications.success('Éxito', 'El monto y método de pago han sido actualizados.');
     closePriceModal();
+
   } catch (error) {
-    console.error('[savePriceData] Error al guardar monto por RPC:', error);
-    notifications.error('Error al guardar', error.message || 'No se pudo guardar el monto');
+    console.error('[savePriceData] Error al guardar monto:', error);
+    notifications.error('Error al guardar', error?.message || 'No se pudo guardar el monto');
   }
 }
 
+// Mejorada con validaciones de normalización DR
 function openWhatsApp(order) {
-  if (!order.phone) { notifications.error('Esta orden no tiene un número de teléfono registrado.'); return; }
-  const phone = normalizePhoneDR(order.phone);
-  const message = `👋 ¡Hola, ${order.name}! Somos del equipo de Logística López Ortiz 🚛.\nQueríamos informarle que recibimos su solicitud y estamos revisando algunos detalles importantes antes de proceder.\nEn breve nos pondremos en contacto con más información.\n¡Gracias por elegirnos! 💼`;
-  if (phone) {
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-  } else {
-    notifications.warning('Número inválido');
+  if (!order || !order.phone) {
+    notifications.error('Esta orden no tiene un número de teléfono registrado.');
+    return;
   }
+
+  const phone = normalizePhoneDR(order.phone);
+  if (!phone) {
+    notifications.warning('Número de teléfono inválido');
+    return;
+  }
+
+  const message = `👋 ¡Hola, ${order.name || 'cliente'}! Somos del equipo de Logística López Ortiz 🚛.\nQueríamos informarle que recibimos su solicitud y estamos revisando algunos detalles importantes antes de proceder.\nEn breve nos pondremos en contacto con más información.\n¡Gracias por elegirnos! 💼`;
+  
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  window.open(url, '_blank');
 }
 
 async function checkVapidStatus() {
@@ -934,11 +1122,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const assignCancel = document.getElementById('assignCancelBtn');
     const assignCloseX = document.getElementById('assignCloseXBtn');
     const deleteOrder = document.getElementById('deleteOrderBtn');
-    const assignModalBody = document.getElementById('assignModalBody'); // Moved from openAssignModal
+    const assignModalBody = document.getElementById('assignModalBody');
 
+    // Asignar listeners sin duplicados
     if (assignCancel) assignCancel.addEventListener('click', closeAssignModal);
     if (assignCloseX) assignCloseX.addEventListener('click', closeAssignModal);
-    // ✅ NOTA: assignConfirmBtn se asigna dinámicamente en openAssignModal para evitar listeners duplicados
+    // ✅ NOTA: assignConfirmBtn se asigna dinámicamente en openAssignModal
     if (deleteOrder) deleteOrder.addEventListener('click', deleteSelectedOrder);
 
     const priceCancel = document.getElementById('priceCancelBtn');
@@ -953,7 +1142,11 @@ document.addEventListener('DOMContentLoaded', () => {
         assignModalBody.classList.toggle('overflow-y-auto');
       });
     }
-  } catch (_) {}
+  } catch (err) {
+    console.error('[DOMContentLoaded] Error al configurar listeners:', err);
+  }
+
+  // Exponer funciones globales
   window.sortTable = sortTable;
   window.updateOrderStatus = updateOrderStatus;
   window.openAssignModal = openAssignModal;
@@ -965,20 +1158,23 @@ document.addEventListener('DOMContentLoaded', () => {
   window.closePriceModal = closePriceModal;
   window.savePriceData = savePriceData;
 
+  // Solicitar permisos de notificación
   try {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       try {
         const enable = window.pushNotifications && window.pushNotifications.enable;
-        if (typeof enable === 'function') { enable().catch(() => {}); }
-        else if (Notification.requestPermission) { Notification.requestPermission().catch(() => {}); }
-      } catch(_){}
+        if (typeof enable === 'function') {
+          enable().catch(() => {});
+        } else if (Notification.requestPermission) {
+          Notification.requestPermission().catch(() => {});
+        }
+      } catch (_) {}
     }
-  } catch(_){}
-
+  } catch (_) {}
 });
 
 document.addEventListener('admin-session-ready', (e) => {
-  if (!e.detail?.isAdmin) { return; }
+  if (!e.detail?.isAdmin) return;
   
   // Suscribirse a notificaciones personales
   if (e.detail.userId && window.notifications) {

@@ -31,18 +31,29 @@
     // Función para actualizar estilo visual del checkbox "Ver todas"
     function updateViewAllStyle() {
       if (!editViewAll) return;
-      const label = editViewAll.closest('label');
+      const label = document.getElementById('editCollabViewAllLabel') || editViewAll.closest('label');
       if (!label) return;
+      
       if (editViewAll.checked) {
-        label.classList.remove('bg-gray-50');
-        label.classList.add('bg-green-100', 'border-green-500', 'text-green-800');
-        editViewAll.classList.replace('text-blue-600', 'text-green-600');
-        editViewAll.classList.replace('focus:ring-blue-500', 'focus:ring-green-500');
+        // ✅ ACTIVO (VERDE) - Puede ver todas las solicitudes pendientes
+        label.classList.remove('bg-gray-50', 'border-gray-300', 'hover:border-blue-300');
+        label.classList.add('bg-green-50', 'border-green-300', 'border-2', 'hover:border-green-400');
+        
+        const textSpan = label.querySelector('span');
+        if (textSpan) {
+          textSpan.innerHTML = '🟢 Ver todas las solicitudes pendientes';
+          textSpan.classList.add('text-green-700', 'font-semibold');
+        }
       } else {
-        label.classList.add('bg-gray-50');
-        label.classList.remove('bg-green-100', 'border-green-500', 'text-green-800');
-        editViewAll.classList.replace('text-green-600', 'text-blue-600');
-        editViewAll.classList.replace('focus:ring-green-500', 'focus:ring-blue-500');
+        // ❌ INACTIVO (GRIS) - Solo ve asignadas
+        label.classList.remove('bg-green-50', 'border-green-300', 'hover:border-green-400');
+        label.classList.add('bg-gray-50', 'border-gray-300', 'hover:border-blue-300');
+        
+        const textSpan = label.querySelector('span');
+        if (textSpan) {
+          textSpan.innerHTML = '🔒 Ver todas las solicitudes pendientes';
+          textSpan.classList.remove('text-green-700', 'font-semibold');
+        }
       }
     }
     if (editViewAll) editViewAll.addEventListener('change', updateViewAllStyle);

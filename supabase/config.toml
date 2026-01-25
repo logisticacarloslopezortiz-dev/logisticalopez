@@ -376,6 +376,11 @@ verify_jwt = false
 import_map = "./functions/process-outbox/deno.json"
 entrypoint = "./functions/process-outbox/index.ts"
 
+[functions.process-email-outbox]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/process-email-outbox/index.ts"
+
 [functions.send-invoice]
 enabled = true
 verify_jwt = true

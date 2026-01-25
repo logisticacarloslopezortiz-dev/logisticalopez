@@ -396,6 +396,26 @@ CREATE TABLE public.notification_outbox (
 CREATE INDEX IF NOT EXISTS idx_outbox_pending 
 ON public.notification_outbox(status, created_at);
 
+-- Cola de salida para Emails (Outbox Email)
+CREATE TABLE IF NOT EXISTS public.email_outbox (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id bigint REFERENCES public.invoices(id) ON DELETE CASCADE,
+  to_email text NOT NULL,
+  subject text NOT NULL,
+  html text NOT NULL,
+  status notification_status DEFAULT 'pending',
+  attempts int DEFAULT 0,
+  dedup_key text NOT NULL UNIQUE,
+  last_error text,
+  created_at timestamptz DEFAULT now(),
+  processed_at timestamptz,
+  failed_at timestamptz,
+  failed_reason text,
+  next_attempt_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_email_outbox_pending
+ON public.email_outbox(status, created_at);
+
 -- Notificaciones In-App (Se mantiene para compatibilidad Frontend si se usa)
 CREATE TABLE IF NOT EXISTS public.notifications (
     id bigserial PRIMARY KEY,
@@ -1231,6 +1251,48 @@ AFTER INSERT ON public.notification_events
 FOR EACH ROW
 EXECUTE FUNCTION public.trg_events_to_outbox();
 
+-- Trigger: Invoices -> Email Outbox
+CREATE OR REPLACE FUNCTION public.trg_invoices_to_email_outbox()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE v_subject text; v_html text; v_dedup text;
+BEGIN
+  -- Requiere email y URL pública del PDF
+  IF NEW.recipient_email IS NULL OR TRIM(NEW.recipient_email) = '' THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.file_url IS NULL OR TRIM(NEW.file_url) = '' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Construir contenido mínimo
+  v_subject := COALESCE(
+    '📄 Factura de tu servicio - Orden #' || COALESCE((SELECT short_id FROM public.orders WHERE id = NEW.order_id), NEW.order_id::text),
+    '📄 Factura generada'
+  );
+  v_html := format(
+    '<p>Tu factura ha sido generada.</p><p>Puedes descargarla aquí: <a href="%s" target="_blank" rel="noopener">Descargar factura (PDF)</a></p>',
+    NEW.file_url
+  );
+
+  -- Dedup por invoice_id + email
+  v_dedup := format('invoice:%s|to:%s', NEW.id, NEW.recipient_email);
+
+  INSERT INTO public.email_outbox (invoice_id, to_email, subject, html, dedup_key)
+  VALUES (NEW.id, NEW.recipient_email, v_subject, v_html, v_dedup)
+  ON CONFLICT (dedup_key) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_invoices_email_outbox ON public.invoices;
+CREATE TRIGGER trg_invoices_email_outbox
+AFTER INSERT ON public.invoices
+FOR EACH ROW
+EXECUTE FUNCTION public.trg_invoices_to_email_outbox();
+
 -- 10. Metrics: Track Order Metrics
 CREATE OR REPLACE FUNCTION public.track_order_metrics() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 DECLARE v_collab uuid; v_when date := current_date; v_amount numeric := null; v_rating numeric := null; v_minutes numeric := null;
@@ -1516,6 +1578,30 @@ BEGIN
   WHERE id IN (
     SELECT id
     FROM public.notification_outbox
+    WHERE status IN ('pending', 'retry')
+      AND attempts < 5
+    ORDER BY created_at ASC
+    LIMIT p_limit
+    FOR UPDATE SKIP LOCKED
+  )
+  RETURNING *;
+END;
+$$;
+
+-- Claim Email Outbox Function (RPC) - Atomic
+CREATE OR REPLACE FUNCTION public.claim_email_outbox(p_limit int)
+RETURNS SETOF public.email_outbox
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  UPDATE public.email_outbox
+  SET status = 'processing',
+      attempts = attempts + 1,
+      processed_at = now()
+  WHERE id IN (
+    SELECT id
+    FROM public.email_outbox
     WHERE status IN ('pending', 'retry')
       AND attempts < 5
     ORDER BY created_at ASC

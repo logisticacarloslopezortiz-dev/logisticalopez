@@ -4,9 +4,27 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 import { handleCors, jsonResponse } from '../cors-config.ts';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 
-// Función para registrar logs
+const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') || '').trim()
+const SUPABASE_SERVICE_ROLE = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '').trim()
+const DEBUG_MODE = ((Deno.env.get('DEBUG_MODE') || '').trim().toLowerCase() === 'true')
+
+function isValidEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v ?? '').trim())
+}
+
 function logDebug(message: string, data?: unknown) {
-  console.log(`[DEBUG] ${message}`, data ? JSON.stringify(data) : '');
+  const msg = `[DEBUG] ${message}`
+  if (data instanceof Error) {
+    const payload = { name: data.name, message: data.message, stack: data.stack }
+    console.error(msg, JSON.stringify(payload))
+    return
+  }
+  if (typeof data !== 'undefined') {
+    if (!DEBUG_MODE) return
+    try { console.log(msg, JSON.stringify(data)) } catch { console.log(msg, String(data)) }
+    return
+  }
+  if (DEBUG_MODE) console.log(msg)
 }
 
 type OrderDataMinimal = { 
@@ -37,7 +55,7 @@ type BusinessDataMinimal = {
 };
 
 function wrapLongText(text: string | undefined | null, max = 60): string {
-  const t = String(text || '').trim();
+  const t = (text ?? '').trim();
   if (!t) return '';
   const words = t.split(/\s+/);
   let line = '';
@@ -69,7 +87,23 @@ function buildInvoiceData(order: OrderDataMinimal) {
   };
 }
 
-// ✅ NUEVO: Función para generar el PDF en memoria en el servidor
+function wrapByWidth(text: string, f: any, size: number, maxWidth: number) {
+  const words = (text ?? '').split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+  for (const w of words) {
+    const test = current ? current + ' ' + w : w;
+    const width = f.widthOfTextAtSize(test, size);
+    if (width > maxWidth && current) {
+      lines.push(current);
+      current = w;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
 async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDataMinimal): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage();
@@ -111,23 +145,6 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
   };
 
   const lineHeight = 12;
-  function wrapByWidth(text: string, f: typeof font, size: number, maxWidth: number) {
-    const words = String(text || '').split(/\s+/);
-    const lines: string[] = [];
-    let current = '';
-    for (const w of words) {
-      const test = current ? current + ' ' + w : w;
-      const width = f.widthOfTextAtSize(test, size);
-      if (width > maxWidth && current) {
-        lines.push(current);
-        current = w;
-      } else {
-        current = test;
-      }
-    }
-    if (current) lines.push(current);
-    return lines;
-  }
   const drawRow = (label: string, value: string, isHeader = false) => {
     const labelY = table.y - lineHeight;
     page.drawText(label, { x: table.x + 5, y: labelY, font: isHeader ? boldFont : font, size: 10 });
@@ -174,13 +191,12 @@ async function sendEmailWithInvoice(order: OrderDataMinimal, email: string, pdfU
     return { success: false, messageId: null };
   }
 
-  const isValidEmailLocal = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || ''));
-  if (!isValidEmailLocal(email || '')) {
+  if (!isValidEmail(email || '')) {
     logDebug('Invalid recipient email', email);
     return { success: false, messageId: null };
   }
 
-  const s = String(order.status || '').toLowerCase();
+  const s = (order.status ?? '').toLowerCase();
   let subject = `📄 Factura de tu servicio - Orden #${orderIdForDisplay} | Logística López Ortiz`;
   let introTitle = 'Tu factura está lista';
   let introBody = 'Hemos generado la factura de tu servicio. Puedes descargarla desde el enlace.';
@@ -302,10 +318,6 @@ Deno.serve(async (req: Request) => {
   }
   
   try {
-    // Obtener variables de entorno
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
       logDebug('Variables de entorno faltantes');
       return jsonResponse({ error: 'Error de configuración del servidor' }, 500, req);
@@ -314,22 +326,36 @@ Deno.serve(async (req: Request) => {
     // Crear cliente de Supabase
     const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     
-    // Extraer datos del cuerpo de la solicitud
-    const { orderId, email, contact_id } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const rawOrderId =
+      (body as any).orderId ??
+      (body as any).order_id ??
+      (body as any).id ??
+      null;
+    const email =
+      (body as any).email ??
+      (body as any).recipientEmail ??
+      null;
+    const contact_id =
+      (body as any).contact_id ??
+      null;
     
-    if (!orderId) {
+    if (!rawOrderId) {
       return jsonResponse({ error: 'Se requiere orderId para generar la factura' }, 400, req);
     }
     
-    // Buscar la orden
-    const isNumericId = typeof orderId === 'number' || (typeof orderId === 'string' && /^\d+$/.test(orderId));
+    const isNumericId =
+      typeof rawOrderId === 'number' ||
+      (typeof rawOrderId === 'string' && /^\d+$/.test(rawOrderId));
     const q = supabase
       .from('orders')
-      // ✅ NUEVO: Seleccionar también los nombres de las tablas relacionadas
       .select('*, service:services(name, description), vehicle:vehicles(name)');
+    const filter = isNumericId
+      ? `id.eq.${Number(rawOrderId)},short_id.eq.${String(rawOrderId)}`
+      : `short_id.eq.${String(rawOrderId)}`
     const { data: order, error: orderError } = isNumericId
-      ? await q.eq('id', Number(orderId)).single()
-      : await q.eq('short_id', String(orderId)).single();
+      ? await q.or(filter).maybeSingle()
+      : await q.eq('short_id', String(rawOrderId)).maybeSingle();
     
     if (orderError || !order) {
       logDebug('Error al buscar la orden', orderError);
@@ -365,46 +391,31 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'No se pudo obtener la URL pública del PDF' }, 500, req);
     }
     
-    // Enviar por email si se proporcionó
-    let emailResult = null;
-    let recipientEmail = email || order.client_email || order.email;
-    if (!recipientEmail && order.client_contact_id) {
-      try {
-        const { data: contactRow } = await supabase
-          .from('clients')
-          .select('email')
-          .eq('id', order.client_contact_id)
-          .maybeSingle();
-        if (contactRow?.email) recipientEmail = contactRow.email;
-      } catch (err) { logDebug('No se pudo obtener email de contacto', err); }
-    }
-    if (!recipientEmail && contact_id) {
-      try {
-        const { data: contactRow2 } = await supabase
-          .from('clients')
-          .select('email')
-          .eq('id', contact_id)
-          .maybeSingle();
-        if (contactRow2?.email) recipientEmail = contactRow2.email;
-      } catch (err) { logDebug('No se pudo obtener email por contact_id', err); }
-    }
-    if (!recipientEmail && order.client_id) {
-      try {
-        const { data: profileRow } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('id', order.client_id)
-          .maybeSingle();
-        if (profileRow?.email) recipientEmail = profileRow.email;
-      } catch (err) { logDebug('No se pudo obtener email de perfil', err); }
-    }
-    const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || ''));
-    if (!isValidEmail(recipientEmail || '')) {
+    let recipientEmail = email || order.client_email || order.email || null;
+    if (recipientEmail && !isValidEmail(recipientEmail)) {
       recipientEmail = null;
     }
-    
+
     if (recipientEmail && pdfUrl) {
-      emailResult = await sendEmailWithInvoice(order, recipientEmail, pdfUrl, invoiceNumber);
+      const FUNCTIONS_BASE = SUPABASE_URL ? SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') : '';
+      const payload = {
+        to: recipientEmail,
+        subject: `📄 Factura de tu servicio - Orden #${order.short_id || order.id} | Logística López Ortiz`,
+        html: `<p>Tu factura ha sido generada.</p><p>Puedes descargarla aquí: <a href="${pdfUrl}" target="_blank" rel="noopener">Descargar factura (PDF)</a></p>`,
+        orderId: order.id,
+        shortId: order.short_id || null,
+        status: order.status || null,
+        name: order.name || null
+      };
+      fetch(`${FUNCTIONS_BASE}/send-order-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }).catch((e) => logDebug('Error disparando send-order-email', e));
     }
     
     // Resolver client_id si está vacío usando el email del perfil
@@ -431,9 +442,8 @@ Deno.serve(async (req: Request) => {
       recipient_email: recipientEmail ?? null,
       data: {
         invoice_number: invoiceNumber,
-        email_sent: emailResult?.success && !!emailResult?.messageId,
         recipient_email: recipientEmail,
-        message_id: emailResult?.messageId
+        pdf_url: pdfUrl
       }
     });
     if (invError) {
@@ -447,9 +457,7 @@ Deno.serve(async (req: Request) => {
       data: {
         invoiceNumber,
         pdfUrl,
-        emailSent: emailResult?.success === true,
-        recipientEmail,
-        messageId: emailResult?.messageId
+        recipientEmail
       }
     }, 200, req);
     

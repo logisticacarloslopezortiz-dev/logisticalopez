@@ -352,11 +352,14 @@
             <input type="password" id="editCollabPassword" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500" placeholder="Opcional" />
           </div>
           <div class="md:col-span-2">
-            <label class="flex items-center gap-3 p-3 border rounded-lg bg-gray-50">
-              <input type="checkbox" id="editCollabViewAll" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-              <span class="text-sm text-gray-700">Permitir ver todas las órdenes pendientes</span>
+            <label class="flex items-center gap-3 p-4 border-2 rounded-lg bg-gray-50 cursor-pointer transition-all hover:border-blue-300" id="editCollabViewAllLabel">
+              <input type="checkbox" id="editCollabViewAll" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+              <div class="flex-1">
+                <span class="text-sm font-medium text-gray-900">🔓 Ver todas las solicitudes pendientes</span>
+                <p class="text-xs text-gray-600 mt-0.5">Cuando está <span class="font-semibold text-green-600">ACTIVO (🟢)</span>: Ve TODAS las solicitudes pendientes sin asignar</p>
+                <p class="text-xs text-gray-600 mt-0.5">Cuando está <span class="font-semibold text-gray-400">INACTIVO (🔒)</span>: Solo ve solicitudes asignadas por el admin</p>
+              </div>
             </label>
-            <p class="text-xs text-gray-500 mt-1">Si está activo, el colaborador verá todas las solicitudes pendientes además de las asignadas.</p>
           </div>
           <div class="md:col-span-2 flex items-center justify-end gap-2 mt-2">
             <button type="button" id="cancelEditCollab" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Cancelar</button>

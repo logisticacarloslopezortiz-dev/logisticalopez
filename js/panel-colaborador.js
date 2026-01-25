@@ -874,8 +874,13 @@ document.addEventListener('DOMContentLoaded', () => {
           window.location.href = 'login-colaborador.html';
           return;
         }
-        // ❌ ELIMINADO: El frontend ya no necesita saber si puede ver todas las órdenes.
-        // La UI se adapta a los datos que llegan.
+        // ✅ LÓGICA DE SOLICITUDES PENDIENTES:
+        // La RLS policy de Supabase automáticamente:
+        // 1. Si puede_ver_todas_las_ordenes = true (botón VERDE):
+        //    - Ve TODAS las órdenes pendientes (assigned_to IS NULL)
+        //    - ADEMÁS ve sus órdenes asignadas
+        // 2. Si puede_ver_todas_las_ordenes = false (botón GRIS):
+        //    - SOLO ve órdenes asignadas por el admin (assigned_to = su ID)
         const titleEl = document.getElementById('collabTitle');
         if (titleEl) {
             titleEl.textContent = 'Mis Solicitudes';
@@ -883,8 +888,9 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) { console.error("Validacion error", e); }
 
       // ✅ REFACTOR: Llamada directa usando RLS
-      // Traemos órdenes pendientes (si tenemos permiso) y las asignadas a nosotros.
-      // Supabase filtra automáticamente según la política RLS.
+      // RLS filtra automáticamente basado en:
+      // - puede_ver_todas_las_ordenes: true → ve pending + assigned
+      // - puede_ver_todas_las_ordenes: false → SOLO assigned
       const { data, error } = await supabaseConfig.client
         .from('orders')
         .select(`
@@ -902,7 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
           service:services(name, description),
           vehicle:vehicles(name)
         `)
-        // Filtramos para no traer historial antiguo innecesario, pero dejamos que RLS decida qué pending/assigned vemos.
+        // RLS ya filtra por estado y permisos de puede_ver_todas_las_ordenes
         .neq('status', 'cancelled')
         .neq('status', 'completed') 
         .order('created_at', { ascending: false });
@@ -914,7 +920,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const rawOrders = data || [];
       
-      // La RPC ya filtra por estado, pero por si acaso, se mantiene el filtro local.
+      // Filtro adicional por si acaso (pero RLS es la autoridad)
       orders = rawOrders.filter(o => !isFinalOrder(o));
       
 
@@ -945,7 +951,7 @@ document.addEventListener('DOMContentLoaded', () => {
       this.channel = supabaseConfig.client.channel('collab_dashboard_v3')
         // Escuchar mis órdenes asignadas
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${userId}` }, this.handleEvent.bind(this))
-        // Escuchar nuevas órdenes pendientes (disponibles para todos)
+        // Escuchar nuevas órdenes pendientes (disponibles si puede_ver_todas_las_ordenes = true)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `status=eq.pending` }, this.handleEvent.bind(this))
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
