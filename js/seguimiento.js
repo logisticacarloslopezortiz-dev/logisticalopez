@@ -33,6 +33,46 @@ document.addEventListener('DOMContentLoaded', () => {
     errorMessage.classList.remove('hidden');
   }
 
+  // ✅ Helper para enriquecer órdenes con nombre del colaborador (reutiliza cache)
+  async function enrichWithCollaboratorName(order) {
+    if (!order || !order.assigned_to) return;
+    
+    // 1️⃣ Intenta obtener del sessionStorage primero (más rápido)
+    try {
+      const cached = sessionStorage.getItem(`collab_${order.assigned_to}`);
+      if (cached) {
+        const collabData = JSON.parse(cached);
+        if (collabData?.name) {
+          order.collaborator_name = collabData.name;
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // 2️⃣ Si no está cacheado, consultar base de datos
+    try {
+      const clientToUse = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function')
+        ? supabaseConfig.client
+        : supabaseConfig.getPublicClient();
+      if (clientToUse && typeof clientToUse.from === 'function') {
+        const { data: collab } = await clientToUse
+          .from('collaborators')
+          .select('id,name')
+          .eq('id', order.assigned_to)
+          .maybeSingle();
+        if (collab?.name) {
+          order.collaborator_name = collab.name;
+          // 💾 Guardar en sessionStorage para futuras referencias
+          try {
+            sessionStorage.setItem(`collab_${order.assigned_to}`, JSON.stringify({ id: collab.id, name: collab.name }));
+          } catch(_) {}
+        }
+      }
+    } catch (_) {
+      console.warn('[enrichWithCollaboratorName] Error:', _);
+    }
+  }
+
   function normalizeOrder(order) {
     if (!order || typeof order !== 'object') return order;
     const td = order.tracking_data;
@@ -112,22 +152,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const o = normalizeOrder(order);
+      
+      // Resolver nombre del colaborador asignado
       let collaboratorName = '';
-      try {
-        if (o.assigned_to) {
+      if (o.assigned_to) {
+        try {
           const clientToUse = (supabaseConfig.client && typeof supabaseConfig.client.from === 'function')
             ? supabaseConfig.client
             : supabaseConfig.getPublicClient();
           if (clientToUse && typeof clientToUse.from === 'function') {
             const { data: collab } = await clientToUse
               .from('collaborators')
-              .select('name')
+              .select('id,name')
               .eq('id', o.assigned_to)
               .maybeSingle();
-            collaboratorName = collab?.name || '';
+            if (collab?.name) {
+              collaboratorName = collab.name;
+              // 💾 Guardar en sessionStorage para reutilizar en updates en tiempo real
+              try {
+                sessionStorage.setItem(`collab_${o.assigned_to}`, JSON.stringify({ id: collab.id, name: collab.name }));
+              } catch(_) {}
+            }
           }
+        } catch (_) {
+          console.warn('[trackOrder] No se pudo resolver nombre del colaborador:', o.assigned_to);
         }
-      } catch (_) {}
+      }
       o.collaborator_name = collaboratorName;
       
       renderTrackingInfo(o);
@@ -474,6 +524,8 @@ document.addEventListener('DOMContentLoaded', () => {
               .maybeSingle();
             if (order) {
               const o = normalizeOrder(order);
+              // ✅ Reutilizar nombre del colaborador cacheado
+              await enrichWithCollaboratorName(o);
               renderTrackingInfo(o);
               initializeMap(o);
               try { updateTimelineRealtimeIndicator(); } catch(_) {}
@@ -497,6 +549,8 @@ document.addEventListener('DOMContentLoaded', () => {
               .maybeSingle();
             if (order) {
               const o = normalizeOrder(order);
+              // ✅ Reutilizar nombre del colaborador cacheado
+              await enrichWithCollaboratorName(o);
               renderTrackingInfo(o);
               initializeMap(o);
             }
@@ -515,6 +569,8 @@ document.addEventListener('DOMContentLoaded', () => {
               .maybeSingle();
             if (order) {
               const o = normalizeOrder(order);
+              // ✅ Reutilizar nombre del colaborador cacheado
+              await enrichWithCollaboratorName(o);
               renderTrackingInfo(o);
               initializeMap(o);
               try { updateTimelineRealtimeIndicator(); } catch(_) {}

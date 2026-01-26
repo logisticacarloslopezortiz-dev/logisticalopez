@@ -71,11 +71,14 @@ async function handleExpired(endpoint: string) {
   try { await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint) } catch (_) {}
 }
 Deno.serve(async (req: Request) => {
+  const secret = (Deno.env.get('SEND_NOTIFICATION_SECRET') || '').trim()
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+  if (!secret || authHeader !== `Bearer ${secret}`) {
+    return jsonResponse({ success: false, error: 'unauthorized' }, 401)
+  }
   const correlationId = req.headers.get('x-correlation-id') || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))
   console.log('[send-notification] START', { correlation_id: correlationId })
   if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
-  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
-  if (!SEND_NOTIFICATION_SECRET || authHeader !== `Bearer ${SEND_NOTIFICATION_SECRET}`) return jsonResponse({ success: false, error: 'unauthorized' }, 401)
   try {
     const body = await req.json().catch(() => ({}))
     let user_id = ''
@@ -88,44 +91,35 @@ Deno.serve(async (req: Request) => {
       payload = validated.payload
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (msg === 'missing_notification_body') return jsonResponse({ success: false, error: 'missing_body' }, 400)
       return jsonResponse({ success: false, error: msg }, 400)
     }
-    console.log('[send-notification] Target', { user_id, contact_id, correlation_id: correlationId })
     if (!user_id && !contact_id) return jsonResponse({ success: false, error: 'missing_target' }, 400)
     const query = supabase.from('push_subscriptions').select('endpoint, keys')
     const { data: subs } = user_id ? await query.eq('user_id', user_id) : await query.eq('client_contact_id', contact_id)
-    console.log('[send-notification] Subscriptions', subs ? subs.length : 0, { correlation_id: correlationId })
     if (!subs || subs.length === 0) {
-      try { await supabase.from('notification_logs').insert({ user_id: user_id || null, payload, success: false, error_message: 'no_subscriptions' }) } catch (_) {}
       return jsonResponse({ success: false, error: 'no_subscriptions' }, 404)
     }
     let sent = 0
     let failed = 0
     for (const sub of subs) {
-      const endpoint = String((sub as any).endpoint || '').trim().replace(/`/g, '')
-      const rawKeys = (sub as any).keys
-      let keys = rawKeys
-      if (typeof keys === 'string') { try { keys = JSON.parse(keys) } catch { keys = undefined } }
-      const p256 = String((keys?.p256dh || (rawKeys?.p256dh)) || '').trim()
-      const auth = String((keys?.auth || (rawKeys?.auth)) || '').trim()
-      if (!endpoint || !p256 || !auth) { failed++; continue }
+      const endpoint = String((sub as any).endpoint || '').trim()
+      let keys: any = (sub as any).keys
+      if (typeof keys === 'string') { try { keys = JSON.parse(keys) } catch { keys = null } }
+      const p256dh = String(keys?.p256dh || '').trim()
+      const auth = String(keys?.auth || '').trim()
+      if (!endpoint || !p256dh || !auth) { failed++; continue }
       try {
-        console.log('[send-notification] Sending push', { endpoint, correlation_id: correlationId })
-        await sendPush({ endpoint, keys: { p256dh: p256, auth } }, payload)
+        await sendPush({ endpoint, keys: { p256dh, auth } }, payload)
         sent++
-      } catch (err) {
+      } catch (err: any) {
         failed++
-        const statusCode = (err as any)?.statusCode as number | undefined
-        const msg = (err instanceof Error) ? (err.message || 'unknown_error') : (String(err) || 'unknown_error')
-        console.error('[send-notification] Push error', msg, { correlation_id: correlationId })
-        if (statusCode === 404 || statusCode === 410) await handleExpired(endpoint)
+        if (err?.statusCode === 404 || err?.statusCode === 410) {
+          await handleExpired(endpoint)
+        }
       }
     }
-    try { await supabase.from('notification_logs').insert({ user_id: user_id || null, payload, success: sent > 0, error_message: failed ? `${failed} failed` : null }) } catch (_) {}
     return jsonResponse({ success: sent > 0, sent, failed, correlation_id: correlationId }, 200)
-  } catch (error) {
-    const msg = error instanceof Error ? (error.message || 'unknown_error') : (String(error) || 'unknown_error')
-    return jsonResponse({ success: false, error: msg, correlation_id: correlationId }, 500)
+  } catch (error: any) {
+    return jsonResponse({ success: false, error: error?.message || String(error) }, 500)
   }
 })

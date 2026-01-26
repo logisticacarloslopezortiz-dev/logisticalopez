@@ -40,10 +40,6 @@ const VAPID = {
     (Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com').trim()
 }
 
-if (!VAPID.publicKey || !VAPID.privateKey) {
-  throw new Error('VAPID keys not configured')
-}
-
 /* =========================
    Supabase Client
 ========================= */
@@ -261,15 +257,16 @@ async function processPending(limit = 10) {
    HTTP Handler
 ========================= */
 Deno.serve(async req => {
+  const INTERNAL_SECRET = Deno.env.get('PUSH_INTERNAL_SECRET')
+  const REQ_SECRET = req.headers.get('x-internal-secret')
+  if (!INTERNAL_SECRET || REQ_SECRET !== INTERNAL_SECRET) {
+    return jsonResponse({ error: 'unauthorized' }, 401)
+  }
+  if (!VAPID.publicKey || !VAPID.privateKey) {
+    return jsonResponse({ error: 'VAPID keys not configured' }, 500)
+  }
   if (!['POST', 'GET'].includes(req.method)) {
     return new Response('Method not allowed', { status: 405 })
-  }
-
-  if (
-    req.headers.get('x-internal-secret') !==
-    Deno.env.get('PUSH_INTERNAL_SECRET')
-  ) {
-    return jsonResponse({ error: 'unauthorized' }, 401)
   }
 
   const limit = Math.min(

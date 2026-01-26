@@ -45,20 +45,7 @@ let __collaboratorsById = {};
 
 function getCollaboratorIdFromOrder(o) {
   if (!o) return null;
-
-  // 1. Asignación directa
   if (o.assigned_to) return o.assigned_to;
-
-  // 2. Tracking (cuando el colaborador toma la orden)
-  if (Array.isArray(o.tracking_data) && o.tracking_data.length) {
-    const last = o.tracking_data[o.tracking_data.length - 1];
-    if (last?.collaborator_id) return last.collaborator_id;
-  }
-
-  // 3. Fallbacks
-  if (o.driver_id) return o.driver_id;
-  if (o.completed_by) return o.completed_by;
-
   return null;
 }
 
@@ -66,10 +53,12 @@ async function resolveCollaboratorName(order) {
   const cid = getCollaboratorIdFromOrder(order);
   if (!cid) return null;
 
-  if (__collaboratorsById?.[cid]) {
+  // ✅ Priorizar cache local para velocidad
+  if (__collaboratorsById?.[cid]?.name) {
     return __collaboratorsById[cid].name;
   }
 
+  // Fallback a base de datos si no está en cache
   try {
     const { data } = await supabaseConfig.client.from('collaborators').select('id,name').eq('id', cid).maybeSingle();
     if (data) {
@@ -664,11 +653,10 @@ async function assignSelectedCollaborator() {
     // 3️⃣ Actualizar orden
     const { success, error } =
       await OrderManager.actualizarEstadoPedido(
-        selectedOrderIdForAssign,
+        Number(selectedOrderIdForAssign),
         'accepted',
         {
-          assigned_to: collaboratorId,
-          assigned_at: new Date().toISOString()
+          assigned_to: String(collaboratorId)
         }
       );
 
@@ -680,7 +668,8 @@ async function assignSelectedCollaborator() {
       return;
     }
 
-    // 4️⃣ Refrescar estado local
+    // 4️⃣ Refrescar cache y estado local
+    try { __collaboratorsById[collaboratorId] = col; } catch(_){}
     AppState.update({
       id: Number(selectedOrderIdForAssign),
       assigned_to: collaboratorId,
@@ -688,7 +677,8 @@ async function assignSelectedCollaborator() {
     });
 
     filterOrders();
-    notifications.success(`Pedido asignado a ${col.name}`);
+    const orderId = order.short_id || order.id;
+    notifications.success(`Orden #${orderId} asignada a ${col.name} ✓`, { duration: 5000 });
     closeAssignModal();
 
   } catch (err) {

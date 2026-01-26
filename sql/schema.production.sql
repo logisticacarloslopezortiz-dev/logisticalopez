@@ -424,8 +424,13 @@ create table if not exists public.notification_outbox (
   status text not null default 'pending' check (status in ('pending','processing','sent','failed')),
   attempts int not null default 0,
   last_error text,
+  processed_at timestamptz,
   created_at timestamptz default now()
 );
+alter table public.notification_outbox add column if not exists attempts int default 0;
+alter table public.notification_outbox add column if not exists last_error text;
+alter table public.notification_outbox add column if not exists processed_at timestamptz;
+
 -- 🧠 dedup_key (clave mágica) para eliminar duplicados sin lógica
 create unique index if not exists uniq_notification_dedup on public.notification_outbox(dedup_key);
 create index if not exists idx_notification_outbox_status on public.notification_outbox(status);
@@ -1442,6 +1447,9 @@ create table if not exists public.notification_outbox (
   payload jsonb,
   dedup_key text unique,
   status text not null default 'pending',
+  attempts int not null default 0,
+  last_error text,
+  processed_at timestamptz,
   created_at timestamptz not null default now()
 );
 create index if not exists idx_notification_outbox_status on public.notification_outbox(status);
@@ -1614,8 +1622,10 @@ create table if not exists public.order_events (
   order_id bigint not null references public.orders(id) on delete cascade,
   event_type text not null, -- 'order_created', 'status_changed'
   payload jsonb not null,
+  actor_id uuid,
   created_at timestamptz default now()
 );
+alter table public.order_events add column if not exists actor_id uuid;
 create index on public.order_events(order_id, created_at);
 
 -- ⚙️ CAPA 2 — TRIGGERS (solo generan eventos)
@@ -1626,16 +1636,16 @@ security definer
 as $$
 begin
   if tg_op = 'INSERT' then
-    insert into public.order_events(order_id, event_type, payload)
+    insert into public.order_events(order_id, event_type, payload, actor_id)
     values (new.id, 'order_created', jsonb_build_object(
       'status', new.status
-    ));
+    ), auth.uid());
   elsif tg_op = 'UPDATE' and old.status is distinct from new.status then
-    insert into public.order_events(order_id, event_type, payload)
+    insert into public.order_events(order_id, event_type, payload, actor_id)
     values (new.id, 'status_changed', jsonb_build_object(
       'old_status', old.status,
       'new_status', new.status
-    ));
+    ), auth.uid());
   end if;
   return new;
 end;
