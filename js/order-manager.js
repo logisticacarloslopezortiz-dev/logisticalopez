@@ -272,17 +272,25 @@ const OrderManager = {
       };
 
       const { data: rpcData, error: rpcError } = await supabaseConfig.client.rpc('update_order_status', rpcPayload);
-
       if (!rpcError) {
         try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
         return { success: true, data: rpcData, error: null };
       }
 
-      // Si falla aceptación por RPC, no intentar fallback
+      // Intentar RPC alternativo para aceptación
       if (ns === 'aceptada' || ns === 'accepted') {
-        return { success: false, error: rpcError?.message || 'No se pudo aceptar la orden' };
+        try {
+          const { data: accData, error: accErr } = await supabaseConfig.client.rpc('accept_order_with_price', {
+            p_order_id: normalizedId,
+            p_price: null
+          });
+          if (!accErr) {
+            try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
+            return { success: true, data: accData, error: null };
+          }
+        } catch (_) {}
       }
-      // Continuar con flujo directo para otros estados
+      // Continuar con flujo directo
     } catch (rpcEx) {
       // Continuar con flujo directo
     }
@@ -351,11 +359,12 @@ const OrderManager = {
       const currentTracking = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
       updatePayload.tracking_data = [...currentTracking, trackingEntry];
 
-      // Actualizar (usar id como filtro siempre)
-      const { error: updateError } = await supabaseConfig.client
-        .from('orders')
-        .update(updatePayload)
-        .eq('id', currentOrder.id);
+      // Actualizar (usar id como filtro siempre) + restricciones para aceptación
+      let q = supabaseConfig.client.from('orders').update(updatePayload).eq('id', currentOrder.id);
+      if (ns === 'aceptada' || ns === 'accepted') {
+        q = q.eq('status', 'pending').is('assigned_to', null);
+      }
+      const { error: updateError } = await q;
 
       if (updateError) {
         throw new Error(`Error al actualizar: ${updateError.message}`);

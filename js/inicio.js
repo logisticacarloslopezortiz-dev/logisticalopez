@@ -88,7 +88,7 @@ function formatUiStatus(s) {
 
 function isFinalOrderStatus(s) {
   const v = String(s || '').toLowerCase();
-  return v === 'completed' || v === 'cancelled' || s === ORDER_STATUS.COMPLETADA || s === ORDER_STATUS.CANCELADA;
+  return v === 'completed' || v === 'cancelled';
 }
 
 // --- GESTIÓN DE ESTADO CENTRALIZADO ---
@@ -341,8 +341,16 @@ async function updateOrderStatus(orderId, newStatus) {
 
   console.log(`[Dueño] Solicitando cambio de estado para orden #${orderId} a "${newStatus}"`);
 
-  // Normalizar el estado recibido del select
-  const normalizedStatus = String(newStatus || '').toLowerCase();
+  // Normalizar estados: UI español → DB inglés
+  const statusMap = {
+    'pendiente': 'pending',
+    'aceptada': 'accepted',
+    'en curso': 'in_progress',
+    'completada': 'completed',
+    'cancelada': 'cancelled'
+  };
+  
+  const normalizedStatus = statusMap[String(newStatus).toLowerCase()] || String(newStatus).toLowerCase();
 
   try {
     const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, normalizedStatus, {});
@@ -352,7 +360,7 @@ async function updateOrderStatus(orderId, newStatus) {
       AppState.update({ id: Number(orderId), status: normalizedStatus });
       refreshLucide();
 
-      if (normalizedStatus === 'completed' || normalizedStatus === 'completada') {
+      if (normalizedStatus === 'completed' || normalizedStatus === 'cancelled') {
         try { window.location.href = 'historial-solicitudes.html'; } catch (_) {}
       }
     } else {
@@ -601,89 +609,85 @@ async function assignSelectedCollaborator() {
   const assignBtn = document.getElementById('assignConfirmBtn');
   const selectEl = document.getElementById('assignSelect');
 
-  // ✅ Validación del colaborador seleccionado
   if (!selectEl || !selectEl.value) {
     notifications.error('Selecciona un colaborador.');
     return;
   }
 
   if (!selectedOrderIdForAssign) {
-    notifications.error('Error: No se seleccionó ninguna orden.');
+    notifications.error('No se seleccionó ninguna orden.');
     return;
   }
 
   const collaboratorId = selectEl.value;
 
-  // ✅ Indicador visual de carga
   assignBtn.disabled = true;
   const originalText = assignBtn.textContent;
-  assignBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin inline-block mr-2"></i>Asignando...';
-  
-  try {
-    refreshLucide();
-  } catch (_) {}
+  assignBtn.innerHTML =
+    '<i data-lucide="loader" class="w-4 h-4 animate-spin inline-block mr-2"></i>Asignando...';
+  refreshLucide();
 
   try {
-    // Validar que el colaborador existe
-    const colaboradores = await loadCollaborators();
-    const col = colaboradores.find(c => String(c.id) === String(collaboratorId));
-    if (!col) {
+
+    // 1️⃣ Verificar colaborador existe
+    const { data: col, error: colErr } = await supabaseConfig.client
+      .from('collaborators')
+      .select('id,name')
+      .eq('id', collaboratorId)
+      .maybeSingle();
+
+    if (colErr || !col) {
       notifications.error('Colaborador no encontrado.');
       return;
     }
 
-    // Verificar que el colaborador no tiene órdenes activas
-    try {
-      const { data: conflicts } = await supabaseConfig.client
-        .from('orders')
-        .select('id,status')
-        .eq('assigned_to', collaboratorId)
-        .in('status', ['accepted', 'in_progress'])
-        .limit(1);
-      
-      if (Array.isArray(conflicts) && conflicts.length > 0) {
-        notifications.error('El colaborador ya tiene una orden activa.');
-        return;
-      }
-    } catch (err) {
-      console.warn('[assignSelectedCollaborator] No se pudo verificar conflictos:', err);
-      // Continuar de todas formas
-    }
+    // 2️⃣ Verificar que NO tenga orden activa
+    const { data: conflicts } = await supabaseConfig.client
+      .from('orders')
+      .select('id')
+      .eq('assigned_to', collaboratorId)
+      .in('status', ['accepted', 'in_progress'])
+      .limit(1);
 
-    // Actualizar la orden
-    const updateData = { collaborator_id: collaboratorId, assigned_at: new Date().toISOString() };
-    const { success, error } = await OrderManager.actualizarEstadoPedido(
-      selectedOrderIdForAssign,
-      ORDER_STATUS.PENDIENTE,
-      updateData
-    );
-
-    if (!success) {
-      notifications.error('Error de asignación', error?.message || 'No se pudo asignar el pedido.');
+    if (conflicts && conflicts.length > 0) {
+      notifications.error('El colaborador ya tiene una orden activa.');
       return;
     }
 
-    // Actualizar estado local
-    const orderIndex = allOrders.findIndex(o => o.id === selectedOrderIdForAssign);
-    if (orderIndex !== -1) {
-      const merged = {
-        ...allOrders[orderIndex],
-        assigned_to: collaboratorId,
-        status: ORDER_STATUS.PENDIENTE
-      };
-      allOrders[orderIndex] = merged;
-      AppState.update({ id: Number(selectedOrderIdForAssign), assigned_to: collaboratorId, status: ORDER_STATUS.PENDIENTE });
+    // 3️⃣ Actualizar orden
+    const { success, error } =
+      await OrderManager.actualizarEstadoPedido(
+        selectedOrderIdForAssign,
+        'accepted',
+        {
+          assigned_to: collaboratorId,
+          assigned_at: new Date().toISOString()
+        }
+      );
+
+    if (!success) {
+      notifications.error(
+        'No se pudo asignar la orden',
+        error?.message
+      );
+      return;
     }
 
+    // 4️⃣ Refrescar estado local
+    AppState.update({
+      id: Number(selectedOrderIdForAssign),
+      assigned_to: collaboratorId,
+      status: 'accepted'
+    });
+
     filterOrders();
-    notifications.success(`Pedido asignado a ${col.name} correctamente.`);
+    notifications.success(`Pedido asignado a ${col.name}`);
     closeAssignModal();
 
   } catch (err) {
-    console.error('[assignSelectedCollaborator] Error inesperado:', err);
-    notifications.error('Error de asignación', err?.message || 'Error desconocido');
+    console.error('[assignSelectedCollaborator]', err);
+    notifications.error('Error asignando colaborador');
   } finally {
-    // ✅ GARANTIZAR restauración del botón
     assignBtn.disabled = false;
     assignBtn.textContent = originalText;
   }
@@ -719,58 +723,95 @@ async function deleteSelectedOrder() {
   }
 }
 
-// Mejorada con try/catch
+// ===============================
+// FACTURA → SOLO send-invoice
+// ===============================
 async function generateAndSendInvoice(orderId) {
+
   if (!orderId) {
-    notifications.error('Error', 'ID de orden no válido');
+    notifications.error('ID de orden inválido');
     return;
   }
 
   const order = allOrders.find(o => o.id === Number(orderId));
   if (!order) {
-    notifications.error('Orden no encontrada.');
+    notifications.error('Orden no encontrada');
     return;
   }
 
   const clientEmail = order.client_email || order.email;
+
   if (!clientEmail) {
-    notifications.error('Cliente sin email', 'Esta orden no tiene un correo electrónico de cliente registrado para enviar la factura.');
+    notifications.warning(
+      'Cliente sin correo',
+      'Esta orden no tiene email registrado.'
+    );
     return;
   }
 
-  notifications.info('Generando y enviando factura por correo...', 'Espera un momento.');
+  const btn = document.getElementById('generateInvoiceBtn');
 
   try {
-    const { data, error } = await supabaseConfig.client.functions.invoke('send-invoice', {
-      body: { orderId: order.id, email: clientEmail }
-    });
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin inline-block mr-2"></i>Generando...`;
+      refreshLucide();
+    }
+
+    notifications.info('Generando factura...', 'Por favor espera');
+
+    const { data, error } =
+      await supabaseConfig.client.functions.invoke('send-invoice', {
+        body: {
+          orderId: Number(orderId),
+          email: clientEmail
+        }
+      });
 
     if (error) {
-      throw new Error(error.message || 'Error invocando send-invoice');
+      throw new Error(error.message || 'Error al invocar send-invoice');
     }
 
-    const pdfUrl = (data?.data?.pdfUrl) || (data?.pdfUrl) || null;
-
-    if (pdfUrl && typeof pdfUrl === 'string') {
-      try {
-        const linkWrap = document.getElementById('invoiceLink');
-        const linkA = document.getElementById('invoiceLinkAnchor');
-        if (linkWrap && linkA) {
-          linkA.href = pdfUrl;
-          linkA.textContent = 'Abrir factura (PDF)';
-          linkA.target = '_blank';
-          linkA.rel = 'noopener';
-          linkWrap.style.display = 'block';
-        }
-      } catch (_) {}
+    if (!data?.success) {
+      throw new Error(data?.message || 'La función no devolvió éxito');
     }
 
-    const recipient = (data?.data?.recipientEmail) || clientEmail;
-    notifications.success('Factura enviada', `Se envió el correo a ${recipient}`);
+    const pdfUrl = data.pdfUrl || null;
 
-  } catch (error) {
-    console.error('[generateAndSendInvoice] Error:', error);
-    notifications.error('Error al enviar factura', error.message || 'No se pudo enviar la factura por correo.');
+    // Mostrar link si existe
+    if (pdfUrl) {
+      const wrap = document.getElementById('invoiceLink');
+      const a = document.getElementById('invoiceLinkAnchor');
+
+      if (wrap && a) {
+        a.href = pdfUrl;
+        a.target = '_blank';
+        a.textContent = 'Abrir factura (PDF)';
+        wrap.style.display = 'block';
+      }
+    }
+
+    notifications.success(
+      'Factura enviada',
+      `Se envió la factura a ${clientEmail}`
+    );
+
+  } catch (err) {
+
+    console.error('[send-invoice]', err);
+
+    notifications.error(
+      'Error al enviar factura',
+      err.message || 'Fallo interno'
+    );
+
+  } finally {
+
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Generar factura';
+    }
+
   }
 }
 

@@ -174,7 +174,7 @@
         divName.textContent = colab.name;
         
         // Indicador visual de permiso "Ver todas"
-        if (colab.puede_ver_todas_las_ordenes) {
+        if (colab.puede_ver_todas_las_solicitudes) {
           const eyeBadge = document.createElement('span');
           eyeBadge.className = 'inline-flex items-center justify-center p-1 bg-green-100 text-green-700 rounded-full';
           eyeBadge.title = 'Puede ver todas las solicitudes pendientes';
@@ -400,7 +400,7 @@
       editMatricula.value = colab.matricula || '';
       editPassword.value = '';
       if (editViewAll) { 
-        editViewAll.checked = !!colab.puede_ver_todas_las_ordenes;
+        editViewAll.checked = !!colab.puede_ver_todas_las_solicitudes;
         updateViewAllStyle();
       }
       if (editMsg) { editMsg.textContent = ''; editMsg.className = ''; }
@@ -470,7 +470,7 @@
           phone: editPhone.value.trim() || undefined,
           matricula: editMatricula.value.trim() || undefined,
           password: editPassword.value.trim() || undefined,
-          puede_ver_todas_las_ordenes: !!(editViewAll && editViewAll.checked)
+          puede_ver_todas_las_solicitudes: !!(editViewAll && editViewAll.checked)
         };
         // Limpiar mensajes
         showMsg(editMsg, 'Guardando cambios...', 'info');

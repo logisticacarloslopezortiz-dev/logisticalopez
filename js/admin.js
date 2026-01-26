@@ -257,7 +257,8 @@ async function assignCollaborator() {
     .from('orders')
     .update({ 
       assigned_to: collaboratorId || null,
-      status: 'Pendiente'
+      assigned_at: new Date().toISOString(),
+      status: 'accepted'
     })
     .eq('id', currentAssigningOrder.id);
 
@@ -270,7 +271,7 @@ async function assignCollaborator() {
     const order = allOrders.find(o => o.id === currentAssigningOrder.id);
     if (order) {
         order.assigned_to = collaboratorId || null;
-        order.status = 'Pendiente';
+        order.status = 'Aceptada';
     }
     filterAndRender();
     updateSummaryCards();

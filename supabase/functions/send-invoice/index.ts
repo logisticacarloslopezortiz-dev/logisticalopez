@@ -71,6 +71,17 @@ function wrapLongText(text: string | undefined | null, max = 60): string {
   return (result + line).trim();
 }
 
+function sanitizePdfText(text: string | undefined | null): string {
+  return (text || '')
+    .replace(/→/g, '->')
+    .replace(/✓/g, 'OK')
+    .replace(/✔/g, 'OK')
+    .replace(/❌/g, 'X')
+    .replace(/⚠️/g, '!')
+    .replace(/[^\x00-\x7F]/g, '')
+    .trim();
+}
+
 function buildInvoiceData(order: OrderDataMinimal) {
   return {
     invoiceNumber: `INV-${order.short_id || order.id}`,
@@ -80,7 +91,7 @@ function buildInvoiceData(order: OrderDataMinimal) {
     rnc: null as string | null,
     serviceName: order.service?.name || 'Servicio',
     description: wrapLongText((order as any)?.service?.description || '', 70),
-    route: wrapLongText(`${order.pickup || ''} → ${order.delivery || ''}`, 60),
+    route: wrapLongText(`${order.pickup || ''} -> ${order.delivery || ''}`, 60),
     amount: Number(order.monto_cobrado || 0),
     paymentMethod: order.metodo_pago || 'Pendiente',
     date: new Date((order as any)?.created_at || Date.now()).toLocaleDateString('es-DO')
@@ -88,7 +99,8 @@ function buildInvoiceData(order: OrderDataMinimal) {
 }
 
 function wrapByWidth(text: string, f: any, size: number, maxWidth: number) {
-  const words = (text ?? '').split(/\s+/);
+  const safeText = sanitizePdfText(text);
+  const words = (safeText ?? '').split(/\s+/);
   const lines: string[] = [];
   let current = '';
   for (const w of words) {
@@ -114,25 +126,34 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
   let y = height - 50;
 
   // Encabezado
-  page.drawText(business.business_name || 'Logística López Ortiz', { x: 50, y, font: boldFont, size: 20, color: rgb(0.11, 0.25, 0.35) });
+  const safeBizName = sanitizePdfText(business.business_name || 'Logistica Lopez Ortiz');
+  const safeBizRnc = sanitizePdfText(business.rnc || 'N/A');
+  const safeBizAddr = sanitizePdfText(business.address || '');
+  const safeBizPhone = sanitizePdfText(business.phone || '');
+  
+  page.drawText(safeBizName, { x: 50, y, font: boldFont, size: 20, color: rgb(0.11, 0.25, 0.35) });
   y -= 25;
-  page.drawText(`RNC: ${business.rnc || 'N/A'}`, { x: 50, y, font, size: 10 });
+  page.drawText(`RNC: ${safeBizRnc}`, { x: 50, y, font, size: 10 });
   y -= 15;
-  page.drawText(`${business.address || ''} | ${business.phone || ''}`, { x: 50, y, font, size: 10 });
+  const bizContactLine = safeBizAddr && safeBizPhone ? `${safeBizAddr} | ${safeBizPhone}` : (safeBizAddr || safeBizPhone || '');
+  page.drawText(bizContactLine, { x: 50, y, font, size: 10 });
   y -= 30;
 
-  // Título de la factura
-  page.drawText(`Factura Orden #${order.short_id || order.id}`, { x: 50, y, font: boldFont, size: 16 });
+  // Titulo de la factura
+  const safeOrderId = sanitizePdfText(order.short_id || String(order.id));
+  page.drawText(`Factura Orden #${safeOrderId}`, { x: 50, y, font: boldFont, size: 16 });
   y -= 20;
   page.drawText(`Fecha: ${new Date().toLocaleDateString('es-DO')}`, { x: 50, y, font, size: 10 });
   y -= 30;
 
   // Datos del cliente
+  const safeClientName = sanitizePdfText(order.name || 'N/A');
+  const safeClientPhone = sanitizePdfText(order.phone || 'N/A');
   page.drawText('Facturar a:', { x: 50, y, font: boldFont, size: 12 });
   y -= 15;
-  page.drawText(order.name || 'N/A', { x: 50, y, font, size: 10 });
+  page.drawText(safeClientName, { x: 50, y, font, size: 10 });
   y -= 15;
-  page.drawText(order.phone || 'N/A', { x: 50, y, font, size: 10 });
+  page.drawText(safeClientPhone, { x: 50, y, font, size: 10 });
   y -= 30;
 
   // Tabla de detalles
@@ -146,9 +167,11 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
 
   const lineHeight = 12;
   const drawRow = (label: string, value: string, isHeader = false) => {
+    const safeLabel = sanitizePdfText(label);
+    const safeValue = sanitizePdfText(value);
     const labelY = table.y - lineHeight;
-    page.drawText(label, { x: table.x + 5, y: labelY, font: isHeader ? boldFont : font, size: 10 });
-    const lines = wrapByWidth(value, font, 10, table.col2 - 10);
+    page.drawText(safeLabel, { x: table.x + 5, y: labelY, font: isHeader ? boldFont : font, size: 10 });
+    const lines = wrapByWidth(safeValue, font, 10, table.col2 - 10);
     const totalHeight = Math.max(lineHeight, lines.length * lineHeight + 6);
     let vY = table.y - lineHeight;
     for (const line of lines) {
@@ -164,7 +187,7 @@ async function generateInvoicePDF(order: OrderDataMinimal, business: BusinessDat
   drawRow('Vehículo', order.vehicle?.name || 'N/A');
   drawRow('Origen', order.pickup || 'N/A');
   drawRow('Destino', order.delivery || 'N/A');
-  const routeText = `${order.pickup || ''} → ${order.delivery || ''}`;
+  const routeText = sanitizePdfText(`${order.pickup || ''} -> ${order.delivery || ''}`);
   drawRow('Ruta', routeText);
   drawRow('Fecha y Hora', `${order.date || ''} ${order.time || ''}`);
   drawRow('Estado Actual', order.status || 'N/A');
@@ -366,7 +389,7 @@ Deno.serve(async (req: Request) => {
     const { data: business, error: businessError } = await supabase
       .from('business')
       .select('*')
-      .eq('id', 1)
+      .limit(1)
       .single();
     
     if (businessError || !business) {
@@ -374,7 +397,14 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'No se encontraron los datos del negocio' }, 404, req);
     }
     
-    const pdfBytes = await generateInvoicePDF(order, business);
+    const pdfBytes = await (async () => {
+      try {
+        return await generateInvoicePDF(order, business);
+      } catch (err) {
+        logDebug('Error generando PDF', err);
+        throw new Error(`No se pudo generar el PDF: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    })();
     const invoiceNumber = `INV-${order.short_id || order.id}`;
 
     const filePath = `${order.client_id || 'anon'}/${invoiceNumber}.pdf`;
@@ -395,27 +425,17 @@ Deno.serve(async (req: Request) => {
     if (recipientEmail && !isValidEmail(recipientEmail)) {
       recipientEmail = null;
     }
-
-    if (recipientEmail && pdfUrl) {
-      const FUNCTIONS_BASE = SUPABASE_URL ? SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') : '';
-      const payload = {
-        to: recipientEmail,
-        subject: `📄 Factura de tu servicio - Orden #${order.short_id || order.id} | Logística López Ortiz`,
-        html: `<p>Tu factura ha sido generada.</p><p>Puedes descargarla aquí: <a href="${pdfUrl}" target="_blank" rel="noopener">Descargar factura (PDF)</a></p>`,
-        orderId: order.id,
-        shortId: order.short_id || null,
-        status: order.status || null,
-        name: order.name || null
-      };
-      fetch(`${FUNCTIONS_BASE}/send-order-email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      }).catch((e) => logDebug('Error disparando send-order-email', e));
+    if (recipientEmail) {
+      const emailResult = await sendEmailWithInvoice(
+        order,
+        recipientEmail,
+        pdfUrl,
+        invoiceNumber,
+        business.email || undefined
+      );
+      if (!emailResult.success) {
+        logDebug('No se pudo enviar el correo de factura');
+      }
     }
     
     // Resolver client_id si está vacío usando el email del perfil
