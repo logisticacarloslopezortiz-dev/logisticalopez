@@ -20,7 +20,22 @@ export function corsHeadersForOrigin(origin: string | null): Record<string, stri
   const isAllowed = !!origin && allowedOrigins.has(origin);
   const headers: Record<string, string> = {
     'Access-Control-Allow-Origin': isAllowed ? origin! : '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, Authorization, X-Client-Info, Apikey, Content-Type, X-Supabase-Client-Platform',
+    'Access-Control-Allow-Headers': [
+      'authorization',
+      'Authorization',
+      'apikey',
+      'Apikey',
+      'content-type',
+      'Content-Type',
+      'x-client-info',
+      'X-Client-Info',
+      'x-supabase-client',
+      'X-Supabase-Client',
+      'x-supabase-client-platform',
+      'X-Supabase-Client-Platform',
+      'x-client-trace-id',
+      'X-Client-Trace-Id'
+    ].join(', '),
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '10'
   };
@@ -37,7 +52,13 @@ export function handleCors(req: Request): Response | null {
   if (req.method === 'OPTIONS') {
     // Es crucial devolver un status 200 OK en la respuesta preflight.
     const origin = req.headers.get('origin');
-    return new Response('ok', { status: 200, headers: corsHeadersForOrigin(origin) });
+    const base = corsHeadersForOrigin(origin);
+    const requested = req.headers.get('access-control-request-headers');
+    if (requested) {
+      // Reflejar los headers solicitados además de los permitidos base
+      base['Access-Control-Allow-Headers'] = `${base['Access-Control-Allow-Headers']}, ${requested}`;
+    }
+    return new Response('ok', { status: 200, headers: base });
   }
   
   return null;

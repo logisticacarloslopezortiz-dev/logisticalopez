@@ -110,29 +110,17 @@ if (!window.supabaseConfig) {
       throw new Error('Supabase JS no está cargado. Verifica el script UMD en index.html');
     }
     if (!this.client) {
-        if (!this.__creatingMain) {
-          this.__creatingMain = true;
-          try {
-            this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-              auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
-              functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
-            });
-          } finally {
-            this.__creatingMain = false;
-          }
+      if (!this.__creatingMain) {
+        this.__creatingMain = true;
+        try {
+          this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, storageKey: 'sb-tlc-main' },
+            functions: { url: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co') }
+          });
+        } finally {
+          this.__creatingMain = false;
         }
-    }
-    if (!this._publicClient) {
-        if (!this.__creatingPublic) {
-          this.__creatingPublic = true;
-          try {
-            this._publicClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-              auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, storageKey: 'sb-tlc-public' }
-            });
-          } finally {
-            this.__creatingPublic = false;
-          }
-        }
+      }
     }
   },
 
@@ -198,11 +186,10 @@ if (!window.supabaseConfig) {
     return { data: null, error: new Error('not_found') };
   },
 
-  // Crea un cliente público (anon) para consultas que no requieran la sesión del usuario
+  // Retorna el cliente público (usa el cliente principal para evitar múltiples GoTrueClient)
   getPublicClient() {
-    if (this._publicClient) return this._publicClient;
     try { this.ensureSupabaseReady?.(); } catch(_){}
-    return this._publicClient || this.client || null;
+    return this.client || null;
   },
 
   // --- INICIO: Funciones de acceso a datos ---

@@ -1113,6 +1113,10 @@ create policy admin_insert_services on public.services for insert with check (pu
 create policy admin_update_services on public.services for update using (public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
 create policy admin_delete_services on public.services for delete using (public.is_owner(auth.uid()) or public.is_admin(auth.uid()));
 
+-- Grants for public catalog tables
+grant select on public.vehicles to anon, authenticated;
+grant select on public.services to anon, authenticated;
+
 -- Profiles
 create policy public_read_profiles on public.profiles for select using (true);
 create policy users_update_own_profile on public.profiles for update using (auth.uid() = id);
@@ -1923,3 +1927,153 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_public_testimonials(int) TO anon, authenticated;
+
+-- Habilitar funciones críticas para asignación y transición de estado
+
+-- 1) Normalizador de estado (depende de enum public.order_status que ya usa tu tabla orders)
+DROP FUNCTION IF EXISTS public.normalize_order_status(text);
+CREATE OR REPLACE FUNCTION public.normalize_order_status(in_status text)
+RETURNS public.order_status
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE s text := trim(both from coalesce(in_status,''));
+BEGIN
+  IF s = '' THEN RETURN 'pending'; END IF;
+  s := replace(lower(s), '_', ' ');
+  IF s IN ('pendiente','pending') THEN RETURN 'pending'; END IF;
+  IF s IN ('aceptada','aceptado','aceptar','accepted') THEN RETURN 'accepted'; END IF;
+  IF s IN ('en curso','en progreso','en proceso','en transito','en tránsito','in_progress','en_camino_recoger','cargando','en_camino_entregar') THEN RETURN 'in_progress'; END IF;
+  IF s IN ('completada','completado','finalizada','terminada','entregado','entregada','completed') THEN RETURN 'completed'; END IF;
+  IF s IN ('cancelada','cancelado','anulada','cancelled') THEN RETURN 'cancelled'; END IF;
+  RETURN 'pending';
+END;
+$$;
+
+-- 2) RPC principal: actualizar estado de orden
+CREATE OR REPLACE FUNCTION public.update_order_status(
+  p_order_id bigint,
+  p_new_status text,
+  p_collaborator_id uuid, -- Ignorado, usa auth.uid()
+  p_tracking_entry jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public AS $$
+DECLARE 
+  v_updated jsonb;
+  v_normalized public.order_status;
+  v_uid uuid;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'No autorizado' USING errcode = '42501';
+  END IF;
+
+  v_normalized := public.normalize_order_status(p_new_status);
+
+  UPDATE public.orders o
+  SET
+    status = v_normalized,
+    assigned_to = CASE WHEN v_normalized = 'pending' THEN NULL ELSE COALESCE(o.assigned_to, v_uid) END,
+    assigned_at = CASE WHEN v_normalized = 'pending' THEN NULL WHEN v_normalized = 'accepted' AND o.assigned_at IS NULL THEN now() ELSE assigned_at END,
+    completed_by = CASE WHEN v_normalized = 'completed' THEN v_uid ELSE completed_by END,
+    completed_at = CASE WHEN v_normalized = 'completed' THEN now() ELSE completed_at END,
+    tracking_data = CASE WHEN p_tracking_entry IS NOT NULL THEN COALESCE(o.tracking_data,'[]'::jsonb) || jsonb_build_array(p_tracking_entry) ELSE o.tracking_data END
+  WHERE o.id = p_order_id
+    AND (o.assigned_to = v_uid OR o.assigned_to IS NULL)
+    AND o.status NOT IN ('cancelled','completed')
+  RETURNING to_jsonb(o) INTO v_updated;
+
+  IF v_normalized IN ('accepted','in_progress') THEN
+    IF EXISTS (
+      SELECT 1 FROM public.collaborator_active_jobs j 
+      WHERE j.collaborator_id = v_uid
+        AND j.order_id <> p_order_id
+    ) THEN
+      RAISE EXCEPTION 'Ya tienes otra orden activa' USING errcode = 'P0001';
+    END IF;
+    INSERT INTO public.collaborator_active_jobs(collaborator_id, order_id)
+    VALUES (v_uid, p_order_id)
+    ON CONFLICT (collaborator_id) DO UPDATE SET 
+      order_id = excluded.order_id,
+      started_at = CASE WHEN collaborator_active_jobs.order_id <> excluded.order_id THEN now() ELSE collaborator_active_jobs.started_at END;
+  ELSIF v_normalized IN ('completed','cancelled') THEN
+    DELETE FROM public.collaborator_active_jobs WHERE order_id = p_order_id;
+  END IF;
+  RETURN v_updated;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.update_order_status(bigint, text, uuid, jsonb) TO authenticated;
+
+-- 3) RPC alternativo para aceptar (usado como fallback)
+DROP FUNCTION IF EXISTS public.accept_order_with_price(bigint, numeric);
+CREATE OR REPLACE FUNCTION public.accept_order_with_price(p_order_id bigint, p_price numeric)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public AS $$
+DECLARE _now timestamptz := now();
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'No autorizado';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.orders o
+    WHERE o.assigned_to = auth.uid()
+      AND o.status IN ('accepted','in_progress')
+  ) THEN
+    RAISE EXCEPTION 'Ya tienes una orden activa' USING errcode = 'P0001';
+  END IF;
+
+  UPDATE public.orders
+  SET
+    status = 'accepted'::public.order_status,
+    accepted_at = COALESCE(accepted_at, _now),
+    accepted_by = COALESCE(accepted_by, auth.uid()),
+    assigned_to = COALESCE(assigned_to, auth.uid()),
+    assigned_at = COALESCE(assigned_at, _now),
+    estimated_price = COALESCE(p_price, estimated_price),
+    tracking_data = COALESCE(tracking_data, '[]'::jsonb) || jsonb_build_array(
+      jsonb_build_object('status','accepted','date',_now,'description', CASE WHEN p_price IS NOT NULL THEN 'Orden aceptada con tarifa ajustada: ' || p_price ELSE 'Orden aceptada' END)
+    )
+  WHERE id = p_order_id
+    AND status = 'pending'
+    AND (assigned_to IS NULL OR assigned_to = auth.uid());
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No se pudo aceptar la orden. Puede que ya no esté disponible.' USING errcode = 'P0002';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.collaborator_active_jobs(collaborator_id, order_id)
+    VALUES (auth.uid(), p_order_id)
+    ON CONFLICT (collaborator_id)
+    DO UPDATE SET order_id = excluded.order_id, started_at = now();
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM 1;
+  END;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.accept_order_with_price(bigint, numeric) TO authenticated;
+
+-- 4) Tabla de trabajos activos (si no existe)
+CREATE TABLE IF NOT EXISTS public.collaborator_active_jobs (
+  collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  order_id bigint NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  started_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (collaborator_id),
+  UNIQUE(order_id)
+);
+CREATE INDEX IF NOT EXISTS idx_active_jobs_collab ON public.collaborator_active_jobs(collaborator_id);
+CREATE INDEX IF NOT EXISTS idx_active_jobs_order ON public.collaborator_active_jobs(order_id);
+ALTER TABLE public.collaborator_active_jobs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS active_jobs_select ON public.collaborator_active_jobs;
+CREATE POLICY active_jobs_select ON public.collaborator_active_jobs FOR SELECT USING (
+  collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+);
+DROP POLICY IF EXISTS active_jobs_insert ON public.collaborator_active_jobs;
+CREATE POLICY active_jobs_insert ON public.collaborator_active_jobs FOR INSERT WITH CHECK (
+  collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+);
+DROP POLICY IF EXISTS active_jobs_delete ON public.collaborator_active_jobs;
+CREATE POLICY active_jobs_delete ON public.collaborator_active_jobs FOR DELETE USING (
+  collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
+);

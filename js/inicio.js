@@ -466,15 +466,22 @@ function updateAlerts() {
   }
 }
 // Mejorada con validaciones DR y mejor manejo de errores
-async function openAssignModal(orderId) {
-  // ✅ Validación del ID
-  if (!orderId) {
-    console.error('[openAssignModal] ID de orden no válido');
+async function openAssignModal(orderOrId) {
+  // Aceptar objeto de orden o ID
+  let orderId = null;
+  if (orderOrId && typeof orderOrId === 'object' && Number.isFinite(orderOrId.id)) {
+    orderId = Number(orderOrId.id);
+  } else {
+    const n = Number(orderOrId);
+    orderId = Number.isFinite(n) ? n : null;
+  }
+  if (!Number.isFinite(orderId) || orderId === null) {
+    console.error('[openAssignModal] ID de orden no válido:', orderOrId);
     notifications.error('Error', 'ID de orden no válido');
     return;
   }
 
-  selectedOrderIdForAssign = Number(orderId);
+  selectedOrderIdForAssign = orderId;
   
   const modal = document.getElementById('assignModal');
   const modalTitle = document.getElementById('assignModalTitle');
