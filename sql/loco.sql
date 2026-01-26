@@ -1,29 +1,10 @@
 -- =====================================================================================
--- 00_HEADER.SQL
--- =====================================================================================
--- PROYECTO: TLC Logística
--- DESCRIPCIÓN: Esquema de base de datos unificado para producción (Supabase/PostgreSQL).
--- FECHA: 2025
--- NOTAS:
---  - Todo el SQL es idempotente (se puede ejecutar múltiples veces sin error).
---  - Se usa RLS (Row Level Security) en todas las tablas sensibles.
---  - Arquitectura de eventos: Order -> Order Events -> Notification Outbox.
+-- 01. EXTENSIONES Y TIPOS PERSONALIZADOS
 -- =====================================================================================
 
--- =====================================================================================
--- 01_EXTENSIONS.SQL
--- =====================================================================================
--- Extensiones necesarias para criptografía y funcionalidades extra.
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Limpieza de extensiones no utilizadas (Legacy)
--- DROP EXTENSION IF EXISTS "pg_cron"; -- LEGACY (Comentado por seguridad en producción)
-
--- =====================================================================================
--- 02_ENUMS.SQL
--- =====================================================================================
--- Tipos enumerados para garantizar integridad de datos en estados.
-
+-- ENUMs para garantizar integridad de datos
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
         CREATE TYPE public.order_status AS ENUM (
@@ -35,29 +16,13 @@ DO $$ BEGIN
             'generada', 'enviada', 'pagada', 'anulada'
         );
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'collaborator_status') THEN
-        CREATE TYPE public.collaborator_status AS ENUM ('activo', 'inactivo', 'suspendido');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'collaborator_role') THEN
-        CREATE TYPE public.collaborator_role AS ENUM ('admin', 'administrador', 'colaborador');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'availability_status') THEN
-        CREATE TYPE public.availability_status AS ENUM ('available', 'busy', 'offline');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_status') THEN
-        CREATE TYPE public.notification_status AS ENUM ('pending', 'processing', 'retry', 'sent', 'failed');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_target') THEN
-        CREATE TYPE public.notification_target AS ENUM ('user', 'contact');
-    END IF;
 END $$;
 
 -- =====================================================================================
--- 03_UTILS.SQL
+-- 02. FUNCIONES UTILITARIAS
 -- =====================================================================================
--- Funciones utilitarias, helpers de fechas y normalización.
 
--- Trigger genérico para actualizar el campo updated_at
+-- Trigger genérico para actualizar updated_at
 CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql SECURITY DEFINER
@@ -79,7 +44,7 @@ DECLARE
     result text := '';
     i int;
 BEGIN
-    FOR i IN 1..6 LOOP
+    FOR i IN 1..4 LOOP
         result := result || substr(chars, floor(random() * length(chars) + 1)::int, 1);
     END LOOP;
     RETURN 'ORD-' || result;
@@ -106,20 +71,20 @@ END;
 $$;
 
 -- =====================================================================================
--- 04_CATALOGS.SQL
+-- 03. TABLAS PRINCIPALES (SIN DATOS)
 -- =====================================================================================
--- Tablas de referencia (Vehículos, Servicios).
 
+-- Catálogo: Vehículos
 CREATE TABLE IF NOT EXISTS public.vehicles (
     id bigserial PRIMARY KEY,
     created_at timestamptz NOT NULL DEFAULT now(),
     name text NOT NULL UNIQUE,
     description text,
     image_url text,
-    is_active boolean NOT NULL DEFAULT true,
-    capacity text -- Legacy support
+    is_active boolean NOT NULL DEFAULT true
 );
 
+-- Catálogo: Servicios
 CREATE TABLE IF NOT EXISTS public.services (
     id bigserial PRIMARY KEY,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -130,11 +95,6 @@ CREATE TABLE IF NOT EXISTS public.services (
     base_price numeric DEFAULT 0,
     display_order int DEFAULT 0
 );
-
--- =====================================================================================
--- 05_USERS.SQL
--- =====================================================================================
--- Gestión de usuarios, perfiles, colaboradores y clientes anónimos.
 
 -- Perfiles (Extensión de auth.users)
 CREATE TABLE IF NOT EXISTS public.profiles (
@@ -156,14 +116,14 @@ CREATE TABLE IF NOT EXISTS public.collaborators (
     email text,
     phone text,
     matricula text,
-    status public.collaborator_status NOT NULL DEFAULT 'activo',
-    role public.collaborator_role NOT NULL DEFAULT 'colaborador',
-    -- push_subscription ELIMINATED: use push_subscriptions table (normalized)
+    status text NOT NULL DEFAULT 'activo',
+    role text NOT NULL DEFAULT 'colaborador',
+    push_subscription jsonb,
     notes text,
     commission_percent numeric DEFAULT 0.10,
     can_take_orders boolean DEFAULT false,
     puede_ver_todas_las_ordenes boolean DEFAULT false,
-    availability public.availability_status DEFAULT 'available'
+    availability text DEFAULT 'available'
 );
 CREATE INDEX IF NOT EXISTS idx_collaborators_status ON public.collaborators(status);
 CREATE INDEX IF NOT EXISTS idx_collaborators_role ON public.collaborators(role);
@@ -178,11 +138,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- =====================================================================================
--- 06_BUSINESS.SQL
--- =====================================================================================
--- Configuración global del negocio.
-
+-- Configuración del Negocio
 CREATE TABLE IF NOT EXISTS public.business (
     id integer PRIMARY KEY DEFAULT 1,
     business_name text,
@@ -200,20 +156,12 @@ CREATE TABLE IF NOT EXISTS public.business (
 );
 CREATE INDEX IF NOT EXISTS idx_business_owner ON public.business(owner_user_id);
 
--- Seed inicial idempotente
-INSERT INTO public.business (id, business_name) VALUES (1, 'Logística López Ortiz') ON CONFLICT (id) DO NOTHING;
-
--- =====================================================================================
--- 07_ORDERS.SQL (Correcciones finales de tabla)
--- =====================================================================================
-
+-- Órdenes (Core)
 CREATE TABLE IF NOT EXISTS public.orders (
     id bigserial PRIMARY KEY,
     short_id text UNIQUE DEFAULT public.generate_order_short_id(),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    
-    -- Cliente (Autenticado o Anónimo)
     client_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
     client_contact_id uuid REFERENCES public.clients(id) ON DELETE SET NULL,
     name text NOT NULL,
@@ -221,73 +169,42 @@ CREATE TABLE IF NOT EXISTS public.orders (
     email text,
     rnc text,
     empresa text,
-    
-    -- Detalles del Servicio
     service_id bigint REFERENCES public.services(id) ON DELETE SET NULL,
     vehicle_id bigint REFERENCES public.vehicles(id) ON DELETE SET NULL,
     service_questions jsonb,
-    
-    -- Ubicación
     pickup text,
     delivery text,
     origin_coords jsonb,
     destination_coords jsonb,
-    -- Legacy address fields removed: use pickup/delivery or coords
-    -- Legacy location fields removed: use origin_coords and destination_coords (JSON)
-    
-    -- Tiempo
     "date" date,
     "time" time,
-    
-    -- Estado y Asignación
     status public.order_status NOT NULL DEFAULT 'pending',
     assigned_to uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
     assigned_at timestamptz,
-    accepted_by uuid, -- LEGACY: Mantener por compatibilidad, no usar para nueva lógica
-    accepted_at timestamptz, -- LEGACY: Mantener por compatibilidad, no usar para nueva lógica
-    
-    -- Finalización
+    accepted_by uuid,
+    accepted_at timestamptz,
     completed_at timestamptz,
     completed_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-    
-    -- Finanzas
     estimated_price numeric,
-    price numeric DEFAULT 0, -- Legacy compat
     monto_cobrado numeric,
     metodo_pago text,
-    
-    -- Tracking y Datos
     tracking_data jsonb DEFAULT '[]'::jsonb,
     tracking_url text,
     evidence_photos jsonb,
     rating jsonb DEFAULT '{}'::jsonb,
     customer_comment text,
-    
-    -- Métricas
     distance_km numeric,
-    duration_min numeric,
-    
-    CONSTRAINT rating_valid CHECK (
-      rating IS NULL
-      OR (
-        (rating->>'stars')::int BETWEEN 1 AND 5
-      )
-    )
+    duration_min numeric
 );
 
-ALTER TABLE public.orders
-ADD CONSTRAINT orders_short_id_unique UNIQUE (short_id);
-
-CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_short_id ON public.orders(short_id);
-CREATE INDEX IF NOT EXISTS idx_orders_client_id ON public.orders(client_id);
-CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON public.orders(assigned_to);
-CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_order_per_collab
-ON public.orders(assigned_to)
-WHERE status IN ('accepted','in_progress');
-
--- Trabajos activos (Lock para evitar múltiples órdenes simultáneas por colaborador)
-DROP TABLE IF EXISTS public.collaborator_active_jobs CASCADE;
+-- Trabajos activos (Lock para evitar múltiples órdenes simultáneas)
+CREATE TABLE IF NOT EXISTS public.collaborator_active_jobs (
+    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    order_id bigint NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    started_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (collaborator_id),
+    UNIQUE(order_id)
+);
 
 -- Ubicación en tiempo real
 CREATE TABLE IF NOT EXISTS public.collaborator_locations (
@@ -301,13 +218,44 @@ CREATE TABLE IF NOT EXISTS public.collaborator_locations (
     CONSTRAINT unique_collaborator_location UNIQUE (collaborator_id)
 );
 
+-- Notificaciones
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id bigserial PRIMARY KEY,
+    user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+    contact_id uuid REFERENCES public.clients(id) ON DELETE CASCADE,
+    title text,
+    body text,
+    data jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    read_at timestamptz,
+    delivered_at timestamptz,
+    delivered boolean DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_contact ON public.notifications(contact_id);
+
+-- Suscripciones Push
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+    id bigserial PRIMARY KEY,
+    user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+    client_contact_id uuid REFERENCES public.clients(id) ON DELETE CASCADE,
+    endpoint text NOT NULL,
+    keys jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT chk_push_owner CHECK (user_id IS NOT NULL OR client_contact_id IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON public.push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_contact ON public.push_subscriptions(client_contact_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_push_subscriptions_user_endpoint ON public.push_subscriptions(user_id, endpoint);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_push_subscriptions_contact_endpoint ON public.push_subscriptions(client_contact_id, endpoint);
+
 -- Facturas
 CREATE TABLE IF NOT EXISTS public.invoices (
     id bigserial PRIMARY KEY,
     created_at timestamptz NOT NULL DEFAULT now(),
     order_id bigint REFERENCES public.orders(id) ON DELETE SET NULL,
     client_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-    file_path text,
+    file_path text NOT NULL,
     file_url text,
     total numeric,
     status public.invoice_status DEFAULT 'generada',
@@ -327,132 +275,60 @@ CREATE TABLE IF NOT EXISTS public.order_completion_receipts (
     data jsonb
 );
 
--- =====================================================================================
--- 08_EVENTS.SQL
--- =====================================================================================
--- Sistema de Event Sourcing para auditoría y disparador de notificaciones.
-
--- notification_events - ELIMINADA
--- Ahora disparamos notification_outbox directamente desde trigger de orders
--- Evita duplicidad: order_events + notification_events era redundante
-
--- Historial de eventos de órdenes (event sourcing ligero)
+-- Eventos de órdenes (Event Sourcing)
 CREATE TABLE IF NOT EXISTS public.order_events (
-  id bigserial PRIMARY KEY,
-  order_id bigint NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  event_type text NOT NULL,
-  payload jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
+    id bigserial PRIMARY KEY,
+    order_id bigint NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    event_type text NOT NULL,
+    payload jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_order_events_order_created ON public.order_events(order_id, created_at);
 
--- =====================================================================================
--- 09_NOTIFICATIONS.SQL
--- =====================================================================================
--- Sistema de notificaciones, plantillas y cola de salida (Outbox).
--- Plantillas de mensajes - ELIMINADA (lógica movida a Edge Functions)
--- Usar build_notification_message() en Edge Function en su lugar
-
--- Cola de salida (Outbox Pattern)
-DROP TABLE IF EXISTS public.notification_outbox CASCADE;
-CREATE TABLE public.notification_outbox (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_type text NOT NULL,
-  recipient_type notification_target NOT NULL,
-  recipient_id uuid NOT NULL,
-  payload jsonb NOT NULL,
-  status notification_status DEFAULT 'pending',
-  attempts int DEFAULT 0,
-  dedup_key text NOT NULL UNIQUE,
-  last_error text,
-  created_at timestamptz DEFAULT now(),
-  processed_at timestamptz,
-  failed_at timestamptz,
-  failed_reason text,
-  next_attempt_at timestamptz DEFAULT now()
+-- Cola de notificaciones (Outbox)
+CREATE TABLE IF NOT EXISTS public.notification_outbox (
+    id bigserial PRIMARY KEY,
+    event_id bigint,
+    event_type text NOT NULL,
+    recipient_type text NOT NULL,
+    recipient_id uuid,
+    template_id bigint,
+    payload jsonb NOT NULL,
+    dedup_key text NOT NULL UNIQUE,
+    status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'sent', 'failed')),
+    attempts int NOT NULL DEFAULT 0,
+    last_error text,
+    created_at timestamptz DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_outbox_pending 
-ON public.notification_outbox(status, created_at);
-CREATE INDEX IF NOT EXISTS idx_notification_outbox_status_next
-ON public.notification_outbox(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_notification_outbox_status ON public.notification_outbox(status);
+CREATE INDEX IF NOT EXISTS idx_notification_outbox_dedup_status ON public.notification_outbox(dedup_key, status);
 
--- Cola de salida para Emails (Outbox Email)
-CREATE TABLE IF NOT EXISTS public.email_outbox (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  invoice_id bigint REFERENCES public.invoices(id) ON DELETE CASCADE,
-  to_email text NOT NULL,
-  subject text NOT NULL,
-  html text NOT NULL,
-  status notification_status DEFAULT 'pending',
-  attempts int DEFAULT 0,
-  dedup_key text NOT NULL UNIQUE,
-  last_error text,
-  created_at timestamptz DEFAULT now(),
-  processed_at timestamptz,
-  failed_at timestamptz,
-  failed_reason text,
-  next_attempt_at timestamptz DEFAULT now(),
-  CONSTRAINT email_requires_invoice CHECK (invoice_id IS NOT NULL)
+-- Plantillas de notificaciones
+CREATE TABLE IF NOT EXISTS public.notification_templates (
+    id bigserial PRIMARY KEY,
+    event_type text NOT NULL,
+    role text NOT NULL,
+    status text,
+    locale text NOT NULL DEFAULT 'es',
+    title text NOT NULL,
+    body text NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    UNIQUE(event_type, role, COALESCE(status, ''), locale)
 );
-CREATE INDEX IF NOT EXISTS idx_email_outbox_status
-ON public.email_outbox(status);
-CREATE INDEX IF NOT EXISTS idx_email_outbox_status_next
-ON public.email_outbox(status, next_attempt_at);
-CREATE INDEX IF NOT EXISTS idx_email_outbox_pending
-ON public.email_outbox(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_notification_templates_event_role ON public.notification_templates(event_type, role);
 
--- Notificaciones In-App - ELIMINADA
--- Ahora usamos notification_outbox + push_subscriptions + email_outbox
--- Eliminamos duplicidad: usar sistema de outbox (singular source of truth)
-
--- Suscripciones Push (Web Push)
-DROP TABLE IF EXISTS public.push_subscriptions CASCADE;
-CREATE TABLE public.push_subscriptions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid,
-  client_contact_id uuid,
-  endpoint text NOT NULL UNIQUE,
-  keys jsonb NOT NULL,
-  user_agent text,
-  created_at timestamptz DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_push_subs_user ON public.push_subscriptions(user_id);
-CREATE INDEX IF NOT EXISTS idx_push_subs_contact ON public.push_subscriptions(client_contact_id);
-
--- Logs de entrega Push
-CREATE TABLE IF NOT EXISTS public.push_delivery_attempts (
-  id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL,
-  endpoint text NOT NULL,
-  status_code int,
-  error text,
-  created_at timestamptz DEFAULT now()
-);
-
--- Logs de sistema (Debugging)
-CREATE TABLE IF NOT EXISTS public.notification_logs (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    created_at timestamptz DEFAULT now(),
-    user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-    payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-    success boolean NOT NULL DEFAULT false,
-    error_message text
-);
-
+-- Logs de sistema
 CREATE TABLE IF NOT EXISTS public.function_logs (
     id bigserial PRIMARY KEY,
     fn_name text NOT NULL,
-    level text NOT NULL CHECK (level IN ('debug','info','warn','error')),
+    level text NOT NULL CHECK (level IN ('debug', 'info', 'warn', 'error')),
     message text NOT NULL,
     payload jsonb,
     created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS idx_function_logs_fn_created ON public.function_logs(fn_name, created_at);
 
--- =====================================================================================
--- 10_METRICS.SQL
--- =====================================================================================
--- Tablas y vistas para análisis de rendimiento.
-
+-- Métricas de colaboradores
 CREATE TABLE IF NOT EXISTS public.collaborator_performance (
     id bigserial PRIMARY KEY,
     collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -461,15 +337,17 @@ CREATE TABLE IF NOT EXISTS public.collaborator_performance (
     in_progress_count int NOT NULL DEFAULT 0,
     completed_count int NOT NULL DEFAULT 0,
     canceled_count int NOT NULL DEFAULT 0,
-    -- CAMBIO: mantener solo sumatorios, calcular AVG en SELECT
     sum_completion_minutes numeric DEFAULT 0,
     sum_rating numeric DEFAULT 0,
     count_ratings int DEFAULT 0,
     total_amount numeric NOT NULL DEFAULT 0,
-    created_at timestamptz NOT NULL DEFAULT now(),
+    avg_rating numeric,
+    avg_completion_minutes numeric,
+    updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE(collaborator_id, metric_date)
 );
 
+-- Testimoniales
 CREATE TABLE IF NOT EXISTS public.testimonials (
     id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
     created_at timestamptz DEFAULT now(),
@@ -481,29 +359,279 @@ CREATE TABLE IF NOT EXISTS public.testimonials (
     avatar_url text
 );
 
-CREATE OR REPLACE VIEW public.collaborator_performance_view AS
-SELECT
-    cp.collaborator_id,
-    p.full_name AS collaborator_name,
-    date_trunc('day', cp.metric_date)::date AS metric_date,
-    cp.accepted_count,
-    cp.in_progress_count,
-    cp.completed_count,
-    cp.canceled_count,
-    cp.total_amount,
-    -- Calcular AVG en SELECT (no almacenar)
-    CASE WHEN cp.count_ratings > 0 
-         THEN cp.sum_rating::numeric / cp.count_ratings 
-         ELSE NULL 
-    END AS avg_rating,
-    CASE WHEN cp.completed_count > 0 
-         THEN cp.sum_completion_minutes::numeric / cp.completed_count 
-         ELSE NULL 
-    END AS avg_completion_minutes
-FROM public.collaborator_performance cp
-LEFT JOIN public.profiles p ON p.id = cp.collaborator_id;
+-- =====================================================================================
+-- 04. ÍNDICES Y CONSTRAINTS ADICIONALES
+-- =====================================================================================
 
--- Helpers de Roles y Permisos (Movidos aquí para asegurar que las tablas existen)
+CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_short_id ON public.orders(short_id);
+CREATE INDEX IF NOT EXISTS idx_orders_client_id ON public.orders(client_id);
+CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON public.orders(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_order_per_collab ON public.orders(assigned_to) WHERE status IN ('accepted','in_progress');
+
+CREATE INDEX IF NOT EXISTS idx_active_jobs_collab ON public.collaborator_active_jobs(collaborator_id);
+CREATE INDEX IF NOT EXISTS idx_active_jobs_order ON public.collaborator_active_jobs(order_id);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_order ON public.invoices(order_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_client ON public.invoices(client_id);
+
+-- =====================================================================================
+-- 05. TRIGGERS
+-- =====================================================================================
+
+-- Updated at (tablas críticas)
+DROP TRIGGER IF EXISTS trg_profiles_set_updated ON public.profiles;
+CREATE TRIGGER trg_profiles_set_updated BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_collaborators_touch_updated ON public.collaborators;
+CREATE TRIGGER trg_collaborators_touch_updated BEFORE UPDATE ON public.collaborators FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_business_touch_updated ON public.business;
+CREATE TRIGGER trg_business_touch_updated BEFORE UPDATE ON public.business FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_orders_touch_updated ON public.orders;
+CREATE TRIGGER trg_orders_touch_updated BEFORE UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Sincronización Profile <-> Collaborator
+CREATE OR REPLACE FUNCTION public.sync_profile_name()
+RETURNS TRIGGER
+LANGUAGE plpgsql SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    INSERT INTO public.profiles (id, full_name, email, phone, created_at, updated_at)
+    VALUES (new.id, new.name, new.email, new.phone, now(), now())
+    ON CONFLICT (id) DO UPDATE SET
+        full_name = excluded.full_name,
+        email = excluded.email,
+        phone = excluded.phone,
+        updated_at = now();
+    RETURN new;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_sync_profile_name ON public.collaborators;
+CREATE TRIGGER trg_sync_profile_name AFTER INSERT OR UPDATE OF name, email, phone ON public.collaborators FOR EACH ROW EXECUTE FUNCTION public.sync_profile_name();
+
+-- Sincronización Push Subscription
+CREATE OR REPLACE FUNCTION public.sync_collaborator_push_subscription()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE endpoint text; keys jsonb;
+BEGIN
+    IF NEW.push_subscription IS NULL THEN RETURN NEW; END IF;
+    endpoint := NEW.push_subscription->>'endpoint';
+    keys := NEW.push_subscription->'keys';
+    IF endpoint IS NULL OR endpoint = '' THEN RETURN NEW; END IF;
+    INSERT INTO public.push_subscriptions(user_id, endpoint, keys, created_at)
+    VALUES (NEW.id, endpoint, COALESCE(keys, '{}'::jsonb), now())
+    ON CONFLICT (user_id, endpoint) DO UPDATE SET keys = EXCLUDED.keys;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_collaborators_sync_push_subscription ON public.collaborators;
+CREATE TRIGGER trg_collaborators_sync_push_subscription AFTER UPDATE OF push_subscription ON public.collaborators FOR EACH ROW EXECUTE FUNCTION public.sync_collaborator_push_subscription();
+
+-- Orders: Tracking URL
+CREATE OR REPLACE FUNCTION public.set_order_tracking_url()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.tracking_url IS NULL OR NEW.tracking_url = '' THEN
+        NEW.tracking_url := '/seguimiento.html?orderId=' || COALESCE(NEW.short_id::text, NEW.id::text);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_orders_set_tracking ON public.orders;
+CREATE TRIGGER trg_orders_set_tracking BEFORE INSERT ON public.orders FOR EACH ROW EXECUTE FUNCTION public.set_order_tracking_url();
+
+-- Orders: Completed Metadata
+CREATE OR REPLACE FUNCTION public.ensure_completed_metadata()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.status = 'completed' THEN
+        IF NEW.completed_at IS NULL THEN NEW.completed_at := now(); END IF;
+        IF NEW.completed_by IS NULL THEN NEW.completed_by := COALESCE(NEW.assigned_to, auth.uid()); END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_orders_ensure_completed_metadata ON public.orders;
+CREATE TRIGGER trg_orders_ensure_completed_metadata BEFORE UPDATE ON public.orders FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE FUNCTION public.ensure_completed_metadata();
+
+-- Orders: Create Receipt
+CREATE OR REPLACE FUNCTION public.create_completion_receipt_on_order_complete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.status = 'completed' THEN
+        IF NOT EXISTS (SELECT 1 FROM public.order_completion_receipts r WHERE r.order_id = NEW.id) THEN
+            INSERT INTO public.order_completion_receipts(order_id, client_id, collaborator_id, signed_by_collaborator_at)
+            VALUES (NEW.id, NEW.client_id, NEW.assigned_to, COALESCE(NEW.completed_at, now()));
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_orders_create_receipt_on_complete ON public.orders;
+CREATE TRIGGER trg_orders_create_receipt_on_complete AFTER UPDATE OF status ON public.orders FOR EACH ROW EXECUTE FUNCTION public.create_completion_receipt_on_order_complete();
+
+-- Orders: Event Sourcing (Emit Events)
+CREATE OR REPLACE FUNCTION public.trg_orders_emit_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO public.order_events(order_id, event_type, payload)
+        VALUES (NEW.id, 'order_created', jsonb_build_object('status', NEW.status));
+    ELSIF TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status THEN
+        INSERT INTO public.order_events(order_id, event_type, payload)
+        VALUES (NEW.id, 'status_changed', jsonb_build_object('old_status', OLD.status, 'new_status', NEW.status));
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_orders_events ON public.orders;
+CREATE TRIGGER trg_orders_events AFTER INSERT OR UPDATE OF status ON public.orders FOR EACH ROW EXECUTE FUNCTION public.trg_orders_emit_event();
+
+-- Cleanup Active Job on Completion
+CREATE OR REPLACE FUNCTION public.cleanup_active_job_on_status()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.status IN ('completed', 'cancelled') THEN
+        DELETE FROM public.collaborator_active_jobs WHERE order_id = NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_cleanup_active_job ON public.orders;
+CREATE TRIGGER trg_cleanup_active_job AFTER UPDATE OF status ON public.orders FOR EACH ROW EXECUTE FUNCTION public.cleanup_active_job_on_status();
+
+-- Create Active Job on Start
+CREATE OR REPLACE FUNCTION public.create_active_job_on_start()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF OLD.status <> 'in_progress' AND NEW.status = 'in_progress' THEN
+        INSERT INTO public.collaborator_active_jobs(collaborator_id, order_id)
+        VALUES (NEW.assigned_to, NEW.id)
+        ON CONFLICT DO NOTHING;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_create_active_job ON public.orders;
+CREATE TRIGGER trg_create_active_job AFTER UPDATE OF status ON public.orders FOR EACH ROW EXECUTE FUNCTION public.create_active_job_on_start();
+
+-- Track Order Metrics
+CREATE OR REPLACE FUNCTION public.track_order_metrics()
+RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+    v_collab uuid;
+    v_when date := current_date;
+    v_amount numeric := NULL;
+    v_rating numeric := NULL;
+    v_minutes numeric := NULL;
+BEGIN
+    v_collab := COALESCE(NEW.assigned_to, OLD.assigned_to);
+    IF v_collab IS NULL THEN RETURN NEW; END IF;
+
+    IF NEW.status = 'completed' AND NEW.completed_at IS NOT NULL THEN
+        v_minutes := EXTRACT(EPOCH FROM (NEW.completed_at - COALESCE(NEW.assigned_at, NEW.created_at))) / 60.0;
+        v_rating := COALESCE((NEW.rating->>'stars')::numeric, NULL);
+        v_amount := NEW.monto_cobrado;
+    END IF;
+
+    IF TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status THEN
+        IF NEW.status = 'accepted' THEN
+            PERFORM public.upsert_collaborator_metric_fixed(v_collab, v_when, 1, 0, 0, 0, NULL, NULL, NULL);
+        ELSIF NEW.status = 'in_progress' THEN
+            PERFORM public.upsert_collaborator_metric_fixed(v_collab, v_when, 0, 1, 0, 0, NULL, NULL, NULL);
+        ELSIF NEW.status = 'completed' THEN
+            PERFORM public.upsert_collaborator_metric_fixed(v_collab, v_when, 0, 0, 1, 0, v_amount, v_rating, v_minutes);
+        ELSIF NEW.status = 'cancelled' THEN
+            PERFORM public.upsert_collaborator_metric_fixed(v_collab, v_when, 0, 0, 0, 1, NULL, NULL, NULL);
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_orders_track_metrics ON public.orders;
+CREATE TRIGGER trg_orders_track_metrics AFTER INSERT OR UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION public.track_order_metrics();
+
+-- Event to Outbox
+CREATE OR REPLACE FUNCTION public.trg_events_to_outbox()
+RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+    r RECORD;
+    t_id bigint;
+BEGIN
+    FOR r IN
+        SELECT 'admin'::text AS recipient_type, c.id AS recipient_id
+        FROM public.collaborators c
+        WHERE c.role IN ('admin', 'administrador') AND c.status = 'activo'
+        UNION ALL
+        SELECT 'user'::text, o.assigned_to FROM public.orders o WHERE o.id = NEW.order_id AND o.assigned_to IS NOT NULL
+        UNION ALL
+        SELECT 'user'::text, o.client_id FROM public.orders o WHERE o.id = NEW.order_id AND o.client_id IS NOT NULL
+    LOOP
+        SELECT id INTO t_id
+        FROM public.notification_templates
+        WHERE event_type = NEW.event_type
+          AND role = r.recipient_type
+          AND (status IS NULL OR status = NEW.payload->>'new_status')
+          AND is_active = true
+        LIMIT 1;
+
+        IF t_id IS NOT NULL THEN
+            INSERT INTO public.notification_outbox(event_id, event_type, recipient_type, recipient_id, template_id, payload, dedup_key)
+            VALUES (NEW.id, NEW.event_type, r.recipient_type, r.recipient_id, t_id, NEW.payload, 
+                    FORMAT('order:%s|event:%s|role:%s|status:%s', NEW.order_id, NEW.event_type, r.recipient_type, COALESCE(NEW.payload->>'new_status', '')))
+            ON CONFLICT DO NOTHING;
+        END IF;
+    END LOOP;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_events_to_outbox ON public.order_events;
+CREATE TRIGGER trg_events_to_outbox AFTER INSERT ON public.order_events FOR EACH ROW EXECUTE FUNCTION public.trg_events_to_outbox();
+
+-- =====================================================================================
+-- 06. POLÍTICAS RLS
+-- =====================================================================================
+
+ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.collaborators ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.business ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_completion_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.function_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.collaborator_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.testimonials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.collaborator_performance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.collaborator_active_jobs ENABLE ROW LEVEL SECURITY;
+
+-- Helper Functions for Permissions
 CREATE OR REPLACE FUNCTION public.is_owner(uid uuid)
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER
@@ -520,106 +648,142 @@ AS $$
     SELECT EXISTS (
         SELECT 1 FROM public.collaborators
         WHERE id = uid
-          AND lower(role::text) IN ('admin', 'administrador')
-          AND lower(status::text) IN ('activo', 'active')
+          AND LOWER(role) IN ('admin', 'administrador')
+          AND LOWER(status) IN ('activo', 'active')
     );
 $$;
 
--- FUNCIÓN CENTRALIZADA: Control de permisos para ver órdenes
--- UN SOLO PUNTO DE DECISIÓN - Usada por RLS y RPC
-CREATE OR REPLACE FUNCTION public.can_user_view_orders(uid uuid)
-RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
-  SELECT
-    CASE 
-      WHEN public.is_admin(uid) THEN true  -- Admins siempre ven
-      WHEN public.is_owner(uid) THEN true  -- Owner siempre ve
-      ELSE COALESCE(
-        (SELECT puede_ver_todas_las_ordenes 
-         FROM public.collaborators c 
-         WHERE c.id = uid 
-         AND c.status = 'activo'),
-        false
-      )
-    END;
-$$;
+-- Vehicles
+DROP POLICY IF EXISTS public_read_vehicles ON public.vehicles;
+CREATE POLICY public_read_vehicles ON public.vehicles FOR SELECT USING (true);
+DROP POLICY IF EXISTS admin_write_vehicles ON public.vehicles;
+CREATE POLICY admin_write_vehicles ON public.vehicles FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
--- Resolución de destinatarios para notificaciones
-CREATE OR REPLACE FUNCTION public.resolve_notification_targets(
-  p_order_id bigint
-)
-RETURNS TABLE (recipient_type notification_target, recipient_id uuid)
-LANGUAGE sql STABLE
-AS $$
-  -- 1. Contacto (Cliente Anónimo)
-  SELECT 'contact'::public.notification_target, o.client_contact_id
-  FROM public.orders o
-  WHERE o.id = p_order_id AND o.client_contact_id IS NOT NULL
+-- Services
+DROP POLICY IF EXISTS public_read_services ON public.services;
+CREATE POLICY public_read_services ON public.services FOR SELECT USING (true);
+DROP POLICY IF EXISTS admin_write_services ON public.services;
+CREATE POLICY admin_write_services ON public.services FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
-  UNION ALL
+-- Profiles
+DROP POLICY IF EXISTS public_read_profiles ON public.profiles;
+CREATE POLICY public_read_profiles ON public.profiles FOR SELECT USING (true);
+DROP POLICY IF EXISTS users_update_own_profile ON public.profiles;
+CREATE POLICY users_update_own_profile ON public.profiles FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS admin_manage_profiles ON public.profiles;
+CREATE POLICY admin_manage_profiles ON public.profiles FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
-  -- 2. Usuario Asignado (Colaborador)
-  SELECT 'user'::public.notification_target, o.assigned_to
-  FROM public.orders o
-  WHERE o.id = p_order_id AND o.assigned_to IS NOT NULL
+-- Collaborators
+DROP POLICY IF EXISTS collaborator_select_self ON public.collaborators;
+CREATE POLICY collaborator_select_self ON public.collaborators FOR SELECT USING (auth.uid() = id OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS collaborator_update_self ON public.collaborators;
+CREATE POLICY collaborator_update_self ON public.collaborators FOR UPDATE USING (auth.uid() = id OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS admin_insert_collaborators ON public.collaborators;
+CREATE POLICY admin_insert_collaborators ON public.collaborators FOR INSERT WITH CHECK (public.is_admin(auth.uid()) OR public.is_owner(auth.uid()));
+DROP POLICY IF EXISTS admin_delete_collaborators ON public.collaborators;
+CREATE POLICY admin_delete_collaborators ON public.collaborators FOR DELETE USING (public.is_admin(auth.uid()) OR public.is_owner(auth.uid()));
 
-  UNION ALL
+-- Business
+DROP POLICY IF EXISTS owner_select_business ON public.business;
+CREATE POLICY owner_select_business ON public.business FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS owner_write_business ON public.business;
+CREATE POLICY owner_write_business ON public.business FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
-  -- 3. Cliente Autenticado (Usuario App)
-  SELECT 'user'::public.notification_target, o.client_id
-  FROM public.orders o
-  WHERE o.id = p_order_id AND o.client_id IS NOT NULL;
-$$;
+-- Orders
+DROP POLICY IF EXISTS orders_insert_public ON public.orders;
+CREATE POLICY orders_insert_public ON public.orders FOR INSERT WITH CHECK (status = 'pending' AND assigned_to IS NULL AND (client_id IS NOT NULL OR client_contact_id IS NOT NULL));
+DROP POLICY IF EXISTS orders_select_policy ON public.orders;
+CREATE POLICY orders_select_policy ON public.orders FOR SELECT USING (
+    (client_id = auth.uid())
+    OR (assigned_to = auth.uid())
+    OR (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()))
+);
+DROP POLICY IF EXISTS orders_update_collaborator ON public.orders;
+CREATE POLICY orders_update_collaborator ON public.orders FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM public.collaborators c WHERE c.id = auth.uid() AND c.status = 'activo') AND assigned_to = auth.uid()
+);
+DROP POLICY IF EXISTS orders_all_admin ON public.orders;
+CREATE POLICY orders_all_admin ON public.orders FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
--- RPC: Cambiar permiso de vista de órdenes (Admin/Owner only)
-CREATE OR REPLACE FUNCTION public.set_collaborator_can_view_orders(
-  p_collaborator_id uuid,
-  p_can_view boolean
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
-DECLARE
-  v_uid uuid := auth.uid();
-BEGIN
-  -- Validar que el que hace la llamada es Admin u Owner
-  IF v_uid IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'message', 'No autorizado');
-  END IF;
-  
-  IF NOT (public.is_admin(v_uid) OR public.is_owner(v_uid)) THEN
-    RETURN jsonb_build_object('success', false, 'message', 'Solo admins pueden cambiar permisos');
-  END IF;
-  
-  -- Actualizar el permiso
-  UPDATE public.collaborators
-  SET puede_ver_todas_las_ordenes = p_can_view,
-      updated_at = now()
-  WHERE id = p_collaborator_id;
-  
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'message', 'Colaborador no encontrado');
-  END IF;
-  
-  RETURN jsonb_build_object(
-    'success', true,
-    'message', 'Permiso actualizado correctamente',
-    'collaborator_id', p_collaborator_id,
-    'can_view_orders', p_can_view
-  );
-END;
-$$;
+-- Notifications
+DROP POLICY IF EXISTS user_select_own_notifications ON public.notifications;
+CREATE POLICY user_select_own_notifications ON public.notifications FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS admin_select_notifications ON public.notifications;
+CREATE POLICY admin_select_notifications ON public.notifications FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- Push Subscriptions
+DROP POLICY IF EXISTS user_manage_own_push ON public.push_subscriptions;
+CREATE POLICY user_manage_own_push ON public.push_subscriptions FOR ALL USING (user_id = auth.uid());
+DROP POLICY IF EXISTS anon_insert_push ON public.push_subscriptions;
+CREATE POLICY anon_insert_push ON public.push_subscriptions FOR INSERT TO anon, authenticated WITH CHECK (client_contact_id IS NOT NULL AND endpoint LIKE 'https://%');
+DROP POLICY IF EXISTS admin_manage_push ON public.push_subscriptions;
+CREATE POLICY admin_manage_push ON public.push_subscriptions FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- Receipts
+DROP POLICY IF EXISTS client_read_own_receipts ON public.order_completion_receipts;
+CREATE POLICY client_read_own_receipts ON public.order_completion_receipts FOR SELECT USING (client_id = auth.uid());
+DROP POLICY IF EXISTS collaborator_select_assigned_receipts ON public.order_completion_receipts;
+CREATE POLICY collaborator_select_assigned_receipts ON public.order_completion_receipts FOR SELECT USING (EXISTS (SELECT 1 FROM public.orders o WHERE o.id = order_id AND o.assigned_to = auth.uid()));
+DROP POLICY IF EXISTS admin_manage_receipts ON public.order_completion_receipts;
+CREATE POLICY admin_manage_receipts ON public.order_completion_receipts FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- Invoices
+DROP POLICY IF EXISTS admin_select_invoices ON public.invoices;
+CREATE POLICY admin_select_invoices ON public.invoices FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS admin_write_invoices ON public.invoices;
+CREATE POLICY admin_write_invoices ON public.invoices FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS client_read_own_invoices ON public.invoices;
+CREATE POLICY client_read_own_invoices ON public.invoices FOR SELECT USING (client_id = auth.uid());
+
+-- Locations
+DROP POLICY IF EXISTS locations_read_auth ON public.collaborator_locations;
+CREATE POLICY locations_read_auth ON public.collaborator_locations FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS locations_write_own ON public.collaborator_locations;
+CREATE POLICY locations_write_own ON public.collaborator_locations FOR ALL USING (collaborator_id = auth.uid());
+
+-- Templates
+DROP POLICY IF EXISTS admin_read_templates ON public.notification_templates;
+CREATE POLICY admin_read_templates ON public.notification_templates FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS admin_manage_templates ON public.notification_templates;
+CREATE POLICY admin_manage_templates ON public.notification_templates FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- Testimonials
+DROP POLICY IF EXISTS public_read_testimonials ON public.testimonials;
+CREATE POLICY public_read_testimonials ON public.testimonials FOR SELECT USING (is_public = true);
+DROP POLICY IF EXISTS admin_manage_testimonials ON public.testimonials;
+CREATE POLICY admin_manage_testimonials ON public.testimonials FOR ALL USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- Metrics
+DROP POLICY IF EXISTS perf_view_self_admin ON public.collaborator_performance;
+CREATE POLICY perf_view_self_admin ON public.collaborator_performance FOR SELECT USING (collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- Clients
+DROP POLICY IF EXISTS clients_insert_any ON public.clients;
+CREATE POLICY clients_insert_any ON public.clients FOR INSERT TO anon, authenticated WITH CHECK (LENGTH(COALESCE(phone, '')) >= 7 OR LENGTH(COALESCE(email, '')) >= 5);
+DROP POLICY IF EXISTS clients_select_admin ON public.clients;
+CREATE POLICY clients_select_admin ON public.clients FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- Function Logs
+DROP POLICY IF EXISTS logs_read_admin ON public.function_logs;
+CREATE POLICY logs_read_admin ON public.function_logs FOR SELECT USING (public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+
+-- Active Jobs
+DROP POLICY IF EXISTS active_jobs_select ON public.collaborator_active_jobs;
+CREATE POLICY active_jobs_select ON public.collaborator_active_jobs FOR SELECT USING (collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS active_jobs_insert ON public.collaborator_active_jobs;
+CREATE POLICY active_jobs_insert ON public.collaborator_active_jobs FOR INSERT WITH CHECK (collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
+DROP POLICY IF EXISTS active_jobs_delete ON public.collaborator_active_jobs;
+CREATE POLICY active_jobs_delete ON public.collaborator_active_jobs FOR DELETE USING (collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid()));
 
 -- =====================================================================================
--- 11_RPCS.SQL
+-- 07. FUNCIONES DE NEGOCIO (RPCs)
 -- =====================================================================================
--- Funciones de lógica de negocio (Remote Procedure Calls).
 
--- 11.1 Crear orden (Maneja usuarios anónimos y autenticados)
+-- =====================================================================================
+-- 07. FUNCIONES DE NEGOCIO (RPCs)
+-- =====================================================================================
+
+-- RPC: Crear orden con contacto (Maneja usuarios anónimos y autenticados)
 CREATE OR REPLACE FUNCTION public.create_order_with_contact(order_payload jsonb)
 RETURNS public.orders
 LANGUAGE plpgsql SECURITY DEFINER
@@ -636,12 +800,11 @@ BEGIN
     IF v_client_id IS NULL THEN -- Usuario anónimo
         INSERT INTO public.clients(name, phone, email)
         VALUES (
-            nullif(order_payload->>'name',''),
-            nullif(order_payload->>'phone',''),
-            nullif(order_payload->>'email','')
+            NULLIF(order_payload->>'name', ''),
+            NULLIF(order_payload->>'phone', ''),
+            NULLIF(order_payload->>'email', '')
         ) RETURNING id INTO v_contact_id;
 
-        -- Guardar push subscription si existe
         IF order_payload->'push_subscription' IS NOT NULL AND order_payload->'push_subscription'->>'endpoint' IS NOT NULL THEN
             INSERT INTO public.push_subscriptions(client_contact_id, endpoint, keys)
             VALUES (v_contact_id, order_payload->'push_subscription'->>'endpoint', order_payload->'push_subscription'->'keys')
@@ -655,12 +818,12 @@ BEGIN
             "date", "time", status, estimated_price, tracking_data,
             client_contact_id
         ) VALUES (
-            nullif(order_payload->>'name',''),
-            nullif(order_payload->>'phone',''),
-            nullif(order_payload->>'email',''),
-            nullif(order_payload->>'rnc',''),
-            nullif(order_payload->>'empresa',''),
-            nullif(order_payload->>'service_id','')::bigint,
+            NULLIF(order_payload->>'name', ''),
+            NULLIF(order_payload->>'phone', ''),
+            NULLIF(order_payload->>'email', ''),
+            NULLIF(order_payload->>'rnc', ''),
+            NULLIF(order_payload->>'empresa', ''),
+            NULLIF(order_payload->>'service_id', '')::bigint,
             (order_payload->>'vehicle_id')::bigint,
             order_payload->'service_questions',
             order_payload->>'pickup',
@@ -688,12 +851,12 @@ BEGIN
             "date", "time", status, estimated_price, tracking_data,
             client_id
         ) VALUES (
-            nullif(order_payload->>'name',''),
-            nullif(order_payload->>'phone',''),
-            nullif(order_payload->>'email',''),
-            nullif(order_payload->>'rnc',''),
-            nullif(order_payload->>'empresa',''),
-            nullif(order_payload->>'service_id','')::bigint,
+            NULLIF(order_payload->>'name', ''),
+            NULLIF(order_payload->>'phone', ''),
+            NULLIF(order_payload->>'email', ''),
+            NULLIF(order_payload->>'rnc', ''),
+            NULLIF(order_payload->>'empresa', ''),
+            NULLIF(order_payload->>'service_id', '')::bigint,
             (order_payload->>'vehicle_id')::bigint,
             order_payload->'service_questions',
             order_payload->>'pickup',
@@ -711,9 +874,81 @@ BEGIN
     RETURN v_order;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION public.create_order_with_contact(jsonb) TO anon, authenticated;
 
--- 11.2 Actualizar estado de orden (Core Logic)
-DROP FUNCTION IF EXISTS public.update_order_status(bigint, text, uuid, jsonb);
+-- RPC: Aceptar orden con precio opcional
+CREATE OR REPLACE FUNCTION public.accept_order_with_price(
+    p_order_id bigint,
+    p_price numeric DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+    _now timestamptz := now();
+BEGIN
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION 'No autorizado';
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM public.orders o WHERE o.assigned_to = auth.uid() AND o.status IN ('accepted', 'in_progress')) THEN
+        RAISE EXCEPTION 'Ya tienes una orden activa' USING ERRCODE = 'P0001';
+    END IF;
+
+    UPDATE public.orders
+    SET
+        status = 'accepted',
+        accepted_at = COALESCE(accepted_at, _now),
+        accepted_by = COALESCE(accepted_by, auth.uid()),
+        assigned_to = COALESCE(assigned_to, auth.uid()),
+        assigned_at = COALESCE(assigned_at, _now),
+        estimated_price = COALESCE(p_price, estimated_price),
+        tracking_data = COALESCE(tracking_data, '[]'::jsonb) || jsonb_build_array(
+            jsonb_build_object(
+                'status', 'accepted',
+                'date', _now,
+                'description', CASE WHEN p_price IS NOT NULL THEN 'Orden aceptada con tarifa ajustada: ' || p_price ELSE 'Orden aceptada' END
+            )
+        )
+    WHERE id = p_order_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.accept_order_with_price(bigint, numeric) TO authenticated;
+
+-- RPC: Aceptar orden por Short ID
+CREATE OR REPLACE FUNCTION public.accept_order_by_short_id(p_short_id text)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE _now timestamptz := now();
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.collaborators c
+        WHERE c.id = auth.uid() AND LOWER(COALESCE(c.status, 'inactive')) = 'activo'
+    ) THEN
+        RAISE EXCEPTION 'No autorizado: colaborador inactivo' USING ERRCODE = '42501';
+    END IF;
+
+    UPDATE public.orders
+    SET
+        status = 'accepted',
+        accepted_at = COALESCE(accepted_at, _now),
+        accepted_by = COALESCE(accepted_by, auth.uid()),
+        assigned_to = COALESCE(assigned_to, auth.uid()),
+        assigned_at = COALESCE(assigned_at, _now),
+        tracking_data = jsonb_build_array(
+            jsonb_build_object('status', 'accepted', 'date', _now, 'description', 'Orden aceptada')
+        )
+    WHERE short_id = p_short_id
+      AND status = 'pending'
+      AND (assigned_to IS NULL OR assigned_to = auth.uid());
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.accept_order_by_short_id(text) TO authenticated;
+
+-- RPC: Actualizar estado de orden
 CREATE OR REPLACE FUNCTION public.update_order_status(
     p_order_id bigint,
     p_new_status text,
@@ -728,7 +963,6 @@ DECLARE
     v_updated jsonb;
     v_normalized public.order_status;
     v_uid uuid;
-    v_target_collab uuid;
 BEGIN
     v_uid := auth.uid();
     IF v_uid IS NULL THEN
@@ -746,22 +980,13 @@ BEGIN
     UPDATE public.orders o
     SET
         status = v_normalized,
-        assigned_to = CASE 
-            WHEN v_normalized = 'pending' THEN NULL
-            WHEN p_collaborator_id IS NOT NULL AND (public.is_admin(v_uid) OR public.is_owner(v_uid)) THEN p_collaborator_id
-            ELSE COALESCE(o.assigned_to, v_uid)
-        END,
+        assigned_to = CASE WHEN v_normalized = 'pending' THEN NULL ELSE COALESCE(o.assigned_to, v_uid) END,
         assigned_at = CASE WHEN v_normalized = 'pending' THEN NULL WHEN v_normalized = 'accepted' AND o.assigned_at IS NULL THEN now() ELSE assigned_at END,
         completed_by = CASE WHEN v_normalized = 'completed' THEN v_uid ELSE completed_by END,
         completed_at = CASE WHEN v_normalized = 'completed' THEN now() ELSE completed_at END,
         tracking_data = CASE WHEN p_tracking_entry IS NOT NULL THEN o.tracking_data || p_tracking_entry ELSE o.tracking_data END
     WHERE o.id = p_order_id
-      AND (
-        o.assigned_to = v_uid
-        OR o.assigned_to IS NULL
-        OR public.is_admin(v_uid)
-        OR public.is_owner(v_uid)
-      )
+      AND (o.assigned_to = v_uid OR o.assigned_to IS NULL OR public.is_admin(v_uid) OR public.is_owner(v_uid))
       AND o.status NOT IN ('cancelled', 'completed')
     RETURNING to_jsonb(o) INTO v_updated;
 
@@ -772,67 +997,62 @@ BEGIN
     RETURN v_updated;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION public.update_order_status(bigint, text, uuid, jsonb) TO authenticated;
 
--- 11.3 Aceptar orden (Wrapper) - Con bloqueo FOR UPDATE
-CREATE OR REPLACE FUNCTION public.accept_order_with_price(
-    p_order_id bigint,
-    p_price numeric DEFAULT NULL
-)
+-- RPC: Iniciar trabajo sobre una orden
+CREATE OR REPLACE FUNCTION public.start_order_work(p_order_id bigint)
 RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
+LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 DECLARE
-    _now timestamptz := now();
-    v_current_status public.order_status;
+    res jsonb;
 BEGIN
-    IF auth.uid() IS NULL THEN
-      RETURN jsonb_build_object('success',false,'message','No autorizado');
-    END IF;
-    
-    -- Bloqueo de fila: Evita doble aceptación en concurrencia
-    SELECT status INTO v_current_status
-    FROM public.orders
-    WHERE id = p_order_id
-    FOR UPDATE;
-    
-    IF v_current_status IS NULL THEN
-      RETURN jsonb_build_object('success',false,'message','Orden no encontrada');
-    END IF;
-    
-    IF v_current_status <> 'pending' THEN
-      RETURN jsonb_build_object('success',false,'message','Orden no está disponible (estado: ' || v_current_status::text || ')');
-    END IF;
-    
-    -- Verificar si ya tiene orden activa
-    IF EXISTS (SELECT 1 FROM public.orders o WHERE o.assigned_to = auth.uid() AND o.status IN ('accepted', 'in_progress')) THEN
-        RETURN jsonb_build_object('success',false,'message','Ya tienes una orden activa');
-    END IF;
-
-    UPDATE public.orders
-    SET
-        status = 'accepted',
-        accepted_at = COALESCE(accepted_at, _now),
-        accepted_by = COALESCE(accepted_by, auth.uid()),
-        assigned_to = auth.uid(),
-        assigned_at = COALESCE(assigned_at, _now),
-        estimated_price = COALESCE(p_price, estimated_price),
-        tracking_data = COALESCE(tracking_data, '[]'::jsonb) || jsonb_build_array(
-            jsonb_build_object(
-                'status', 'accepted',
-                'date', _now,
-                'description', CASE WHEN p_price IS NOT NULL THEN 'Orden aceptada con tarifa ajustada: ' || p_price ELSE 'Orden aceptada' END
-            )
-        )
-    WHERE id = p_order_id;
-
-    RETURN jsonb_build_object('success',true,'message','Orden aceptada correctamente');
+    res := public.update_order_status(
+        p_order_id,
+        'in_progress',
+        auth.uid(),
+        jsonb_build_object('status', 'in_progress', 'date', now(), 'description', 'Trabajo iniciado')
+    );
+    RETURN res;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION public.start_order_work(bigint) TO authenticated;
 
--- 11.4 Obtener datos del dashboard
-CREATE OR REPLACE FUNCTION public.get_collaborator_dashboard_data(collab_id uuid, period_start date, period_end date)
+-- RPC: Establecer monto de orden (Admin)
+CREATE OR REPLACE FUNCTION public.set_order_amount_admin(
+    order_id bigint,
+    amount numeric,
+    method text
+)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE updated jsonb;
+BEGIN
+    IF auth.uid() IS NULL THEN RAISE EXCEPTION 'No autorizado'; END IF;
+    IF NOT (public.is_admin(auth.uid()) OR public.is_owner(auth.uid())) THEN
+        RAISE EXCEPTION 'Acceso restringido: solo administradores pueden modificar montos.' USING ERRCODE = '42501';
+    END IF;
+    UPDATE public.orders o
+    SET monto_cobrado = amount, metodo_pago = method
+    WHERE o.id = order_id
+    RETURNING to_jsonb(o) INTO updated;
+    IF updated IS NULL THEN
+        RAISE EXCEPTION 'Orden no encontrada' USING ERRCODE = 'P0002';
+    END IF;
+    RETURN updated;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.set_order_amount_admin(bigint, numeric, text) TO authenticated;
+
+-- RPC: Obtener datos del dashboard del colaborador
+CREATE OR REPLACE FUNCTION public.get_collaborator_dashboard_data(
+    collab_id uuid,
+    period_start date,
+    period_end date
+)
 RETURNS TABLE (
     order_id bigint,
     "date" date,
@@ -859,9 +1079,36 @@ AS $$
       AND (period_end IS NULL OR o."date" <= period_end)
     ORDER BY o."date" DESC;
 $$;
+GRANT EXECUTE ON FUNCTION public.get_collaborator_dashboard_data(uuid, date, date) TO authenticated;
 
--- 11.5 Calificar orden
-CREATE OR REPLACE FUNCTION public.submit_rating_v2(order_id bigint, service_stars int, collab_stars int, comment text)
+-- RPC: Calificar orden (v1)
+CREATE OR REPLACE FUNCTION public.submit_rating(order_id bigint, stars int, comment text)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE exists_order boolean;
+BEGIN
+    SELECT EXISTS(SELECT 1 FROM public.orders WHERE id = order_id) INTO exists_order;
+    IF NOT exists_order THEN RETURN false; END IF;
+
+    UPDATE public.orders
+    SET rating = jsonb_build_object('stars', GREATEST(1, LEAST(5, stars)), 'comment', NULLIF(comment, '')),
+        customer_comment = NULLIF(comment, '')
+    WHERE id = order_id
+      AND (status = 'completed' OR completed_at IS NOT NULL);
+    RETURN true;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.submit_rating(bigint, int, text) TO anon, authenticated;
+
+-- RPC: Calificar orden (v2)
+CREATE OR REPLACE FUNCTION public.submit_rating_v2(
+    order_id bigint,
+    service_stars int,
+    collab_stars int,
+    comment text
+)
 RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public
@@ -877,44 +1124,71 @@ BEGIN
 
     UPDATE public.orders
     SET rating = jsonb_build_object(
-            'service', greatest(1, least(5, service_stars)),
-            'collab', greatest(1, least(5, collab_stars)),
-            'stars', greatest(1, least(5, service_stars)),
-            'comment', nullif(comment, '')
+            'service', GREATEST(1, LEAST(5, service_stars)),
+            'collab', GREATEST(1, LEAST(5, collab_stars)),
+            'stars', GREATEST(1, LEAST(5, service_stars)),
+            'comment', NULLIF(comment, '')
         ),
-        customer_comment = nullif(comment, '')
+        customer_comment = NULLIF(comment, '')
     WHERE id = order_id
       AND (status = 'completed' OR completed_at IS NOT NULL);
     RETURN true;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION public.submit_rating_v2(bigint, int, int, text) TO anon, authenticated;
 
--- 11.6 Obtener testimonios públicos
+-- RPC: Resolver orden para rating (por ID o Short ID)
+CREATE OR REPLACE FUNCTION public.resolve_order_for_rating(p_code text)
+RETURNS TABLE (id bigint, is_completed boolean)
+SECURITY DEFINER LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+DECLARE v_clean text;
+BEGIN
+    -- Intento por ID numérico
+    BEGIN
+        RETURN QUERY SELECT o.id, (o.status = 'completed' OR o.completed_at IS NOT NULL)
+        FROM public.orders o WHERE o.id = p_code::bigint LIMIT 1;
+        IF FOUND THEN RETURN; END IF;
+    EXCEPTION WHEN OTHERS THEN NULL; END;
+
+    -- Intento por Short ID
+    v_clean := UPPER(REGEXP_REPLACE(TRIM(p_code), '^ORD-', '', 'i'));
+    RETURN QUERY SELECT o.id, (o.status = 'completed' OR o.completed_at IS NOT NULL)
+    FROM public.orders o
+    WHERE UPPER(TRIM(o.short_id)) = v_clean OR UPPER(TRIM(o.short_id)) = 'ORD-' || v_clean LIMIT 1;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.resolve_order_for_rating(text) TO anon, authenticated;
+
+-- RPC: Obtener testimonios públicos
 CREATE OR REPLACE FUNCTION public.get_public_testimonials(limit_count int DEFAULT 10)
 RETURNS TABLE (
-  order_id bigint,
-  stars int,
-  comment text,
-  client_name text,
-  created_at timestamptz
+    order_id bigint,
+    stars int,
+    comment text,
+    client_name text,
+    created_at timestamptz
 )
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public
 AS $$
-  SELECT
-    o.id AS order_id,
-    COALESCE((o.rating->>'service')::int, (o.rating->>'stars')::int, NULL) AS stars,
-    NULLIF(o.customer_comment, '') AS comment,
-    NULLIF(o.name, '') AS client_name,
-    COALESCE(o.completed_at, o.created_at) AS created_at
-  FROM public.orders o
-  WHERE o.customer_comment IS NOT NULL
-    AND TRIM(o.customer_comment) <> ''
-    AND COALESCE((o.rating->>'stars')::int, (o.rating->>'service')::int, 0) >= 4
-  ORDER BY o.completed_at DESC NULLS LAST, o.created_at DESC
-  LIMIT GREATEST(1, limit_count);
+    SELECT
+        o.id AS order_id,
+        COALESCE((o.rating->>'service')::int, (o.rating->>'stars')::int, NULL) AS stars,
+        NULLIF(o.customer_comment, '') AS comment,
+        NULLIF(o.name, '') AS client_name,
+        COALESCE(o.completed_at, o.created_at) AS created_at
+    FROM public.orders o
+    WHERE o.customer_comment IS NOT NULL
+      AND TRIM(o.customer_comment) <> ''
+      AND COALESCE((o.rating->>'stars')::int, (o.rating->>'service')::int, 0) >= 4
+    ORDER BY o.completed_at DESC NULLS LAST, o.created_at DESC
+    LIMIT GREATEST(1, limit_count);
 $$;
+GRANT EXECUTE ON FUNCTION public.get_public_testimonials(int) TO anon, authenticated;
 
--- 11.7 Obtener VAPID Key
+-- RPC: Obtener VAPID Key
 CREATE OR REPLACE FUNCTION public.get_vapid_key()
 RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER
@@ -930,7 +1204,7 @@ BEGIN
 END;
 $$;
 
--- 11.8 Validar colaborador activo
+-- RPC: Validar colaborador activo
 CREATE OR REPLACE FUNCTION public.validate_active_collaborator(p_user_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER
@@ -947,165 +1221,130 @@ BEGIN
 END;
 $$;
 
--- 11.9 Resolver orden para rating (por ID o Short ID)
-CREATE OR REPLACE FUNCTION public.resolve_order_for_rating(p_code text)
-RETURNS TABLE (id bigint, is_completed boolean)
-SECURITY DEFINER LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $$
-DECLARE v_clean text;
-BEGIN
-    -- Intento por ID numérico
-    BEGIN
-        RETURN QUERY SELECT o.id, (o.status = 'completed' OR o.completed_at IS NOT NULL)
-        FROM public.orders o WHERE o.id = p_code::bigint LIMIT 1;
-        IF FOUND THEN RETURN; END IF;
-    EXCEPTION WHEN OTHERS THEN NULL; END;
-
-    -- Intento por Short ID
-    v_clean := upper(regexp_replace(trim(p_code), '^ORD-', '', 'i'));
-    RETURN QUERY SELECT o.id, (o.status = 'completed' OR o.completed_at IS NOT NULL)
-    FROM public.orders o
-    WHERE upper(trim(o.short_id)) = v_clean OR upper(trim(o.short_id)) = 'ORD-' || v_clean LIMIT 1;
-END;
-$$;
-
--- 11.10 Set Order Amount (Admin)
-CREATE OR REPLACE FUNCTION public.set_order_amount_admin(order_id bigint, amount numeric, method text)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-DECLARE updated jsonb;
-BEGIN
-    IF auth.uid() IS NULL THEN RAISE EXCEPTION 'No autorizado'; END IF;
-    IF NOT (public.is_admin(auth.uid()) OR public.is_owner(auth.uid())) THEN
-        RAISE EXCEPTION 'Acceso restringido' USING ERRCODE = '42501';
-    END IF;
-    UPDATE public.orders o SET monto_cobrado = amount, metodo_pago = method WHERE o.id = order_id
-    RETURNING to_jsonb(o) INTO updated;
-    IF updated IS NULL THEN RAISE EXCEPTION 'Orden no encontrada' USING ERRCODE = 'P0002'; END IF;
-    RETURN updated;
-END;
-$$;
-
--- 11.11 Start Order Work (Wrapper) - Aceptar luego iniciar
--- 11.11 Start Order Work (Wrapper) - Aceptar orden, luego iniciar trabajo
-CREATE OR REPLACE FUNCTION public.start_order_work(p_order_id bigint)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
-DECLARE
-  v_accept jsonb;
-BEGIN
-  -- Paso 1: Aceptar orden (bloquea fila, valida estado, registra trabajo activo)
-  v_accept := public.accept_order_with_price(p_order_id, NULL);
-  
-  IF (v_accept->>'success')::boolean IS NOT TRUE THEN
-    RETURN v_accept;
-  END IF;
-
-  -- Paso 2: Pasar a in_progress (solo si aceptación fue exitosa)
-  RETURN public.update_order_status(
-    p_order_id,
-    'in_progress',
-    auth.uid(),
-    jsonb_build_object(
-      'status','in_progress',
-      'date', now(),
-      'description','Trabajo iniciado'
-    )
-  );
-END;
-$$;
-
--- 11.12 Accept Order by Short ID (Wrapper) - Returns jsonb
-CREATE OR REPLACE FUNCTION public.accept_order_by_short_id(p_short_id text)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
-DECLARE
-  v_id bigint;
-BEGIN
-  SELECT id INTO v_id FROM public.orders WHERE short_id = p_short_id;
-
-  IF v_id IS NULL THEN
-    RETURN jsonb_build_object('success',false,'message','Orden no encontrada');
-  END IF;
-
-  RETURN public.accept_order_with_price(v_id, NULL);
-END;
-$$;
-
--- 11.14 Obtener órdenes visibles para colaborador
-CREATE OR REPLACE FUNCTION public.get_visible_orders_for_collaborator()
-RETURNS SETOF public.orders
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
-  SELECT o.*
-  FROM public.orders o
-  JOIN public.collaborators c ON c.id = auth.uid()
-  WHERE
-    c.status = 'activo' AND
-    o.status IN ('pending', 'accepted', 'in_progress') AND
-    (
-      -- Lógica espejo a RLS para consistencia
-      (c.puede_ver_todas_las_ordenes = true AND (o.assigned_to IS NULL OR o.assigned_to = auth.uid()))
-      OR
-      (c.puede_ver_todas_las_ordenes = false AND o.assigned_to = auth.uid())
-    )
-  ORDER BY o.created_at DESC;
-$$;
-
--- 11.13 Upsert Metrics (Helper)
+-- RPC: Upsert Metrics (Helper)
 CREATE OR REPLACE FUNCTION public.upsert_collaborator_metric_fixed(
-  p_collaborator_id uuid,
-  p_metric_date date,
-  p_accept_inc int,
-  p_in_progress_inc int,
-  p_complete_inc int,
-  p_cancel_inc int,
-  p_amount numeric,
-  p_rating numeric,
-  p_completion_minutes numeric
-) RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+    p_collaborator_id uuid,
+    p_metric_date date,
+    p_accept_inc int,
+    p_in_progress_inc int,
+    p_complete_inc int,
+    p_cancel_inc int,
+    p_amount numeric,
+    p_rating numeric,
+    p_completion_minutes numeric
+)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
 BEGIN
-  INSERT INTO public.collaborator_performance(
-    collaborator_id, metric_date, accepted_count, in_progress_count,
-    completed_count, canceled_count, total_amount, avg_rating, avg_completion_minutes, updated_at,
-    sum_completion_minutes, sum_rating, count_ratings
-  ) VALUES (
-    p_collaborator_id, p_metric_date,
-    greatest(p_accept_inc,0), greatest(p_in_progress_inc,0), greatest(p_complete_inc,0), greatest(p_cancel_inc,0),
-    coalesce(p_amount,0), null, null, now(),
-    coalesce(p_completion_minutes, 0), coalesce(p_rating, 0), CASE WHEN p_rating IS NOT NULL THEN 1 ELSE 0 END
-  )
-  ON CONFLICT (collaborator_id, metric_date) DO UPDATE SET
-    accepted_count = public.collaborator_performance.accepted_count + greatest(p_accept_inc,0),
-    in_progress_count = public.collaborator_performance.in_progress_count + greatest(p_in_progress_inc,0),
-    completed_count = public.collaborator_performance.completed_count + greatest(p_complete_inc,0),
-    canceled_count = public.collaborator_performance.canceled_count + greatest(p_cancel_inc,0),
-    total_amount = public.collaborator_performance.total_amount + coalesce(p_amount,0),
-    sum_completion_minutes = public.collaborator_performance.sum_completion_minutes + coalesce(p_completion_minutes, 0),
-    sum_rating = public.collaborator_performance.sum_rating + coalesce(p_rating, 0),
-    count_ratings = public.collaborator_performance.count_ratings + (CASE WHEN p_rating IS NOT NULL THEN 1 ELSE 0 END),
-    avg_rating = CASE WHEN (public.collaborator_performance.count_ratings + (CASE WHEN p_rating IS NOT NULL THEN 1 ELSE 0 END)) > 0 
-                 THEN (public.collaborator_performance.sum_rating + coalesce(p_rating, 0)) / (public.collaborator_performance.count_ratings + (CASE WHEN p_rating IS NOT NULL THEN 1 ELSE 0 END)) ELSE NULL END,
-    avg_completion_minutes = CASE WHEN (public.collaborator_performance.completed_count + greatest(p_complete_inc,0)) > 0
-                             THEN (public.collaborator_performance.sum_completion_minutes + coalesce(p_completion_minutes, 0)) / (public.collaborator_performance.completed_count + greatest(p_complete_inc,0)) ELSE NULL END,
-    updated_at = now();
-END;$$;
+    INSERT INTO public.collaborator_performance(
+        collaborator_id, metric_date, accepted_count, in_progress_count,
+        completed_count, canceled_count, total_amount, avg_rating, avg_completion_minutes, updated_at,
+        sum_completion_minutes, sum_rating, count_ratings
+    ) VALUES (
+        p_collaborator_id, p_metric_date,
+        GREATEST(p_accept_inc, 0), GREATEST(p_in_progress_inc, 0), GREATEST(p_complete_inc, 0), GREATEST(p_cancel_inc, 0),
+        COALESCE(p_amount, 0), NULL, NULL, now(),
+        COALESCE(p_completion_minutes, 0), COALESCE(p_rating, 0), CASE WHEN p_rating IS NOT NULL THEN 1 ELSE 0 END
+    )
+    ON CONFLICT (collaborator_id, metric_date) DO UPDATE SET
+        accepted_count = public.collaborator_performance.accepted_count + GREATEST(p_accept_inc, 0),
+        in_progress_count = public.collaborator_performance.in_progress_count + GREATEST(p_in_progress_inc, 0),
+        completed_count = public.collaborator_performance.completed_count + GREATEST(p_complete_inc, 0),
+        canceled_count = public.collaborator_performance.canceled_count + GREATEST(p_cancel_inc, 0),
+        total_amount = public.collaborator_performance.total_amount + COALESCE(p_amount, 0),
+        sum_completion_minutes = public.collaborator_performance.sum_completion_minutes + COALESCE(p_completion_minutes, 0),
+        sum_rating = public.collaborator_performance.sum_rating + COALESCE(p_rating, 0),
+        count_ratings = public.collaborator_performance.count_ratings + (CASE WHEN p_rating IS NOT NULL THEN 1 ELSE 0 END),
+        avg_rating = CASE WHEN (public.collaborator_performance.count_ratings + (CASE WHEN p_rating IS NOT NULL THEN 1 ELSE 0 END)) > 0 
+                     THEN (public.collaborator_performance.sum_rating + COALESCE(p_rating, 0)) / (public.collaborator_performance.count_ratings + (CASE WHEN p_rating IS NOT NULL THEN 1 ELSE 0 END)) ELSE NULL END,
+        avg_completion_minutes = CASE WHEN (public.collaborator_performance.completed_count + GREATEST(p_complete_inc, 0)) > 0
+                                 THEN (public.collaborator_performance.sum_completion_minutes + COALESCE(p_completion_minutes, 0)) / (public.collaborator_performance.completed_count + GREATEST(p_complete_inc, 0)) ELSE NULL END,
+        updated_at = now();
+END;
+$$;
 
 -- =====================================================================================
--- 12_TRIGGERS.SQL
+-- 08. VISTA: PERFORMANCE
 -- =====================================================================================
--- Lógica reactiva de la base de datos.
 
--- 1. Updated At (Solo tablas críticas)
+CREATE OR REPLACE VIEW public.collaborator_performance_view AS
+SELECT
+    cp.collaborator_id,
+    p.full_name AS collaborator_name,
+    DATE_TRUNC('day', cp.metric_date)::date AS metric_date,
+    cp.accepted_count,
+    cp.in_progress_count,
+    cp.completed_count,
+    cp.canceled_count,
+    cp.total_amount,
+    CASE WHEN cp.count_ratings > 0 
+         THEN cp.sum_rating::numeric / cp.count_ratings 
+         ELSE NULL 
+    END AS avg_rating,
+    CASE WHEN cp.completed_count > 0 
+         THEN cp.sum_completion_minutes::numeric / cp.completed_count 
+         ELSE NULL 
+    END AS avg_completion_minutes
+FROM public.collaborator_performance cp
+LEFT JOIN public.profiles p ON p.id = cp.collaborator_id;
+
+-- =====================================================================================
+-- 09. DATOS INICIALES (SEEDS)
+-- =====================================================================================
+
+-- Business
+INSERT INTO public.business (id, business_name, address, phone, email)
+VALUES (1, 'Logística López Ortiz', '', '', '')
+ON CONFLICT (id) DO NOTHING;
+
+-- Vehículos
+INSERT INTO public.vehicles (name, description, image_url, is_active) VALUES
+('Camión Pequeño', '14 pies', 'https://i.postimg.cc/DynCkfnV/camionpequeno.jpg', true),
+('Furgoneta', 'Paquetería y cargas ligeras', 'https://i.postimg.cc/RV4P5C9f/furgoneta.jpg', true),
+('Grúa Vehicular', 'Remolque de autos y jeepetas', 'https://i.postimg.cc/hvgBTFmy/grua-vehiculos.jpg', true),
+('Camión Grande', '22 a 28 pies', 'https://i.postimg.cc/44z8SHCc/camiongrande.jpg', true),
+('Grúa de Carga', 'Izado y movimiento de carga', 'https://i.postimg.cc/0yHZwpSf/grua.png', true),
+('Motor', 'Entregas rápidas', 'https://i.postimg.cc/JMNgTvmd/motor.jpg', true),
+('Camión Abierto', 'Materiales y mineros', 'https://i.postimg.cc/Kvx9ScFT/camionminero.jpg', true)
+ON CONFLICT (name) DO NOTHING;
+
+-- Servicios
+INSERT INTO public.services (name, description, image_url, is_active, display_order) VALUES
+('Transporte Comercial', 'Mercancías comerciales.', 'https://i.postimg.cc/sXCdCFTD/transporte-comercial.png', true, 1),
+('Paquetería', 'Envíos rápidos.', 'https://i.postimg.cc/zBYZYmx8/paqueteria.png', true, 2),
+('Carga Pesada', 'Especialistas carga pesada.', 'https://i.postimg.cc/B65b1fbv/pesado.jpg', true, 3),
+('Flete', 'Flete nacional.', 'https://i.postimg.cc/15vQnj3w/flete.png', true, 4),
+('Mudanza', 'Residencial y comercial.', 'https://i.postimg.cc/HszyJd5m/mudanza.jpg', true, 5),
+('Grúa Vehículo', 'Remolque.', 'https://i.postimg.cc/hvgBTFmy/grua-vehiculos.jpg', true, 6),
+('Botes Mineros', 'Alquiler/transporte.', 'https://i.postimg.cc/gzL29mkt/botes-minenos.png', true, 7),
+('Grúa de Carga', 'Movimiento de carga.', 'https://i.postimg.cc/sDjz2rsx/grua-carga.png', true, 8)
+ON CONFLICT (name) DO NOTHING;
+
+-- Testimonios
+INSERT INTO public.testimonials (client_name, comment, stars, display_order, created_at)
+SELECT 'María González', 'Excelente servicio, llegaron súper rápido y cuidaron mis muebles.', 5, 1, now()
+WHERE NOT EXISTS (SELECT 1 FROM public.testimonials);
+
+INSERT INTO public.testimonials (client_name, comment, stars, display_order, created_at)
+SELECT 'Juan Pérez', 'Muy profesionales. El seguimiento en tiempo real es una maravilla.', 5, 2, now() - INTERVAL '1 day'
+WHERE NOT EXISTS (SELECT 1 FROM public.testimonials WHERE client_name = 'Juan Pérez');
+
+-- Plantillas de notificación
+INSERT INTO public.notification_templates (event_type, role, status, locale, title, body, is_active)
+VALUES
+    ('order_created', 'admin', 'pending', 'es', 'Nueva orden creada', 'Se creó la orden #{{id}}. Requiere asignación.', true),
+    ('order_created', 'collaborator', 'pending', 'es', 'Nueva orden disponible', 'Hay una nueva orden #{{id}} pendiente de asignación.', true),
+    ('status_changed', 'client', 'accepted', 'es', 'Actualización de tu orden', 'Tu orden #{{id}} ha sido aceptada', true),
+    ('status_changed', 'client', 'in_progress', 'es', 'Actualización de tu orden', 'Tu orden #{{id}} está en curso', true),
+    ('status_changed', 'client', 'completed', 'es', 'Actualización de tu orden', 'Tu orden #{{id}} ha sido completada', true),
+    ('status_changed', 'client', 'cancelled', 'es', 'Actualización de tu orden', 'Tu orden #{{id}} ha sido cancelada', true),
+    ('status_changed', 'collaborator', 'accepted', 'es', 'Actualización de tu trabajo', 'Orden #{{id}} aceptada', true),
+    ('status_changed', 'collaborator', 'in_progress', 'es', 'Actualización de tu trabajo', 'Orden #{{id}} en curso', true),
+    ('status_changed', 'collaborator', 'completed', 'es', 'Actualización de tu trabajo', 'Orden #{{id}} completada', true),
+    ('status_changed', 'collaborator', 'cancelled', 'es', 'Actualización de tu trabajo', 'Orden #{{id}} cancelada', true)
+ON CONFLICT (event_type, role, COALESCE(status, ''), locale) DO NOTHING;
 DROP TRIGGER IF EXISTS trg_profiles_set_updated ON public.profiles;
 -- Removido: trigger de profiles (ruido de escritura innecesario)
 
@@ -1620,3 +1859,20 @@ ON public.notification_outbox(status, next_attempt_at);
 
 CREATE INDEX IF NOT EXISTS idx_email_outbox_status
 ON public.email_outbox(status);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

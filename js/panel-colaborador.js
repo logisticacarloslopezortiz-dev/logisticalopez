@@ -211,6 +211,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Utilidades ---
 
+  // Geocoding inverso: convertir coordenadas a direcciones
+  const addressCache = new Map();
+  
+  async function getAddressFromCoords(lat, lng) {
+    if (!lat || !lng) return null;
+    const key = `${lat},${lng}`;
+    if (addressCache.has(key)) return addressCache.get(key);
+    
+    try {
+      // Usar Nominatim (OpenStreetMap) - libre y sin API key
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lng=${lng}&zoom=18&addressdetails=1`,
+        { headers: { 'Accept-Language': 'es' } }
+      );
+      if (!response.ok) return null;
+      const data = await response.json();
+      const address = data.address?.road || data.address?.village || data.address?.city || data.display_name || null;
+      if (address) {
+        addressCache.set(key, address);
+        return address;
+      }
+    } catch (e) {
+      console.warn('Error geocoding:', e);
+    }
+    return null;
+  }
+
+  // Obtener dirección de texto (si existe) o convertir desde coordenadas
+  async function getDisplayAddress(textAddress, coordsObj) {
+    // Si ya hay dirección de texto y no es solo coordenadas, usarla
+    if (textAddress && textAddress.trim() && !/^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(textAddress.trim())) {
+      return textAddress;
+    }
+    
+    // Si hay coordenadas, intentar convertir
+    if (coordsObj && typeof coordsObj.lat === 'number' && typeof coordsObj.lng === 'number') {
+      const address = await getAddressFromCoords(coordsObj.lat, coordsObj.lng);
+      if (address) return address;
+      // Fallback a mostrar coordenadas de forma legible
+      return `${coordsObj.lat.toFixed(4)}, ${coordsObj.lng.toFixed(4)}`;
+    }
+    
+    return textAddress || 'Sin dirección';
+  }
+
   // --- Notificaciones Push (Automatización) ---
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -409,8 +454,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Mapas y Direcciones ---
 
   function openDirections(order){
-    const oc = order.origin_coords || order.pickup_coords;
-    const dc = order.destination_coords || order.delivery_coords;
+    const oc = order.origin_coords;
+    const dc = order.destination_coords;
     
     // Prioridad a coordenadas
     if (oc && dc && typeof oc.lat === 'number' && typeof oc.lng === 'number' && typeof dc.lat === 'number' && typeof dc.lng === 'number') {
@@ -455,8 +500,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (activePickupMarker) { try { activeMap.removeLayer(activePickupMarker); } catch(_){} activePickupMarker = null; }
       if (activeDeliveryMarker) { try { activeMap.removeLayer(activeDeliveryMarker); } catch(_){} activeDeliveryMarker = null; }
       
-      const oc = order.origin_coords || order.pickup_coords;
-      const dc = order.destination_coords || order.delivery_coords;
+      const oc = order.origin_coords;
+      const dc = order.destination_coords;
       
       const bounds = [];
 
@@ -891,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // RLS filtra automáticamente basado en:
       // - puede_ver_todas_las_ordenes: true → ve pending + assigned
       // - puede_ver_todas_las_ordenes: false → SOLO assigned
-      const { data, error } = await supabaseConfig.client
+      const base = supabaseConfig.client
         .from('orders')
         .select(`
           id,
@@ -900,18 +945,24 @@ document.addEventListener('DOMContentLoaded', () => {
           assigned_to,
           pickup,
           delivery,
-          pickup_coords,
-          delivery_coords,
+          origin_coords,
+          destination_coords,
           name,
           phone,
-          client_email,
           service:services(name, description),
           vehicle:vehicles(name)
         `)
-        // RLS ya filtra por estado y permisos de puede_ver_todas_las_ordenes
-        .neq('status', 'cancelled')
-        .neq('status', 'completed') 
-        .order('created_at', { ascending: false });
+        .in('status', ['pending','accepted','in_progress']);
+      
+      let query = base;
+      const vinfo = await supabaseConfig.validateActiveCollaborator?.(uid);
+      const canViewAll = !!(vinfo && vinfo.collaborator && (vinfo.collaborator.can_take_orders || vinfo.collaborator.puede_ver_todas_las_ordenes));
+      if (canViewAll) {
+        query = query.or(`assigned_to.eq.${uid},status.eq.pending`);
+      } else {
+        query = query.eq('assigned_to', uid);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
           console.error('Error fetching visible orders:', error);
@@ -920,8 +971,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const rawOrders = data || [];
       
-      // Filtro adicional por si acaso (pero RLS es la autoridad)
-      orders = rawOrders.filter(o => !isFinalOrder(o));
+      // Normalizar visual: tratar órdenes asignadas al colaborador en estado "accepted" como "pendiente" visual
+      // y priorizarlas al inicio.
+      const me = uid;
+      const normalized = rawOrders
+        .filter(o => !isFinalOrder(o))
+        .map(o => {
+          const db = String(o.status || '').toLowerCase();
+          const isMine = String(o.assigned_to || '') === String(me);
+          const visualStatus = (db === 'accepted' && isMine) ? 'pending' : db;
+          return { ...o, __visual_status: visualStatus };
+        });
+      
+      const weight = (o) => {
+        const s = String(o.__visual_status || '').toLowerCase();
+        const isMine = String(o.assigned_to || '') === String(me);
+        if (isMine && (s === 'pending' || s === 'accepted')) return 0; // mis asignadas primero (como pendientes)
+        if (s === 'pending') return 1;
+        if (s === 'in_progress' || s.includes('camino') || s === 'cargando') return 2;
+        return 3;
+      };
+      orders = normalized.sort((a,b) => {
+        const wa = weight(a), wb = weight(b);
+        if (wa !== wb) return wa - wb;
+        const ta = new Date(a.created_at || 0).getTime();
+        const tb = new Date(b.created_at || 0).getTime();
+        return tb - ta;
+      });
       
 
       renderOrdersHTML();
@@ -982,11 +1058,13 @@ function renderOrdersHTML() {
       return;
     }
 
-    function toSpanishStatus(s) {
+    function toSpanishStatus(s, o) {
       const x = String(s || '').trim().toLowerCase();
+      const isMine = o && String(o.assigned_to || '') === String(__currentUserId || '');
       if (!x) return 'Pendiente';
       if (x === 'pending' || x === 'pendiente') return 'Pendiente';
-      if (x === 'accepted' || x === 'aceptada') return 'Aceptada';
+      // Si está aceptada por admin pero asignada a mí, mostrar como Pendiente (para que yo la acepte)
+      if (x === 'accepted' || x === 'aceptada') return isMine ? 'Pendiente' : 'Asignada';
       if (x === 'in_progress' || x === 'en curso') return 'En curso';
       if (x === 'en_camino_recoger') return 'En camino a recoger';
       if (x === 'cargando') return 'Cargando';
@@ -1000,14 +1078,14 @@ function renderOrdersHTML() {
       const idDisplay = o.id; // o.short_id si prefieres
       const service = escapeHtml(o?.service?.name || 'Servicio General');
       const dbStatus = String(o.status || '').toLowerCase();
-      const status = toSpanishStatus(dbStatus);
+      const status = toSpanishStatus(dbStatus, o);
       const s = status.toLowerCase();
       
       let badge = 'bg-gray-100 text-gray-700';
       if (s === 'pending') {
         if (o.assigned_to === __currentUserId) {
             badge = 'bg-purple-100 text-purple-800 border border-purple-200'; // ✨ Diferenciador visual
-            status = 'Asignada a ti';
+            // Mostrar como Pendiente (para que el colaborador la acepte)
         } else {
             badge = 'bg-yellow-100 text-yellow-800 border border-yellow-200';
         }
@@ -1019,13 +1097,28 @@ function renderOrdersHTML() {
 
       // Boton Aceptar solo si está pendiente y no tengo orden activa (o lógica de negocio)
       // Aquí permitimos aceptar si está pendiente.
-      const canAccept = dbStatus === 'pending' && (!o.assigned_to || o.assigned_to === __currentUserId);
+      const canAccept = (dbStatus === 'pending' && (!o.assigned_to || o.assigned_to === __currentUserId))
+        || (dbStatus === 'accepted' && o.assigned_to === __currentUserId);
+      
+      const extraTag = (s === 'pending' && o.assigned_to === __currentUserId)
+        ? `<span class="ml-2 px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[10px]">Asignada a ti</span>`
+        : '';
+      
+      // Obtener direcciones (pueden ser de texto o coordenadas)
+      const pickupDisplay = o.pickup && !/^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(o.pickup) 
+        ? o.pickup 
+        : (o.origin_coords ? `${o.origin_coords.lat?.toFixed(4)}, ${o.origin_coords.lng?.toFixed(4)}` : o.pickup || 'Sin origen');
+      
+      const deliveryDisplay = o.delivery && !/^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(o.delivery)
+        ? o.delivery
+        : (o.destination_coords ? `${o.destination_coords.lat?.toFixed(4)}, ${o.destination_coords.lng?.toFixed(4)}` : o.delivery || 'Sin destino');
       
       return `
         <div class="group bg-white rounded-2xl shadow hover:shadow-lg border border-gray-200 overflow-hidden transition-shadow">
           <div class="flex items-center justify-between px-4 py-3 border-b">
             <span class="inline-flex items-center justify-center w-auto min-w-[36px] px-2 h-9 rounded-xl bg-blue-600 text-white font-bold text-sm">#${idDisplay}</span>
             <span class="px-2 py-1 rounded ${badge} text-xs font-medium uppercase tracking-wide">${escapeHtml(status)}</span>
+            ${extraTag}
           </div>
           <div class="p-4 space-y-3">
             <div class="flex items-start gap-2">
@@ -1036,14 +1129,14 @@ function renderOrdersHTML() {
                <i data-lucide="map-pin" class="w-4 h-4 text-gray-400 mt-0.5"></i>
                <div class="text-xs text-gray-600">
                  <div class="font-medium text-gray-900">Origen:</div>
-                 ${escapeHtml(o.pickup || 'Sin origen')}
+                 ${escapeHtml(pickupDisplay)}
                </div>
             </div>
             <div class="flex items-start gap-2">
                <i data-lucide="flag" class="w-4 h-4 text-gray-400 mt-0.5"></i>
                <div class="text-xs text-gray-600">
                  <div class="font-medium text-gray-900">Destino:</div>
-                 ${escapeHtml(o.delivery || 'Sin destino')}
+                 ${escapeHtml(deliveryDisplay)}
                </div>
             </div>
 

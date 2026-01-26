@@ -1486,6 +1486,24 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
 
+        // 🧠 REFUERZO EXTRA (ANTI-COORDENADAS): Evitar que label sea coordenadas
+        function sanitizeLabel(label) {
+          if (!label) return null;
+          // Detectar si el label es solo coordenadas (ej: "18.43284, -70.13983")
+          if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(String(label).trim())) {
+            return 'Ubicación seleccionada en el mapa';
+          }
+          return label;
+        }
+
+        // Sanitizar labels de MapState antes de usar
+        if (MapState.origin) {
+          MapState.origin.label = sanitizeLabel(MapState.origin.label);
+        }
+        if (MapState.destination) {
+          MapState.destination.label = sanitizeLabel(MapState.destination.label);
+        }
+
         // Construir el objeto de la orden para Supabase
         const selectedVehicleCard = document.querySelector('.vehicle-item.selected');
         const originCoords = getSafeCoords(MapState.origin);
@@ -1505,9 +1523,9 @@ document.addEventListener('DOMContentLoaded', function() {
           service_id: selectedService ? parseInt(selectedService.id, 10) : null,
           vehicle_id: selectedVehicleCard ? parseInt(selectedVehicleCard.dataset.vehicleId, 10) : null,
           service_questions: JSON.parse(JSON.stringify(serviceQuestions)),
-          // Detalles de la ruta (Paso 4)
-          pickup: (document.getElementById('pickupAddress') || { value: '' }).value,
-          delivery: (document.getElementById('deliveryAddress') || { value: '' }).value,
+          // Detalles de la ruta (Paso 4) - 🔁 USAR MAPSTATE COMO FUENTE DE VERDAD
+          pickup: MapState.origin?.label ?? null,
+          delivery: MapState.destination?.label ?? null,
           origin_coords: originCoords ? { lat: originCoords.lat, lng: originCoords.lng } : null,
           destination_coords: destinationCoords ? { lat: destinationCoords.lat, lng: destinationCoords.lng } : null,
           // Fecha y Hora (Paso 5)

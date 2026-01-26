@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
     const body = await req.json();
-    const { user_id, email, password, name, matricula, phone } = body || {};
+    const { user_id, email, password, name, matricula, phone, can_take_orders, puede_ver_todas_las_ordenes } = body || {};
     const authHeader = req.headers.get('Authorization') || '';
     const jwt = authHeader.replace('Bearer ', '').trim();
 
@@ -71,6 +71,8 @@ Deno.serve(async (req: Request) => {
     if (name !== undefined) updateCollab.name = name;
     if (phone !== undefined) updateCollab.phone = phone;
     if (matricula !== undefined) updateCollab.matricula = matricula;
+    if (can_take_orders !== undefined) updateCollab.can_take_orders = !!can_take_orders;
+    if (puede_ver_todas_las_ordenes !== undefined) updateCollab.puede_ver_todas_las_ordenes = !!puede_ver_todas_las_ordenes;
 
     if (Object.keys(updateCollab).length > 0) {
       const { error: collabErr } = await admin.from('collaborators').update(updateCollab).eq('id', user_id);

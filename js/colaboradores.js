@@ -400,7 +400,7 @@
       editMatricula.value = colab.matricula || '';
       editPassword.value = '';
       if (editViewAll) { 
-        editViewAll.checked = !!colab.puede_ver_todas_las_solicitudes;
+        editViewAll.checked = !!(colab.puede_ver_todas_las_ordenes || colab.can_take_orders);
         updateViewAllStyle();
       }
       if (editMsg) { editMsg.textContent = ''; editMsg.className = ''; }
@@ -470,7 +470,8 @@
           phone: editPhone.value.trim() || undefined,
           matricula: editMatricula.value.trim() || undefined,
           password: editPassword.value.trim() || undefined,
-          puede_ver_todas_las_solicitudes: !!(editViewAll && editViewAll.checked)
+          puede_ver_todas_las_ordenes: !!(editViewAll && editViewAll.checked),
+          can_take_orders: !!(editViewAll && editViewAll.checked)
         };
         // Limpiar mensajes
         showMsg(editMsg, 'Guardando cambios...', 'info');

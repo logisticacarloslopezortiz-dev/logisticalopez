@@ -209,7 +209,7 @@ async function sendEmailWithResend(to: string, subject: string, html: string) {
 async function logFn(payload: unknown, level: 'info' | 'error' | 'warning' = 'info', message?: string) {
   try {
     if (!supabase) return
-    supabase.from('function_logs').insert({
+    await supabase.from('function_logs').insert({
       fn_name: 'send-order-email',
       level,
       message: message || null,
@@ -224,7 +224,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json().catch(() => ({})) as ReqBody
-    const to = String(body.to || '').trim()
+    let to = String(body.to || '').trim()
     let subject = String(body.subject || '').trim()
     let html = String(body.html || '').trim()
     const orderId = body.orderId
@@ -232,20 +232,34 @@ Deno.serve(async (req: Request) => {
     const status = body.status
     let name = body.name
 
-    if (!to) {
-      return jsonResponse({ success: false, error: 'missing_to' }, 400, req)
-    }
-
     if (!shortId && orderId && supabase) {
       try {
         const { data: ord } = await supabase
           .from('orders')
-          .select('short_id,name')
+          .select('short_id,name,email')
           .eq('id', orderId)
           .maybeSingle()
         if (ord?.short_id) shortId = ord.short_id
         if (!name && ord?.name) name = ord.name
+        if (!to && ord?.email) to = ord.email
       } catch (_) {}
+    }
+
+    if (!to && orderId && supabase) {
+      try {
+        const { data: ordEmail } = await supabase
+          .from('orders')
+          .select('email')
+          .eq('id', orderId)
+          .maybeSingle()
+        if (ordEmail?.email) {
+          to = ordEmail.email
+        }
+      } catch (_) {}
+    }
+
+    if (!to) {
+      return jsonResponse({ success: false, error: 'missing_recipient_email' }, 400, req)
     }
 
     if (!subject || !html) {
@@ -255,13 +269,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const sent = await sendEmailWithResend(to, subject, html)
-    logFn({ to, orderId, shortId, status, result: sent }, sent.ok ? 'info' : 'error', sent.ok ? 'email_sent' : 'email_failed')
+    await logFn({ to, orderId, shortId, status, result: sent }, sent.ok ? 'info' : 'error', sent.ok ? 'email_sent' : 'email_failed')
     if (!sent.ok) {
       return jsonResponse({ success: false, error: sent.error, details: sent.details }, 500, req)
     }
     return jsonResponse({ success: true, id: (sent.data as any)?.id || null }, 200, req)
   } catch (err) {
-    logFn({ error: String(err) }, 'error', 'fatal_error')
+    await logFn({ error: String(err) }, 'error', 'fatal_error')
     return jsonResponse({ success: false, error: 'internal_error' }, 500, req)
   }
 })
