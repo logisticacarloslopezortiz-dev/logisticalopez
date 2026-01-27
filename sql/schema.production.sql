@@ -1592,7 +1592,7 @@ returns table (
 language sql stable
 as $$
   -- CLIENTE
-  select 'client', o.client_id
+  select 'client', coalesce(o.client_id, o.client_contact_id)
   from public.orders o
   where o.id = p_order_id
 
@@ -1638,7 +1638,7 @@ begin
   if tg_op = 'INSERT' then
     insert into public.order_events(order_id, event_type, payload, actor_id)
     values (new.id, 'order_created', jsonb_build_object(
-      'status', new.status
+      'new_status', new.status
     ), auth.uid());
   elsif tg_op = 'UPDATE' and old.status is distinct from new.status then
     insert into public.order_events(order_id, event_type, payload, actor_id)
@@ -2087,3 +2087,118 @@ DROP POLICY IF EXISTS active_jobs_delete ON public.collaborator_active_jobs;
 CREATE POLICY active_jobs_delete ON public.collaborator_active_jobs FOR DELETE USING (
   collaborator_id = auth.uid() OR public.is_owner(auth.uid()) OR public.is_admin(auth.uid())
 );
+update public.business
+set
+  vapid_public_key = 'BFvwyVvSHVCGnD9SMxK0UWdopxwi3frwqf10-MWWnQsL40WEP5FyH8VUMytvW0gH4eFXJj9UcweCWPcuvzld2AA',
+  push_vapid_key   = 'X56_kEbfHdPqOi09-LxK_xvv0Iusf2WxLeyaSDeYhCU'
+where id = 1;
+-- ==========================================
+-- RPC: claim_notification_outbox (procesamiento atómico de outbox)
+-- ==========================================
+DROP FUNCTION IF EXISTS public.claim_notification_outbox(int);
+CREATE OR REPLACE FUNCTION public.claim_notification_outbox(p_limit int DEFAULT 50)
+  RETURNS SETOF public.notification_outbox
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = pg_catalog, public
+  AS $$
+  BEGIN
+    RETURN QUERY
+    WITH claimed AS (
+      SELECT id
+      FROM public.notification_outbox
+      WHERE status = 'pending'
+      ORDER BY created_at
+      LIMIT p_limit
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE public.notification_outbox o
+    SET
+      status = 'processing',
+      attempts = attempts + 1
+    FROM claimed
+    WHERE o.id = claimed.id
+    RETURNING o.*;
+  END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.claim_notification_outbox(int) TO service_role, authenticated, anon;
+
+-- ==========================================
+-- Helpers de resultado: marcar sent / failed
+-- ==========================================
+DROP FUNCTION IF EXISTS public.mark_notification_sent(bigint);
+CREATE OR REPLACE FUNCTION public.mark_notification_sent(p_id bigint)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.notification_outbox
+  SET
+    status = 'sent',
+    processed_at = now()
+  WHERE id = p_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.mark_notification_sent(bigint) TO service_role;
+
+DROP FUNCTION IF EXISTS public.mark_notification_failed(bigint, text);
+CREATE OR REPLACE FUNCTION public.mark_notification_failed(p_id bigint, p_error text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.notification_outbox
+  SET
+    status = 'failed',
+    last_error = p_error
+  WHERE id = p_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.mark_notification_failed(bigint, text) TO service_role;
+-- ==========================================
+-- RPC: mark_notification_sent (marcar éxito)
+-- ==========================================
+CREATE OR REPLACE FUNCTION public.mark_notification_sent(
+  p_id bigint
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.notification_outbox
+  SET
+    status = 'sent',
+    processed_at = now()
+  WHERE id = p_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.mark_notification_sent(bigint)
+TO service_role;
+
+-- ==========================================
+-- RPC: mark_notification_failed (marcar error)
+-- ==========================================
+CREATE OR REPLACE FUNCTION public.mark_notification_failed(
+  p_id bigint,
+  p_error text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.notification_outbox
+  SET
+    status = 'failed',
+    last_error = p_error
+  WHERE id = p_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.mark_notification_failed(bigint, text)
+TO service_role;

@@ -410,3 +410,8 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/notify-role/deno.json"
 entrypoint = "./functions/notify-role/index.ts"
+
+[functions.process-scheduler]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/process-scheduler/index.ts"

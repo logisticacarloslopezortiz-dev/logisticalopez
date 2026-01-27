@@ -273,7 +273,10 @@ const OrderManager = {
 
       const { data: rpcData, error: rpcError } = await supabaseConfig.client.rpc('update_order_status', rpcPayload);
       if (!rpcError) {
-        try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
+        try { await supabaseConfig.runProcessOutbox?.(); } catch (err) {
+          console.warn('[OrderManager] Error invocando process-outbox:', err);
+        }
+        try { await notifyClientForOrder(normalizedId, ns); } catch (_) {}
         return { success: true, data: rpcData, error: null };
       }
 
@@ -286,6 +289,7 @@ const OrderManager = {
           });
           if (!accErr) {
             try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
+            try { await notifyClientForOrder(normalizedId, ns); } catch (_) {}
             return { success: true, data: accData, error: null };
           }
         } catch (_) {}
@@ -370,7 +374,10 @@ const OrderManager = {
         throw new Error(`Error al actualizar: ${updateError.message}`);
       }
 
-      try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
+      try { await supabaseConfig.runProcessOutbox?.(); } catch (err) {
+        console.warn('[OrderManager] Error invocando process-outbox:', err);
+      }
+      try { await notifyClientForOrder(currentOrder.id, ns); } catch (_) {}
       return { success: true, error: null };
 
     } catch (error) {
@@ -379,7 +386,18 @@ const OrderManager = {
   }
 };
 
-async function notifyClientForOrder(orderId, newStatus) {}
+async function notifyClientForOrder(orderId, newStatus) {
+  try { await supabaseConfig.ensureFreshSession?.(); } catch (_) {}
+  const normalizedId = OrderManager._normalizeOrderId(orderId);
+  if (!Number.isFinite(normalizedId)) return;
+  const key = String(newStatus || '').toLowerCase();
+  const dbStatus = UI_TO_DB_STATUS[key] || newStatus;
+  try {
+    await supabaseConfig.client.functions.invoke('send-order-email', {
+      body: { orderId: normalizedId, status: dbStatus }
+    });
+  } catch (_) {}
+}
 
 // Exportar a entorno global
 try { if (typeof window !== 'undefined') window.OrderManager = OrderManager; } catch (_) {}

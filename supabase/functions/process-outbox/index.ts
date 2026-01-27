@@ -18,7 +18,7 @@ type WebPushSubscription = { endpoint: string; keys: SubscriptionKeys }
 
 interface NotificationOutboxRow {
   id: string
-  recipient_type: 'user' | 'contact'
+  recipient_type: 'user' | 'contact' | 'client' | 'collaborator' | 'admin'
   recipient_id: string
   payload: any
   attempts: number
@@ -90,23 +90,45 @@ const sendWebPush = async (
    Resolve Subscriptions
 ========================= */
 async function resolveSubscriptions(
-  type: 'user' | 'contact',
+  type: 'user' | 'contact' | 'client' | 'collaborator' | 'admin',
   id: string
 ): Promise<WebPushSubscription[]> {
+  const col =
+    type === 'user' || type === 'client' || type === 'collaborator' || type === 'admin'
+      ? 'user_id'
+      : 'client_contact_id'
+
   const { data } = await supabase
     .from('push_subscriptions')
     .select('endpoint, keys')
-    .eq(type === 'user' ? 'user_id' : 'client_contact_id', id)
+    .eq(col, id)
 
-  return (
-    data
+  let subs =
+    (data
       ?.map(r => {
         const keys = normalizeKeys(r.keys)
         if (!r.endpoint || !keys) return null
         return { endpoint: String(r.endpoint).trim(), keys }
       })
-      .filter(Boolean) as WebPushSubscription[]
-  ) || []
+      .filter(Boolean) as WebPushSubscription[]) || []
+
+  if (!subs.length) {
+    const altCol = col === 'user_id' ? 'client_contact_id' : 'user_id'
+    const { data: alt } = await supabase
+      .from('push_subscriptions')
+      .select('endpoint, keys')
+      .eq(altCol, id)
+    subs =
+      (alt
+        ?.map(r => {
+          const keys = normalizeKeys(r.keys)
+          if (!r.endpoint || !keys) return null
+          return { endpoint: String(r.endpoint).trim(), keys }
+        })
+        .filter(Boolean) as WebPushSubscription[]) || []
+  }
+
+  return subs
 }
 
 /* =========================
@@ -257,9 +279,9 @@ async function processPending(limit = 10) {
    HTTP Handler
 ========================= */
 Deno.serve(async req => {
-  const INTERNAL_SECRET = Deno.env.get('PUSH_INTERNAL_SECRET')
-  const REQ_SECRET = req.headers.get('x-internal-secret')
-  if (!INTERNAL_SECRET || REQ_SECRET !== INTERNAL_SECRET) {
+  const auth = req.headers.get('authorization') || req.headers.get('Authorization')
+  const expected = `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+  if (!auth || auth !== expected) {
     return jsonResponse({ error: 'unauthorized' }, 401)
   }
   if (!VAPID.publicKey || !VAPID.privateKey) {
