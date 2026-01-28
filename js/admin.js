@@ -373,15 +373,36 @@ async function generateAndSendInvoice(order) {
   doc.output('dataurlnewwindow');
 
   try {
-    const { data: { session } } = await supabaseConfig.client.auth.getSession();
     const payload = { orderId: order.short_id || order.id, email: order.email };
-    const { data, error } = await supabaseConfig.client.functions.invoke('send-invoice', { body: payload });
-    if (error) {
-      notifications.error('Error enviando factura por correo');
+    let respData = null;
+    let respError = null;
+    const invokeRes = await supabaseConfig.client.functions.invoke('send-invoice', { body: payload });
+    if (invokeRes.error || !invokeRes.data) {
+      try {
+        const url = `${supabaseConfig.projectUrl}/functions/v1/send-invoice`;
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        respData = await r.json().catch(() => null);
+        if (!r.ok) {
+          respError = new Error((respData && respData.error) || `HTTP ${r.status}`);
+        }
+      } catch (e) {
+        respError = e;
+      }
     } else {
-      notifications.info('Factura enviada por correo');
+      respData = invokeRes.data;
     }
-    console.log('[Admin] send-invoice result:', data || error);
+    if (respError) {
+      notifications.error('Error enviando factura por correo');
+    } else if (respData?.success) {
+      notifications.info('Factura enviada por correo');
+    } else {
+      notifications.error('Error enviando factura por correo');
+    }
+    console.log('[Admin] send-invoice result:', respData || respError);
   } catch (e) {
     console.error('[Admin] Error invocando send-invoice', e);
     notifications.error('No se pudo invocar el envío de factura');

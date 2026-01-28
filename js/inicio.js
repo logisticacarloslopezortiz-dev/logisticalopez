@@ -757,23 +757,42 @@ async function generateAndSendInvoice(orderId) {
 
     notifications.info('Generando factura...', 'Por favor espera');
 
-    const { data, error } =
-      await supabaseConfig.client.functions.invoke('send-invoice', {
-        body: {
-          orderId: Number(orderId),
-          email: clientEmail
+    let respData = null;
+    let respError = null;
+    const invokeRes = await supabaseConfig.client.functions.invoke('send-invoice', {
+      body: {
+        orderId: Number(orderId),
+        email: clientEmail
+      }
+    });
+    if (invokeRes.error || !invokeRes.data) {
+      try {
+        const url = `${supabaseConfig.projectUrl}/functions/v1/send-invoice`;
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: Number(orderId), email: clientEmail })
+        });
+        respData = await r.json().catch(() => null);
+        if (!r.ok) {
+          respError = new Error((respData && respData.error) || `HTTP ${r.status}`);
         }
-      });
-
-    if (error) {
-      throw new Error(error.message || 'Error al invocar send-invoice');
+      } catch (e) {
+        respError = e;
+      }
+    } else {
+      respData = invokeRes.data;
     }
 
-    if (!data?.success) {
-      throw new Error(data?.message || 'La función no devolvió éxito');
+    if (respError) {
+      throw new Error(respError.message || 'Error al invocar send-invoice');
     }
 
-    const pdfUrl = data.pdfUrl || null;
+    if (!respData?.success) {
+      throw new Error(respData?.message || 'La función no devolvió éxito');
+    }
+
+    const pdfUrl = (respData?.data && respData.data.pdfUrl) ? respData.data.pdfUrl : null;
 
     // Mostrar link si existe
     if (pdfUrl) {
