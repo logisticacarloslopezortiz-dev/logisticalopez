@@ -36,6 +36,7 @@
         }
       } catch (_) { } 
       */
+      try { await window.supabaseConfig.runProcessOutbox?.(50); } catch (_) {}
       return { success: true, order, email_sent: false, push_sent: false, fallback: true };
     }
   };

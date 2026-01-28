@@ -42,9 +42,22 @@ if (!window.supabaseConfig) {
     vapidPublicKey: null,
     buckets: { evidence: 'order-evidence', fallbackEvidence: 'public' },
     getEvidenceBucket() { return (this.buckets && this.buckets.evidence) ? this.buckets.evidence : 'evidence'; },
-    // Eliminado: process-outbox no debe invocarse desde el frontend.
-    // Si necesitas forzar procesamiento, usa el RPC admin desde backend
-    // o confía en pg_cron para ejecutar cada minuto.
+    async runProcessOutbox(limit = 50) {
+      try {
+        await this.ensureSupabaseReady?.();
+        if (!this.client || !this.client.functions || typeof this.client.functions.invoke !== 'function') {
+          throw new Error('Supabase Functions no disponible');
+        }
+        const { data, error } = await this.client.functions.invoke('process-outbox', {
+          body: { limit }
+        });
+        if (error) throw error;
+        return data || null;
+      } catch (e) {
+        console.warn('runProcessOutbox error:', e?.message || e);
+        return null;
+      }
+    },
     async triggerOutboxTestForContact(contactId){
       try {
         const { data, error } = await this.client.rpc('create_outbox_test_for_contact', { c: contactId });

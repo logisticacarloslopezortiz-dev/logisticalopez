@@ -1,125 +1,146 @@
-/// <reference path="../globals.d.ts" />
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import * as webPush from 'https://esm.sh/jsr/@negrel/webpush'
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-}
-let VAPID_PUBLIC_KEY = (Deno.env.get('VAPID_PUBLIC_KEY') || '').trim()
-let VAPID_PRIVATE_KEY = (Deno.env.get('VAPID_PRIVATE_KEY') || '').trim()
-let VAPID_SUBJECT = (Deno.env.get('VAPID_SUBJECT') || 'mailto:contacto@logisticalopezortiz.com').trim()
-const SITE_BASE = (Deno.env.get('PUBLIC_SITE_URL') || 'https://logisticalopezortiz.com').trim()
-const supabase = createClient(Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', { auth: { autoRefreshToken: false, persistSession: false } })
-const SEND_NOTIFICATION_SECRET = (Deno.env.get('SEND_NOTIFICATION_SECRET') || '').trim()
-function absolutize(url: string): string {
-  try {
-    if (!url) return SITE_BASE + '/'
-    if (/^https?:\/\//i.test(url)) return url
-    return SITE_BASE + (url.startsWith('/') ? '' : '/') + url
-  } catch (_) { return SITE_BASE + '/' }
-}
-async function hydrateVapidFromDb() {
-  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) return;
-  try {
-    const { data } = await supabase.from('business').select('vapid_public_key,push_vapid_key').limit(1).maybeSingle()
-    const pub = (data?.vapid_public_key || '').trim()
-    const priv = (data?.push_vapid_key || '').trim()
-    if (pub) VAPID_PUBLIC_KEY = pub
-    if (priv) VAPID_PRIVATE_KEY = priv
-  } catch (_) {}
-}
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import webpush from "https://esm.sh/web-push@3.6.7?bundle&target=deno";
 
-async function validateVapid() {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
-    await hydrateVapidFromDb()
-  }
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) throw new Error('missing_vapid')
+
+serve(async (req) => {
   try {
-    const b64 = VAPID_PUBLIC_KEY.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (VAPID_PUBLIC_KEY.length % 4)) % 4)
-    const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
-    if (raw.length !== 65 || raw[0] !== 4) throw new Error('invalid_vapid_public_key')
-  } catch (_) { throw new Error('invalid_vapid_public_key') }
-}
-async function sendPush(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }, payload: unknown) {
-  await validateVapid()
-  return await webPush.sendNotification(
-    { endpoint: subscription.endpoint, keys: subscription.keys as unknown as webPush.SubscriptionKeys },
-    JSON.stringify(payload),
-    {
-      vapidDetails: {
-        subject: VAPID_SUBJECT,
-        publicKey: VAPID_PUBLIC_KEY,
-        privateKey: VAPID_PRIVATE_KEY
-      },
-      TTL: 2592000
+
+    if (req.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
     }
-  )
-}
-function validateRequest(body: any) {
-  const user_id = String(body?.user_id || '').trim()
-  const contact_id = String(body?.contact_id || '').trim()
-  const n = body?.notification ?? body ?? {}
-  const title = String(n?.title || 'Notificación')
-  const bodyText = String(n?.body || '')
-  const icon = absolutize(n?.icon || '/img/android-chrome-192x192.png')
-  const badge = absolutize(n?.badge || '/img/favicon-32x32.png')
-  const dataObj = (typeof n?.data === 'object' && n?.data) ? n.data : {}
-  const url = absolutize((dataObj as any)?.url || '/')
-  if (!bodyText.trim()) throw new Error('missing_notification_body')
-  return { user_id, contact_id, payload: { title, body: bodyText, icon, badge, data: { ...dataObj, url } } }
-}
-async function handleExpired(endpoint: string) {
-  try { await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint) } catch (_) {}
-}
-Deno.serve(async (req: Request) => {
-  const secret = (Deno.env.get('SEND_NOTIFICATION_SECRET') || '').trim()
-  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || ''
-  if (!secret || authHeader !== `Bearer ${secret}`) {
-    return jsonResponse({ success: false, error: 'unauthorized' }, 401)
-  }
-  const correlationId = req.headers.get('x-correlation-id') || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))
-  console.log('[send-notification] START', { correlation_id: correlationId })
-  if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
-  try {
-    const body = await req.json().catch(() => ({}))
-    let user_id = ''
-    let contact_id = ''
-    let payload: any
-    try {
-      const validated = validateRequest(body)
-      user_id = validated.user_id
-      contact_id = validated.contact_id
-      payload = validated.payload
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      return jsonResponse({ success: false, error: msg }, 400)
+
+    const { outbox_id } = await req.json();
+
+    if (!outbox_id) {
+      return new Response("Missing outbox_id", { status: 400 });
     }
-    if (!user_id && !contact_id) return jsonResponse({ success: false, error: 'missing_target' }, 400)
-    const query = supabase.from('push_subscriptions').select('endpoint, keys')
-    const { data: subs } = user_id ? await query.eq('user_id', user_id) : await query.eq('client_contact_id', contact_id)
-    if (!subs || subs.length === 0) {
-      return jsonResponse({ success: false, error: 'no_subscriptions' }, 404)
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !supabaseKey) {
+      return new Response("Missing env vars", { status: 500 });
     }
-    let sent = 0
-    let failed = 0
-    for (const sub of subs) {
-      const endpoint = String((sub as any).endpoint || '').trim()
-      let keys: any = (sub as any).keys
-      if (typeof keys === 'string') { try { keys = JSON.parse(keys) } catch { keys = null } }
-      const p256dh = String(keys?.p256dh || '').trim()
-      const auth = String(keys?.auth || '').trim()
-      if (!endpoint || !p256dh || !auth) { failed++; continue }
-      try {
-        await sendPush({ endpoint, keys: { p256dh, auth } }, payload)
-        sent++
-      } catch (err: any) {
-        failed++
-        if (err?.statusCode === 404 || err?.statusCode === 410) {
-          await handleExpired(endpoint)
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // 🔹 JOB
+    const { data: job, error: jobError } = await supabase
+      .from("notification_outbox")
+      .select(`*, template:notification_templates(*)`)
+      .eq("id", outbox_id)
+      .single();
+
+    if (jobError || !job) {
+      console.error("Job not found", jobError);
+      return new Response("Job not found", { status: 404 });
+    }
+
+    // 🔹 SUBSCRIPTION
+    let pushSub: any = null;
+
+    if (job.recipient_contact_id) {
+      const { data } = await supabase
+        .from("push_subscriptions")
+        .select("*")
+        .eq("client_contact_id", job.recipient_contact_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      pushSub = data;
+    } else if (job.recipient_id) {
+      const { data } = await supabase
+        .from("push_subscriptions")
+        .select("*")
+        .eq("user_id", job.recipient_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      pushSub = data;
+    }
+
+    if (!pushSub) {
+      await supabase.rpc("mark_notification_failed", {
+        p_id: outbox_id,
+        p_error: "No push subscription found"
+      });
+      return new Response("No subscription", { status: 200 });
+    }
+
+    // 🔹 VAPID
+    let vapidPublic = Deno.env.get("VAPID_PUBLIC_KEY");
+    let vapidPrivate = Deno.env.get("VAPID_PRIVATE_KEY");
+    let vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@example.com";
+
+    if (!vapidPublic || !vapidPrivate) {
+      const { data: business } = await supabase
+        .from("business")
+        .select("vapid_public_key, push_vapid_key, email")
+        .limit(1)
+        .single();
+
+      if (business) {
+        vapidPublic = business.vapid_public_key;
+        vapidPrivate = business.push_vapid_key;
+        if (business.email) {
+          vapidSubject = `mailto:${business.email}`;
         }
       }
     }
-    return jsonResponse({ success: sent > 0, sent, failed, correlation_id: correlationId }, 200)
-  } catch (error: any) {
-    return jsonResponse({ success: false, error: error?.message || String(error) }, 500)
+
+    if (!vapidPublic || !vapidPrivate) {
+      await supabase.rpc("mark_notification_failed", {
+        p_id: outbox_id,
+        p_error: "Missing VAPID keys"
+      });
+      return new Response("Missing VAPID", { status: 500 });
+    }
+
+    webpush.setVapidDetails(
+      vapidSubject,
+      vapidPublic,
+      vapidPrivate
+    );
+
+    // 🔹 PAYLOAD
+    let payload: any = {
+      title: job.template?.title || "Notificación",
+      body: job.template?.body || "Tienes un nuevo mensaje",
+      ...job.payload
+    };
+
+    if (job.payload) {
+      Object.keys(job.payload).forEach((k) => {
+        payload.title = payload.title.replace(`{{${k}}}`, String(job.payload[k]));
+        payload.body = payload.body.replace(`{{${k}}}`, String(job.payload[k]));
+      });
+    }
+
+    // 🔹 PARSE KEYS
+    const parsedKeys =
+      typeof pushSub.keys === "string"
+        ? JSON.parse(pushSub.keys)
+        : pushSub.keys;
+
+    const subscription = {
+      endpoint: pushSub.endpoint,
+      keys: parsedKeys
+    };
+
+    console.log("Sending push for job", outbox_id);
+
+    await webpush.sendNotification(
+      subscription,
+      JSON.stringify(payload)
+    );
+
+    await supabase.rpc("mark_notification_sent", { p_id: outbox_id });
+
+    return new Response(JSON.stringify({ success: true }), { status: 200 });
+
+  } catch (err: any) {
+    console.error("Fatal send-notification error:", err);
+    return new Response(err.message, { status: 500 });
   }
-})
+});
