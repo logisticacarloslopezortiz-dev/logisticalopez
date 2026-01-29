@@ -1,15 +1,20 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { handleCors, jsonResponse } from "../cors-config.ts";
 
-serve(async (_req) => {
+serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing env vars");
-      return new Response("Config error", { status: 500 });
+      return jsonResponse({ error: "Config error" }, 500, req);
     }
+
+    // ✅ CORS preflight
+    const corsResp = handleCors(req);
+    if (corsResp) return corsResp;
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -102,13 +107,10 @@ serve(async (_req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, processed: jobs.length }),
-      { status: 200 }
-    );
+    return jsonResponse({ ok: true, processed: jobs.length }, 200, req);
 
   } catch (err: any) {
     console.error("Fatal error:", err);
-    return new Response(err.message, { status: 500 });
+    return jsonResponse({ error: err.message || String(err) }, 500, req);
   }
 });

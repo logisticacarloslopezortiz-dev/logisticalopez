@@ -152,8 +152,9 @@ create table if not exists public.clients (
 );
 
 -- Business Config
-create table if not exists public.business (
-  id uuid primary key default gen_random_uuid(),
+drop table if exists public.business cascade;
+create table public.business (
+  id bigint primary key default 1,
   business_name text,
   address text,
   phone text,
@@ -168,6 +169,9 @@ create table if not exists public.business (
   constraint business_rnc_check check (rnc ~ '^\d{3}-\d{5}-\d{1}$' or rnc is null)
 );
 create index if not exists idx_business_owner on public.business(owner_user_id);
+
+insert into public.business (id, business_name) values (1, 'Mi Negocio')
+on conflict (id) do nothing;
 
 drop trigger if exists trg_business_touch_updated on public.business;
 create trigger trg_business_touch_updated
@@ -722,8 +726,8 @@ $$;
 create or replace function public.update_order_status(
   p_order_id bigint,
   p_new_status text,
-  p_collaborator_id uuid,
-  p_tracking_entry jsonb
+  p_collaborator_id uuid default null,
+  p_tracking_entry jsonb default null
 )
 returns jsonb
 language plpgsql security definer
@@ -733,33 +737,60 @@ declare
   v_normalized public.order_status;
   v_current_status public.order_status;
   v_uid uuid;
+  v_target_collab uuid;
 begin
   if auth.uid() is null then raise exception 'No autorizado'; end if;
   v_uid := auth.uid();
   v_normalized := public.normalize_order_status(p_new_status);
 
+  -- Determinar colaborador objetivo (explícito > en json > usuario actual)
+  v_target_collab := p_collaborator_id;
+  if v_target_collab is null and p_tracking_entry ? 'assigned_to' then
+     begin
+       v_target_collab := (p_tracking_entry->>'assigned_to')::uuid;
+     exception when others then
+       v_target_collab := null;
+     end;
+  end if;
+
   select status into v_current_status from public.orders where id = p_order_id;
-  if not public.validate_transition(v_current_status, v_normalized) then
-    raise exception 'Transición de estado inválida: % -> %', v_current_status, v_normalized;
+  
+  -- Validaciones (Admin puede saltarse algunas, Colaborador no)
+  if not (public.is_admin(v_uid) or public.is_owner(v_uid)) then
+    if not public.validate_transition(v_current_status, v_normalized) then
+      raise exception 'Transición de estado inválida: % -> %', v_current_status, v_normalized;
+    end if;
+    -- Colaborador solo puede asignarse a sí mismo
+    if v_target_collab is not null and v_target_collab <> v_uid then
+       raise exception 'No puedes asignar a otros';
+    end if;
   end if;
 
   update public.orders o
   set
     status = v_normalized,
-    assigned_to = CASE WHEN v_normalized = 'pending' THEN NULL ELSE COALESCE(o.assigned_to, v_uid) END,
+    assigned_to = CASE 
+      WHEN v_normalized = 'pending' THEN NULL 
+      WHEN v_target_collab IS NOT NULL THEN v_target_collab
+      ELSE COALESCE(o.assigned_to, v_uid) 
+    END,
     assigned_at = CASE WHEN v_normalized = 'accepted' AND o.assigned_at IS NULL THEN now() ELSE assigned_at END,
     completed_by = CASE WHEN v_normalized = 'completed' THEN v_uid ELSE completed_by END,
     completed_at = CASE WHEN v_normalized = 'completed' THEN now() ELSE completed_at END,
     tracking_data = CASE WHEN p_tracking_entry IS NOT NULL THEN COALESCE(o.tracking_data,'[]'::jsonb) || jsonb_build_array(p_tracking_entry) ELSE o.tracking_data END
+    updated_at = now()
   where o.id = p_order_id
   returning to_jsonb(o) into v_updated;
 
   if v_normalized in ('accepted','in_progress') then
-    if exists (select 1 from public.collaborator_active_jobs j where j.collaborator_id = v_uid and j.order_id <> p_order_id) then
+    -- Verificar si el colaborador objetivo ya tiene trabajo (si se está asignando)
+    -- Nota: Si es admin asignando, quizás queramos permitir override, pero por seguridad mantenemos la regla
+    -- Usamos v_target_collab si existe, sino v_uid (auto-asignación)
+    if exists (select 1 from public.collaborator_active_jobs j where j.collaborator_id = coalesce(v_target_collab, v_uid) and j.order_id <> p_order_id) then
       raise exception 'Ya tienes otra orden activa' using errcode = 'P0001';
     end if;
     insert into public.collaborator_active_jobs(collaborator_id, order_id)
-    values (v_uid, p_order_id)
+    values (coalesce(v_target_collab, v_uid), p_order_id)
     on conflict (collaborator_id) do update set order_id = excluded.order_id;
   elsif v_normalized in ('completed','cancelled') then
     delete from public.collaborator_active_jobs where order_id = p_order_id;

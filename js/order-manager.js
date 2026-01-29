@@ -265,10 +265,10 @@ const OrderManager = {
       const trackingEntry = _makeTrackingEntry(ns, dbStatus);
 
       const rpcPayload = {
-        order_id: normalizedId,
-        new_status: ns,
-        collaborator_id: additionalData?.collaborator_id || null,
-        tracking_entry: trackingEntry
+        p_order_id: normalizedId,
+        p_new_status: ns,
+        p_collaborator_id: additionalData?.collaborator_id || null,
+        p_tracking_entry: trackingEntry
       };
 
       const { data: rpcData, error: rpcError } = await supabaseConfig.client.rpc('update_order_status', rpcPayload);

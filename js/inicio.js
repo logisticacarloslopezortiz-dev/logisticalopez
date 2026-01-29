@@ -677,7 +677,8 @@ async function assignSelectedCollaborator() {
     });
 
     filterOrders();
-    const orderId = order.short_id || order.id;
+    const order = allOrders.find(o => o.id === Number(selectedOrderIdForAssign));
+    const orderId = order ? (order.short_id || order.id) : selectedOrderIdForAssign;
     notifications.success(`Orden #${orderId} asignada a ${col.name} ✓`, { duration: 5000 });
     closeAssignModal();
 
