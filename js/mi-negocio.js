@@ -104,20 +104,14 @@ businessForm.addEventListener('submit', async (e) => {
   const rncClean = rncInput.replace(/\D/g, '');
 
   function isValidRNC(rnc) {
-    return (
-      /^1\d{8}$/.test(rnc) ||        // Empresa (9 dígitos, empieza con 1)
-      /^4\d{10}$/.test(rnc) ||       // Persona física (11 dígitos, empieza con 4)
-      /^101\d{6}$/.test(rnc)         // Antiguo (9 dígitos, empieza con 101)
-    );
+    // Aceptar cualquier RNC de 9 o 11 dígitos
+    return /^\d{9}$/.test(rnc) || /^\d{11}$/.test(rnc);
   }
 
   if (rncClean && !isValidRNC(rncClean)) {
     alert(
       'RNC inválido.\n\n' +
-      'Formatos aceptados:\n' +
-      '- Empresa: 1XXXXXXXX\n' +
-      '- Persona física: 4XXXXXXXXXX\n' +
-      '- Antiguo: 101XXXXXX'
+      'El RNC debe tener 9 dígitos (empresas) o 11 dígitos (cédula).'
     );
     return;
   }

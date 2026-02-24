@@ -75,18 +75,15 @@ const OrderManager = {
     let orConditions = [];
     if (isNumeric) {
       orConditions.push(`id.eq.${normalizedId}`);
-      orConditions.push(`supabase_seq_id.eq.${normalizedId}`);
       orConditions.push(`short_id.eq.${String(normalizedId)}`);
     } else if (typeof orderId === 'string') {
       const maybeNum = Number(orderId);
       if (Number.isFinite(maybeNum)) {
         orConditions.push(`id.eq.${maybeNum}`);
-        orConditions.push(`supabase_seq_id.eq.${maybeNum}`);
       }
       orConditions.push(`short_id.eq.${orderId}`);
     } else if (orderId && typeof orderId === 'object') {
       if (Number.isFinite(orderId.id)) orConditions.push(`id.eq.${orderId.id}`);
-      if (Number.isFinite(orderId.supabase_seq_id)) orConditions.push(`supabase_seq_id.eq.${orderId.supabase_seq_id}`);
       if (typeof orderId.short_id === 'string') orConditions.push(`short_id.eq.${orderId.short_id}`);
     }
 
@@ -260,14 +257,21 @@ const OrderManager = {
 
     // Intentar RPC primero
     try {
-      const normalizedId = this._normalizeOrderId(orderId);
       const dbStatus = UI_TO_DB_STATUS[ns] || newStatus;
       const trackingEntry = _makeTrackingEntry(ns, dbStatus);
+      
+      // ✅ Obtener ID de colaborador válido (UUID)
+      let collabId = null;
+      if (additionalData?.collaborator_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(additionalData.collaborator_id)) {
+        collabId = additionalData.collaborator_id;
+      } else if (additionalData?.assigned_to && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(additionalData.assigned_to)) {
+        collabId = additionalData.assigned_to;
+      }
 
       const rpcPayload = {
         p_order_id: normalizedId,
         p_new_status: ns,
-        p_collaborator_id: additionalData?.collaborator_id || null,
+        p_collaborator_id: collabId,
         p_tracking_entry: trackingEntry
       };
 

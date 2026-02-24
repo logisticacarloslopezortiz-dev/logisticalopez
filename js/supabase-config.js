@@ -459,9 +459,9 @@ if (!window.supabaseConfig) {
    */
   async getBusinessSettings() {
     if (!this.client) return {};
-    // Asumimos que solo hay una fila de configuración con id=1
-    const { data, error } = await this.client.from('business').select('*').eq('id', 1).single();
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+    // Intentar obtener la primera fila disponible (independientemente del ID)
+    const { data, error } = await this.client.from('business').select('*').limit(1).maybeSingle();
+    if (error) {
       console.error('Error fetching business settings:', error);
       return {};
     }
@@ -474,53 +474,41 @@ if (!window.supabaseConfig) {
    */
   async saveBusinessSettings(settingsData) {
     if (!this.client) throw new Error('Cliente de Supabase no inicializado');
-    console.log('Guardando configuración del negocio:', settingsData);
-
-    // Saneamiento defensivo
-    const payload = { id: 1, ...settingsData };
-    // rnc: normalizar a solo dígitos y validar longitud (9-11)
+    
+    // 1. Intentar obtener el ID existente
+    const existing = await this.getBusinessSettings();
+    const payload = { ...settingsData };
+    
+    // Saneamiento defensivo del RNC
     if (Object.prototype.hasOwnProperty.call(payload, 'rnc')) {
       const raw = payload.rnc;
       let normalized = (raw === undefined || raw === null) ? null : String(raw).replace(/\D+/g, '');
       if (normalized && normalized.length === 0) normalized = null;
-      if (normalized && (normalized.length < 9 || normalized.length > 11)) {
-        throw new Error('RNC inválido: debe contener entre 9 y 11 dígitos');
-      }
       
       // Formatear RNC para cumplir con el constraint de la base de datos (XXX-XXXXX-X)
       if (normalized && normalized.length === 9) {
         payload.rnc = normalized.replace(/^(\d{3})(\d{5})(\d{1})$/, '$1-$2-$3');
       } else if (normalized && normalized.length === 11) {
-        // Formato estándar para cédula/persona física (XXX-XXXXXXX-X)
         payload.rnc = normalized.replace(/^(\d{3})(\d{7})(\d{1})$/, '$1-$2-$3');
       } else {
         payload.rnc = normalized;
       }
     }
-    // quotation_rates debe ser objeto JSON serializable
-    if (Object.prototype.hasOwnProperty.call(payload, 'quotation_rates')) {
-      const qr = payload.quotation_rates;
-      if (qr && typeof qr === 'object') {
-        // No hacer nada, dejarlo como objeto
-      } else {
-        payload.quotation_rates = null;
-      }
+
+    let result;
+    if (existing && existing.id) {
+      // 2. Actualizar si existe
+      result = await this.client.from('business').update(payload).eq('id', existing.id).select().maybeSingle();
+    } else {
+      // 3. Insertar si no existe
+      result = await this.client.from('business').insert(payload).select().maybeSingle();
     }
 
-    const { data, error } = await this.client
-      .from('business')
-      .upsert(payload)
-      .select();
-    if (error) {
-      console.error('Error detallado al guardar business:', error);
-      const msg = String(error.message || 'Error');
-      if (/business_rnc_check/i.test(msg)) {
-        throw new Error('Error al guardar configuración: RNC inválido (solo dígitos, 9-11)');
-      }
-      throw new Error(`Error al guardar configuración: ${msg}`);
+    if (result.error) {
+      console.error('Error detallado al guardar business:', result.error);
+      throw result.error;
     }
-    console.log('Configuración guardada exitosamente:', data);
-    return data;
+    return result.data;
   },
 
   /**

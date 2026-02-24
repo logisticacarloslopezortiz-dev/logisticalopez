@@ -768,10 +768,16 @@ async function generateAndSendInvoice(orderId) {
     });
     if (invokeRes.error || !invokeRes.data) {
       try {
-        const url = `${supabaseConfig.projectUrl}/functions/v1/send-invoice`;
+        const { data: { session } } = await supabaseConfig.client.auth.getSession();
+        const token = session?.access_token || supabaseConfig.anonKey;
+        const url = `${supabaseConfig.functionsUrl}/send-invoice`;
         const r = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': supabaseConfig.anonKey
+          },
           body: JSON.stringify({ orderId: Number(orderId), email: clientEmail })
         });
         respData = await r.json().catch(() => null);
@@ -836,7 +842,7 @@ function renderCardHtml(o) {
   const displayStatus = formatUiStatus(o.status);
   const badgeClass = STATUS_COLOR[displayStatus] || 'bg-gray-100 text-gray-800';
   const collabId = getCollaboratorIdFromOrder(o);
-  const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || '';
+  const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || o.nombre_chofer || '';
 
   return `
     <div class="flex justify-between items-start mb-2">
@@ -872,7 +878,7 @@ function renderRowHtml(o) {
   const displayStatus = formatUiStatus(o.status);
   const statusColorClass = STATUS_COLOR[displayStatus] || 'bg-gray-100 text-gray-800';
   const collabId = getCollaboratorIdFromOrder(o);
-  const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || '';
+  const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || o.nombre_chofer || '';
 
   return `
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
@@ -1167,9 +1173,9 @@ function vapidToBytes(base64String) {
 async function initAdminOrdersPage() {
   if (__initialized) return;
   __initialized = true;
-  await loadOrders();
+  await loadCollaborators(); // Cargar primero los colaboradores para el mapa
+  await loadOrders(); // Cargar órdenes después
   await loadAdminInfo();
-  await loadCollaborators();
   checkVapidStatus();
   setupRealtime();
   refreshLucide();

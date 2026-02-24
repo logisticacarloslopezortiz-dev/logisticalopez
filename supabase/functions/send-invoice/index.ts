@@ -385,16 +385,16 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'No se encontró la orden especificada' }, 404, req);
     }
     
-    // Buscar datos del negocio
+    // Buscar datos del negocio (independientemente del ID)
     const { data: business, error: businessError } = await supabase
       .from('business')
       .select('*')
       .limit(1)
-      .single();
+      .maybeSingle();
     
     if (businessError || !business) {
       logDebug('Error al buscar datos del negocio', businessError);
-      return jsonResponse({ error: 'No se encontraron los datos del negocio' }, 404, req);
+      return jsonResponse({ error: 'Debe configurar los datos del negocio en el panel administrativo antes de generar facturas.' }, 404, req);
     }
     
     const pdfBytes = await (async () => {
