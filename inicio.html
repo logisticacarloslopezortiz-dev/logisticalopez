@@ -17,6 +17,37 @@
   <link rel="stylesheet" href="css/admin-panel-styles.css">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
+
+  <!-- OneSignal SDK -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
+        allowLocalhostAsSecureOrigin: true,
+      });
+
+      // Manejar el registro del Player ID para Administradores
+      OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+        if (event.current.id) {
+          console.log("OneSignal Subscription ID (Admin):", event.current.id);
+          if (window.supabaseConfig) {
+            await window.supabaseConfig.updateOneSignalId(event.current.id);
+          }
+        }
+      });
+
+      // Captura inicial si ya está suscrito
+      const subscriptionId = OneSignal.User.PushSubscription.id;
+      if (subscriptionId) {
+        console.log("OneSignal Initial ID (Admin):", subscriptionId);
+        if (window.supabaseConfig) {
+          await window.supabaseConfig.updateOneSignalId(subscriptionId);
+        }
+      }
+    });
+  </script>
 </head>
 <body class="bg-gray-100">
   

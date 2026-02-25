@@ -1436,3 +1436,10 @@
             where moved_at < now() - interval '90 days';
           $$
         );
+
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS onesignal_id text;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS onesignal_id text;
+
+-- Add index for faster lookups
+CREATE INDEX IF NOT EXISTS idx_profiles_onesignal_id ON public.profiles(onesignal_id);
+CREATE INDEX IF NOT EXISTS idx_clients_onesignal_id ON public.clients(onesignal_id);

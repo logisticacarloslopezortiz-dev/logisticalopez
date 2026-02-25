@@ -58,6 +58,37 @@
     #offline-indicator { transition: transform 0.3s ease; }
     #offline-indicator.hidden-indicator { transform: translateY(-100%); }
   </style>
+
+  <!-- OneSignal SDK -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
+        allowLocalhostAsSecureOrigin: true,
+      });
+
+      // Manejar el registro del Player ID para Colaboradores
+      OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+        if (event.current.id) {
+          console.log("OneSignal Subscription ID:", event.current.id);
+          if (window.supabaseConfig) {
+            await window.supabaseConfig.updateOneSignalId(event.current.id);
+          }
+        }
+      });
+
+      // Captura inicial si ya está suscrito
+      const subscriptionId = OneSignal.User.PushSubscription.id;
+      if (subscriptionId) {
+        console.log("OneSignal Initial ID:", subscriptionId);
+        if (window.supabaseConfig) {
+          await window.supabaseConfig.updateOneSignalId(subscriptionId);
+        }
+      }
+    });
+  </script>
 </head>
 <body class="bg-gray-100">
   <!-- Indicador de Estado de Red -->

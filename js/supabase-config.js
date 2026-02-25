@@ -65,6 +65,37 @@ if (!window.supabaseConfig) {
       } catch(e){ return { id:null, error: e }; }
     },
 
+    /**
+     * Actualiza el ID de OneSignal para el usuario actual o un contacto específico.
+     */
+    async updateOneSignalId(onesignalId, contactId = null) {
+      try {
+        if (!this.client) return { error: 'Supabase client not initialized' };
+        
+        const { data: { user } } = await this.client.auth.getUser();
+        
+        if (user) {
+          // Si hay usuario logueado (Admin/Colaborador), actualizar en profiles
+          const { error } = await this.client
+            .from('profiles')
+            .update({ onesignal_id: onesignalId })
+            .eq('id', user.id);
+          return { success: !error, error };
+        } else if (contactId) {
+          // Si no hay usuario pero hay contactId (Cliente), actualizar en clients
+          const { error } = await this.client
+            .from('clients')
+            .update({ onesignal_id: onesignalId })
+            .eq('id', contactId);
+          return { success: !error, error };
+        }
+        
+        return { error: 'No user or contactId provided' };
+      } catch (e) {
+        return { error: e.message };
+      }
+    },
+
   // Asegura que la sesión JWT esté fresca antes de consultas
   ensureFreshSession: async function() {
     try {

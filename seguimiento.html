@@ -67,6 +67,39 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
 
   <link href="css/seguimiento-styles.css?v=20251215" rel="stylesheet">
+
+  <!-- OneSignal SDK -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
+        allowLocalhostAsSecureOrigin: true,
+      });
+
+      // Manejar el registro del Player ID para Seguimiento (Clientes)
+      OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+        if (event.current.id) {
+          console.log("OneSignal Subscription ID (Seguimiento):", event.current.id);
+          if (window.supabaseConfig) {
+            const contactId = localStorage.getItem('tlc_client_contact_id');
+            await window.supabaseConfig.updateOneSignalId(event.current.id, contactId);
+          }
+        }
+      });
+
+      // Captura inicial si ya está suscrito
+      const subscriptionId = OneSignal.User.PushSubscription.id;
+      if (subscriptionId) {
+        console.log("OneSignal Initial ID (Seguimiento):", subscriptionId);
+        if (window.supabaseConfig) {
+          const contactId = localStorage.getItem('tlc_client_contact_id');
+          await window.supabaseConfig.updateOneSignalId(subscriptionId, contactId);
+        }
+      }
+    });
+  </script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 

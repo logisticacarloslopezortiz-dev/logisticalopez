@@ -63,16 +63,41 @@ Deno.serve(async (req: Request) => {
     // 3) Enviar push de confirmación (si hay cliente o contacto asociado)
     let pushSent = false
     try {
-      const targetBody = order.client_id
-        ? { user_id: String(order.client_id), notification: { title: 'Solicitud creada', body: `Tu código: ${shortId || orderId}`, data: { url } } }
-        : { contact_id: String(order.client_contact_id || ''), notification: { title: 'Solicitud creada', body: `Tu código: ${shortId || orderId}`, data: { url } } }
-      if ((targetBody as any).user_id || (targetBody as any).contact_id) {
-        const resp = await fetch(`${FUNCTIONS_BASE}/send-notification`, {
+      // Intentar obtener onesignal_id
+      let onesignalId = null
+      if (order.client_id) {
+        const { data: profile } = await supabase.from('profiles').select('onesignal_id').eq('id', order.client_id).single()
+        onesignalId = profile?.onesignal_id
+      } else if (order.client_contact_id) {
+        const { data: client } = await supabase.from('clients').select('onesignal_id').eq('id', order.client_contact_id).single()
+        onesignalId = client?.onesignal_id
+      }
+
+      if (onesignalId) {
+        const resp = await fetch(`${FUNCTIONS_BASE}/send-onesignal-notification`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SEND_NOTIFICATION_SECRET}` },
-          body: JSON.stringify(targetBody)
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            player_ids: [onesignalId],
+            title: 'Solicitud creada',
+            message: `Tu código de seguimiento: ${shortId || orderId}`,
+            url
+          })
         })
         pushSent = resp.ok
+      } else {
+        // Fallback al sistema anterior si no hay OneSignal
+        const targetBody = order.client_id
+          ? { user_id: String(order.client_id), notification: { title: 'Solicitud creada', body: `Tu código: ${shortId || orderId}`, data: { url } } }
+          : { contact_id: String(order.client_contact_id || ''), notification: { title: 'Solicitud creada', body: `Tu código: ${shortId || orderId}`, data: { url } } }
+        if ((targetBody as any).user_id || (targetBody as any).contact_id) {
+          const resp = await fetch(`${FUNCTIONS_BASE}/send-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SEND_NOTIFICATION_SECRET}` },
+            body: JSON.stringify(targetBody)
+          })
+          pushSent = resp.ok
+        }
       }
     } catch (_) { pushSent = false }
 
