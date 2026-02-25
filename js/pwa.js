@@ -6,8 +6,12 @@
   // is deployed to a subpath). Also make message sending robust from the window context.
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('/sw.js');
-      console.log('ServiceWorker registrado con éxito:', reg.scope);
+      // ✅ IMPORTANTE: OneSignal requiere su propio Service Worker (OneSignalSDKWorker.js)
+      // Hemos fusionado nuestro sw.js dentro de OneSignalSDKWorker.js para no perder PWA/Caché.
+      const swPath = '/OneSignalSDKWorker.js';
+      
+      const reg = await navigator.serviceWorker.register(swPath);
+      console.log('ServiceWorker (OneSignal/PWA) registrado:', reg.scope);
 
       // If a waiting worker exists, notify and activate immediately
       if (reg.waiting) {
