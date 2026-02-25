@@ -459,13 +459,29 @@ if (!window.supabaseConfig) {
    */
   async getBusinessSettings() {
     if (!this.client) return {};
-    // Intentar obtener la primera fila disponible (independientemente del ID)
-    const { data, error } = await this.client.from('business').select('*').limit(1).maybeSingle();
-    if (error) {
-      console.error('Error fetching business settings:', error);
+    try {
+      // Intentar obtener la primera fila disponible (independientemente del ID)
+      const { data, error } = await this.client
+        .from('business')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        // Si el error es por sintaxis de UUID (posiblemente por políticas o filtros previos)
+        if (error.code === '22P02') {
+          console.warn('Error de sintaxis UUID al buscar business. Reintentando sin filtros.');
+          const fallback = await this.client.from('business').select('*').limit(1);
+          return (fallback.data && fallback.data[0]) || {};
+        }
+        console.error('Error fetching business settings:', error);
+        return {};
+      }
+      return data || {};
+    } catch (e) {
+      console.error('Exception in getBusinessSettings:', e);
       return {};
     }
-    return data || {};
   },
 
   /**
@@ -486,27 +502,37 @@ if (!window.supabaseConfig) {
       if (normalized && normalized.length === 0) normalized = null;
       
       // Formatear RNC para cumplir con el constraint de la base de datos (XXX-XXXXX-X)
+      // Nota: El constraint actual solo permite 9 dígitos formateados (XXX-XXXXX-X)
       if (normalized && normalized.length === 9) {
         payload.rnc = normalized.replace(/^(\d{3})(\d{5})(\d{1})$/, '$1-$2-$3');
-      } else if (normalized && normalized.length === 11) {
-        payload.rnc = normalized.replace(/^(\d{3})(\d{7})(\d{1})$/, '$1-$2-$3');
       } else {
-        payload.rnc = normalized;
+        // Si no tiene 9 dígitos, lo dejamos como null o el valor original si es que la BD lo acepta
+        // (Pero el constraint 'business_rnc_check' es estricto)
+        payload.rnc = normalized; 
       }
     }
 
     let result;
-    if (existing && existing.id) {
-      // 2. Actualizar si existe
+    // Validar que el ID sea un UUID válido antes de usarlo en .eq()
+    const isUuid = (id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id));
+
+    if (existing && existing.id && isUuid(existing.id)) {
+      // 2. Actualizar si existe un ID de tipo UUID válido
       result = await this.client.from('business').update(payload).eq('id', existing.id).select().maybeSingle();
     } else {
-      // 3. Insertar si no existe
+      // 3. Insertar si no existe o el ID no es UUID (ej. el "1" que daba error)
+      // No enviamos ID para que la BD genere uno nuevo de tipo UUID
+      delete payload.id; 
       result = await this.client.from('business').insert(payload).select().maybeSingle();
     }
 
     if (result.error) {
       console.error('Error detallado al guardar business:', result.error);
-      throw result.error;
+      const msg = result.error.message || 'Error desconocido';
+      if (result.error.code === '23514' && msg.includes('business_rnc_check')) {
+        throw new Error('El RNC debe tener 9 dígitos (formato: 000-00000-0)');
+      }
+      throw new Error(msg);
     }
     return result.data;
   },
