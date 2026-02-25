@@ -100,6 +100,21 @@ const OrderManager = {
     return data || null;
   },
 
+  // ✅ Helper para enviar notificaciones OneSignal
+  async notifyOneSignal({ player_ids, title, message, url, data = {} }) {
+    if (!player_ids || player_ids.length === 0) return;
+    try {
+      console.log(`[OneSignal] Enviando notificación a ${player_ids.length} destinatarios...`);
+      const { data: res, error } = await supabaseConfig.client.functions.invoke('send-onesignal-notification', {
+        body: { player_ids, title, message, url, data }
+      });
+      if (error) console.error('[OneSignal] Error:', error);
+      return res;
+    } catch (e) {
+      console.error('[OneSignal] Fallo crítico:', e);
+    }
+  },
+
   // Toast simple para notificaciones visuales
   _toast(message, type = 'info') {
     try {
@@ -368,24 +383,75 @@ const OrderManager = {
       updatePayload.tracking_data = [...currentTracking, trackingEntry];
 
       // Actualizar (usar id como filtro siempre) + restricciones para aceptación
-      let q = supabaseConfig.client.from('orders').update(updatePayload).eq('id', currentOrder.id);
+      let q = supabaseConfig.client.from('orders')
+        .update(updatePayload)
+        .eq('id', currentOrder.id);
+
       if (ns === 'aceptada' || ns === 'accepted') {
         q = q.eq('status', 'pending').is('assigned_to', null);
       }
-      const { error: updateError } = await q;
+
+      const { data: updatedData, error: updateError } = await q
+        .select('id, short_id, status, name, email, client_email, client_id, client_contact_id')
+        .single();
 
       if (updateError) {
         throw new Error(`Error al actualizar: ${updateError.message}`);
+      }
+
+      // ✅ NOTIFICACIÓN AL CLIENTE POR CAMBIO DE ESTADO (OneSignal)
+      if (updatedData && ns !== 'pendiente' && ns !== 'cancelada') {
+        this._notifyClientStatusChange(updatedData, ns);
       }
 
       try { await supabaseConfig.runProcessOutbox?.(); } catch (err) {
         console.warn('[OrderManager] Error invocando process-outbox:', err);
       }
       try { await notifyClientForOrder(currentOrder.id, ns); } catch (_) {}
-      return { success: true, error: null };
+      return { success: true, data: updatedData, error: null };
 
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  },
+
+  // ✅ Helper privado para notificar al cliente sobre cambios de estado
+  async _notifyClientStatusChange(order, uiStatus) {
+    try {
+      let clientOnesignalId = null;
+      
+      // 1. Buscar en profiles si hay client_id
+      if (order.client_id) {
+        const { data: p } = await supabaseConfig.client.from('profiles').select('onesignal_id').eq('id', order.client_id).single();
+        clientOnesignalId = p?.onesignal_id;
+      } 
+      
+      // 2. Si no, buscar en clients si hay client_contact_id
+      if (!clientOnesignalId && order.client_contact_id) {
+        const { data: c } = await supabaseConfig.client.from('clients').select('onesignal_id').eq('id', order.client_contact_id).single();
+        clientOnesignalId = c?.onesignal_id;
+      }
+
+      if (clientOnesignalId) {
+        const statusMap = {
+          'en_camino_recoger': '📍 El transportista va en camino a recoger tu carga.',
+          'cargando': '📦 Tu carga está siendo procesada/cargada.',
+          'en_camino_entregar': '🚚 ¡Tu pedido ya va en ruta de entrega!',
+          'entregada': '✅ ¡Servicio completado con éxito!',
+          'completada': '✅ ¡Servicio completado con éxito!'
+        };
+
+        const message = statusMap[uiStatus] || `El estado de tu orden #${order.short_id || order.id} ha cambiado a: ${uiStatus.replace(/_/g, ' ')}`;
+        
+        this.notifyOneSignal({
+          player_ids: [clientOnesignalId],
+          title: 'Actualización de tu pedido',
+          message: message,
+          url: `${window.location.origin}/seguimiento.html?codigo=${order.short_id || order.id}`
+        });
+      }
+    } catch (e) {
+      console.warn('[OrderManager] Error notificando al cliente:', e);
     }
   }
 };

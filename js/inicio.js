@@ -680,6 +680,17 @@ async function assignSelectedCollaborator() {
     const order = allOrders.find(o => o.id === Number(selectedOrderIdForAssign));
     const orderId = order ? (order.short_id || order.id) : selectedOrderIdForAssign;
     notifications.success(`Orden #${orderId} asignada a ${col.name} ✓`, { duration: 5000 });
+    
+    // ✅ NOTIFICACIÓN ONESIGNAL AL COLABORADOR
+    if (col.onesignal_id && window.OrderManager?.notifyOneSignal) {
+      window.OrderManager.notifyOneSignal({
+        player_ids: [col.onesignal_id],
+        title: '🚛 Nueva Orden Asignada',
+        message: `Se te ha asignado la orden #${orderId}. Revisa los detalles en tu panel.`,
+        url: `${window.location.origin}/panel-colaborador.html`
+      });
+    }
+
     closeAssignModal();
 
   } catch (err) {

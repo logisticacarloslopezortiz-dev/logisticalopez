@@ -8,36 +8,39 @@
       if (!client || !client.functions || typeof client.functions.invoke !== 'function') {
         throw new Error('Funciones de Supabase no disponibles');
       }
-      // Estrategia: evitar CORS en ambientes locales -> usar RPC primero
-      const { data: created, error: rpcErr } = await client.rpc('create_order_with_contact', { order_payload: orderPayload });
-      if (rpcErr) throw rpcErr;
-      const order = Array.isArray(created) ? created[0] : created;
-      const to = order?.email || null;
-      const orderId = order?.id || null;
-      const shortId = order?.short_id || null;
-      const name = order?.name || null;
-      let email_sent = false;
-      /* 
-      // ❌ ELIMINADO: El frontend NO debe enviar emails ni notificaciones.
-      // Esto lo maneja el backend (Trigger -> Outbox -> Edge Function).
-      if (to && orderId) {
-        try {
-          const { error: mailErr } = await client.functions.invoke('send-order-email', { body: { to, orderId, shortId, status: 'pending', name } });
-          if (!mailErr) email_sent = true;
-        } catch (_) { email_sent = false; }
-      }
-      // Intento opcional de función unificada si está desplegada (no crítico)
+
+      console.log('Invocando Edge Function create-order-and-notify...');
+      
       try {
         const { data, error } = await client.functions.invoke('create-order-and-notify', {
           body: { order_payload: orderPayload }
         });
-        if (!error && data && data.success === true) {
+
+        if (error) {
+          console.error('Error en Edge Function:', error);
+          throw error;
+        }
+
+        if (data && data.success) {
+          console.log('Edge Function ejecutada con éxito:', data);
           return data;
         }
-      } catch (_) { } 
-      */
-      try { await window.supabaseConfig.runProcessOutbox?.(50); } catch (_) {}
-      return { success: true, order, email_sent: false, push_sent: false, fallback: true };
+        
+        throw new Error(data?.error || 'Error desconocido en la función');
+      } catch (err) {
+        console.warn('Fallo Edge Function, intentando fallback RPC directo...', err);
+        
+        // Fallback: Crear la orden vía RPC si la Edge Function falla (ej: problemas de red o despliegue)
+        const { data: created, error: rpcErr } = await client.rpc('create_order_with_contact', { order_payload: orderPayload });
+        if (rpcErr) throw rpcErr;
+        
+        const order = Array.isArray(created) ? created[0] : created;
+        
+        // Intentar procesar outbox para disparar notificaciones asíncronas si el RPC funcionó
+        try { await window.supabaseConfig.runProcessOutbox?.(50); } catch (_) {}
+        
+        return { success: true, order, email_sent: false, push_sent: false, fallback: true };
+      }
     }
   };
   try { window.OrdersService = OrdersService; } catch(_) {}

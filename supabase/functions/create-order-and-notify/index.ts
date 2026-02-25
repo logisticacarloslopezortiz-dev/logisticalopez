@@ -63,43 +63,56 @@ Deno.serve(async (req: Request) => {
     // 3) Enviar push de confirmación (si hay cliente o contacto asociado)
     let pushSent = false
     try {
-      // Intentar obtener onesignal_id
-      let onesignalId = null
+      // --- NOTIFICACIÓN AL CLIENTE ---
+      let clientOnesignalId = null
       if (order.client_id) {
         const { data: profile } = await supabase.from('profiles').select('onesignal_id').eq('id', order.client_id).single()
-        onesignalId = profile?.onesignal_id
+        clientOnesignalId = profile?.onesignal_id
       } else if (order.client_contact_id) {
         const { data: client } = await supabase.from('clients').select('onesignal_id').eq('id', order.client_contact_id).single()
-        onesignalId = client?.onesignal_id
+        clientOnesignalId = client?.onesignal_id
       }
 
-      if (onesignalId) {
-        const resp = await fetch(`${FUNCTIONS_BASE}/send-onesignal-notification`, {
+      if (clientOnesignalId) {
+        await fetch(`${FUNCTIONS_BASE}/send-onesignal-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            player_ids: [onesignalId],
+            player_ids: [clientOnesignalId],
             title: 'Solicitud creada',
             message: `Tu código de seguimiento: ${shortId || orderId}`,
             url
           })
-        })
-        pushSent = resp.ok
-      } else {
-        // Fallback al sistema anterior si no hay OneSignal
-        const targetBody = order.client_id
-          ? { user_id: String(order.client_id), notification: { title: 'Solicitud creada', body: `Tu código: ${shortId || orderId}`, data: { url } } }
-          : { contact_id: String(order.client_contact_id || ''), notification: { title: 'Solicitud creada', body: `Tu código: ${shortId || orderId}`, data: { url } } }
-        if ((targetBody as any).user_id || (targetBody as any).contact_id) {
-          const resp = await fetch(`${FUNCTIONS_BASE}/send-notification`, {
+        }).then(r => pushSent = r.ok).catch(() => {})
+      }
+
+      // --- NOTIFICACIÓN A ADMINISTRADORES Y COLABORADORES ---
+      // Obtener todos los administradores y colaboradores activos que tengan OneSignal ID
+      const { data: staff } = await supabase
+        .from('collaborators')
+        .select('onesignal_id')
+        .eq('status', 'activo')
+        .not('onesignal_id', 'is', null);
+
+      if (staff && staff.length > 0) {
+        const staffIds = staff.map(s => s.onesignal_id).filter(id => id);
+        if (staffIds.length > 0) {
+          await fetch(`${FUNCTIONS_BASE}/send-onesignal-notification`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SEND_NOTIFICATION_SECRET}` },
-            body: JSON.stringify(targetBody)
-          })
-          pushSent = resp.ok
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              player_ids: staffIds,
+              title: '🔔 Nueva Solicitud',
+              message: `Nueva orden de ${clientName || 'Cliente'}. Código: ${shortId || orderId}`,
+              url: `${SITE_BASE}/inicio.html` // Llevar al admin al inicio
+            })
+          }).catch(e => console.error('Error notifying staff:', e));
         }
       }
-    } catch (_) { pushSent = false }
+    } catch (e) { 
+      console.error('Error in push notification flow:', e);
+      pushSent = false; 
+    }
 
     return jsonResponse({ success: true, order, email_sent: emailSent, push_sent: pushSent }, 200, req)
   } catch (e) {
