@@ -1,6 +1,14 @@
 // Service Worker para llo Logística
 // Manejo de notificaciones push y caché básico
 
+// ✅ FIJAR EL LISTENER DE MENSAJES AL INICIO (Para evitar advertencias de Chrome/OneSignal)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+  console.log('[SW] Mensaje recibido:', event.data);
+});
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });

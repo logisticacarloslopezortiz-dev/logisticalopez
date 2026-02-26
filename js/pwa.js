@@ -55,9 +55,14 @@
   window.pwaHelpers = {
     promptInstall: async (deferredPrompt) => {
       if (!deferredPrompt) return false;
-      deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      return choice && choice.outcome === 'accepted';
+      try {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        return choice && choice.outcome === 'accepted';
+      } catch (e) {
+        console.warn('Error en prompt de instalación PWA:', e);
+        return false;
+      }
     },
     skipWaiting: () => {
       if (navigator.serviceWorker && navigator.serviceWorker.controller) {
