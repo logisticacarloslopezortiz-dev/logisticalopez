@@ -134,11 +134,22 @@ const formSection = document.getElementById('form-section');
 mapContainer = document.getElementById('map-container');
 
 function showStep(step) {
-  steps.forEach(s => s.classList.add('hidden'));
-  document.querySelector(`.step[data-step="${step}"]`).classList.remove('hidden');
-  prevBtn.classList.toggle('hidden', step === 1);
+  if (!steps || steps.length === 0) return;
+  
+  // Guardar el paso actual en una variable global si no existe
+  currentStep = step;
+
+  steps.forEach(s => {
+    if (s.dataset.step == step) {
+      s.classList.remove('hidden');
+    } else {
+      s.classList.add('hidden');
+    }
+  });
+
+  if (prevBtn) prevBtn.classList.toggle('hidden', step === 1);
   const isLastStep = step === steps.length;
-  nextBtn.classList.toggle('hidden', isLastStep);
+  if (nextBtn) nextBtn.classList.toggle('hidden', isLastStep);
 
   // Lógica para mostrar/ocultar el mapa a pantalla completa
   if (step === 4) { // Asumiendo que el paso 4 es el del mapa
@@ -171,7 +182,10 @@ function showStep(step) {
   const isStep5 = step === 5;
   if (dateEl) { dateEl.required = isStep5; }
   if (timeEl) { timeEl.required = isStep5; }
-  if (progressBar) { progressBar.style.width = ((step-1)/(steps.length-1))*100 + '%'; }
+  if (progressBar) { 
+    const totalSteps = steps ? steps.length : 6;
+    progressBar.style.width = ((step-1)/(totalSteps-1))*100 + '%'; 
+  }
   updateHelpText(step);
 }
 
@@ -1124,8 +1138,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Manejar envío de formularios de modales
   document.querySelectorAll('[id^="form-"]').forEach(form => {
+    // IMPORTANTE: Excluir el formulario principal serviceForm de este comportamiento
+    if (form.id === 'serviceForm') return;
+
     form.addEventListener('submit', function(e) {
       e.preventDefault();
+      e.stopPropagation(); // Evitar burbujeo al formulario principal
       
       // Guardar respuestas del servicio
       const formEl = e.currentTarget && e.currentTarget.nodeName === 'FORM'
@@ -1214,7 +1232,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Botón siguiente
   if (nextBtn) {
-    nextBtn.addEventListener('click', () => {
+    nextBtn.addEventListener('click', (e) => {
+      e.preventDefault(); // Evitar cualquier comportamiento por defecto (como submit si está dentro de un form)
       if (!validateCurrentStep()) return;
 
       if(currentStep < steps.length) {
@@ -1227,7 +1246,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Botón anterior
   if (prevBtn) {
-    prevBtn.addEventListener('click', () => {
+    prevBtn.addEventListener('click', (e) => {
+      e.preventDefault(); // Evitar recarga
       if(currentStep > 1) {
         currentStep--;
         showStep(currentStep);
