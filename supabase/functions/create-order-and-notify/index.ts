@@ -81,15 +81,18 @@ Deno.serve(async (req: Request) => {
     let pushSent = false
     try {
       // --- NOTIFICACIÓN AL CLIENTE ---
-      let clientOnesignalId = null
-      if (order.client_id) {
-        console.log('Buscando onesignal_id para profile:', order.client_id);
-        const { data: profile } = await supabase.from('profiles').select('onesignal_id').eq('id', order.client_id).maybeSingle()
-        clientOnesignalId = profile?.onesignal_id
-      } else if (order.client_contact_id) {
-        console.log('Buscando onesignal_id para client contact:', order.client_contact_id);
-        const { data: client } = await supabase.from('clients').select('onesignal_id').eq('id', order.client_contact_id).maybeSingle()
-        clientOnesignalId = client?.onesignal_id
+      let clientOnesignalId = orderPayload.onesignal_player_id || null
+      
+      if (!clientOnesignalId) {
+        if (order.client_id) {
+          console.log('Buscando onesignal_id para profile:', order.client_id);
+          const { data: profile } = await supabase.from('profiles').select('onesignal_id').eq('id', order.client_id).maybeSingle()
+          clientOnesignalId = profile?.onesignal_id
+        } else if (order.client_contact_id) {
+          console.log('Buscando onesignal_id para client contact:', order.client_contact_id);
+          const { data: client } = await supabase.from('clients').select('onesignal_id').eq('id', order.client_contact_id).maybeSingle()
+          clientOnesignalId = client?.onesignal_id
+        }
       }
 
       if (clientOnesignalId) {

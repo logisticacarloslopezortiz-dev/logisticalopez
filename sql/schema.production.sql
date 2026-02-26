@@ -1437,9 +1437,15 @@
           $$
         );
 
+-- =============================================================
+--        ONESIGNAL INTEGRATION (ADDED 2026-02-26)
+-- =============================================================
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS onesignal_id text;
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS onesignal_id text;
+ALTER TABLE public.collaborators ADD COLUMN IF NOT EXISTS onesignal_id text;
 
--- Add index for faster lookups
+-- Add indexes for faster lookups during notification triggers
 CREATE INDEX IF NOT EXISTS idx_profiles_onesignal_id ON public.profiles(onesignal_id);
 CREATE INDEX IF NOT EXISTS idx_clients_onesignal_id ON public.clients(onesignal_id);
+CREATE INDEX IF NOT EXISTS idx_collaborators_onesignal_id ON public.collaborators(onesignal_id);
+
