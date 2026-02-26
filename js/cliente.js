@@ -44,121 +44,6 @@ function getSafeCoords(point) {
   return point?.latlng ? { lat: point.latlng.lat, lng: point.latlng.lng } : null;
 }
 
-/**
- * Solicita permiso para mostrar notificaciones push.
- * Se llama cuando el usuario intenta enviar la solicitud final.
- */
-async function requestNotificationPermission() {
-  try {
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-      console.warn('Push notifications not supported by this browser.');
-      return 'unsupported';
-    }
-    
-    if (Notification.permission === 'granted') {
-      return 'granted';
-    }
-    
-    if (Notification.permission === 'denied') {
-      notify('info', 'Las notificaciones están bloqueadas. Puedes activarlas en la configuración de tu navegador.', { title: 'Notificaciones Bloqueadas' });
-      return 'denied';
-    }
-    
-    const permission = await Notification.requestPermission();
-    
-    if (permission === 'granted') {
-      notify('success', '¡Gracias! Recibirás actualizaciones sobre tu solicitud.', { title: 'Permiso Concedido' });
-    }
-    return permission;
-  } catch (error) {
-    return 'error';
-  }
-}
-
-async function getPushSubscription() {
-  try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      return null;
-    }
-
-    // No solicitar permiso automáticamente; solo continuar si ya está concedido
-    const permission = Notification.permission;
-    if (permission !== 'granted') {
-      return null;
-    }
-
-    const registration = await navigator.serviceWorker.ready;
-    let vapidKey = null;
-    try {
-      // ✅ SOLO usamos la función correcta get-vapid-key
-      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key');
-      if (error) { /* silencio */ }
-      vapidKey = data?.key || null;
-    } catch (e) {
-      // silencio
-    }
-    if (!vapidKey || typeof vapidKey !== 'string') {
-      return null;
-    }
-    const applicationServerKey = urlBase64ToUint8Array(vapidKey);
-
-    if (window.__push_subscribing) return null;
-    window.__push_subscribing = true;
-    const existing = await registration.pushManager.getSubscription();
-    if (existing) {
-      window.__push_subscribing = false;
-      const json = typeof existing.toJSON === 'function' ? existing.toJSON() : existing;
-      return json;
-    }
-
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey
-    });
-    window.__push_subscribing = false;
-    // Suscripción obtenida
-    return typeof subscription.toJSON === 'function' ? subscription.toJSON() : subscription;
-  } catch (error) {
-    // silencio: no mostrar al usuario
-    return null;
-  }
-}
-
-// --- Push Flow Centralizado ---
-const PushFlow = {
-  async resolve(options = {}) {
-    const { timeout = 8000 } = options;
-    let permissionPromise = null;
-    let pushSubscription = null;
-
-    try {
-      // 1. Request Permission
-      permissionPromise = requestNotificationPermission();
-      const perm = await Promise.race([
-        permissionPromise,
-        new Promise(r => setTimeout(() => r('timeout'), timeout))
-      ]);
-
-      if (perm === 'granted') {
-        notify('info', 'Activando notificaciones...', { title: 'Permiso Concedido' });
-        
-        // 2. Get Subscription
-        let pushPromise = (window.pushManager && typeof window.pushManager.subscribe === 'function')
-          ? window.pushManager.subscribe()
-          : getPushSubscription();
-
-        pushSubscription = await Promise.race([
-          pushPromise,
-          new Promise(r => setTimeout(() => r(null), timeout))
-        ]);
-      }
-    } catch (e) {
-      console.warn('PushFlow error:', e);
-    }
-    return { permissionPromise, pushSubscription };
-  }
-};
-
 // Variables para el mapa
 let map;
 // Usar MapState.preview como marcador de preview
@@ -1083,103 +968,6 @@ if (!window.showError) window.showError = (message, options) => notify('error', 
 if (!window.showWarning) window.showWarning = (message, options) => notify('warning', message, options);
 if (!window.showInfo) window.showInfo = (message, options) => notify('info', message, options);
 
-/**
- * Pide permiso al usuario para notificaciones y guarda la suscripción en la orden.
- * @param {string} orderId - El ID de la orden recién creada.
- */
-async function askForNotificationPermission(savedOrder) {
-  // Desactivado: no pedir permiso ni mostrar overlay post-envío.
-  return;
-}
-
-// Utilidad: convertir Base64 URL-safe a Uint8Array para Push API
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding)
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
-}
-
-async function subscribeUserToPush(savedOrder) {
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    
-    // Obtener la clave VAPID válida desde el servidor (unificada)
-    let vapidKey = null;
-    try {
-      const { data, error } = await supabaseConfig.client.functions.invoke('get-vapid-key');
-      if (error) {
-        console.warn('No se pudo obtener VAPID por función:', error.message);
-      }
-      vapidKey = data?.key || null;
-    } catch (e) {
-      console.warn('Fallo al invocar get-vapid-key:', e?.message || String(e));
-    }
-
-    if (!vapidKey || typeof vapidKey !== 'string') {
-      throw new Error('VAPID pública no disponible.');
-    }
-
-    // Validar formato de clave VAPID antes de convertir
-    const raw = urlBase64ToUint8Array(vapidKey);
-    if (!(raw instanceof Uint8Array) || raw.length !== 65 || raw[0] !== 4) {
-      console.error('Clave VAPID inválida: longitud', raw?.length, 'primer byte', raw?.[0]);
-      throw new Error('Invalid raw ECDSA P-256 public key');
-    }
-
-    const applicationServerKey = raw;
-    // applicationServerKey validada correctamente
-
-    let subscription = null;
-    let existing = null;
-    try {
-      existing = await registration.pushManager.getSubscription();
-      if (existing) {
-        subscription = existing;
-        // Suscripción existente reutilizada
-      } else {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey
-        });
-      }
-    } catch (subErr) {
-      if (String(subErr?.message || '').includes('applicationServerKey') || String(subErr?.name || '') === 'InvalidStateError') {
-        try {
-          existing = await registration.pushManager.getSubscription();
-          if (existing) await existing.unsubscribe();
-        } catch (_) {}
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey
-        });
-      } else {
-        throw subErr;
-      }
-    }
-    
-    // Guardado delegado al backend: la suscripción se vincula server-side.
-    // Si se necesita enviar explícitamente, usar una función de Edge con validaciones.
-
-    return subscription;
-  } catch (error) {
-    // Error en subscribeUserToPush (silenciado)
-    throw error;
-  }
-}
-
-// --- UI elegante para opt-in de notificaciones (tarjeta blanca con logo) ---
-function showPushOptInCard(savedOrder) {
-  // Evitar duplicados
-  return; // Deshabilitado: no mostrar tarjeta de opt-in
-}
-
 // Redirección después de copiar el ID
 function handleAfterCopy(orderId) {
   try {
@@ -1509,8 +1297,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const originCoords = getSafeCoords(MapState.origin);
         const destinationCoords = getSafeCoords(MapState.destination);
 
-        // 1. Push Flow Centralizado
-        const { permissionPromise, pushSubscription } = await PushFlow.resolve();
+        // 1. OneSignal Flow: Solicitar permiso y obtener ID
+        let oneSignalPlayerId = null;
+        if (window.OneSignalDeferred) {
+          await new Promise(resolve => {
+            window.OneSignalDeferred.push(async function(OneSignal) {
+              try {
+                await OneSignal.Slidedown.promptPush();
+                oneSignalPlayerId = OneSignal.User.PushSubscription.id;
+                console.log("OneSignal Subscription ID:", oneSignalPlayerId);
+              } catch (e) {
+                console.warn("OneSignal prompt error:", e);
+              }
+              resolve();
+            });
+          });
+        }
 
         const orderData = {
           // Datos del cliente (Paso 1)
@@ -1587,8 +1389,8 @@ document.addEventListener('DOMContentLoaded', function() {
           vehicle_id: orderData.vehicle_id,
           origin_coords: origin_coords2,
           destination_coords: destination_coords2,
-          // ✅ AÑADIR LA SUSCRIPCIÓN AL PAYLOAD
-          push_subscription: pushSubscription
+          // ✅ AÑADIR EL ID DE ONESIGNAL AL PAYLOAD
+          onesignal_player_id: oneSignalPlayerId
         });
 
         
@@ -1606,27 +1408,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const displayCode = (savedOrder && (savedOrder.short_id || savedOrder.id)) ? (savedOrder.short_id || savedOrder.id) : null;
         
-        // ✅ ACTUALIZACIÓN TARDÍA DE SUSCRIPCIÓN PUSH (RPC)
-        
-        // Caso B: El usuario aprobó el permiso TARDE (después del timeout de permiso)
-        if (!pushSubscription && permissionPromise && savedOrder && savedOrder.id) {
-            permissionPromise.then(async (latePerm) => {
-                if (latePerm === 'granted') {
-                    console.log('Permiso concedido tardíamente (Caso B). Intentando obtener suscripción...');
-                    try {
-                        const lateSub = await getPushSubscription();
-                        if (lateSub) {
-                            await supabaseConfig.client.rpc('update_push_subscription_by_order', {
-                                p_order_id: savedOrder.id,
-                                p_push_subscription: lateSub
-                            });
-                            console.log('Orden actualizada con suscripción push (late update B).');
-                        }
-                    } catch(e) { console.error('Error en late update B:', e); }
-                }
-            }).catch(e => console.debug('Late permission promise failed:', e));
-        }
-
         if (!displayCode) {
           console.warn('Orden creada sin datos de retorno por RLS. Mostrando confirmación genérica.');
           notify('persistent',

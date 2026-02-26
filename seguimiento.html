@@ -287,33 +287,43 @@
     <script src="js/logging.js?v=20251231"></script>
     <script src="js/notifications.js?v=20251231"></script>
     <script src="js/seguimiento.js?v=20251231"></script>
-  <script src="js/push-notifications.js" defer></script>
   <script src="js/pwa.js"></script>
   <script>
     (function(){
       const onReady = () => {
         const btn = document.getElementById('enablePushBtn');
-        if (!btn || !window.pushNotifications) return;
+        if (!btn) return;
+        
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        
         const updateBtn = () => {
-          const perm = window.pushNotifications.permission;
-          const enabled = window.pushNotifications.isEnabled;
-          if (perm === 'denied') {
-            btn.textContent = 'Permiso de notificaciones denegado';
-            btn.disabled = true;
-          } else if (enabled) {
-            btn.textContent = 'Notificaciones activas';
-            btn.disabled = true;
-          } else {
-            btn.textContent = 'Activar notificaciones';
-            btn.disabled = false;
-          }
+          OneSignalDeferred.push(async function(OneSignal) {
+            const isOptedIn = OneSignal.User.PushSubscription.optedIn;
+            const perm = Notification.permission;
+            if (perm === 'denied') {
+              btn.textContent = 'Notificaciones bloqueadas';
+              btn.disabled = true;
+            } else if (isOptedIn) {
+              btn.textContent = 'Notificaciones activas';
+              btn.disabled = true;
+            } else {
+              btn.textContent = 'Activar notificaciones';
+              btn.disabled = false;
+            }
+          });
         };
+        
         updateBtn();
+        
+        // Escuchar cambios en la suscripción
+        OneSignalDeferred.push(function(OneSignal) {
+          OneSignal.User.PushSubscription.addEventListener("change", updateBtn);
+        });
+
         btn.addEventListener('click', async () => {
-          if (!window.pushNotifications.isSupported) return;
-          await window.pushNotifications.enable();
-          updateBtn();
-          try { if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons(); } catch(_){}
+          OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.Slidedown.promptPush();
+          });
         });
         try { if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons(); } catch(_){}
       };

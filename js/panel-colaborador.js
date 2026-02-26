@@ -257,72 +257,37 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Notificaciones Push (Automatización) ---
-  function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
-
   async function registerCollaboratorPush(userId) {
-    try {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-      
-      // Intentar pedir permiso si está en 'default' (puede requerir interacción en algunos navegadores)
-      if (Notification.permission === 'default') {
-        try { await Notification.requestPermission(); } catch(_) {}
-      }
-      
-      if (Notification.permission !== 'granted') return;
-
-      const registration = await navigator.serviceWorker.ready;
-      let sub = await registration.pushManager.getSubscription();
-      
-      if (!sub) {
-        const vapidKey = await supabaseConfig.getVapidPublicKey();
-        if (!vapidKey) return;
-        
-        sub = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey)
-        });
-      }
-      
-      if (sub) {
-        const raw = typeof sub.toJSON === 'function' ? sub.toJSON() : null;
-        const keys = raw?.keys || (sub.keys || {});
-        const endpoint = String(sub.endpoint || '').trim().replace(/`+/g, '');
-        // Validar si el colaborador está activo antes de intentar actualizar su fila
-        let canUpdateCollaborator = false;
+    if (window.OneSignalDeferred) {
+      window.OneSignalDeferred.push(async function(OneSignal) {
         try {
-          const v = await supabaseConfig.validateActiveCollaborator?.(userId);
-          canUpdateCollaborator = !!(v && v.isValid);
-        } catch(_){}
+          // Identificar al colaborador en OneSignal
+          await OneSignal.login(userId);
+          console.log(`[OneSignal] Colaborador identificado: ${userId}`);
 
-        if (canUpdateCollaborator) {
-          const { error: collabErr } = await supabaseConfig.client
-            .from('collaborators')
-            .update({ push_subscription: raw || sub })
-            .eq('id', userId);
-          if (!collabErr) return; // sincroniza a push_subscriptions por trigger
+          // Solicitar permiso si aún no lo tiene
+          if (!OneSignal.User.PushSubscription.optedIn) {
+             await OneSignal.Slidedown.promptPush();
+          }
+
+          // ✅ Guardar ID en Supabase para recibir notificaciones de asignación
+          const saveId = async () => {
+            const id = OneSignal.User.PushSubscription.id;
+            if (id) {
+              console.log('[OneSignal] Guardando ID en DB:', id);
+              await supabaseConfig.updateOneSignalId(id);
+            }
+          };
+
+          // Guardar ahora y si cambia
+          await saveId();
+          OneSignal.User.PushSubscription.addEventListener("change", saveId);
+
+        } catch (e) {
+          console.warn('[OneSignal] Error registrando colaborador:', e);
         }
-
-        // Fallback robusto: guardar directamente en push_subscriptions
-        try {
-          await supabaseConfig.client
-            .from('push_subscriptions')
-            .upsert({
-              user_id: userId,
-              endpoint,
-              keys: { p256dh: keys.p256dh, auth: keys.auth }
-            }, { onConflict: 'user_id,endpoint' });
-        } catch(_){}
-      }
-    } catch (e) { console.warn('Error auto-registro push:', e); }
+      });
+    }
   }
 
   // --- Autenticación ---

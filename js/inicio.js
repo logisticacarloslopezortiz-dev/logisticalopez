@@ -1158,6 +1158,34 @@ function openWhatsApp(order) {
   window.open(url, '_blank');
 }
 
+// ✅ Nueva función para registrar al Admin en OneSignal
+async function registerAdminPush() {
+  if (window.OneSignalDeferred) {
+    window.OneSignalDeferred.push(async function(OneSignal) {
+      try {
+        const { data: { user } } = await supabaseConfig.client.auth.getUser();
+        if (user) {
+          await OneSignal.login(user.id);
+          
+          if (!OneSignal.User.PushSubscription.optedIn) {
+             await OneSignal.Slidedown.promptPush();
+          }
+
+          const saveId = async () => {
+            const id = OneSignal.User.PushSubscription.id;
+            if (id) await supabaseConfig.updateOneSignalId(id);
+          };
+          
+          await saveId();
+          OneSignal.User.PushSubscription.addEventListener("change", saveId);
+        }
+      } catch (e) {
+        console.warn('[OneSignal] Error registrando admin:', e);
+      }
+    });
+  }
+}
+
 async function checkVapidStatus() {
   try {
     const { data, error } = await supabaseConfig.client.functions.invoke('getVapidKey');
@@ -1187,7 +1215,8 @@ async function initAdminOrdersPage() {
   await loadCollaborators(); // Cargar primero los colaboradores para el mapa
   await loadOrders(); // Cargar órdenes después
   await loadAdminInfo();
-  checkVapidStatus();
+  // checkVapidStatus(); // Ya no es necesario con OneSignal
+  registerAdminPush(); // ✅ Registrar Admin
   setupRealtime();
   refreshLucide();
 }

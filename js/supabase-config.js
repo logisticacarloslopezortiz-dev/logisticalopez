@@ -75,12 +75,19 @@ if (!window.supabaseConfig) {
         const { data: { user } } = await this.client.auth.getUser();
         
         if (user) {
-          // Si hay usuario logueado (Admin/Colaborador), actualizar en profiles
-          const { error } = await this.client
+          // 1. Actualizar en profiles (Usuarios generales)
+          const { error: profileError } = await this.client
             .from('profiles')
             .update({ onesignal_id: onesignalId })
             .eq('id', user.id);
-          return { success: !error, error };
+
+          // 2. Actualizar en collaborators (Si es colaborador/admin)
+          const { error: collabError } = await this.client
+            .from('collaborators')
+            .update({ onesignal_id: onesignalId })
+            .eq('id', user.id);
+
+          return { success: !profileError || !collabError, error: profileError || collabError };
         } else if (contactId) {
           // Si no hay usuario pero hay contactId (Cliente), actualizar en clients
           const { error } = await this.client
