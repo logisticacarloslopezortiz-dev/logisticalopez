@@ -1261,20 +1261,6 @@ document.addEventListener('DOMContentLoaded', () => {
   window.closeAssignModal = closeAssignModal;
   window.closePriceModal = closePriceModal;
   window.savePriceData = savePriceData;
-
-  // Solicitar permisos de notificación
-  try {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      try {
-        const enable = window.pushNotifications && window.pushNotifications.enable;
-        if (typeof enable === 'function') {
-          enable().catch(() => {});
-        } else if (Notification.requestPermission) {
-          Notification.requestPermission().catch(() => {});
-        }
-      } catch (_) {}
-    }
-  } catch (_) {}
 });
 
 document.addEventListener('admin-session-ready', (e) => {
