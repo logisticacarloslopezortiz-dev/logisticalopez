@@ -96,6 +96,8 @@
   }
 
   // Force reload once when controller changes to ensure new SW takes over
+  // ✅ DESACTIVADO: La recarga automática causa problemas al usuario (pérdida de datos/IDs)
+  /*
   (function setupControllerChangeReload(){
     try {
       let reloaded = false;
@@ -106,4 +108,5 @@
       });
     } catch(_){}
   })();
+  */
 })();

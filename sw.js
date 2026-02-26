@@ -1,13 +1,13 @@
-// Service Worker para llo Logística
-// Manejo de notificaciones push y caché básico
-
-// ✅ FIJAR EL LISTENER DE MENSAJES AL INICIO (Para evitar advertencias de Chrome/OneSignal)
+// ✅ FIJAR EL LISTENER DE MENSAJES AL INICIO ABSOLUTO (Requisito Chrome/OneSignal)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.action === 'skipWaiting') {
     self.skipWaiting();
   }
   console.log('[SW] Mensaje recibido:', event.data);
 });
+
+// Service Worker para llo Logística
+// Manejo de notificaciones push y caché básico
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -34,8 +34,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'TLC Logística';
   const options = {
     body: data.body || 'Tienes una nueva actualización.',
-    icon: '/img/logo.png', // Asegúrate de tener un logo aquí o usa uno genérico
-    badge: '/img/badge.png', // Icono pequeño para la barra de estado
+    icon: '/img/logo.png',
+    badge: '/img/badge.png',
     data: data.data || {},
     vibrate: [100, 50, 100],
     actions: data.actions || []
@@ -49,19 +49,16 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  // Datos adjuntos a la notificación
   const data = event.notification.data;
-  const urlToOpen = data.url || '/inicio.html'; // URL por defecto
+  const urlToOpen = data.url || '/inicio.html';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si ya hay una ventana abierta con esa URL, enfocarla
       for (const client of clientList) {
         if (client.url === urlToOpen && 'focus' in client) {
           return client.focus();
         }
       }
-      // Si no, abrir una nueva
       if (clients.openWindow) {
         return clients.openWindow(urlToOpen);
       }
