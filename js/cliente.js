@@ -88,14 +88,49 @@ async function reverseGeocode(latlng) {
 function updateStepUI() {
   try {
     const instr = document.getElementById('map-instruction-text');
-    if (instr) {
-        if (MapState.mode === 'origin') instr.textContent = 'Primero, define tu punto de recogida.';
-        else if (MapState.mode === 'destination') instr.textContent = 'Ahora, define tu punto de entrega.';
-        else instr.textContent = 'Origen y destino definidos. Puedes continuar.';
+    const guideCard = document.getElementById('map-guide-card');
+    const guideIcon = document.getElementById('map-guide-icon');
+    const guideTitle = document.getElementById('map-guide-title');
+    const guideText = document.getElementById('map-guide-text');
+
+    if (MapState.mode === 'origin') {
+      if (instr) instr.textContent = 'Primero, define tu punto de recogida.';
+      if (guideCard) {
+        guideCard.classList.remove('hidden', 'bg-red-50', 'border-red-200');
+        guideCard.classList.add('bg-green-50', 'border-green-200', 'animate-bounce-subtle');
+        if (guideIcon) guideIcon.innerHTML = '<i class="fa-solid fa-location-dot text-green-600 text-xl"></i>';
+        if (guideTitle) guideTitle.textContent = 'Punto de Recogida';
+        if (guideText) guideText.textContent = 'Toca el mapa o busca la dirección donde debemos recoger la carga.';
+      }
+    } else if (MapState.mode === 'destination') {
+      if (instr) instr.textContent = 'Ahora, define tu punto de entrega.';
+      if (guideCard) {
+        guideCard.classList.remove('hidden', 'bg-green-50', 'border-green-200');
+        guideCard.classList.add('bg-red-50', 'border-red-200', 'animate-pulse-subtle');
+        if (guideIcon) guideIcon.innerHTML = '<i class="fa-solid fa-flag-checkered text-red-600 text-xl"></i>';
+        if (guideTitle) guideTitle.textContent = 'Punto de Entrega';
+        if (guideText) guideText.textContent = 'Excelente. Ahora marca el lugar exacto de destino.';
+      }
+    } else {
+      if (instr) instr.textContent = 'Origen y destino definidos. Puedes continuar.';
+      if (guideCard) guideCard.classList.add('hidden');
     }
     
-    if (pickupInput) pickupInput.disabled = false;
-    if (deliveryInput) deliveryInput.disabled = MapState.mode === 'origin';
+    if (pickupInput) {
+      pickupInput.disabled = false;
+      // Facilitar pegado y limpieza
+      if (!pickupInput.dataset.listenerAdded) {
+        pickupInput.addEventListener('focus', () => pickupInput.select());
+        pickupInput.dataset.listenerAdded = 'true';
+      }
+    }
+    if (deliveryInput) {
+      deliveryInput.disabled = MapState.mode === 'origin';
+      if (!deliveryInput.dataset.listenerAdded) {
+        deliveryInput.addEventListener('focus', () => deliveryInput.select());
+        deliveryInput.dataset.listenerAdded = 'true';
+      }
+    }
     
     const originCard = document.getElementById('origin-card');
     const destCard = document.getElementById('destination-card');
@@ -121,7 +156,7 @@ function updateStepUI() {
     }
     
     const distanceContainer = document.getElementById('distance-container');
-    if (distanceContainer) distanceContainer.classList.add('hidden'); // Calculo de distancia eliminado según reglas
+    if (distanceContainer) distanceContainer.classList.add('hidden'); 
   } catch(_) {}
 }
 
@@ -820,7 +855,7 @@ async function confirmPoint(latlng, label = null) {
 
     // 1. Validar límites de República Dominicana
     if (rdBounds && !rdBounds.contains(latlng)) {
-      notify('error', 'La ubicación está fuera de República Dominicana.');
+      notify('error', 'La ubicación seleccionada está fuera de la República Dominicana. Por favor, marca un punto dentro del territorio nacional.', { title: 'Ubicación no permitida' });
       return;
     }
 
@@ -845,9 +880,13 @@ async function confirmPoint(latlng, label = null) {
     } else if (MapState.mode === 'origin') {
       setPoint('origin', latlng, label);
       MapState.mode = 'destination';
+      // Notificar éxito al fijar origen
+      notify('success', 'Punto de recogida fijado correctamente.', { duration: 2000 });
     } else if (MapState.mode === 'destination') {
       setPoint('destination', latlng, label);
       MapState.mode = 'complete';
+      // Notificar éxito al fijar destino
+      notify('success', 'Ruta completada. Ya puedes continuar al siguiente paso.', { duration: 3000 });
     }
 
     // 5. Actualizar UI

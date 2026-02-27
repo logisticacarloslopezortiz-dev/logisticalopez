@@ -522,13 +522,24 @@
                 
                 // Configurar botón para abrir la vista completa
                 document.getElementById('continueActiveBtn').onclick = () => {
-                  document.getElementById('main-content').classList.add('hidden');
-                  document.getElementById('activeJobView').classList.remove('hidden');
-                  renderActiveJob(data, user); // ✅ Renderizar datos al abrir con nombre fijo
+                  if (typeof window.openActiveJob === 'function') {
+                    window.openActiveJob(data);
+                  } else {
+                    // Fallback si el JS externo no ha cargado
+                    document.getElementById('main-content').classList.add('hidden');
+                    document.getElementById('activeJobView').classList.remove('hidden');
+                    renderActiveJob(data, user);
+                  }
                 };
+
+                // ✅ Si el estado guardado era 'active', abrirlo automáticamente
+                if (localStorage.getItem('collab_current_view') === 'active') {
+                   if (typeof window.openActiveJob === 'function') window.openActiveJob(data);
+                }
               }
             } else {
-              // Si no tiene orden activa, cargar lista de asignadas
+              // Si no tiene orden activa, limpiar localStorage y cargar lista
+              localStorage.removeItem('activeJobId');
               loadAssignedOrders(user.id);
             }
           } catch (err) {
@@ -549,7 +560,7 @@
                 'activeJobPickup': order.pickup || '',
                 'activeJobDelivery': order.delivery || '',
                 'activeJobVehicle': (order?.vehicle?.name || ''),
-                'activeCollaborator': user.user_metadata?.full_name || 'Tú' // ✅ Nombre fijo del colaborador
+                'activeCollaborator': user?.user_metadata?.full_name || 'Tú' // ✅ Nombre fijo del colaborador
             };
             
             for (const [id, val] of Object.entries(fields)) {
@@ -563,55 +574,58 @@
             const grid = document.getElementById('ordersGrid');
             if(!grid) return;
 
-            grid.innerHTML = '<div class="col-span-full text-center py-8"><i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto text-blue-500"></i><p class="mt-2 text-gray-500">Buscando tus asignaciones...</p></div>';
-            lucide.createIcons();
+            // Mostrar un esqueleto de carga más ligero para internet lento
+            grid.innerHTML = '<div class="col-span-full text-center py-8"><div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div><p class="text-gray-500">Cargando tus tareas...</p></div>';
+            
+            try {
+              const { data: orders, error } = await supabaseConfig.client
+                  .from('orders')
+                  .select('*, service:services(name), vehicle:vehicles(name)')
+                  .eq('assigned_to', userId)
+                  .in('status', ['pending', 'accepted'])
+                  .order('created_at', { ascending: false });
 
-            const { data: orders, error } = await supabaseConfig.client
-                .from('orders')
-                .select('*, service:services(name), vehicle:vehicles(name)')
-                .eq('assigned_to', userId)
-                .in('status', ['pending', 'accepted'])
-                .order('created_at', { ascending: false });
+              if (error || !orders || orders.length === 0) {
+                  grid.innerHTML = `
+                      <div class="col-span-full flex flex-col items-center justify-center py-12 text-gray-400">
+                          <div class="bg-gray-100 p-4 rounded-full mb-3">
+                              <i data-lucide="inbox" class="w-8 h-8"></i>
+                          </div>
+                          <p class="text-lg font-medium">No tienes órdenes asignadas</p>
+                          <p class="text-sm">El administrador te notificará cuando tengas una nueva tarea.</p>
+                      </div>`;
+                  if(window.lucide) lucide.createIcons();
+                  document.getElementById('collabShowing').textContent = '0';
+                  document.getElementById('collabTotal').textContent = '0';
+                  return;
+              }
 
-            if (error || !orders || orders.length === 0) {
-                grid.innerHTML = `
-                    <div class="col-span-full flex flex-col items-center justify-center py-12 text-gray-400">
-                        <div class="bg-gray-100 p-4 rounded-full mb-3">
-                            <i data-lucide="inbox" class="w-8 h-8"></i>
-                        </div>
-                        <p class="text-lg font-medium">No tienes órdenes asignadas</p>
-                        <p class="text-sm">El administrador te notificará cuando tengas una nueva tarea.</p>
-                    </div>`;
-                lucide.createIcons();
-                document.getElementById('collabShowing').textContent = '0';
-                document.getElementById('collabTotal').textContent = '0';
-                return;
+              // Renderizar órdenes
+              grid.innerHTML = '';
+              document.getElementById('collabShowing').textContent = orders.length;
+              document.getElementById('collabTotal').textContent = orders.length;
+
+              orders.forEach(order => {
+                  const card = document.createElement('div');
+                  card.className = 'bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow cursor-pointer relative overflow-hidden group';
+                  card.innerHTML = `
+                      <div class="absolute top-0 left-0 w-1 h-full bg-[var(--azul)] group-hover:bg-[var(--amarillo)] transition-colors"></div>
+                      <div class="flex justify-between items-start mb-3">
+                          <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded">#${String(order.id)}</span>
+                          <span class="text-xs text-gray-500">${new Date(order.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <h3 class="font-bold text-gray-900 mb-1">${order?.service?.name || 'Servicio'}</h3>
+                      <p class="text-sm text-gray-600 mb-4 line-clamp-2">${order.pickup || ''} ➝ ${order.delivery || ''}</p>
+                      <button class="w-full py-2 bg-[var(--azul)] text-white rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors">Ver Detalles</button>
+                  `;
+                  card.onclick = () => { openOrderModal(order); };
+                  grid.appendChild(card);
+              });
+              if(window.lucide) lucide.createIcons();
+            } catch(e) {
+              grid.innerHTML = '<p class="col-span-full text-center text-red-500 py-8">Error de conexión. Reintentando...</p>';
+              setTimeout(() => loadAssignedOrders(userId), 3000);
             }
-
-            // Renderizar órdenes
-            grid.innerHTML = '';
-            document.getElementById('collabShowing').textContent = orders.length;
-            document.getElementById('collabTotal').textContent = orders.length;
-
-            orders.forEach(order => {
-                // Aquí iría tu lógica de renderizado de tarjeta (puedes copiar la de tu js principal o crearla aquí)
-                // Por brevedad, creo una tarjeta simple:
-                const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow cursor-pointer relative overflow-hidden group';
-                card.innerHTML = `
-                    <div class="absolute top-0 left-0 w-1 h-full bg-[var(--azul)] group-hover:bg-[var(--amarillo)] transition-colors"></div>
-                    <div class="flex justify-between items-start mb-3">
-                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded">#${String(order.id)}</span>
-                        <span class="text-xs text-gray-500">${new Date(order.created_at).toLocaleDateString()}</span>
-                    </div>
-                    <h3 class="font-bold text-gray-900 mb-1">${order?.service?.name || 'Servicio'}</h3>
-                    <p class="text-sm text-gray-600 mb-4 line-clamp-2">${order.pickup || ''} ➝ ${order.delivery || ''}</p>
-                    <button class="w-full py-2 bg-[var(--azul)] text-white rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors">Ver Detalles</button>
-                `;
-                // Al hacer click, abrir modal (asumiendo que openOrderModal existe en tu JS principal o lo implementas)
-                card.onclick = () => { openOrderModal(order); };
-                grid.appendChild(card);
-            });
         }
 
         // ✅ Función Modal y Aceptar Orden (Integrada para asegurar funcionamiento)
@@ -622,7 +636,7 @@
             document.getElementById('modalOrderId').textContent = '#' + order.id;
             document.getElementById('modalService').textContent = order?.service?.name || '';
             document.getElementById('modalStatus').textContent = order.status;
-            document.getElementById('modalClient').textContent = order.name || '';
+            document.getElementById('modalClient').textContent = (order.name || '') + (order.phone ? ' · ' + order.phone : '');
             document.getElementById('modalVehicle').textContent = order?.vehicle?.name || '';
             document.getElementById('modalPickup').textContent = order.pickup || '';
             document.getElementById('modalDelivery').textContent = order.delivery || '';
@@ -634,39 +648,43 @@
                     acceptBtn.disabled = true;
                     acceptBtn.textContent = "Procesando...";
                     
-                    const { error } = await supabaseConfig.client
-                        .from('orders')
-                        .update({ status: 'accepted' })
-                        .eq('id', order.id);
-                        
-                    if(!error) {
-                        // ✅ Notificar al cliente vía OneSignal (desde inline script)
-                        try {
-                            if (typeof notifyStatusToClient === 'function') {
-                                await notifyStatusToClient(order, 'accepted');
-                            } else if (window.OrderManager && typeof OrderManager.notifyOneSignal === 'function') {
-                                // Fallback si la función no está expuesta globalmente
-                                // Buscamos el onesignal_id manualmente
-                                const { data: client } = await supabaseConfig.client
-                                    .from('clients')
-                                    .select('onesignal_id')
-                                    .eq('id', order.client_contact_id || order.client_id)
-                                    .maybeSingle();
-                                
-                                if (client?.onesignal_id) {
-                                    await OrderManager.notifyOneSignal({
-                                        player_ids: [client.onesignal_id],
-                                        title: '✅ Solicitud Aceptada',
-                                        message: `Tu solicitud ha sido aceptada. (Orden #${order.short_id || order.id})`,
-                                        url: `${window.location.origin}/seguimiento.html?codigo=${order.short_id || order.id}`
-                                    });
-                                }
-                            }
-                        } catch (e) { console.warn('Error notif aceptada:', e); }
+                    try {
+                      const { error } = await supabaseConfig.client
+                          .from('orders')
+                          .update({ status: 'accepted' })
+                          .eq('id', order.id);
+                          
+                      if(!error) {
+                          // ✅ Notificar al cliente vía OneSignal
+                          if (typeof notifyStatusToClient === 'function') {
+                              await notifyStatusToClient(order, 'accepted');
+                          }
 
-                        modal.classList.add('hidden');
-                        modal.classList.remove('flex');
-                        // Realtime actualizará la UI automáticamente
+                          modal.classList.add('hidden');
+                          modal.classList.remove('flex');
+                          
+                          // ✅ Abrir inmediatamente el trabajo activo sin esperar recargas
+                          const { data: updatedOrder } = await supabaseConfig.client
+                            .from('orders')
+                            .select('*, service:services(name), vehicle:vehicles(name)')
+                            .eq('id', order.id)
+                            .single();
+                          
+                          if (typeof window.openActiveJob === 'function') {
+                            window.openActiveJob(updatedOrder || order);
+                          } else {
+                            // Fallback UI
+                            document.getElementById('main-content').classList.add('hidden');
+                            document.getElementById('activeJobView').classList.remove('hidden');
+                            renderActiveJob(updatedOrder || order);
+                          }
+                      } else {
+                        throw error;
+                      }
+                    } catch(e) {
+                      alert("Error al aceptar orden: " + (e.message || "Problema de conexión"));
+                      acceptBtn.disabled = false;
+                      acceptBtn.textContent = "Aceptar Orden";
                     }
                 };
             }

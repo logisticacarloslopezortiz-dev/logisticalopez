@@ -409,8 +409,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function showView(name) {
     const showGrid = name === 'grid';
     const showActive = name === 'active';
+    
+    // Ocultar/Mostrar contenedores principales
     if (grid) grid.classList.toggle('hidden', !showGrid);
     if (activeView) activeView.classList.toggle('hidden', !showActive);
+    
+    // Asegurar que el contenido principal se oculte si estamos en vista activa
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) mainContent.classList.toggle('hidden', showActive);
     
     // Si mostramos el mapa activo, asegurar que se renderice bien
     if (showActive && activeMap) {
@@ -418,6 +424,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try { activeMap.invalidateSize(); } catch(_) {}
       }, 300);
     }
+
+    // Guardar estado de vista en localStorage para persistencia en recargas
+    localStorage.setItem('collab_current_view', name);
   }
 
   // --- Modales ---
@@ -567,12 +576,18 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openActiveJob(order) {
     if (!order || !order.id) {
       console.error('[ActiveJob] Orden inválida:', order);
-      try { notifications?.error?.('La orden no está disponible'); } catch(_) {}
       return;
     }
+    
+    // 1. Establecer como orden actual para que funcionen los botones de acción
     currentOrder = order;
+    window._currentActiveOrder = order; // Backup global
+    localStorage.setItem('activeJobId', order.id);
+    
+    // 2. Cambiar vista
     showView('active');
     
+    // 3. Poblar datos en la UI
     if (activeId) activeId.textContent = `#${order.id}`;
     if (activeService) activeService.textContent = order?.service?.name || '';
     if (activeStatus) activeStatus.textContent = formatStatus(getUiStatus(order));
@@ -580,15 +595,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeVehicle) activeVehicle.textContent = order?.vehicle?.name || '';
     if (activePickup) activePickup.textContent = order.pickup || '';
     if (activeDelivery) activeDelivery.textContent = order.delivery || '';
-    if (activeCollaborator) {
-      const n = document.getElementById('sidebarCollabName');
-      activeCollaborator.textContent = n?.textContent || '';
-    }
     
-    try {
-      const { data: { user } } = await supabaseConfig.client.auth.getUser();
-      if (activeCollaborator) activeCollaborator.textContent = user?.email || user?.id || '';
-    } catch(_) { if (activeCollaborator) activeCollaborator.textContent = ''; }
+    // Nombre del colaborador
+    if (activeCollaborator) {
+      try {
+        const { data: { user } } = await supabaseConfig.client.auth.getUser();
+        activeCollaborator.textContent = user?.user_metadata?.full_name || user?.email || 'Tú';
+      } catch(_) { activeCollaborator.textContent = 'Tú'; }
+    }
     
     // Evidencia
     const photos = Array.isArray(order.evidence_photos) ? order.evidence_photos : [];
@@ -600,25 +614,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (evidencePreview) evidencePreview.innerHTML = '';
     
+    // 4. Actualizar botones y mapa
     updatePrimaryActionButtons(order);
-    
-    if (btnVerOrigen) btnVerOrigen.onclick = () => openGoogleMaps(order.pickup);
-    if (btnVerDestino) btnVerDestino.onclick = () => openGoogleMaps(order.delivery);
-    
     initActiveMap(order);
 
+    // 5. Notificaciones Push
     try {
       const { data: { session } } = await supabaseConfig.client.auth.getSession();
-      const uid = session?.user?.id;
-      if (uid) await registerCollaboratorPush(uid);
+      if (session?.user?.id) await registerCollaboratorPush(session.user.id);
     } catch(_){}
   }
+  
+  // Exponer para que el banner inline pueda usarlo
+  window.openActiveJob = openActiveJob;
 
   function closeActiveJob() {
     currentOrder = null;
+    window._currentActiveOrder = null;
+    localStorage.removeItem('activeJobId');
+    localStorage.setItem('collab_current_view', 'grid');
     showView('grid');
     fetchOrdersForCollaborator(); // Recargar lista al salir
   }
+  window.closeActiveJob = closeActiveJob;
 
   // --- Actualización de Estados ---
 
@@ -1044,6 +1062,19 @@ document.addEventListener('DOMContentLoaded', () => {
       
 
       renderOrdersHTML();
+
+      // ✅ Auto-abrir trabajo activo si existe y está en progreso
+      const activeIdInStorage = localStorage.getItem('activeJobId');
+      if (activeIdInStorage) {
+        const activeOrder = orders.find(o => String(o.id) === String(activeIdInStorage));
+        if (activeOrder && !isFinalOrder(activeOrder)) {
+          // Si ya estamos en la vista activa, solo actualizar datos
+          // Si no, y el localStorage dice que deberíamos estar ahí, abrirla
+          if (localStorage.getItem('collab_current_view') === 'active') {
+             openActiveJob(activeOrder);
+          }
+        }
+      }
 
     } catch (e) {
       console.error('Error in fetchOrdersForCollaborator:', e);
