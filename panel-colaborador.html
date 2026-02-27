@@ -640,6 +640,30 @@
                         .eq('id', order.id);
                         
                     if(!error) {
+                        // ✅ Notificar al cliente vía OneSignal (desde inline script)
+                        try {
+                            if (typeof notifyStatusToClient === 'function') {
+                                await notifyStatusToClient(order, 'accepted');
+                            } else if (window.OrderManager && typeof OrderManager.notifyOneSignal === 'function') {
+                                // Fallback si la función no está expuesta globalmente
+                                // Buscamos el onesignal_id manualmente
+                                const { data: client } = await supabaseConfig.client
+                                    .from('clients')
+                                    .select('onesignal_id')
+                                    .eq('id', order.client_contact_id || order.client_id)
+                                    .maybeSingle();
+                                
+                                if (client?.onesignal_id) {
+                                    await OrderManager.notifyOneSignal({
+                                        player_ids: [client.onesignal_id],
+                                        title: '✅ Solicitud Aceptada',
+                                        message: `Tu solicitud ha sido aceptada. (Orden #${order.short_id || order.id})`,
+                                        url: `${window.location.origin}/seguimiento.html?codigo=${order.short_id || order.id}`
+                                    });
+                                }
+                            }
+                        } catch (e) { console.warn('Error notif aceptada:', e); }
+
                         modal.classList.add('hidden');
                         modal.classList.remove('flex');
                         // Realtime actualizará la UI automáticamente

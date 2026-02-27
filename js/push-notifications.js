@@ -300,66 +300,12 @@ class PushNotificationManager {
     }
 }
 
-// Instancia global
-window.pushManager = new PushNotificationManager();
-
-// Funciones de utilidad para usar en la UI
-window.pushNotifications = {
-    async enable() {
-        try {
-            await window.pushManager.subscribe();
-            return true;
-        } catch (error) {
-            console.error('Failed to enable push notifications:', error);
-            return false;
-        }
-    },
-
-    async disable() {
-        try {
-            await window.pushManager.unsubscribe();
-            return true;
-        } catch (error) {
-            console.error('Failed to disable push notifications:', error);
-            return false;
-        }
-    },
-
-    async sendTest() {
-        try {
-            return await window.pushManager.sendTestNotification();
-        } catch (error) {
-            console.error('Failed to send test notification:', error);
-            throw error;
-        }
-    },
-    
-    async sendEdgeNotification({ toUserId, title, body, data }) {
-        try {
-            const client = supabaseConfig?.client;
-            if (!client || !client.functions || typeof client.functions.invoke !== 'function') {
-                throw new Error('Supabase Functions no disponible');
-            }
-            const { data: resp, error } = await client.functions.invoke('send-notification', {
-                body: { toUserId, title, body, data }
-            });
-            if (error) throw error;
-            return resp;
-        } catch (e) {
-            console.error('Edge notification error:', e);
-            throw e;
-        }
-    },
-
-    get isEnabled() {
-        return window.pushManager.isSubscribed;
-    },
-
-    get isSupported() {
-        return window.pushManager.isSupported;
-    },
-
-    get permission() {
-        return window.pushManager.permissionStatus;
-    }
-};
+/* 
+  SISTEMA DESHABILITADO
+  Este archivo contenía una implementación manual de Web Push que ha sido 
+  reemplazada por OneSignal para evitar conflictos y mejorar la fiabilidad.
+  
+  window.pushManager = new PushNotificationManager();
+  window.pushNotifications = { ... };
+*/
+console.warn('[Push] El sistema manual de push-notifications.js está deshabilitado en favor de OneSignal.');

@@ -10,7 +10,7 @@ self.addEventListener('message', (event) => {
 });
 
 // Service Worker para llo Logística
-// Manejo de notificaciones push y caché básico
+// Manejo de caché básico (Las notificaciones Push las gestiona OneSignal)
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -18,55 +18,6 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener('push', (event) => {
-  if (!(self.Notification && self.Notification.permission === 'granted')) {
-    return;
-  }
-
-  let data = {};
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch (e) {
-      data = { title: 'Nueva Notificación', body: event.data.text() };
-    }
-  }
-
-  const title = data.title || 'TLC Logística';
-  const options = {
-    body: data.body || 'Tienes una nueva actualización.',
-    icon: '/img/logo.png',
-    badge: '/img/badge.png',
-    data: data.data || {},
-    vibrate: [100, 50, 100],
-    actions: data.actions || []
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  const data = event.notification.data;
-  const urlToOpen = data.url || '/inicio.html';
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url === urlToOpen && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
-      }
-    })
-  );
 });
 
 const CACHE_NAME = 'tlc-static-v1';

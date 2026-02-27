@@ -422,13 +422,13 @@ const OrderManager = {
       
       // 1. Buscar en profiles si hay client_id
       if (order.client_id) {
-        const { data: p } = await supabaseConfig.client.from('profiles').select('onesignal_id').eq('id', order.client_id).single();
+        const { data: p } = await supabaseConfig.client.from('profiles').select('onesignal_id').eq('id', order.client_id).maybeSingle();
         clientOnesignalId = p?.onesignal_id;
       } 
       
       // 2. Si no, buscar en clients si hay client_contact_id
       if (!clientOnesignalId && order.client_contact_id) {
-        const { data: c } = await supabaseConfig.client.from('clients').select('onesignal_id').eq('id', order.client_contact_id).single();
+        const { data: c } = await supabaseConfig.client.from('clients').select('onesignal_id').eq('id', order.client_contact_id).maybeSingle();
         clientOnesignalId = c?.onesignal_id;
       }
 

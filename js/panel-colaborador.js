@@ -257,6 +257,78 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Notificaciones Push (Automatización) ---
+
+  // ✅ Nueva función para notificar al cliente sobre cambios de estado
+  async function notifyStatusToClient(order, uiStatus) {
+    try {
+      if (!order || !order.id) return;
+
+      // 1. Buscar el onesignal_id del cliente
+      // Prioridad: client_contact_id (tabla clients) > client_id (tabla profiles)
+      let onesignalId = null;
+
+      if (order.client_contact_id) {
+        const { data: client } = await supabaseConfig.client
+          .from('clients')
+          .select('onesignal_id')
+          .eq('id', order.client_contact_id)
+          .maybeSingle();
+        onesignalId = client?.onesignal_id;
+      }
+
+      if (!onesignalId && order.client_id) {
+        const { data: profile } = await supabaseConfig.client
+          .from('profiles')
+          .select('onesignal_id')
+          .eq('id', order.client_id)
+          .maybeSingle();
+        onesignalId = profile?.onesignal_id;
+      }
+
+      if (!onesignalId) {
+        console.log(`[OneSignal] No se encontró ID para el cliente de la orden #${order.id}`);
+        return;
+      }
+
+      // 2. Preparar mensaje según el estado
+      const statusMap = {
+        'accepted': 'Tu solicitud ha sido aceptada.',
+        'en_camino_recoger': 'El colaborador va en camino a recoger tu pedido.',
+        'cargando': 'Tu pedido está siendo cargado.',
+        'en_camino_entregar': 'El colaborador va en camino a entregar tu pedido.',
+        'completed': '¡Tu servicio ha sido completado con éxito!',
+        'cancelled': 'Tu solicitud ha sido cancelada.'
+      };
+
+      const titleMap = {
+        'accepted': '✅ Solicitud Aceptada',
+        'en_camino_recoger': '🚚 En Camino',
+        'cargando': '📦 Cargando Pedido',
+        'en_camino_entregar': '🚛 En Ruta de Entrega',
+        'completed': '🏁 Servicio Completado',
+        'cancelled': '❌ Servicio Cancelado'
+      };
+
+      const message = statusMap[uiStatus] || `Actualización de tu pedido: ${formatStatus(uiStatus)}`;
+      const title = titleMap[uiStatus] || 'Actualización de Pedido';
+      const shortId = order.short_id || order.id;
+      const url = `${window.location.origin}/seguimiento.html?codigo=${shortId}`;
+
+      // 3. Enviar notificación
+      await OrderManager.notifyOneSignal({
+        player_ids: [onesignalId],
+        title: title,
+        message: `${message} (Orden #${shortId})`,
+        url: url
+      });
+
+    } catch (e) {
+      console.warn('[OneSignal] Error notificando al cliente:', e);
+    }
+  }
+  // Exponer globalmente
+  window.notifyStatusToClient = notifyStatusToClient;
+
   async function registerCollaboratorPush(userId) {
     if (window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function(OneSignal) {
@@ -720,7 +792,8 @@ document.addEventListener('DOMContentLoaded', () => {
       currentOrder.status = 'in_progress';
       currentOrder.tracking_data = nextTracking;
 
-      
+      // ✅ Notificar al cliente vía OneSignal
+      await notifyStatusToClient(currentOrder, newStatus);
 
       notifications?.success?.(successMsg);
       try { window.sendStatusEmail?.(currentOrder, newStatus); } catch(_){}
@@ -775,7 +848,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const { error } = await supabaseConfig.completeOrderWork(currentOrder.id);
         if (error) throw error;
         
-        
+        // ✅ Notificar al cliente vía OneSignal
+        await notifyStatusToClient(currentOrder, 'completed');
 
         notifications?.success?.('Solicitud completada');
         try { window.sendStatusEmail?.(currentOrder, 'completed'); } catch(_){}
@@ -797,6 +871,10 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await OrderManager.cancelActiveJob(currentOrder.id);
         if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
+        
+        // ✅ Notificar al cliente vía OneSignal
+        await notifyStatusToClient(currentOrder, 'cancelled');
+
         notifications?.success?.('Solicitud cancelada');
         try { window.sendStatusEmail?.(currentOrder, 'cancelled'); } catch(_){}
         closeActiveJob();
