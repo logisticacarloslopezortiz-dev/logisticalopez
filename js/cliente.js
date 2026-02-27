@@ -1317,20 +1317,29 @@ document.addEventListener('DOMContentLoaded', function() {
         const originCoords = getSafeCoords(MapState.origin);
         const destinationCoords = getSafeCoords(MapState.destination);
 
-        // 1. OneSignal Flow: Obtener ID actual de forma síncrona/directa
+        // 1. OneSignal Flow: Pedir permiso ANTES de generar la orden
         let oneSignalPlayerId = null;
         try {
-          // Intentar obtener de OneSignal SDK v16
-          if (window.OneSignal && OneSignal.User && OneSignal.User.PushSubscription) {
-            oneSignalPlayerId = OneSignal.User.PushSubscription.id;
+          if (window.OneSignal) {
+            console.log("Solicitando permiso de OneSignal antes de enviar...");
+            // Usar el Slidedown o el prompt nativo
+            await OneSignal.Slidedown.promptPush();
+            
+            // Esperar un momento breve para que la suscripción se procese si el usuario aceptó
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            if (OneSignal.User && OneSignal.User.PushSubscription) {
+              oneSignalPlayerId = OneSignal.User.PushSubscription.id;
+              console.log("OneSignal ID capturado tras permiso:", oneSignalPlayerId);
+            }
           }
-          // Fallback: buscar en localStorage si OneSignal lo guardó ahí (algunas versiones lo hacen)
+          
+          // Fallback: buscar en localStorage
           if (!oneSignalPlayerId) {
             oneSignalPlayerId = localStorage.getItem('onesignal_subscription_id');
           }
-          console.log("OneSignal ID capturado para la orden:", oneSignalPlayerId);
         } catch (e) {
-          console.warn("Error capturando OneSignal ID:", e);
+          console.warn("Error en flujo OneSignal previo al envío:", e);
         }
 
         const orderData = {
