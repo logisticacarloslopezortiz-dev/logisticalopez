@@ -82,8 +82,10 @@ Deno.serve(async (req: Request) => {
     try {
       // --- NOTIFICACIÓN AL CLIENTE ---
       let clientOnesignalId = orderPayload.onesignal_player_id || null
+      console.log('ID de OneSignal recibido en payload:', clientOnesignalId);
       
       if (!clientOnesignalId) {
+        console.log('ID no en payload, buscando en base de datos...');
         if (order.client_id) {
           console.log('Buscando onesignal_id para profile:', order.client_id);
           const { data: profile } = await supabase.from('profiles').select('onesignal_id').eq('id', order.client_id).maybeSingle()
@@ -96,7 +98,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (clientOnesignalId) {
-        console.log('Enviando notificación OneSignal al cliente:', clientOnesignalId);
+        console.log('Invocando send-onesignal-notification para el CLIENTE con ID:', clientOnesignalId);
         const resp = await fetch(`${FUNCTIONS_BASE}/send-onesignal-notification`, {
           method: 'POST',
           headers: { 

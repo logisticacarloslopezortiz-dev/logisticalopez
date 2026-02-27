@@ -1317,21 +1317,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const originCoords = getSafeCoords(MapState.origin);
         const destinationCoords = getSafeCoords(MapState.destination);
 
-        // 1. OneSignal Flow: Solicitar permiso y obtener ID
+        // 1. OneSignal Flow: Obtener ID actual de forma síncrona/directa
         let oneSignalPlayerId = null;
-        if (window.OneSignalDeferred) {
-          await new Promise(resolve => {
-            window.OneSignalDeferred.push(async function(OneSignal) {
-              try {
-                await OneSignal.Slidedown.promptPush();
-                oneSignalPlayerId = OneSignal.User.PushSubscription.id;
-                console.log("OneSignal Subscription ID:", oneSignalPlayerId);
-              } catch (e) {
-                console.warn("OneSignal prompt error:", e);
-              }
-              resolve();
-            });
-          });
+        try {
+          if (window.OneSignal && OneSignal.User && OneSignal.User.PushSubscription) {
+            oneSignalPlayerId = OneSignal.User.PushSubscription.id;
+            console.log("OneSignal ID capturado para la orden:", oneSignalPlayerId);
+          }
+        } catch (e) {
+          console.warn("Error capturando OneSignal ID:", e);
         }
 
         const orderData = {
