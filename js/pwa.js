@@ -2,53 +2,29 @@
 (function () {
   if (!('serviceWorker' in navigator)) return;
 
-  // Register the service worker (use path relative to the page to avoid issues when the site
-  // is deployed to a subpath). Also make message sending robust from the window context.
+  // ✅ MODIFICADO: No registrar manualmente el worker si OneSignal está presente.
+  // OneSignal v16 maneja su propio registro de worker con los parámetros necesarios (?appId=...).
+  // Solo registramos si OneSignal NO está en la página (fallback).
   window.addEventListener('load', async () => {
-    try {
-      // ✅ IMPORTANTE: OneSignal requiere su propio Service Worker (OneSignalSDKWorker.js)
-      // Hemos fusionado nuestro sw.js dentro de OneSignalSDKWorker.js para no perder PWA/Caché.
-      const swPath = '/OneSignalSDKWorker.js';
-      
-      const reg = await navigator.serviceWorker.register(swPath);
-      console.log('ServiceWorker (OneSignal/PWA) registrado:', reg.scope);
-
-      // If a waiting worker exists, notify and activate immediately
-      if (reg.waiting) {
-        sendMessageToClients({ type: 'sw-update-ready' });
-        if (window.pwaHelpers && typeof window.pwaHelpers.skipWaiting === 'function') {
-          window.pwaHelpers.skipWaiting();
-        }
-      }
-
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        if (!newWorker) return;
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // New content is available; notify and activate immediately
-            sendMessageToClients({ type: 'sw-update-ready' });
-            if (window.pwaHelpers && typeof window.pwaHelpers.skipWaiting === 'function') {
-              window.pwaHelpers.skipWaiting();
-            }
+    if ('serviceWorker' in navigator) {
+      // Esperar un poco para ver si OneSignal toma el control
+      setTimeout(async () => {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const isOneSignalRegistered = registrations.some(r => r.active && r.active.scriptURL.includes('OneSignalSDKWorker'));
+        
+        if (!isOneSignalRegistered) {
+          try {
+            // Si OneSignal no lo hizo, lo hacemos nosotros para PWA
+            const reg = await navigator.serviceWorker.register('/OneSignalSDKWorker.js');
+            console.log('ServiceWorker (PWA Fallback) registrado:', reg.scope);
+          } catch (e) {
+            console.warn('Error registrando SW Fallback:', e);
           }
-        });
-      });
-    } catch (err) {
-      console.warn('Error al registrar ServiceWorker:', err);
-    }
-
-    try {
-      // No habilitar suscripción push automáticamente; dejar que el usuario la active explícitamente
-      if ('Notification' in window) {
-        const seen = localStorage.getItem('tlc_push_prompt_seen');
-        if (Notification.permission === 'default' && !seen) {
-          // Solo registrar que ya se mostró el prompt en esta sesión
-          localStorage.setItem('tlc_push_prompt_seen', '1');
-          // Si se desea, puede mostrarse un botón en UI para activar push manualmente
+        } else {
+          console.log('ServiceWorker ya gestionado por OneSignal.');
         }
-      }
-    } catch(_){ }
+      }, 3000);
+    }
   });
 
   // beforeinstallprompt handling moved to each page; expose helper

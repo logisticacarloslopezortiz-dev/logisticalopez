@@ -1,15 +1,18 @@
-// ✅ FIJAR EL LISTENER DE MENSAJES AL INICIO ABSOLUTO (Requisito Chrome/OneSignal)
+// ✅ OneSignal v16 Service Worker
+// Se registran los listeners al inicio para evitar advertencias de "initial evaluation"
 self.addEventListener('message', (event) => {
-  console.log('[OneSignalWorker] Mensaje recibido:', event.data);
+  // Manejar mensajes internos o de OneSignal
+  if (event.data && event.data.type === 'sw-update-ready') {
+    console.log('[OneSignalWorker] Nueva versión detectada.');
+  }
 });
 
-// ✅ OneSignal v16 Service Worker
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
 // ✅ Tu lógica de PWA/Caché
-// Se carga después para evitar interferir con la inicialización de OneSignal
+// Se carga después para no interferir con el inicio de OneSignal
 try {
   importScripts("/sw.js");
 } catch (e) {
-  console.warn("No se pudo cargar sw.js en OneSignalWorker:", e);
+  console.error("No se pudo cargar sw.js en OneSignalWorker:", e);
 }

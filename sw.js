@@ -1,9 +1,12 @@
-// ✅ FIJAR EL LISTENER DE MENSAJES AL INICIO ABSOLUTO (Requisito Chrome/OneSignal)
+// ✅ FIJAR EL LISTENER DE MENSAJES AL INICIO ABSOLUTO
 self.addEventListener('message', (event) => {
   if (event.data && event.data.action === 'skipWaiting') {
     self.skipWaiting();
   }
-  console.log('[SW] Mensaje recibido:', event.data);
+  // Evitar logs excesivos en producción si es mensaje interno de OneSignal
+  if (event.data && !event.data.command) {
+    console.log('[SW] Mensaje recibido:', event.data);
+  }
 });
 
 // Service Worker para llo Logística

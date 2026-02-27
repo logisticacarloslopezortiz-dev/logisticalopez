@@ -1320,10 +1320,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // 1. OneSignal Flow: Obtener ID actual de forma síncrona/directa
         let oneSignalPlayerId = null;
         try {
+          // Intentar obtener de OneSignal SDK v16
           if (window.OneSignal && OneSignal.User && OneSignal.User.PushSubscription) {
             oneSignalPlayerId = OneSignal.User.PushSubscription.id;
-            console.log("OneSignal ID capturado para la orden:", oneSignalPlayerId);
           }
+          // Fallback: buscar en localStorage si OneSignal lo guardó ahí (algunas versiones lo hacen)
+          if (!oneSignalPlayerId) {
+            oneSignalPlayerId = localStorage.getItem('onesignal_subscription_id');
+          }
+          console.log("OneSignal ID capturado para la orden:", oneSignalPlayerId);
         } catch (e) {
           console.warn("Error capturando OneSignal ID:", e);
         }
@@ -1438,9 +1443,19 @@ document.addEventListener('DOMContentLoaded', function() {
             {
               title: '¡Solicitud Enviada con Éxito!',
               copyText: displayCode,
-              onCopy: () => { window.location.href = trackingUrl; }
+              onCopy: () => { 
+                console.log('Código copiado:', displayCode);
+                // Opcional: mostrar un mensaje pequeño de "Copiado" sin redirigir inmediatamente
+              }
             }
           );
+          
+          // Dar un tiempo antes de redirigir opcionalmente o dejar que el usuario lo haga
+          setTimeout(() => {
+            if (confirm('¿Deseas ir a la página de seguimiento ahora?')) {
+              window.location.href = trackingUrl;
+            }
+          }, 2000);
         }
 
         hasSubmittedOrder = true;
