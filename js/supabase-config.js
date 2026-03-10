@@ -331,21 +331,42 @@ if (!window.supabaseConfig) {
     if (this.useLocalStorage) {
       try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
     }
-    const resp = await this.withAuthRetry(() => this.client
+    // Intentar consulta completa con relaciones
+    let resp = await this.withAuthRetry(() => this.client
       .from('orders')
-      .select('*, service:services(name), vehicle:vehicles(name)')
+      .select('*, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name)')
     );
+    
+    // Fallback si la consulta compleja falla (ej. error de relación 400)
+    if (resp?.error) {
+      console.warn('getOrders: Fallback a consulta simple debido a:', resp.error);
+      resp = await this.withAuthRetry(() => this.client
+        .from('orders')
+        .select('*, service:services(name), vehicle:vehicles(name)')
+      );
+    }
+    
     if (resp?.error) return [];
     return resp?.data || [];
   },
 
   async getOrderById(orderId) {
-    const resp = await this.withAuthRetry(() => this.client
+    let resp = await this.withAuthRetry(() => this.client
       .from('orders')
-      .select('*, service:services(name), vehicle:vehicles(name)')
+      .select('*, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name)')
       .eq('id', orderId)
       .maybeSingle()
     );
+
+    if (resp?.error) {
+      resp = await this.withAuthRetry(() => this.client
+        .from('orders')
+        .select('*, service:services(name), vehicle:vehicles(name)')
+        .eq('id', orderId)
+        .maybeSingle()
+      );
+    }
+
     if (resp?.error) return null;
     return resp?.data || null;
   },

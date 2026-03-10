@@ -7,22 +7,16 @@ let currentAssigningOrder = null;
  * Carga las órdenes desde Supabase y las renderiza.
  */
 async function loadOrders() {
-  const { data, error } = await supabaseConfig.client
-    .from('orders')
-    // ✅ MEJORA: Cargar los nombres de las tablas relacionadas directamente.
-    .select('*, service:services(name), vehicle:vehicles(name), collaborator:collaborators(name)')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error al cargar las órdenes:', error);
+  try {
+    const orders = await supabaseConfig.getOrders();
+    allOrders = orders || [];
+    filterAndRender();
+    updateSummaryCards();
+    loadCollaboratorsForModal();
+  } catch (err) {
+    console.error('Error al cargar las órdenes:', err);
     notifications.show('Error al cargar las órdenes.', 'error');
-    return;
   }
-
-  allOrders = data;
-  filterAndRender();
-  updateSummaryCards();
-  loadCollaboratorsForModal();
 }
 
 /**

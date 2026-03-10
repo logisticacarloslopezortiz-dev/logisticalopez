@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="css/admin-panel-styles.css?v=20251204">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js?v=20251204"></script>
+
   <style>
     .login-hero {
       position: relative;
@@ -133,51 +133,56 @@
     </div>
   </main>
 
-  <!-- Modal de Instalación para iOS -->
-  <div id="ios-install-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full text-center p-6 animate-fadeInUp">
-      <img src="img/1vertical.png" alt="Logo de Logística López Ortiz" class="h-20 w-20 mx-auto mb-4">
-      <h3 class="text-xl font-bold text-azulOscuro mb-2">Instala Nuestra App</h3>
-      <p class="text-gray-600 mb-6">Accede más rápido a nuestros servicios añadiendo la app a tu pantalla de inicio.</p>
-      <div class="text-left space-y-3 text-gray-700">
-        <p>1. Pulsa el botón de <strong>Compartir</strong> en tu navegador.</p>
-        <div class="text-center">
-          <i data-lucide="share-2" class="w-6 h-6 text-blue-600"></i>
+  <!-- Modal de Instalación PWA para iOS -->
+  <div id="ios-install-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4">
+    <div class="bg-white p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl animate-in fade-in zoom-in duration-300">
+      <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="smartphone" class="w-8 h-8 text-blue-600"></i>
+      </div>
+      <h3 class="text-xl font-bold text-gray-900 mb-2">Instalar Aplicación</h3>
+      <p class="text-sm text-gray-600 mb-6">
+        Para recibir notificaciones y gestionar tu negocio con mayor comodidad, debes instalar la aplicación en tu iPhone.
+      </p>
+      <div class="text-left space-y-4 mb-6">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-500 mt-0.5">1</div>
+          <p class="text-sm text-gray-700">Toca el botón <b>Compartir</b> <i data-lucide="share" class="w-4 h-4 inline mb-1"></i> en la parte inferior de Safari.</p>
         </div>
-        <p>2. Busca y selecciona la opción <strong>"Agregar a la pantalla de inicio"</strong>.</p>
-        <div class="text-center">
-          <i data-lucide="plus-square" class="w-6 h-6 text-blue-600"></i>
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-500 mt-0.5">2</div>
+          <p class="text-sm text-gray-700">Desliza hacia abajo y selecciona <b>Añadir a pantalla de inicio</b> <i data-lucide="plus-square" class="w-4 h-4 inline mb-1"></i>.</p>
+        </div>
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-500 mt-0.5">3</div>
+          <p class="text-sm text-gray-700">Abre la app desde el icono <b>LLO</b> en tu pantalla de inicio.</p>
         </div>
       </div>
-      <button id="close-ios-modal" class="mt-8 w-full bg-gray-200 text-gray-800 py-2 rounded-lg font-semibold hover:bg-gray-300">
+      <button onclick="document.getElementById('ios-install-modal').classList.add('hidden')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg">
         Entendido
       </button>
     </div>
   </div>
 
+  <script src="js/supabase-config.js?v=20260310"></script>
+  <script src="js/pwa.js?v=20260310"></script>
   <script>
     lucide.createIcons();
-
-    // --- INICIO: Lógica de Login Mejorada ---
-
-    document.addEventListener('DOMContentLoaded', () => {
+    // Manejar el login...
+    document.addEventListener('DOMContentLoaded', async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const redirectTo = urlParams.get('redirect') || 'inicio.html';
 
-      supabaseConfig.client.auth.getSession().then(({ data: { session } }) => {
+      // --- INICIO: Verificación de sesión previa ---
+      try {
+        const { data: { session } } = await supabaseConfig.client.auth.getSession();
         if (session) {
-          // Si hay una sesión activa, verificar si es admin antes de redirigir.
-          supabaseConfig.client.rpc('is_admin', { uid: session.user.id }).then(({ data: isAdmin }) => {
-            if (isAdmin) {
-              console.log(`Sesión activa de admin encontrada, redirigiendo a: ${redirectTo}`);
-              window.location.href = redirectTo;
-            }
-          });
+          const { data: isAdmin } = await supabaseConfig.client.rpc('is_admin', { uid: session.user.id });
+          if (isAdmin) {
+            window.location.href = redirectTo;
+          }
         }
-      }).catch(error => {
-        console.error('Error al verificar la sesión en la página de login:', error);
-      });
-      // --- FIN: Verificación de sesión con Supabase ---
+      } catch (e) { console.warn('Error verificando sesión previa:', e); }
+
       const loginForm = document.getElementById('loginForm');
       const usernameInput = document.getElementById('username');
       const passwordInput = document.getElementById('password');
@@ -250,7 +255,5 @@
       }
     });
   </script>
-  <script src="js/pwa.js?v=20251204"></script>
-
 </body>
 </html>

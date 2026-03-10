@@ -263,36 +263,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // ✅ Nueva función para notificar al cliente sobre cambios de estado
   async function notifyStatusToClient(order, uiStatus) {
     try {
-      if (!order || !order.id) return;
+      if (!order || !order.id || !window.OrderManager?.notifyOneSignal) return;
 
-      // 1. Buscar el onesignal_id del cliente
-      // Prioridad: client_contact_id (tabla clients) > client_id (tabla profiles)
-      let onesignalId = null;
-
-      if (order.client_contact_id) {
-        const { data: client } = await supabaseConfig.client
-          .from('clients')
-          .select('onesignal_id')
-          .eq('id', order.client_contact_id)
-          .maybeSingle();
-        onesignalId = client?.onesignal_id;
-      }
-
-      if (!onesignalId && order.client_id) {
-        const { data: profile } = await supabaseConfig.client
-          .from('profiles')
-          .select('onesignal_id')
-          .eq('id', order.client_id)
-          .maybeSingle();
-        onesignalId = profile?.onesignal_id;
-      }
+      const onesignalId = await (async () => {
+        if (order.client_contact_id) {
+          const { data } = await supabaseConfig.client.from('clients').select('onesignal_id').eq('id', order.client_contact_id).maybeSingle();
+          if (data?.onesignal_id) return data.onesignal_id;
+        }
+        if (order.client_id) {
+          const { data } = await supabaseConfig.client.from('profiles').select('onesignal_id').eq('id', order.client_id).maybeSingle();
+          if (data?.onesignal_id) return data.onesignal_id;
+        }
+        return null;
+      })();
 
       if (!onesignalId) {
-        console.log(`[OneSignal] No se encontró ID para el cliente de la orden #${order.id}`);
+        console.log(`[OneSignal] No se encontró ID para notificar al cliente de la orden #${order.id}`);
         return;
       }
 
-      // 2. Preparar mensaje según el estado
       const statusMap = {
         'accepted': 'Tu solicitud ha sido aceptada.',
         'en_camino_recoger': 'El colaborador va en camino a recoger tu pedido.',
@@ -301,7 +290,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'completed': '¡Tu servicio ha sido completado con éxito!',
         'cancelled': 'Tu solicitud ha sido cancelada.'
       };
-
       const titleMap = {
         'accepted': '✅ Solicitud Aceptada',
         'en_camino_recoger': '🚚 En Camino',
@@ -316,12 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const shortId = order.short_id || order.id;
       const url = `${window.location.origin}/seguimiento.html?codigo=${shortId}`;
 
-      // 3. Enviar notificación
-      if (!window.OrderManager?.notifyOneSignal) {
-        console.warn("[OneSignal] OrderManager.notifyOneSignal no disponible");
-        return;
-      }
-
       await OrderManager.notifyOneSignal({
         player_ids: [onesignalId],
         title: title,
@@ -329,8 +311,11 @@ document.addEventListener('DOMContentLoaded', () => {
         url: url
       });
 
+      notifications?.success?.('Cliente notificado');
+
     } catch (e) {
       console.warn('[OneSignal] Error notificando al cliente:', e);
+      notifications?.warning?.('No se pudo notificar al cliente.');
     }
   }
   // Exponer globalmente
@@ -615,11 +600,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. Poblar datos en la UI
     if (activeId) activeId.textContent = `#${order.id}`;
     if (activeService) activeService.textContent = order?.service?.name || '';
-    if (activeStatus) activeStatus.textContent = formatStatus(getUiStatus(order));
     if (activeClient) activeClient.textContent = `${order.name || ''} • ${order.phone || ''}`;
     if (activeVehicle) activeVehicle.textContent = order?.vehicle?.name || '';
     if (activePickup) activePickup.textContent = order.pickup || '';
     if (activeDelivery) activeDelivery.textContent = order.delivery || '';
+    
+    // 4. Actualizar UI dinámica (barra, botones, texto de estado)
+    ActiveJobUI.updateAll(order);
     
     // Nombre del colaborador
     if (activeCollaborator) {
@@ -695,77 +682,77 @@ document.addEventListener('DOMContentLoaded', () => {
     return db === 'completed' || db === 'cancelled';
   }
 
-  function updateProgressBar(status){
-    const bar = document.getElementById('jobProgressBar');
-    if (!bar) return;
-    // Ajuste de porcentajes: entregada 90%, completed 100%
-    const map = { 
-      pending: 0, 
-      accepted: 15, 
-      en_camino_recoger: 25, 
-      cargando: 50, 
-      en_camino_entregar: 75, 
-      entregada: 90, 
-      completed: 100, 
-      cancelled: 100
-    };
-    // Normalizar status
-    const s = String(status || '').toLowerCase();
-    bar.style.width = (map[s] || 0) + '%';
-  }
+  // --- GESTOR DE UI DE TRABAJO ACTIVO ---
+  const ActiveJobUI = {
+    updateAll(order) {
+      if (!order) return;
+      this.updateProgressBar(order);
+      this.updateActionButtons(order);
+      this.updateStatusText(order);
+      // Actualizar otros campos si es necesario
+      if (activeId) activeId.textContent = `#${order.id}`;
+      if (activeService) activeService.textContent = order?.service?.name || '';
+      if (activeClient) activeClient.textContent = `${order.name || ''} • ${order.phone || ''}`;
+    },
 
-  function updatePrimaryActionButtons(order){
-    const phase = getUiStatus(order);
-    const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
-    
-    // Ocultar y deshabilitar todos primero
-    [btnGoPickup, btnLoading, btnGoDeliver, btnComplete].forEach(btn => {
-      if(btn) {
-        btn.classList.add('hidden');
-        btn.disabled = true;
-      }
-    });
+    updateProgressBar(order) {
+      const bar = document.getElementById('jobProgressBar');
+      const barText = document.getElementById('jobProgressBarText');
+      if (!bar) return;
 
-    // Usar estado DB para determinar finalización
-    const dbStatus = String(order?.status || '').toLowerCase();
-    if (dbStatus === 'completed' || dbStatus === 'cancelled') {
-      // Si la orden ya finalizó (DB), no mostrar botones de acción
-      updateProgressBar(dbStatus === 'completed' ? 'completed' : 'cancelled');
-      return;
-    }
+      const uiStatus = getUiStatus(order);
+      const map = { 
+        pending: 0, 
+        accepted: 15, 
+        en_camino_recoger: 25, 
+        cargando: 50, 
+        en_camino_entregar: 75, 
+        completed: 100, 
+        cancelled: 100
+      };
+      const percent = map[uiStatus] || 0;
+      bar.style.width = `${percent}%`;
 
-    if (phase === 'accepted') { 
-      if (btnGoPickup) { btnGoPickup.classList.remove('hidden'); btnGoPickup.disabled = false; } 
-    }
-    else if (phase === 'en_camino_recoger') { 
-      if (btnLoading) { btnLoading.classList.remove('hidden'); btnLoading.disabled = false; } 
-    }
-    else if (phase === 'cargando') { 
-      if (btnGoDeliver) { btnGoDeliver.classList.remove('hidden'); btnGoDeliver.disabled = !hasEvidence; }
-      if (!hasEvidence) {
-        try {
-          notifications?.info?.('Sube evidencia fotográfica antes de continuar');
-          document.getElementById('evidenceInput')?.focus();
-          document.getElementById('activeEvidence')?.scrollIntoView({ behavior: 'smooth' });
-        } catch(_) {}
+      if (barText) {
+        barText.textContent = formatStatus(uiStatus);
       }
-    }
-    else if (phase === 'en_camino_entregar') { 
-      if (btnComplete) { btnComplete.classList.remove('hidden'); btnComplete.disabled = !hasEvidence; }
-      if (!hasEvidence) {
-        try {
-          notifications?.warning?.('Debes subir al menos una evidencia antes de completar');
-          document.getElementById('evidenceInput')?.focus();
-        } catch(_) {}
+      
+      // Cambiar color de la barra según el estado
+      bar.classList.remove('bg-red-500', 'bg-green-500');
+      if (uiStatus === 'cancelled') bar.classList.add('bg-red-500');
+      else if (uiStatus === 'completed') bar.classList.add('bg-green-500');
+    },
+
+    updateActionButtons(order) {
+      const phase = getUiStatus(order);
+      const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
+      
+      [btnGoPickup, btnLoading, btnGoDeliver, btnComplete].forEach(btn => {
+        if(btn) btn.classList.add('hidden');
+      });
+
+      const dbStatus = String(order?.status || '').toLowerCase();
+      if (dbStatus === 'completed' || dbStatus === 'cancelled') {
+        if (btnCancel) btnCancel.classList.add('hidden');
+        return;
       }
+
+      if (phase === 'accepted') { if (btnGoPickup) btnGoPickup.classList.remove('hidden'); }
+      else if (phase === 'en_camino_recoger') { if (btnLoading) btnLoading.classList.remove('hidden'); }
+      else if (phase === 'cargando') { if (btnGoDeliver) btnGoDeliver.classList.remove('hidden'); }
+      else if (phase === 'en_camino_entregar') { if (btnComplete) btnComplete.classList.remove('hidden'); }
+      else { if (btnGoPickup) btnGoPickup.classList.remove('hidden'); }
+
+      // Lógica de deshabilitación
+      if (btnGoDeliver) btnGoDeliver.disabled = !hasEvidence;
+      if (btnComplete) btnComplete.disabled = !hasEvidence;
+    },
+
+    updateStatusText(order) {
+      const uiStatus = getUiStatus(order);
+      if (activeStatus) activeStatus.textContent = formatStatus(uiStatus);
     }
-    else { 
-      // Por defecto (ej. Aceptada), mostrar "En camino a recoger"
-      if (btnGoPickup) { btnGoPickup.classList.remove('hidden'); btnGoPickup.disabled = false; } 
-    }
-    
-    updateProgressBar(phase);
-  }
+  };
 
   async function handleStatusUpdate(newStatus, successMsg, btn) {
     if (!currentOrder) return;
@@ -837,6 +824,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Asegurar estado local coherente
       currentOrder.status = 'in_progress';
       currentOrder.tracking_data = nextTracking;
+
+      // ✅ Actualizar UI en tiempo real
+      ActiveJobUI.updateAll(currentOrder);
 
       // ✅ Notificar al cliente vía OneSignal
       await notifyStatusToClient(currentOrder, newStatus);
