@@ -2,19 +2,20 @@
 (function () {
   if (!('serviceWorker' in navigator)) return;
 
+  // Detection functions
+  const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isAndroid = () => /Android/i.test(navigator.userAgent);
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
   // ✅ MODIFICADO: No registrar manualmente el worker si OneSignal está presente.
-  // OneSignal v16 maneja su propio registro de worker con los parámetros necesarios (?appId=...).
-  // Solo registramos si OneSignal NO está en la página (fallback).
   window.addEventListener('load', async () => {
     if ('serviceWorker' in navigator) {
-      // Esperar un poco para ver si OneSignal toma el control
       setTimeout(async () => {
         const registrations = await navigator.serviceWorker.getRegistrations();
         const isOneSignalRegistered = registrations.some(r => r.active && r.active.scriptURL.includes('OneSignalSDKWorker'));
         
         if (!isOneSignalRegistered) {
           try {
-            // Si OneSignal no lo hizo, lo hacemos nosotros para PWA
             const reg = await navigator.serviceWorker.register('/OneSignalSDKWorker.js');
             console.log('ServiceWorker (PWA Fallback) registrado:', reg.scope);
           } catch (e) {
@@ -27,62 +28,78 @@
     }
   });
 
-  // beforeinstallprompt handling moved to each page; expose helper
-  window.pwaHelpers = {
-    promptInstall: async (deferredPrompt) => {
-      if (!deferredPrompt) return false;
-      try {
-        deferredPrompt.prompt();
-        const choice = await deferredPrompt.userChoice;
-        return choice && choice.outcome === 'accepted';
-      } catch (e) {
-        console.warn('Error en prompt de instalación PWA:', e);
-        return false;
+  // PWA Manager: Uber-style installation flow
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // Show Android/Desktop install button if available
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) installBtn.classList.remove('hidden');
+  });
+
+  window.pwaManager = {
+    isIOS,
+    isAndroid,
+    isStandalone,
+    
+    checkInstallation: () => {
+      const modal = document.getElementById('ios-install-modal');
+      if (!modal) return;
+
+      // Solo mostrar guía en iOS si NO está instalada
+      if (isIOS() && !isStandalone()) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
       }
     },
-    skipWaiting: () => {
-      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ action: 'skipWaiting' });
+
+    promptInstall: async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        return outcome === 'accepted';
+      } else if (isIOS() && !isStandalone()) {
+        // En iOS, solo podemos mostrar el modal de instrucciones
+        const modal = document.getElementById('ios-install-modal');
+        if (modal) {
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+        }
+      }
+      return false;
+    },
+
+    requestPermissions: async (types = ['notification', 'location']) => {
+      // 1. Notificaciones
+      if (types.includes('notification') && 'Notification' in window) {
+        if (Notification.permission === 'default') {
+          try {
+            await Notification.requestPermission();
+          } catch (e) { console.warn('Error pidiendo permiso Notif:', e); }
+        }
+      }
+
+      // 2. Ubicación
+      if (types.includes('location') && navigator.geolocation) {
+        return new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            () => { console.log('GPS permitido'); resolve(true); },
+            (err) => { console.warn('GPS denegado', err); resolve(false); },
+            { enableHighAccuracy: true, timeout: 5000 }
+          );
+        });
       }
     }
   };
 
-  // Safe messaging from window context to service worker(s).
-  function sendMessageToClients(msg) {
-    try {
-      // Prefer posting to the active controller if available
-      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage(msg);
-        return;
-      }
+  // Run initial check
+  document.addEventListener('DOMContentLoaded', () => {
+    window.pwaManager.checkInstallation();
+  });
 
-      // Otherwise, iterate registrations and post to active/waiting workers
-      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-        navigator.serviceWorker.getRegistrations().then(regs => {
-          regs.forEach(r => {
-            if (r.waiting) r.waiting.postMessage(msg);
-            if (r.active) r.active.postMessage(msg);
-          });
-        }).catch(() => {});
-      }
-    } catch (e) {
-      // Silently ignore - this helper must not throw in the page context
-      console.warn('sendMessageToClients failed:', e);
-    }
-  }
-
-  // Force reload once when controller changes to ensure new SW takes over
-  // ✅ DESACTIVADO: La recarga automática causa problemas al usuario (pérdida de datos/IDs)
-  /*
-  (function setupControllerChangeReload(){
-    try {
-      let reloaded = false;
-      navigator.serviceWorker && navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloaded) return;
-        reloaded = true;
-        location.reload();
-      });
-    } catch(_){}
-  })();
-  */
 })();

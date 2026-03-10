@@ -1,4 +1,4 @@
-// ✅ FIJAR EL LISTENER DE MENSAJES AL INICIO ABSOLUTO
+// ✅ FIJAR EL LISTENER DE MENSAJES AL INICIO ABSOLUTO (REQUERIDO POR NAVEGADORES)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.action === 'skipWaiting') {
     self.skipWaiting();
@@ -9,8 +9,19 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Service Worker para llo Logística
-// Manejo de caché básico (Las notificaciones Push las gestiona OneSignal)
+// Importar OneSignal si existe el script (Chaining)
+try {
+  // OneSignal usualmente inyecta sus propios workers, 
+  // pero permitimos que sw.js viva como parte de OneSignalSDKWorker.js
+} catch(e){}
+
+// Service Worker para Logísticaexiste el script (Chaining)
+try {
+  // OneSignal usualmente inyecta sus propios workers, 
+  // pero si este worker es el principal, debemos ser cuidadosos.
+} catch (e) {}
+
+// Service Worker para Logística López Ortiz
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

@@ -32,7 +32,31 @@ if (!window.supabaseConfig) {
 
   window.supabaseConfig = {
     client: mainClient,
-    _publicClient: null, // Se inicializa como null y se crea solo cuando se necesita
+    _publicClient: null,
+    
+    /**
+     * Obtiene un cliente de Supabase optimizado para operaciones públicas (sin persistencia de sesión).
+     * Esto evita advertencias de "Tracking Prevention" en el navegador al cargar datos públicos (ej. testimonios).
+     */
+    getPublicClient() {
+      if (this._publicClient) return this._publicClient;
+      if (typeof supabase === 'undefined' || !supabase?.createClient) return this.client;
+      
+      try {
+        this._publicClient = supabase.createClient(this.projectUrl, this.anonKey, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false
+          }
+        });
+        return this._publicClient;
+      } catch (e) {
+        console.warn('Error al crear public client:', e);
+        return this.client;
+      }
+    },
+
     __creatingMain: false,
     __creatingPublic: false,
     projectUrl: SUPABASE_URL,

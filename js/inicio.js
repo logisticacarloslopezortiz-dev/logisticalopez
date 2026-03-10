@@ -1222,6 +1222,13 @@ async function initAdminOrdersPage() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // ✅ Solicitud proactiva de permisos (Notificaciones)
+  if (window.pwaManager) {
+    setTimeout(() => {
+      window.pwaManager.requestPermissions(['notification']);
+    }, 4000);
+  }
+
   try {
     const assignCancel = document.getElementById('assignCancelBtn');
     const assignCloseX = document.getElementById('assignCloseXBtn');

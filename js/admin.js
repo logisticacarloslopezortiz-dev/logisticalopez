@@ -411,6 +411,13 @@ async function generateAndSendInvoice(order) {
 
 // --- Event Listeners ---
 document.addEventListener('DOMContentLoaded', async () => {
+  // ✅ Solicitud proactiva de permisos (Notificaciones)
+  if (window.pwaManager) {
+    setTimeout(() => {
+      window.pwaManager.requestPermissions(['notification']);
+    }, 3000);
+  }
+
   // --- INICIO: Verificación de Sesión Obligatoria ---
   const { data: { session } } = await supabaseConfig.client.auth.getSession();
   if (!session) {

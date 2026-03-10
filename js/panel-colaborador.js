@@ -9,12 +9,14 @@ document.addEventListener('DOMContentLoaded', () => {
       let clientId = order?.client_id || null;
       if (!clientId) {
         try {
-          const { data: full } = await supabaseConfig.client
+          const { data: full, error } = await supabaseConfig.client
             .from('orders')
             .select('client_id,short_id,name')
             .eq('id', orderId)
             .single();
-          clientId = full?.client_id || clientId || null;
+          if (!error && full) {
+            clientId = full.client_id;
+          }
         } catch (_) {}
       }
       if (clientId) {
@@ -154,8 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Prevenir XSS escapando HTML
   const escapeHtml = (unsafe) => {
-    if (typeof unsafe !== 'string') return '';
-    return unsafe
+    if (unsafe === null || unsafe === undefined) return '';
+    return String(unsafe)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
@@ -222,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       // Usar Nominatim (OpenStreetMap) - libre y sin API key
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lng=${lng}&zoom=18&addressdetails=1`,
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
         { headers: { 'Accept-Language': 'es' } }
       );
       if (!response.ok) return null;
@@ -315,6 +317,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const url = `${window.location.origin}/seguimiento.html?codigo=${shortId}`;
 
       // 3. Enviar notificación
+      if (!window.OrderManager?.notifyOneSignal) {
+        console.warn("[OneSignal] OrderManager.notifyOneSignal no disponible");
+        return;
+      }
+
       await OrderManager.notifyOneSignal({
         player_ids: [onesignalId],
         title: title,
@@ -330,30 +337,44 @@ document.addEventListener('DOMContentLoaded', () => {
   window.notifyStatusToClient = notifyStatusToClient;
 
   async function registerCollaboratorPush(userId) {
+    if (!userId) return;
     if (window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function(OneSignal) {
+        if (!OneSignal) return;
         try {
-          // Identificar al colaborador en OneSignal
-          await OneSignal.login(userId);
-          console.log(`[OneSignal] Colaborador identificado: ${userId}`);
+          // Prevenir condición de carrera: esperar a que el SDK esté listo
+          await OneSignal.init({/* SDK ya inicializado en HTML, esto asegura que la promesa interna se resuelva */});
+
+          // Identificar al colaborador en OneSignal (solo si es un string válido)
+          const uid = String(userId).trim();
+          if (!uid || uid === 'null' || uid === 'undefined') return;
+
+          await OneSignal.login(uid);
+          console.log(`[OneSignal] Colaborador identificado: ${uid}`);
 
           // Solicitar permiso si aún no lo tiene
-          if (!OneSignal.User.PushSubscription.optedIn) {
-             await OneSignal.Slidedown.promptPush();
+          if (OneSignal.User && !OneSignal.User.PushSubscription.optedIn) {
+             try { await OneSignal.Slidedown.promptPush(); } catch(_) {}
           }
 
           // ✅ Guardar ID en Supabase para recibir notificaciones de asignación
           const saveId = async () => {
-            const id = OneSignal.User.PushSubscription.id;
-            if (id) {
-              console.log('[OneSignal] Guardando ID en DB:', id);
-              await supabaseConfig.updateOneSignalId(id);
-            }
+            try {
+              const id = OneSignal.User?.PushSubscription?.id;
+              if (id) {
+                console.log('[OneSignal] Guardando ID en DB:', id);
+                if (window.supabaseConfig?.updateOneSignalId) {
+                  await window.supabaseConfig.updateOneSignalId(id);
+                }
+              }
+            } catch(e) {}
           };
 
           // Guardar ahora y si cambia
           await saveId();
-          OneSignal.User.PushSubscription.addEventListener("change", saveId);
+          if (OneSignal.User?.PushSubscription) {
+            OneSignal.User.PushSubscription.addEventListener("change", saveId);
+          }
 
         } catch (e) {
           console.warn('[OneSignal] Error registrando colaborador:', e);
@@ -420,9 +441,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Si mostramos el mapa activo, asegurar que se renderice bien
     if (showActive && activeMap) {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         try { activeMap.invalidateSize(); } catch(_) {}
-      }, 300);
+      });
     }
 
     // Guardar estado de vista en localStorage para persistencia en recargas
@@ -464,11 +485,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Mostrar botón de aceptar solo si es pendiente y no está asignada
     if (modalAcceptBtn) {
-        const isPending = String(order.status || '').toLowerCase() === 'pending' && (!order.assigned_to || order.assigned_to === __currentUserId);
-        if (isPending) {
-            modalAcceptBtn.classList.remove('hidden');
-        } else {
+        if (!__currentUserId) {
             modalAcceptBtn.classList.add('hidden');
+        } else {
+            const isPending = String(order.status || '').toLowerCase() === 'pending' && (!order.assigned_to || order.assigned_to === __currentUserId);
+            if (isPending) {
+                modalAcceptBtn.classList.remove('hidden');
+            } else {
+                modalAcceptBtn.classList.add('hidden');
+            }
         }
     }
     
@@ -567,7 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activeMap.setView([oc.lat, oc.lng], 14);
       }
       
-      setTimeout(() => { try { activeMap.invalidateSize(); } catch(_){} }, 150);
+      requestAnimationFrame(() => { try { activeMap.invalidateSize(); } catch(_){} });
     } catch(e){ console.error("Error init map", e); }
   }
 
@@ -651,6 +676,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (s === 'cancelled') return 'cancelled';
     
     if (s === 'in_progress' || s === 'en curso') {
+      if (!order.tracking_data?.length) return 'accepted';
+      
       if (Array.isArray(order.tracking_data) && order.tracking_data.length > 0) {
         const last = order.tracking_data[order.tracking_data.length - 1];
         const uiStatus = String(last.ui_status || 'en_camino_recoger').toLowerCase();
@@ -742,6 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function handleStatusUpdate(newStatus, successMsg, btn) {
     if (!currentOrder) return;
+    if (window.__updatingOrder) return;
 
     // Helper: actualiza tracking_data y (si aplica) status en DB
     async function persistTrackingStep(orderId, uiStatus, opts = {}) {
@@ -781,8 +809,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      if (window.__updatingOrder) return;
       window.__updatingOrder = true;
+      if (btn) btn.disabled = true;
       UI.disableButtons(true);
 
       const { data: { user } } = await supabaseConfig.client.auth.getUser();
@@ -828,8 +856,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       notifications?.error?.(e?.message || 'No se pudo actualizar');
     } finally {
-      UI.disableButtons(false);
       window.__updatingOrder = false;
+      if (btn) btn.disabled = false;
+      UI.disableButtons(false);
     }
   }
 
@@ -908,6 +937,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (backToListBtn) backToListBtn.addEventListener('click', closeActiveJob);
 
+  if (btnVerOrigen) btnVerOrigen.addEventListener('click', () => {
+    if (currentOrder?.pickup) openGoogleMaps(currentOrder.pickup);
+  });
+  if (btnVerDestino) btnVerDestino.addEventListener('click', () => {
+    if (currentOrder?.delivery) openGoogleMaps(currentOrder.delivery);
+  });
+
   // --- Evidencia ---
 
   async function uploadEvidence(file){
@@ -929,7 +965,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const { data: pub } = supabaseConfig.client.storage.from(bucket).getPublicUrl(path);
       const url = pub?.publicUrl || '';
       
-      const prev = Array.isArray(currentOrder.evidence_photos) ? currentOrder.evidence_photos : [];
+      // Obtener datos frescos de la DB para evitar sobrescribir evidencia de otros colaboradores o sesiones
+      const { data: fresh, error: freshErr } = await supabaseConfig.client
+        .from('orders')
+        .select('evidence_photos')
+        .eq('id', currentOrder.id)
+        .single();
+      
+      if (freshErr) throw freshErr;
+
+      const prev = Array.isArray(fresh?.evidence_photos) ? fresh.evidence_photos : [];
       const next = [...prev, { bucket, path, url }];
       
       const { error: updErr } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client.from('orders').update({ evidence_photos: next }).eq('id', currentOrder.id))
@@ -1033,30 +1078,32 @@ document.addEventListener('DOMContentLoaded', () => {
       const rawOrders = data || [];
       
       // Normalizar visual: tratar órdenes asignadas al colaborador en estado "accepted" como "pendiente" visual
-      // y priorizarlas al inicio.
-      const me = uid;
+      const me = String(uid);
       const normalized = rawOrders
-        .filter(o => !isFinalOrder(o))
+        .filter(o => o && !isFinalOrder(o))
         .map(o => {
           const db = String(o.status || '').toLowerCase();
-          const isMine = String(o.assigned_to || '') === String(me);
+          const assigned = String(o.assigned_to || '');
+          const isMine = assigned === me;
           const visualStatus = (db === 'accepted' && isMine) ? 'pending' : db;
           return { ...o, __visual_status: visualStatus };
         });
       
       const weight = (o) => {
-        const s = String(o.__visual_status || '').toLowerCase();
-        const isMine = String(o.assigned_to || '') === String(me);
-        if (isMine && (s === 'pending' || s === 'accepted')) return 0; // mis asignadas primero (como pendientes)
+        const s = (o.__visual_status || o.status || '').toLowerCase();
+        const isMine = String(o.assigned_to || '') === me;
+        if (isMine && (s === 'pending' || s === 'accepted')) return 0; // mis asignadas primero
         if (s === 'pending') return 1;
         if (s === 'in_progress' || s.includes('camino') || s === 'cargando') return 2;
         return 3;
       };
-      orders = normalized.sort((a,b) => {
-        const wa = weight(a), wb = weight(b);
+
+      orders = normalized.sort((a, b) => {
+        const wa = weight(a);
+        const wb = weight(b);
         if (wa !== wb) return wa - wb;
-        const ta = new Date(a.created_at || 0).getTime();
-        const tb = new Date(b.created_at || 0).getTime();
+        const ta = new Date(a.created_at ?? 0).getTime();
+        const tb = new Date(b.created_at ?? 0).getTime();
         return tb - ta;
       });
       
@@ -1092,10 +1139,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- GESTOR DE REALTIME MEJORADO ---
   const RealtimeManager = {
     channel: null,
+    refreshing: false,
     
     init(userId) {
       if (this.channel) {
-        supabaseConfig.client.removeChannel(this.channel);
+        try {
+          supabaseConfig.client.removeChannel(this.channel);
+        } catch(e) {}
+        this.channel = null;
       }
 
       this.channel = supabaseConfig.client.channel('collab_dashboard_v3')
@@ -1114,9 +1165,14 @@ document.addEventListener('DOMContentLoaded', () => {
     },
 
     async handleEvent(payload) {
+      if (this.refreshing) return;
+      this.refreshing = true;
       console.log('[Realtime] Evento recibido:', payload.eventType);
       // Refrescar en segundo plano para mantener la UI actualizada
       await fetchOrdersForCollaborator(true);
+      setTimeout(() => {
+        this.refreshing = false;
+      }, 1000);
     }
   };
 
@@ -1179,18 +1235,20 @@ function renderOrdersHTML() {
         : '';
       
       // Obtener direcciones (pueden ser de texto o coordenadas)
-      const pickupDisplay = o.pickup && !/^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(o.pickup) 
+      const coordRegex = /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/;
+      
+      const pickupDisplay = o.pickup && !coordRegex.test(o.pickup) 
         ? o.pickup 
         : (o.origin_coords ? `${o.origin_coords.lat?.toFixed(4)}, ${o.origin_coords.lng?.toFixed(4)}` : o.pickup || 'Sin origen');
       
-      const deliveryDisplay = o.delivery && !/^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(o.delivery)
+      const deliveryDisplay = o.delivery && !coordRegex.test(o.delivery)
         ? o.delivery
         : (o.destination_coords ? `${o.destination_coords.lat?.toFixed(4)}, ${o.destination_coords.lng?.toFixed(4)}` : o.delivery || 'Sin destino');
       
       return `
         <div class="group bg-white rounded-2xl shadow hover:shadow-lg border border-gray-200 overflow-hidden transition-shadow">
           <div class="flex items-center justify-between px-4 py-3 border-b">
-            <span class="inline-flex items-center justify-center w-auto min-w-[36px] px-2 h-9 rounded-xl bg-blue-600 text-white font-bold text-sm">#${idDisplay}</span>
+            <span class="inline-flex items-center justify-center w-auto min-w-[36px] px-2 h-9 rounded-xl bg-blue-600 text-white font-bold text-sm">#${escapeHtml(idDisplay)}</span>
             <span class="px-2 py-1 rounded ${badge} text-xs font-medium uppercase tracking-wide">${escapeHtml(status)}</span>
             ${extraTag}
           </div>
@@ -1216,9 +1274,9 @@ function renderOrdersHTML() {
 
             </div>
           <div class="px-4 py-3 border-t flex items-center justify-end gap-2 bg-gray-50">
-            <button class="btn-open px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors" data-id="${o.id}">Detalles</button>
-            ${canAccept ? `<button class="btn-accept px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${o.id}">Aceptar</button>` : ''}
-            ${!canAccept && o.assigned_to ? `<button class="btn-continue px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${o.id}">Continuar</button>` : ''}
+            <button class="btn-open px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors" data-id="${escapeHtml(o.id)}">Detalles</button>
+            ${canAccept ? `<button class="btn-accept px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${escapeHtml(o.id)}">Aceptar</button>` : ''}
+            ${!canAccept && o.assigned_to ? `<button class="btn-continue px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${escapeHtml(o.id)}">Continuar</button>` : ''}
           </div>
         </div>
       `;
@@ -1237,7 +1295,7 @@ function renderOrdersHTML() {
     if (!grid || grid.__delegated) return;
     grid.__delegated = true;
     grid.addEventListener('click', async (e) => {
-      const btn = e.target.closest('button');
+      const btn = e.target.closest('button[data-id]');
       if (!btn) return;
       const o = orders.find(x => String(x.id) === btn.dataset.id);
       if (!o) return;
@@ -1254,7 +1312,10 @@ function renderOrdersHTML() {
           if (v && !v.isValid) throw new Error('Sesión inválida');
 
           // Bloquear aceptación local si ya existe un trabajo activo asignado
-          const hasActive = orders.some(x => x.assigned_to === userId && !isFinalOrder(x));
+          const hasActive = orders.some(x => 
+            String(x.assigned_to) === String(userId) && 
+            !['completed', 'cancelled'].includes(String(x.status).toLowerCase())
+          );
           if (hasActive) {
             notifications?.error?.('Ya tienes una orden activa');
             btn.disabled = false;
@@ -1370,11 +1431,12 @@ function renderOrdersHTML() {
     const ok = await ensureAuthOrRedirect();
     if (!ok) return;
 
-    try {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-        try { await Notification.requestPermission(); } catch(_){}
-      }
-    } catch(_){}
+    // ✅ Solicitud proactiva de permisos (Ubicación y Notificaciones)
+    if (window.pwaManager) {
+      setTimeout(() => {
+        window.pwaManager.requestPermissions(['notification', 'location']);
+      }, 3000);
+    }
 
     try {
       const info = await getActiveCollaboratorInfo();

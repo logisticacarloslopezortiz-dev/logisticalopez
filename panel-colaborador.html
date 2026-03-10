@@ -1,4 +1,4 @@
-<!doctype html>
+ <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -64,28 +64,35 @@
   <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
-        allowLocalhostAsSecureOrigin: true,
-      });
+      if (!OneSignal) return;
+      try {
+        await OneSignal.init({
+          appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
+          allowLocalhostAsSecureOrigin: true,
+        });
 
-      // Manejar el registro del Player ID para Colaboradores
-      OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
-        if (event.current.id) {
-          console.log("OneSignal Subscription ID:", event.current.id);
-          if (window.supabaseConfig) {
-            await window.supabaseConfig.updateOneSignalId(event.current.id);
+        // Manejar el registro del Player ID para Colaboradores
+        if (OneSignal.User?.PushSubscription) {
+          OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+            if (event.current.id) {
+              console.log("OneSignal Subscription ID:", event.current.id);
+              if (window.supabaseConfig?.updateOneSignalId) {
+                await window.supabaseConfig.updateOneSignalId(event.current.id);
+              }
+            }
+          });
+
+          // Captura inicial si ya está suscrito
+          const subscriptionId = OneSignal.User.PushSubscription.id;
+          if (subscriptionId) {
+            console.log("OneSignal Initial ID:", subscriptionId);
+            if (window.supabaseConfig?.updateOneSignalId) {
+              await window.supabaseConfig.updateOneSignalId(subscriptionId);
+            }
           }
         }
-      });
-
-      // Captura inicial si ya está suscrito
-      const subscriptionId = OneSignal.User.PushSubscription.id;
-      if (subscriptionId) {
-        console.log("OneSignal Initial ID:", subscriptionId);
-        if (window.supabaseConfig) {
-          await window.supabaseConfig.updateOneSignalId(subscriptionId);
-        }
+      } catch (e) {
+        console.warn("Error OneSignal init:", e);
       }
     });
   </script>
@@ -355,13 +362,43 @@
   </div>
 
   
+  <!-- Modal de Instalación PWA para iOS -->
+  <div id="ios-install-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4">
+    <div class="bg-white p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl animate-in fade-in zoom-in duration-300">
+      <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="smartphone" class="w-8 h-8 text-blue-600"></i>
+      </div>
+      <h3 class="text-xl font-bold text-gray-900 mb-2">Instalar Aplicación</h3>
+      <p class="text-sm text-gray-600 mb-6">
+        Para recibir notificaciones de nuevos pedidos y usar el GPS en tiempo real, debes instalar la aplicación en tu iPhone.
+      </p>
+      <div class="text-left space-y-4 mb-6">
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-500 mt-0.5">1</div>
+          <p class="text-sm text-gray-700">Toca el botón <b>Compartir</b> <i data-lucide="share" class="w-4 h-4 inline mb-1"></i> en la parte inferior de Safari.</p>
+        </div>
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-500 mt-0.5">2</div>
+          <p class="text-sm text-gray-700">Desliza hacia abajo y selecciona <b>Añadir a pantalla de inicio</b> <i data-lucide="plus-square" class="w-4 h-4 inline mb-1"></i>.</p>
+        </div>
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-500 mt-0.5">3</div>
+          <p class="text-sm text-gray-700">Abre la app desde el icono <b>LLO</b> en tu pantalla de inicio.</p>
+        </div>
+      </div>
+      <button onclick="document.getElementById('ios-install-modal').classList.add('hidden')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg">
+        Entendido
+      </button>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/supabase-config.js?v=20260126"></script>
-    <script src="js/pwa.js?v=20260126"></script>
-    <script src="js/sidebar.js?v=20260126"></script>
-    <script src="js/notifications.js?v=20260126"></script>
-    <script src="js/order-manager.js?v=20260126"></script>
-    <script src="js/panel-colaborador.js?v=20260126"></script>
+  <script src="js/supabase-config.js?v=20260310"></script>
+  <script src="js/pwa.js?v=20260310"></script>
+  <script src="js/sidebar.js?v=20260126"></script>
+  <script src="js/notifications.js?v=20260126"></script>
+  <script src="js/order-manager.js?v=20260126"></script>
+  <script src="js/panel-colaborador.js?v=20260310"></script>
 
     <!-- ⚡ Script de Optimización Autónoma (Compresión y Offline) -->
     <script>

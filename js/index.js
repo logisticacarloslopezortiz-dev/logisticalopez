@@ -102,8 +102,28 @@
   let supabaseReadyPromise = null;
 
   async function ensureSupabase() {
-    if (!supabaseReadyPromise && window.supabaseConfig?.ensureSupabaseReady) {
-      supabaseReadyPromise = window.supabaseConfig.ensureSupabaseReady();
+    if (supabaseReadyPromise) return supabaseReadyPromise;
+    
+    if (window.supabaseConfig?.ensureSupabaseReady) {
+      // Intentar inicializar, pero no bloquear indefinidamente
+      supabaseReadyPromise = new Promise(async (resolve) => {
+        const timeout = setTimeout(() => {
+          console.warn("Timeout inicializando Supabase, procediendo con fallback.");
+          resolve(false);
+        }, 4000);
+
+        try {
+          await window.supabaseConfig.ensureSupabaseReady();
+          clearTimeout(timeout);
+          resolve(true);
+        } catch (e) {
+          console.warn("Error inicializando Supabase:", e);
+          clearTimeout(timeout);
+          resolve(false);
+        }
+      });
+    } else {
+      supabaseReadyPromise = Promise.resolve(false);
     }
     return supabaseReadyPromise;
   }
@@ -112,6 +132,130 @@
      DOM READY
   ========================== */
   document.addEventListener('DOMContentLoaded', async () => {
+
+    async function loadTestimonials() {
+        try {
+            // Asegurar Supabase sin bloquear
+            await ensureSupabase();
+
+            let data = null;
+            let error = null;
+
+            const config = window.supabaseConfig;
+            
+            // Intentar con el cliente de Supabase primero
+            if (config?.client) {
+                try {
+                    const client = config.getPublicClient?.() || config.client;
+                    const resp = await client
+                        .from('orders')
+                        .select('name, customer_comment, rating, completed_at, created_at')
+                        .not('customer_comment', 'is', null)
+                        .not('customer_comment', 'eq', '')
+                        .order('created_at', { ascending: false }) // Usar created_at como fallback si completed_at falla
+                        .limit(15);
+                    data = resp.data;
+                    error = resp.error;
+                } catch (e) {
+                    console.error("Error con cliente Supabase, intentando REST:", e);
+                }
+            }
+
+            // Fallback a REST directo si falla el cliente o no está listo
+            if (!data && config?.restSelect) {
+                const resp = await config.restSelect('orders', {
+                    select: 'name, customer_comment, rating, completed_at, created_at',
+                    customer_comment: 'not.is.null',
+                    order: 'created_at.desc',
+                    limit: '15'
+                });
+                data = resp.data;
+                error = resp.error;
+            }
+
+            if (error) {
+                console.error('Error cargando testimonios:', error);
+                throw error;
+            }
+
+            if (!data || data.length === 0) {
+                console.log("No se encontraron testimonios en la base de datos.");
+                if (track) track.innerHTML = '';
+                empty?.classList.remove('hidden');
+                return;
+            }
+
+            // Ocultar mensaje de vacío si hay datos
+            empty?.classList.add('hidden');
+
+            const esc = s => String(s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+
+            const cards = data.map((it, i) => {
+                const name = esc(it.name || 'Cliente');
+                const comment = esc(it.customer_comment || '');
+
+                // CORREGIDO: Lógica para parsear el rating si es un string JSON o un objeto.
+                let stars = 5;
+                if (it.rating) {
+                    let ratingData = it.rating;
+                    if (typeof ratingData === 'string') {
+                        try {
+                            // Intentar parsear si es JSON
+                            ratingData = JSON.parse(ratingData);
+                        } catch (e) {
+                            // Si no es JSON, intentar convertir a número
+                            const num = Number(ratingData);
+                            ratingData = !isNaN(num) ? { stars: num } : null;
+                        }
+                    }
+                    
+                    if (typeof ratingData === 'object' && ratingData !== null) {
+                        // Buscar en campos comunes
+                        stars = Number(ratingData.stars || ratingData.service || ratingData.rating || 5);
+                    } else if (typeof ratingData === 'number') {
+                        stars = ratingData;
+                    }
+                }
+                stars = Math.max(0, Math.min(5, Math.round(stars)));
+
+                const starsHtml = Array.from({ length: 5 }).map((_, idx) =>
+                    `<i class="fas fa-star ${idx < stars ? 'text-yellow-400' : 'text-gray-300'} text-xs"></i>`
+                ).join('');
+
+                const initial = name.charAt(0).toUpperCase();
+                const colors = ['bg-blue-100 text-blue-600', 'bg-green-100 text-green-600', 'bg-purple-100 text-purple-600', 'bg-yellow-100 text-yellow-600', 'bg-pink-100 text-pink-600'];
+                const theme = colors[i % colors.length];
+                const dateStr = (it.completed_at || it.created_at) ? new Date(it.completed_at || it.created_at).toLocaleDateString('es-DO') : '';
+
+                return `
+                <div class="mx-4 flex-shrink-0 w-[300px] md:w-[350px] bg-white rounded-xl shadow-lg p-6 border border-gray-100 flex flex-col h-full transform transition-transform hover:-translate-y-1 duration-300">
+                  <div class="flex items-center gap-4 mb-4">
+                      <div class="w-12 h-12 rounded-full ${theme} flex items-center justify-center text-xl font-bold shadow-sm">
+                        ${initial}
+                      </div>
+                      <div>
+                          <h4 class="font-bold text-gray-800 text-base">${name}</h4>
+                          <div class="flex items-center gap-1 mt-1">${starsHtml}</div>
+                      </div>
+                  </div>
+                  <p class="text-gray-600 text-sm italic leading-relaxed flex-grow">"${comment}"</p>
+                  <div class="mt-4 pt-4 border-t border-gray-50 text-xs text-gray-400 flex justify-between items-center">
+                     <span>${dateStr || 'Fecha no disponible'}</span>
+                     <span class="flex items-center gap-1 text-green-600 font-medium"><i class="fas fa-check-circle"></i> Verificado</span>
+                  </div>
+                </div>
+                `;
+            }).join('');
+
+            track.innerHTML = data.length > 2 ? cards + cards : cards;
+
+        } catch (err) {
+            console.error('Fallo al cargar testimonios:', err);
+            if (track) track.innerHTML = '<p class="text-red-500 p-4">No se pudieron cargar los testimonios en este momento.</p>';
+            empty?.classList.remove('hidden');
+            empty.textContent = 'Error al cargar testimonios. Intenta de nuevo más tarde.';
+        }
+    }
 
     /* ---------- Reveal on Scroll ---------- */
     const revealEls = document.querySelectorAll('.reveal-on-scroll, .animate-on-scroll');
@@ -168,86 +312,10 @@
     const track = document.getElementById('testimonialsTrack');
     const empty = document.getElementById('testimonialsEmpty');
 
-    if (track) {
-      try {
-        await ensureSupabase();
-      } catch {}
-
-      let client = null;
-      try {
-        // Usar cliente público o el principal si está disponible
-        client = window.supabaseConfig?.getPublicClient?.() || window.supabaseConfig?.client;
-      } catch {}
-
-      let items = [];
-
-      try {
-        // ✅ CONSULTA CORRECTA: Usar tabla 'orders' en lugar de 'testimonials'
-        const { data } = await client
-          .from('orders')
-          .select('name, customer_comment, rating, created_at')
-          .not('customer_comment', 'is', null)
-          .neq('customer_comment', '')
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        if (data) items = data;
-      } catch (err) {
-        console.error('Error cargando testimonios:', err);
-      }
-
-      if (!items.length) {
-        empty?.classList.remove('hidden');
-        return;
-      }
-
-      const esc = s => String(s || '').replace(/[&<>"']/g, m =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])
-      );
-
-      const cards = items.map((it, i) => {
-        const name = esc(it.name || 'Cliente');
-        const comment = esc(it.customer_comment || '');
-        
-        // Calcular estrellas desde rating (soporta objeto o número)
-        let stars = 5;
-        if (it.rating) {
-            if (typeof it.rating === 'object') stars = Number(it.rating.stars || it.rating.service || 5);
-            else stars = Number(it.rating);
-        }
-        stars = Math.max(0, Math.min(5, Math.round(stars)));
-        
-        const starsHtml = Array.from({ length: 5 }).map((_, idx) => 
-            `<i class="fas fa-star ${idx < stars ? 'text-yellow-400' : 'text-gray-300'} text-xs"></i>`
-        ).join('');
-
-        const initial = name.charAt(0).toUpperCase();
-        const colors = ['bg-blue-100 text-blue-600', 'bg-green-100 text-green-600', 'bg-purple-100 text-purple-600', 'bg-yellow-100 text-yellow-600', 'bg-pink-100 text-pink-600'];
-        const theme = colors[i % colors.length];
-        const dateStr = it.created_at ? new Date(it.created_at).toLocaleDateString('es-DO') : '';
-
-        return `
-        <div class="mx-4 flex-shrink-0 w-[300px] md:w-[350px] bg-white rounded-xl shadow-lg p-6 border border-gray-100 flex flex-col h-full transform transition-transform hover:-translate-y-1 duration-300">
-          <div class="flex items-center gap-4 mb-4">
-              <div class="w-12 h-12 rounded-full ${theme} flex items-center justify-center text-xl font-bold shadow-sm">
-                ${initial}
-              </div>
-              <div>
-                  <h4 class="font-bold text-gray-800 text-base">${name}</h4>
-                  <div class="flex items-center gap-1 mt-1">${starsHtml}</div>
-              </div>
-          </div>
-          <p class="text-gray-600 text-sm italic leading-relaxed flex-grow">"${comment}"</p>
-          <div class="mt-4 pt-4 border-t border-gray-50 text-xs text-gray-400 flex justify-between items-center">
-             <span>${dateStr}</span>
-             <span class="flex items-center gap-1 text-green-600 font-medium"><i class="fas fa-check-circle"></i> Verificado</span>
-          </div>
-        </div>
-        `;
-      }).join('');
-
-      // Duplicar contenido para efecto infinito si hay suficientes items
-      track.innerHTML = items.length > 2 ? cards + cards : cards;
+    if (!track) {
+      console.warn("Contenedor de testimonios no encontrado");
+    } else {
+      loadTestimonials();
     }
 
     /* ---------- Formulario WhatsApp ---------- */
