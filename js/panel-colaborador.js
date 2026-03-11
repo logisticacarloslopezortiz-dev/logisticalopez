@@ -283,11 +283,15 @@ document.addEventListener('DOMContentLoaded', () => {
           if (data?.onesignal_id) return data.onesignal_id;
         }
 
-        // D. Último recurso: Buscar en la tabla orders por si acaso se guardó ahí
+        // D. Último recurso: Buscar en la tabla orders (solo si las columnas existen)
         try {
-          const { data } = await supabaseConfig.client.from('orders').select('onesignal_id, onesignal_player_id').eq('id', order.id).maybeSingle();
+          const { data, error } = await supabaseConfig.client.from('orders').select('*').eq('id', order.id).maybeSingle();
+          if (error) throw error;
           return data?.onesignal_id || data?.onesignal_player_id || null;
-        } catch (_) { return null; }
+        } catch (_) { 
+          // Si falla (ej. error 400 por columnas faltantes), simplemente retornamos null
+          return null; 
+        }
       })();
 
       if (!onesignalId) {

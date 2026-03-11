@@ -435,12 +435,15 @@ const OrderManager = {
         clientOnesignalId = c?.onesignal_id;
       }
 
-      // 4. Último recurso: Buscar en la tabla orders por si acaso
+      // 4. Último recurso: Buscar en la tabla orders (solo si las columnas existen)
       if (!clientOnesignalId) {
         try {
-          const { data: o } = await supabaseConfig.client.from('orders').select('onesignal_id, onesignal_player_id').eq('id', order.id).maybeSingle();
+          const { data: o, error } = await supabaseConfig.client.from('orders').select('*').eq('id', order.id).maybeSingle();
+          if (error) throw error;
           clientOnesignalId = o?.onesignal_id || o?.onesignal_player_id || null;
-        } catch(_) {}
+        } catch(_) {
+          clientOnesignalId = null;
+        }
       }
 
       if (clientOnesignalId) {

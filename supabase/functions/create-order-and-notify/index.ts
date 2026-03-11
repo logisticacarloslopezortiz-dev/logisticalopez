@@ -60,12 +60,17 @@ Deno.serve(async (req: Request) => {
     const clientOnesignalId = orderPayload.onesignal_player_id || null
     if (clientOnesignalId) {
       try {
+        // A. Guardar en la tabla correspondiente (Relacional)
         if (order.client_id) {
           await supabase.from('profiles').update({ onesignal_id: clientOnesignalId }).eq('id', order.client_id)
         } else if (order.client_contact_id) {
           await supabase.from('clients').update({ onesignal_id: clientOnesignalId }).eq('id', order.client_contact_id)
         }
-        console.log('ID de OneSignal guardado en la base de datos.');
+        
+        // B. Guardar directamente en la orden (Redundancia solicitada por el usuario)
+        await supabase.from('orders').update({ onesignal_id: clientOnesignalId, onesignal_player_id: clientOnesignalId }).eq('id', order.id)
+        
+        console.log('ID de OneSignal guardado en la base de datos (relacional y redundante).');
       } catch (e) {
         console.error('Error guardando OneSignal ID:', e);
       }

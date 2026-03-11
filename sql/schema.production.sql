@@ -257,7 +257,9 @@
           tracking_data jsonb,
           tracking_url text,
           updated_at timestamptz not null default now(),
-          customer_comment text
+          customer_comment text,
+          onesignal_id text,
+          onesignal_player_id text
         );
 
         -- Índices Orders
@@ -630,7 +632,8 @@
                 origin_coords, destination_coords,
                 "date", "time",
                 status, estimated_price, tracking_data,
-                client_contact_id
+                client_contact_id,
+                onesignal_id, onesignal_player_id
               ) values (
                 nullif(order_payload->>'name',''),
                 nullif(order_payload->>'phone',''),
@@ -648,7 +651,9 @@
                 (order_payload->>'time')::time,
                 v_status,
                 (CASE WHEN order_payload->>'estimated_price' ~ '^[0-9]+(\.[0-9]+)?$' THEN (order_payload->>'estimated_price')::numeric ELSE NULL END),
-                order_payload->'tracking_data', v_contact_id
+                order_payload->'tracking_data', v_contact_id,
+                nullif(order_payload->>'onesignal_id',''),
+                nullif(order_payload->>'onesignal_player_id','')
               ) returning * into v_order;
               
               -- Si llegamos aquí, insert exitoso
@@ -678,7 +683,8 @@
                 "date", "time",
                 status, estimated_price,
                 tracking_data,
-                client_id
+                client_id,
+                onesignal_id, onesignal_player_id
               ) values (
                 nullif(order_payload->>'name',''),
                 nullif(order_payload->>'phone',''),
@@ -697,7 +703,9 @@
                 v_status,
                 (CASE WHEN order_payload->>'estimated_price' ~ '^[0-9]+(\.[0-9]+)?$' THEN (order_payload->>'estimated_price')::numeric ELSE NULL END),
                 order_payload->'tracking_data',
-                v_client_id
+                v_client_id,
+                nullif(order_payload->>'onesignal_id',''),
+                nullif(order_payload->>'onesignal_player_id','')
               ) returning * into v_order;
               
               exit;
