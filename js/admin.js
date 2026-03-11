@@ -7,6 +7,8 @@ let currentAssigningOrder = null;
  * Carga las órdenes desde Supabase y las renderiza.
  */
 async function loadOrders() {
+  if (!document.getElementById('ordersTableBody')) return;
+
   try {
     const orders = await supabaseConfig.getOrders();
     allOrders = orders || [];
@@ -23,20 +25,32 @@ async function loadOrders() {
  * Aplica los filtros actuales y renderiza las órdenes.
  */
 function filterAndRender() {
-  const searchInput = document.getElementById('searchInput').value.toLowerCase();
-  const statusFilter = document.getElementById('statusFilter').value;
-  const serviceFilter = document.getElementById('serviceFilter').value;
-  const dateFilter = document.getElementById('dateFilter').value;
+  const searchInputEl = document.getElementById('searchInput');
+  const statusFilterEl = document.getElementById('statusFilter');
+  const serviceFilterEl = document.getElementById('serviceFilter');
+  const dateFilterEl = document.getElementById('dateFilter');
+
+  const searchInput = searchInputEl ? searchInputEl.value.toLowerCase() : '';
+  const statusFilter = statusFilterEl ? statusFilterEl.value : '';
+  const serviceFilter = serviceFilterEl ? serviceFilterEl.value : '';
+  const dateFilter = dateFilterEl ? dateFilterEl.value : '';
 
   let filtered = allOrders.filter(order => {
-    const matchesSearch = !searchInput ||
-      order.name.toLowerCase().includes(searchInput) ||
-      (order.service?.name || '').toLowerCase().includes(searchInput) || // ✅ CORREGIDO: Buscar por nombre de servicio
+
+    const matchesSearch =
+      !searchInput ||
+      (order.name || '').toLowerCase().includes(searchInput) ||
+      (order.service?.name || '').toLowerCase().includes(searchInput) ||
       String(order.id).includes(searchInput);
 
-    const matchesStatus = !statusFilter || order.status === statusFilter;
-    const matchesService = !serviceFilter || order.service?.name === serviceFilter; // ✅ CORREGIDO: Filtrar por nombre de servicio
-    const matchesDate = !dateFilter || order.date === dateFilter;
+    const matchesStatus =
+      !statusFilter || order.status === statusFilter;
+
+    const matchesService =
+      !serviceFilter || order.service?.name === serviceFilter;
+
+    const matchesDate =
+      !dateFilter || order.date === dateFilter;
 
     return matchesSearch && matchesStatus && matchesService && matchesDate;
   });
@@ -92,8 +106,8 @@ function renderOrders(orders) {
     });
   }
 
-  showingCount.textContent = orders.length;
-  totalCount.textContent = allOrders.length;
+  if (showingCount) showingCount.textContent = orders.length;
+  if (totalCount) totalCount.textContent = allOrders.length;
 
   // Añadir listeners a los botones de "Gestionar"
   document.querySelectorAll('.manage-btn').forEach(btn => {
@@ -108,19 +122,25 @@ function updateSummaryCards() {
   const today = new Date().toISOString().split('T')[0];
   const totalPedidos = allOrders.length;
   const pedidosHoy = allOrders.filter(o => o.date === today).length;
-  const pedidosCompletados = allOrders.filter(o => o.status === 'Completado').length;
+  const pedidosCompletados = allOrders.filter(o => o.status === 'Completada').length;
   const pedidosPendientes = allOrders.filter(o => o.status === 'Pendiente').length;
   const gananciaTotal = allOrders
-    .filter(o => o.status === 'Completado' && o.estimated_price && !isNaN(parseFloat(o.estimated_price.replace(/[^0-9.-]+/g,""))))
+    .filter(o => o.status === 'Completada' && o.estimated_price && !isNaN(parseFloat(o.estimated_price.replace(/[^0-9.-]+/g,""))))
     .reduce((sum, o) => sum + parseFloat(o.estimated_price.replace(/[^0-9.-]+/g,"")), 0);
 
-  document.getElementById('totalPedidos').textContent = totalPedidos;
-  document.getElementById('pedidosHoy').textContent = pedidosHoy;
-  document.getElementById('pedidosCompletados').textContent = pedidosCompletados;
-  document.getElementById('porcentajeCompletados').textContent = totalPedidos > 0 ? ((pedidosCompletados / totalPedidos) * 100).toFixed(0) : 0;
-  document.getElementById('pedidosPendientes').textContent = pedidosPendientes;
-  document.getElementById('gananciaTotal').textContent = `$${gananciaTotal.toLocaleString('es-DO')}`;
-  // ... otros resúmenes
+  const elTotal = document.getElementById('totalPedidos');
+  const elHoy = document.getElementById('pedidosHoy');
+  const elCompletados = document.getElementById('pedidosCompletados');
+  const elPorcentaje = document.getElementById('porcentajeCompletados');
+  const elPendientes = document.getElementById('pedidosPendientes');
+  const elGanancia = document.getElementById('gananciaTotal');
+
+  if (elTotal) elTotal.textContent = totalPedidos;
+  if (elHoy) elHoy.textContent = pedidosHoy;
+  if (elCompletados) elCompletados.textContent = pedidosCompletados;
+  if (elPorcentaje) elPorcentaje.textContent = totalPedidos > 0 ? ((pedidosCompletados / totalPedidos) * 100).toFixed(0) : 0;
+  if (elPendientes) elPendientes.textContent = pedidosPendientes;
+  if (elGanancia) elGanancia.textContent = `$${gananciaTotal.toLocaleString('es-DO')}`;
 }
 
 /**

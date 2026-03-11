@@ -23,28 +23,42 @@
   <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
-        allowLocalhostAsSecureOrigin: true,
-      });
+      try {
+        // Verificar si estamos en el dominio permitido o localhost
+        const isAllowedDomain = window.location.hostname === 'logisticalopezortiz.com' || 
+                               window.location.hostname === 'localhost' || 
+                               window.location.hostname === '127.0.0.1';
+        
+        if (!isAllowedDomain) {
+          console.warn("[OneSignal] Dominio no reconocido, inicialización omitida para evitar errores.");
+          return;
+        }
 
-      // Manejar el registro del Player ID para Administradores
-      OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
-        if (event.current.id) {
-          console.log("OneSignal Subscription ID (Admin):", event.current.id);
+        await OneSignal.init({
+          appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
+          allowLocalhostAsSecureOrigin: true,
+        });
+
+        // Manejar el registro del Player ID para Administradores
+        OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+          if (event.current.id) {
+            console.log("OneSignal Subscription ID (Admin):", event.current.id);
+            if (window.supabaseConfig) {
+              await window.supabaseConfig.updateOneSignalId(event.current.id);
+            }
+          }
+        });
+
+        // Captura inicial si ya está suscrito
+        const subscriptionId = OneSignal.User.PushSubscription.id;
+        if (subscriptionId) {
+          console.log("OneSignal Initial ID (Admin):", subscriptionId);
           if (window.supabaseConfig) {
-            await window.supabaseConfig.updateOneSignalId(event.current.id);
+            await window.supabaseConfig.updateOneSignalId(subscriptionId);
           }
         }
-      });
-
-      // Captura inicial si ya está suscrito
-      const subscriptionId = OneSignal.User.PushSubscription.id;
-      if (subscriptionId) {
-        console.log("OneSignal Initial ID (Admin):", subscriptionId);
-        if (window.supabaseConfig) {
-          await window.supabaseConfig.updateOneSignalId(subscriptionId);
-        }
+      } catch (e) {
+        console.error("[OneSignal] Error durante la inicialización:", e);
       }
     });
   </script>
