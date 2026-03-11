@@ -265,31 +265,47 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       if (!order || !order.id || !window.OrderManager?.notifyOneSignal) return;
 
+      // 1. Intentar obtener el ID de OneSignal desde múltiples fuentes
       const onesignalId = await (async () => {
+        // A. Buscar en el objeto de la orden directamente (si ya fue cargado)
+        if (order.onesignal_id) return order.onesignal_id;
+        if (order.onesignal_player_id) return order.onesignal_player_id;
+
+        // B. Buscar en la tabla clients si es un contacto
         if (order.client_contact_id) {
           const { data } = await supabaseConfig.client.from('clients').select('onesignal_id').eq('id', order.client_contact_id).maybeSingle();
           if (data?.onesignal_id) return data.onesignal_id;
         }
+
+        // C. Buscar en la tabla profiles si es un usuario registrado
         if (order.client_id) {
           const { data } = await supabaseConfig.client.from('profiles').select('onesignal_id').eq('id', order.client_id).maybeSingle();
           if (data?.onesignal_id) return data.onesignal_id;
         }
-        return null;
+
+        // D. Último recurso: Buscar en la tabla orders por si acaso se guardó ahí
+        try {
+          const { data } = await supabaseConfig.client.from('orders').select('onesignal_id, onesignal_player_id').eq('id', order.id).maybeSingle();
+          return data?.onesignal_id || data?.onesignal_player_id || null;
+        } catch (_) { return null; }
       })();
 
       if (!onesignalId) {
-        console.log(`[OneSignal] No se encontró ID para notificar al cliente de la orden #${order.id}`);
+        console.warn(`[OneSignal] No se encontró ID para notificar al cliente de la orden #${order.id}. Intentando fallback por email.`);
+        // No bloqueamos el flujo, el email se envía por separado
         return;
       }
 
+      // 2. Preparar mensaje según el estado
       const statusMap = {
         'accepted': 'Tu solicitud ha sido aceptada.',
-        'en_camino_recoger': 'El colaborador va en camino a recoger tu pedido.',
-        'cargando': 'Tu pedido está siendo cargado.',
-        'en_camino_entregar': 'El colaborador va en camino a entregar tu pedido.',
-        'completed': '¡Tu servicio ha sido completado con éxito!',
-        'cancelled': 'Tu solicitud ha sido cancelada.'
+        'en_camino_recoger': '📍 El colaborador va en camino a recoger tu pedido.',
+        'cargando': '📦 Tu pedido está siendo cargado.',
+        'en_camino_entregar': '🚚 El colaborador va en camino a entregar tu pedido.',
+        'completed': '✅ ¡Tu servicio ha sido completado con éxito!',
+        'cancelled': '❌ Tu solicitud ha sido cancelada.'
       };
+      
       const titleMap = {
         'accepted': '✅ Solicitud Aceptada',
         'en_camino_recoger': '🚚 En Camino',
@@ -304,6 +320,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const shortId = order.short_id || order.id;
       const url = `${window.location.origin}/seguimiento.html?codigo=${shortId}`;
 
+      console.log(`[OneSignal] Notificando al cliente ${onesignalId} sobre estado: ${uiStatus}`);
+
       await OrderManager.notifyOneSignal({
         player_ids: [onesignalId],
         title: title,
@@ -315,7 +333,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } catch (e) {
       console.warn('[OneSignal] Error notificando al cliente:', e);
-      notifications?.warning?.('No se pudo notificar al cliente.');
     }
   }
   // Exponer globalmente

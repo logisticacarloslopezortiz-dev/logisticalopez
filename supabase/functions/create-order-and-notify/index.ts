@@ -56,6 +56,21 @@ Deno.serve(async (req: Request) => {
     const clientName = order.name || null
     const url = buildTrackingUrl(shortId || undefined)
 
+    // ✅ NUEVO: Guardar el ID de OneSignal en la base de datos para futuras notificaciones
+    const clientOnesignalId = orderPayload.onesignal_player_id || null
+    if (clientOnesignalId) {
+      try {
+        if (order.client_id) {
+          await supabase.from('profiles').update({ onesignal_id: clientOnesignalId }).eq('id', order.client_id)
+        } else if (order.client_contact_id) {
+          await supabase.from('clients').update({ onesignal_id: clientOnesignalId }).eq('id', order.client_contact_id)
+        }
+        console.log('ID de OneSignal guardado en la base de datos.');
+      } catch (e) {
+        console.error('Error guardando OneSignal ID:', e);
+      }
+    }
+
     // 2) Enviar email de confirmación
     let emailSent = false
     if (toEmail) {

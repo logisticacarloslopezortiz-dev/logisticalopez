@@ -420,20 +420,32 @@ const OrderManager = {
     try {
       let clientOnesignalId = null;
       
-      // 1. Buscar en profiles si hay client_id
-      if (order.client_id) {
+      // 1. Intentar obtener el ID desde el objeto de la orden
+      clientOnesignalId = order.onesignal_id || order.onesignal_player_id || null;
+
+      // 2. Buscar en profiles si hay client_id
+      if (!clientOnesignalId && order.client_id) {
         const { data: p } = await supabaseConfig.client.from('profiles').select('onesignal_id').eq('id', order.client_id).maybeSingle();
         clientOnesignalId = p?.onesignal_id;
       } 
       
-      // 2. Si no, buscar en clients si hay client_contact_id
+      // 3. Si no, buscar en clients si hay client_contact_id
       if (!clientOnesignalId && order.client_contact_id) {
         const { data: c } = await supabaseConfig.client.from('clients').select('onesignal_id').eq('id', order.client_contact_id).maybeSingle();
         clientOnesignalId = c?.onesignal_id;
       }
 
+      // 4. Último recurso: Buscar en la tabla orders por si acaso
+      if (!clientOnesignalId) {
+        try {
+          const { data: o } = await supabaseConfig.client.from('orders').select('onesignal_id, onesignal_player_id').eq('id', order.id).maybeSingle();
+          clientOnesignalId = o?.onesignal_id || o?.onesignal_player_id || null;
+        } catch(_) {}
+      }
+
       if (clientOnesignalId) {
         const statusMap = {
+          'accepted': '✅ Tu solicitud ha sido aceptada.',
           'en_camino_recoger': '📍 El transportista va en camino a recoger tu carga.',
           'cargando': '📦 Tu carga está siendo procesada/cargada.',
           'en_camino_entregar': '🚚 ¡Tu pedido ya va en ruta de entrega!',
@@ -443,6 +455,8 @@ const OrderManager = {
 
         const message = statusMap[uiStatus] || `El estado de tu orden #${order.short_id || order.id} ha cambiado a: ${uiStatus.replace(/_/g, ' ')}`;
         
+        console.log(`[OrderManager] Notificando al cliente ${clientOnesignalId} sobre estado: ${uiStatus}`);
+
         this.notifyOneSignal({
           player_ids: [clientOnesignalId],
           title: 'Actualización de tu pedido',
