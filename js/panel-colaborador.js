@@ -1509,6 +1509,16 @@ function renderOrdersHTML() {
   const collapseBtnNav = document.getElementById('collabCollapseBtnNav');
   if (logoutBtnNav) logoutBtnNav.addEventListener('click', async () => {
     try {
+      // ✅ Cerrar sesión en OneSignal para evitar conflictos de identidad
+      if (window.OneSignal) {
+        await window.OneSignal.logout();
+        console.log('[OneSignal] Sesión de colaborador cerrada.');
+      }
+    } catch (e) {
+      console.warn('[OneSignal] Error al cerrar sesión:', e);
+    }
+
+    try {
       await supabaseConfig.client.auth.signOut();
     } catch(_) {}
     try { localStorage.removeItem('userRole'); } catch(_){}

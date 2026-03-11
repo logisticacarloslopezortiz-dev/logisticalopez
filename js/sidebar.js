@@ -219,6 +219,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- INICIO: Lógica de Logout ---
     async function performLogout(){
+        try {
+            // ✅ Cerrar sesión en OneSignal para evitar conflictos de identidad
+            if (window.OneSignal) {
+                await window.OneSignal.logout();
+                console.log('[OneSignal] Sesión de administrador cerrada.');
+            }
+        } catch (e) {
+            console.warn('[OneSignal] Error al cerrar sesión:', e);
+        }
+
         const { error } = await supabaseConfig.client.auth.signOut();
         localStorage.clear();
         if (error) {
