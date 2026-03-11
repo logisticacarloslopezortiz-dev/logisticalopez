@@ -327,13 +327,11 @@ document.addEventListener('DOMContentLoaded', () => {
       window.OneSignalDeferred.push(async function(OneSignal) {
         if (!OneSignal) return;
         try {
-          // Prevenir condición de carrera: esperar a que el SDK esté listo
-          await OneSignal.init({/* SDK ya inicializado en HTML, esto asegura que la promesa interna se resuelva */});
-
           // Identificar al colaborador en OneSignal (solo si es un string válido)
           const uid = String(userId).trim();
           if (!uid || uid === 'null' || uid === 'undefined') return;
 
+          // En v16 login() ya maneja internamente la espera de inicialización
           await OneSignal.login(uid);
           console.log(`[OneSignal] Colaborador identificado: ${uid}`);
 
@@ -627,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (evidencePreview) evidencePreview.innerHTML = '';
     
     // 4. Actualizar botones y mapa
-    updatePrimaryActionButtons(order);
+    ActiveJobUI.updateActionButtons(order);
     initActiveMap(order);
 
     // 5. Notificaciones Push
@@ -825,9 +823,6 @@ document.addEventListener('DOMContentLoaded', () => {
       currentOrder.status = 'in_progress';
       currentOrder.tracking_data = nextTracking;
 
-      // ✅ Actualizar UI en tiempo real
-      ActiveJobUI.updateAll(currentOrder);
-
       // ✅ Notificar al cliente vía OneSignal
       await notifyStatusToClient(currentOrder, newStatus);
 
@@ -841,8 +836,8 @@ document.addEventListener('DOMContentLoaded', () => {
           document.getElementById('activeEvidence')?.scrollIntoView({ behavior: 'smooth' });
         } catch (_) {}
       }
-
-      updatePrimaryActionButtons(currentOrder);
+  
+      ActiveJobUI.updateAll(currentOrder);
     } catch (e) {
       notifications?.error?.(e?.message || 'No se pudo actualizar');
     } finally {
@@ -1318,6 +1313,9 @@ function renderOrdersHTML() {
 
           notifications?.success?.('Orden aceptada');
           
+          // ✅ Notificar al cliente vía OneSignal
+          await notifyStatusToClient(o, 'accepted');
+          
           try { window.sendStatusEmail?.(o, 'accepted'); } catch(_){}
 
           try {
@@ -1370,15 +1368,15 @@ function renderOrdersHTML() {
         currentOrder.assigned_to = userId;
         currentOrder.tracking_data = []; // Iniciar vacío
         
-        
+        // ✅ Notificar al cliente vía OneSignal
+        await notifyStatusToClient(currentOrder, 'accepted');
 
         try { window.sendStatusEmail?.(currentOrder, 'accepted'); } catch(_){}
         closeModal();
         try { notifications?.info?.('Orden aceptada. Pulsa "En camino a recoger" para iniciar.'); } catch(_){}
         try {
           openActiveJob(currentOrder);
-          updatePrimaryActionButtons(currentOrder);
-          updateProgressBar(getUiStatus(currentOrder));
+          ActiveJobUI.updateAll(currentOrder);
         } catch(_){}
       } catch (e) {
         notifications?.error?.(e?.message || 'No se pudo aceptar la orden');
