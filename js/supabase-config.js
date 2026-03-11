@@ -33,6 +33,31 @@ if (!window.supabaseConfig) {
   window.supabaseConfig = {
     client: mainClient,
     _publicClient: null,
+    _sessionReady: false,
+    _sessionReadyPromise: null,
+    _sessionReadyResolver: null,
+
+    // ✅ NUEVO: Promesa para esperar a que la sesión esté lista
+    async ensureSessionReady() {
+      if (this._sessionReady) return true;
+      if (!this._sessionReadyPromise) {
+        this._sessionReadyPromise = new Promise(resolve => {
+          this._sessionReadyResolver = resolve;
+        });
+      }
+      return this._sessionReadyPromise;
+    },
+
+    // ✅ NUEVO: Función para marcar la sesión como lista
+    _markSessionReady() {
+      if (this._sessionReady) return;
+      this._sessionReady = true;
+      if (this._sessionReadyResolver) {
+        this._sessionReadyResolver(true);
+      }
+      // Disparar evento global para scripts que no pueden usar await
+      document.dispatchEvent(new CustomEvent('supabase-session-ready'));
+    },
     
     /**
      * Obtiene un cliente de Supabase optimizado para operaciones públicas (sin persistencia de sesión).
@@ -94,6 +119,7 @@ if (!window.supabaseConfig) {
      */
     async updateOneSignalId(onesignalId, contactId = null) {
       try {
+        await this.ensureSessionReady(); // ✅ Esperar a que la sesión esté lista
         if (!this.client) return { error: 'Supabase client not initialized' };
         
         const { data: { user } } = await this.client.auth.getUser();
@@ -131,18 +157,22 @@ if (!window.supabaseConfig) {
   ensureFreshSession: async function() {
     try {
       const { data: { session } } = await this.client.auth.getSession();
-      if (!session) return;
-      const now = Math.floor(Date.now() / 1000);
-      const exp = session.expires_at || 0;
-      if (exp <= now + 60) { // renovar si expira en 60s
-        // Intentar refrescar la sesión; si falla, lo manejaremos en los queries
-        try {
-          if (this.client.auth.refreshSession) {
-            await this.client.auth.refreshSession();
+      if (session) {
+        this._markSessionReady(); // ✅ Marcar sesión como lista si hay una sesión válida
+        const now = Math.floor(Date.now() / 1000);
+        const exp = session.expires_at || 0;
+        if (exp <= now + 60) { // renovar si expira en 60s
+          try {
+            if (this.client.auth.refreshSession) {
+              await this.client.auth.refreshSession();
+            }
+          } catch (e) {
+            console.warn('No se pudo refrescar la sesión automáticamente:', e?.message || e);
           }
-        } catch (e) {
-          console.warn('No se pudo refrescar la sesión automáticamente:', e?.message || e);
         }
+      } else {
+        // Si no hay sesión, asegurar que el estado no esté marcado como listo
+        this._sessionReady = false;
       }
     } catch (_) { /* no-op */ }
   },

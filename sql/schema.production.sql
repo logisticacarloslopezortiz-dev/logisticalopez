@@ -1457,3 +1457,5 @@ CREATE INDEX IF NOT EXISTS idx_profiles_onesignal_id ON public.profiles(onesigna
 CREATE INDEX IF NOT EXISTS idx_clients_onesignal_id ON public.clients(onesignal_id);
 CREATE INDEX IF NOT EXISTS idx_collaborators_onesignal_id ON public.collaborators(onesignal_id);
 
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS onesignal_id text;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS onesignal_player_id text;
