@@ -1,4 +1,22 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // ✅ Sistema de Notificaciones Local
+  const notifications = {
+    success: (msg) => OrderManager._toast(msg, 'success'),
+    error: (msg) => OrderManager._toast(msg, 'error'),
+    warning: (msg) => OrderManager._toast(msg, 'warning'),
+    info: (msg) => OrderManager._toast(msg, 'info')
+  };
+
+  // ✅ Gestor de Interfaz (UI)
+  const UI = {
+    showLoading: () => {
+      if (overlay) overlay.classList.remove('hidden');
+    },
+    hideLoading: () => {
+      if (overlay) overlay.classList.add('hidden');
+    }
+  };
+
   window.sendStatusEmail = async function(order, status) {
     try {
       if (!supabaseConfig?.client) return;
@@ -153,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeMap = null;
   let activePickupMarker = null;
   let activeDeliveryMarker = null;
+  let locationWatcher = null;
 
   // Prevenir XSS escapando HTML
   const escapeHtml = (unsafe) => {
@@ -166,52 +185,16 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   function formatStatus(status) {
-    const v = String(status || '').toLowerCase();
-    if (v === 'pending') return 'Pendiente';
-    if (v === 'accepted') return 'Aceptada';
-    if (v === 'completed') return 'Completada';
-    if (v === 'cancelled') return 'Cancelada';
-    if (v === 'en_camino_recoger') return 'En camino a recoger';
-    if (v === 'cargando') return 'Cargando';
-    if (v === 'en_camino_entregar') return 'En camino a entregar';
-    return 'Actualizada';
+    const s = String(status || '').toLowerCase();
+    return OrderManager.STATUS_LABELS[s] || 'Pendiente';
   }
 
-  // --- MÓDULOS DE GESTIÓN ---
-
-  const UI = {
-    showLoading() {
-      if (grid) {
-        grid.innerHTML = Array(3).fill(0).map(() => `
-          <div class="bg-white rounded-2xl shadow p-4 space-y-3 animate-pulse">
-            <div class="flex justify-between">
-              <div class="h-6 bg-gray-200 rounded w-1/4"></div>
-              <div class="h-6 bg-gray-200 rounded w-1/6"></div>
-            </div>
-            <div class="h-4 bg-gray-200 rounded w-3/4"></div>
-            <div class="h-4 bg-gray-200 rounded w-1/2"></div>
-            <div class="h-10 bg-gray-200 rounded w-full mt-4"></div>
-          </div>
-        `).join('');
-      }
-    },
-    hideLoading() {
-      if (overlay) overlay.classList.add('hidden');
-    },
-    disableButtons(disabled = true) {
-      // Deshabilitar solo botones de acción principales para evitar bloqueo total
-      const selectors = [
-        '#btnGoPickup', '#btnLoading', '#btnGoDeliver', '#btnComplete', '#btnCancel',
-        '#modalAcceptBtn', '#confirmContinueBtn'
-      ];
-      selectors.forEach(sel => {
-        const el = document.querySelector(sel);
-        if (el) el.disabled = disabled;
-      });
-    }
-  };
-
   // --- Utilidades ---
+
+  // Reemplazar toSpanishStatus por una versión que use STATUS_LABELS de OrderManager
+  function toSpanishStatus(status) {
+    return formatStatus(status);
+  }
 
   // Geocoding inverso: convertir coordenadas a direcciones
   const addressCache = new Map();
@@ -460,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentOrder = order;
     if (modalOrderId) modalOrderId.textContent = `#${order.id}`;
     if (modalService) modalService.innerHTML = `<strong>${escapeHtml(order?.service?.name || '')}</strong><br><small class="text-gray-600">${escapeHtml(order?.service?.description || '')}</small>`;
-    if (modalStatus) modalStatus.textContent = formatStatus(order.status);
+    if (modalStatus) modalStatus.textContent = formatStatus(getUiStatus(order));
     if (modalClient) modalClient.textContent = `${order.name || ''} • ${order.phone || ''}`;
     if (modalVehicle) modalVehicle.textContent = order?.vehicle?.name || '';
     if (modalPickup) modalPickup.textContent = order.pickup || '';
@@ -646,7 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (evidencePreview) evidencePreview.innerHTML = '';
     
     // 4. Actualizar botones y mapa
-    ActiveJobUI.updateActionButtons(order);
+    ActiveJobUI.updateActionButtons(getUiStatus(order), order);
     initActiveMap(order);
 
     // 5. Notificaciones Push
@@ -671,29 +654,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Actualización de Estados ---
 
-  // Helper para obtener estado UI desde orden DB
+  // Helper para obtener estado UI desde orden DB (Refactorizado para usar OrderManager)
   function getUiStatus(order) {
-    if (!order) return '';
-    const s = String(order.status || '').toLowerCase();
-    
-    if (s === 'pending') return 'pending';
-    if (s === 'accepted') return 'accepted';
-    if (s === 'completed') return 'completed';
-    if (s === 'cancelled') return 'cancelled';
-    
-    if (s === 'in_progress' || s === 'en curso') {
-      if (!order.tracking_data?.length) return 'accepted';
-      
-      if (Array.isArray(order.tracking_data) && order.tracking_data.length > 0) {
-        const last = order.tracking_data[order.tracking_data.length - 1];
-        const uiStatus = String(last.ui_status || 'en_camino_recoger').toLowerCase();
-        if (['en_camino_recoger', 'cargando', 'en_camino_entregar', 'entregada'].includes(uiStatus)) {
-          return uiStatus;
-        }
-      }
-      return 'en_camino_recoger'; 
-    }
-    return s;
+    return OrderManager.getPhaseConfig(order).phase; // Usa el wrapper público, más seguro
   }
 
   function isFinalOrder(order) {
@@ -701,170 +664,121 @@ document.addEventListener('DOMContentLoaded', () => {
     return db === 'completed' || db === 'cancelled';
   }
 
-  // --- GESTOR DE UI DE TRABAJO ACTIVO ---
+  // ✅ GESTOR DE UI DE TRABAJO ACTIVO (Refactorizado para usar OrderManager)
   const ActiveJobUI = {
     updateAll(order) {
       if (!order) return;
-      this.updateProgressBar(order);
-      this.updateActionButtons(order);
-      this.updateStatusText(order);
-      // Actualizar otros campos si es necesario
+      const config = OrderManager.getPhaseConfig(order);
+      this.updateProgressBar(config);
+      this.updateActionButtons(config.phase, order);
+      this.updateStatusText(config.label);
+      
       if (activeId) activeId.textContent = `#${order.id}`;
       if (activeService) activeService.textContent = order?.service?.name || '';
       if (activeClient) activeClient.textContent = `${order.name || ''} • ${order.phone || ''}`;
     },
 
-    updateProgressBar(order) {
+    updateProgressBar(config) {
       const bar = document.getElementById('jobProgressBar');
       const barText = document.getElementById('jobProgressBarText');
       if (!bar) return;
 
-      const uiStatus = getUiStatus(order);
-      const map = { 
-        pending: 0, 
-        accepted: 15, 
-        en_camino_recoger: 25, 
-        cargando: 50, 
-        en_camino_entregar: 75, 
-        completed: 100, 
-        cancelled: 100
-      };
-      const percent = map[uiStatus] || 0;
-      bar.style.width = `${percent}%`;
-
-      if (barText) {
-        barText.textContent = formatStatus(uiStatus);
-      }
+      bar.style.width = `${config.percent}%`;
+      if (barText) barText.textContent = config.label;
       
-      // Cambiar color de la barra según el estado
-      bar.classList.remove('bg-red-500', 'bg-green-500');
-      if (uiStatus === 'cancelled') bar.classList.add('bg-red-500');
-      else if (uiStatus === 'completed') bar.classList.add('bg-green-500');
+      // Colores desde config
+      bar.className = `h-full rounded-full transition-all duration-500 ${config.color}`;
     },
 
-    updateActionButtons(order) {
-      const phase = getUiStatus(order);
-      const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
-      
-      [btnGoPickup, btnLoading, btnGoDeliver, btnComplete].forEach(btn => {
+    updateActionButtons(phase, order) {
+      const allBtns = [btnGoPickup, btnLoading, btnGoDeliver, btnComplete, btnCancel];
+      allBtns.forEach(btn => {
         if(btn) btn.classList.add('hidden');
       });
 
-      const dbStatus = String(order?.status || '').toLowerCase();
-      if (dbStatus === 'completed' || dbStatus === 'cancelled') {
-        if (btnCancel) btnCancel.classList.add('hidden');
+      if (phase === 'completed' || phase === 'cancelled') {
         return;
       }
 
-      if (phase === 'accepted') { if (btnGoPickup) btnGoPickup.classList.remove('hidden'); }
-      else if (phase === 'en_camino_recoger') { if (btnLoading) btnLoading.classList.remove('hidden'); }
-      else if (phase === 'cargando') { if (btnGoDeliver) btnGoDeliver.classList.remove('hidden'); }
-      else if (phase === 'en_camino_entregar') { if (btnComplete) btnComplete.classList.remove('hidden'); }
-      else { if (btnGoPickup) btnGoPickup.classList.remove('hidden'); }
+      // El botón de cancelar siempre visible si no es final
+      if (btnCancel) btnCancel.classList.remove('hidden');
 
-      // Lógica de deshabilitación
-      if (btnGoDeliver) btnGoDeliver.disabled = !hasEvidence;
-      if (btnComplete) btnComplete.disabled = !hasEvidence;
+      // ✅ MEJORA PROFESIONAL: Usar máquina de estados para determinar botones
+      const nextStates = OrderManager.ORDER_FLOW[phase] || [];
+      
+      // Fallback manual si la máquina de estados falla por inconsistencia de nombres
+      if (phase === 'en_camino_entregar' && !nextStates.includes('completed')) {
+          nextStates.push('completed');
+      }
+
+      if (nextStates.includes('en_camino_recoger') && btnGoPickup) btnGoPickup.classList.remove('hidden');
+      if (nextStates.includes('cargando') && btnLoading) btnLoading.classList.remove('hidden');
+      if (nextStates.includes('en_camino_entregar') && btnGoDeliver) btnGoDeliver.classList.remove('hidden');
+      
+      if ((nextStates.includes('completed') || nextStates.includes('entregada')) && btnComplete) {
+        btnComplete.classList.remove('hidden');
+        // Validación visual: deshabilitar si no hay evidencia
+        const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
+        btnComplete.disabled = !hasEvidence;
+        if (!hasEvidence) {
+            btnComplete.title = "Sube evidencia para completar";
+        }
+      }
     },
 
-    updateStatusText(order) {
-      const uiStatus = getUiStatus(order);
-      if (activeStatus) activeStatus.textContent = formatStatus(uiStatus);
+    updateStatusText(label) {
+      if (activeStatus) activeStatus.textContent = label;
     }
   };
 
   async function handleStatusUpdate(newStatus, successMsg, btn) {
     if (!currentOrder) return;
-    if (window.__updatingOrder) return;
-
-    // Helper: actualiza tracking_data y (si aplica) status en DB
-    async function persistTrackingStep(orderId, uiStatus, opts = {}) {
-      const { setInProgress = true } = opts;
-      // Obtener tracking actual desde DB para evitar sobrescribir
-      const { data: fresh, error: getErr } = await (supabaseConfig.withAuthRetry?.(() =>
-        supabaseConfig.client
-          .from('orders')
-          .select('tracking_data,status')
-          .eq('id', orderId)
-          .single()) || supabaseConfig.client
-          .from('orders')
-          .select('tracking_data,status')
-          .eq('id', orderId)
-          .single());
-      if (getErr) throw getErr;
-
-      const tracking = Array.isArray(fresh?.tracking_data) ? [...fresh.tracking_data] : [];
-      const last = tracking[tracking.length - 1];
-      if (last?.ui_status === uiStatus) return tracking;
-      tracking.push({ ui_status: uiStatus, date: new Date().toISOString() });
-
-      const patch = { tracking_data: tracking };
-      if (setInProgress) patch.status = 'in_progress';
-
-      const { error: updErr } = await (supabaseConfig.withAuthRetry?.(() =>
-        supabaseConfig.client
-          .from('orders')
-          .update(patch)
-          .eq('id', orderId)) || supabaseConfig.client
-          .from('orders')
-          .update(patch)
-          .eq('id', orderId));
-      if (updErr) throw updErr;
-
-      return tracking;
-    }
+    // ✅ MEJORA 7: Bloqueo local por orden para evitar conflictos
+    if (currentOrder.__updating) return;
 
     try {
-      window.__updatingOrder = true;
+      currentOrder.__updating = true;
       if (btn) btn.disabled = true;
-      UI.disableButtons(true);
 
       const { data: { user } } = await supabaseConfig.client.auth.getUser();
       if (!user?.id) throw new Error('Sesión inválida');
 
-      // Estados finales ya tienen flujos dedicados (complete/cancel). Aquí manejamos intermedios.
-      if (['entregada', 'completada', 'cancelada'].includes(newStatus)) {
-        throw new Error('Estado no soportado por este flujo');
+      // Delegar toda la lógica al OrderManager
+      const { success, error, data: updatedOrder } = await OrderManager.actualizarEstadoPedido(
+        currentOrder.id,
+        newStatus,
+        { collaborator_id: user.id }
+      );
+
+      if (!success) {
+        throw new Error(error || 'No se pudo actualizar el estado.');
       }
 
-      // Persistir tracking y forzar in_progress
-      const nextTracking = await persistTrackingStep(currentOrder.id, newStatus, { setInProgress: true });
-
-      // Refrescar orden desde DB para tener estado consistente
-      try {
-        const { data: freshOrder } = await supabaseConfig.client
-          .from('orders')
-          .select('*,service:services(name,description),vehicle:vehicles(name)')
-          .eq('id', currentOrder.id)
-          .single();
-        if (freshOrder) currentOrder = freshOrder;
-      } catch (_) {}
-
-      // Asegurar estado local coherente
-      currentOrder.status = 'in_progress';
-      currentOrder.tracking_data = nextTracking;
-
-      // ✅ Notificar al cliente vía OneSignal
-      await notifyStatusToClient(currentOrder, newStatus);
-
       notifications?.success?.(successMsg);
-      try { window.sendStatusEmail?.(currentOrder, newStatus); } catch(_){}
+
+      // Sincronizar estado local de forma robusta
+      if (updatedOrder) {
+        currentOrder = updatedOrder;
+      } else {
+        // Fallback: refrescar orden completa desde el servidor
+        const fresh = await supabaseConfig.getOrderById(currentOrder.id);
+        if (fresh) currentOrder = fresh;
+      }
 
       if (newStatus === 'cargando') {
         try {
-          notifications?.info?.('Sube evidencia fotográfica en la sección Evidencia');
+          notifications?.info?.('Sube evidencia fotográfica para continuar');
           document.getElementById('evidenceInput')?.focus();
-          document.getElementById('activeEvidence')?.scrollIntoView({ behavior: 'smooth' });
         } catch (_) {}
       }
   
       ActiveJobUI.updateAll(currentOrder);
     } catch (e) {
-      notifications?.error?.(e?.message || 'No se pudo actualizar');
+      notifications?.error?.(e?.message || 'Error al actualizar');
     } finally {
-      window.__updatingOrder = false;
+      if (currentOrder) currentOrder.__updating = false;
       if (btn) btn.disabled = false;
-      UI.disableButtons(false);
+      ActiveJobUI.updateActionButtons(getUiStatus(currentOrder), currentOrder);
     }
   }
 
@@ -898,14 +812,20 @@ document.addEventListener('DOMContentLoaded', () => {
     showConfirm('¿Seguro que deseas completar esta solicitud?', async () => {
       btnComplete.disabled = true;
       try {
-        const { error } = await supabaseConfig.completeOrderWork(currentOrder.id);
-        if (error) throw error;
-        
-        // ✅ Notificar al cliente vía OneSignal
-        await notifyStatusToClient(currentOrder, 'completed');
+        const { data: { user } } = await supabaseConfig.client.auth.getUser();
+        if (!user?.id) throw new Error('Sesión inválida');
+
+        const { success, error } = await OrderManager.actualizarEstadoPedido(
+          currentOrder.id,
+          'entregada', // CORREGIDO: Usar el alias 'entregada' que es un estado UI válido
+          { collaborator_id: user.id }
+        );
+
+        if (!success) {
+          throw new Error(error || 'No se pudo completar la orden.');
+        }
 
         notifications?.success?.('Solicitud completada');
-        try { window.sendStatusEmail?.(currentOrder, 'completed'); } catch(_){}
         closeActiveJob();
         document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
         fetchOrdersForCollaborator();
@@ -925,8 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await OrderManager.cancelActiveJob(currentOrder.id);
         if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
         
-        // ✅ Notificar al cliente vía OneSignal
-        await notifyStatusToClient(currentOrder, 'cancelled');
+        // Eliminado para evitar doble notificación (OrderManager maneja el estado)
 
         notifications?.success?.('Solicitud cancelada');
         try { window.sendStatusEmail?.(currentOrder, 'cancelled'); } catch(_){}
@@ -1011,7 +930,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function fetchOrdersForCollaborator(isBackground = false) {
     if (!isBackground) {
-      UI.showLoading();
+      if (overlay) overlay.classList.remove('hidden');
     }
 
     try {
@@ -1045,14 +964,14 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) { console.error("Validacion error", e); }
 
       // ✅ REFACTOR: Llamada directa usando RLS
-      // RLS filtra automáticamente basado en:
-      // - puede_ver_todas_las_ordenes: true → ve pending + assigned
-      // - puede_ver_todas_las_ordenes: false → SOLO assigned
-      const base = supabaseConfig.client
+      const query = supabaseConfig.client
         .from('orders')
         .select(`
           id,
+          short_id,
           status,
+          tracking_data,
+          evidence_photos,
           created_at,
           assigned_to,
           pickup,
@@ -1066,15 +985,17 @@ document.addEventListener('DOMContentLoaded', () => {
         `)
         .in('status', ['pending','accepted','in_progress']);
       
-      let query = base;
       const vinfo = await supabaseConfig.validateActiveCollaborator?.(uid);
       const canViewAll = !!(vinfo && vinfo.collaborator && (vinfo.collaborator.can_take_orders || vinfo.collaborator.puede_ver_todas_las_ordenes));
+      
+      let finalQuery = query;
       if (canViewAll) {
-        query = query.or(`assigned_to.eq.${uid},status.eq.pending`);
+        finalQuery = finalQuery.or(`assigned_to.eq.${uid},status.eq.pending`);
       } else {
-        query = query.eq('assigned_to', uid);
+        finalQuery = finalQuery.eq('assigned_to', uid);
       }
-      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      const { data, error } = await finalQuery.order('created_at', { ascending: false });
 
       if (error) {
           console.error('Error fetching visible orders:', error);
@@ -1089,18 +1010,26 @@ document.addEventListener('DOMContentLoaded', () => {
         .filter(o => o && !isFinalOrder(o))
         .map(o => {
           const db = String(o.status || '').toLowerCase();
-          const assigned = String(o.assigned_to || '');
-          const isMine = assigned === me;
-          const visualStatus = (db === 'accepted' && isMine) ? 'pending' : db;
+          const isMine = String(o.assigned_to || '') === me;
+          
+          // Usar la nueva lógica de OrderManager para determinar la fase real
+          const phase = OrderManager._getUiPhaseFromOrder(o);
+          
+          // Si está aceptada pero es mía, visualmente sigue siendo "Pendiente" para el grid
+          const visualStatus = (db === 'accepted' && isMine) ? 'pending' : phase;
+          
           return { ...o, __visual_status: visualStatus };
         });
       
+      const ACTIVE_STATES = ['in_progress', 'en_camino_recoger', 'cargando', 'en_camino_entregar'];
+      
       const weight = (o) => {
-        const s = (o.__visual_status || o.status || '').toLowerCase();
+        const s = (o.__visual_status || '').toLowerCase();
         const isMine = String(o.assigned_to || '') === me;
+        
         if (isMine && (s === 'pending' || s === 'accepted')) return 0; // mis asignadas primero
         if (s === 'pending') return 1;
-        if (s === 'in_progress' || s.includes('camino') || s === 'cargando') return 2;
+        if (ACTIVE_STATES.includes(s)) return 2;
         return 3;
       };
 
@@ -1108,9 +1037,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const wa = weight(a);
         const wb = weight(b);
         if (wa !== wb) return wa - wb;
-        const ta = new Date(a.created_at ?? 0).getTime();
-        const tb = new Date(b.created_at ?? 0).getTime();
-        return tb - ta;
+        return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
       });
       
 
@@ -1119,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // ✅ Auto-abrir trabajo activo si existe y está en progreso
       const activeIdInStorage = localStorage.getItem('activeJobId');
       if (activeIdInStorage) {
-        const activeOrder = orders.find(o => String(o.id) === String(activeIdInStorage));
+        const activeOrder = rawOrders.find(o => String(o.id) === String(activeIdInStorage));
         if (activeOrder && !isFinalOrder(activeOrder)) {
           // Si ya estamos en la vista activa, solo actualizar datos
           // Si no, y el localStorage dice que deberíamos estar ahí, abrirla
@@ -1133,12 +1060,13 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Error in fetchOrdersForCollaborator:', e);
       notifications?.error?.('Error cargando solicitudes.');
     } finally {
-      UI.hideLoading();
+      if (overlay) overlay.classList.add('hidden');
     }
     try {
       const { data: { session } } = await supabaseConfig.client.auth.getSession();
       const uid = session?.user?.id;
-      if (uid) RealtimeManager.init(uid);
+      // ✅ MEJORA 8: Evitar duplicar sockets si ya existe conexión
+      if (uid && !RealtimeManager.channel) RealtimeManager.init(uid);
     } catch (_) {}
   }
 
@@ -1171,14 +1099,12 @@ document.addEventListener('DOMContentLoaded', () => {
     },
 
     async handleEvent(payload) {
-      if (this.refreshing) return;
-      this.refreshing = true;
-      console.log('[Realtime] Evento recibido:', payload.eventType);
-      // Refrescar en segundo plano para mantener la UI actualizada
-      await fetchOrdersForCollaborator(true);
-      setTimeout(() => {
-        this.refreshing = false;
-      }, 1000);
+      if (this.refreshTimer) clearTimeout(this.refreshTimer);
+
+      this.refreshTimer = setTimeout(async () => {
+        console.log('[Realtime] Refrescando órdenes (debounce)...');
+        await fetchOrdersForCollaborator(true);
+      }, 600);
     }
   };
 
@@ -1194,68 +1120,43 @@ function renderOrdersHTML() {
       return;
     }
 
-    function toSpanishStatus(s, o) {
-      const x = String(s || '').trim().toLowerCase();
-      const isMine = o && String(o.assigned_to || '') === String(__currentUserId || '');
-      if (!x) return 'Pendiente';
-      if (x === 'pending' || x === 'pendiente') return 'Pendiente';
-      // Si está aceptada por admin pero asignada a mí, mostrar como Pendiente (para que yo la acepte)
-      if (x === 'accepted' || x === 'aceptada') return isMine ? 'Pendiente' : 'Asignada';
-      if (x === 'in_progress' || x === 'en curso') return 'En curso';
-      if (x === 'en_camino_recoger') return 'En camino a recoger';
-      if (x === 'cargando') return 'Cargando';
-      if (x === 'en_camino_entregar') return 'En camino a entregar';
-      if (x === 'completed' || x === 'completada' || x === 'entregada') return 'Completada';
-      if (x === 'cancelled' || x === 'cancelada') return 'Cancelada';
-      return s;
-    }
-
     grid.innerHTML = orders.map(o => {
-      const idDisplay = o.id; // o.short_id si prefieres
+      const idDisplay = o.id; 
       const service = escapeHtml(o?.service?.name || 'Servicio General');
       const dbStatus = String(o.status || '').toLowerCase();
-      const status = toSpanishStatus(dbStatus, o);
-      const s = status.toLowerCase();
+      const visualStatus = (o.__visual_status || dbStatus).toLowerCase();
+      const label = toSpanishStatus(visualStatus);
+      const s = visualStatus;
       
       let badge = 'bg-gray-100 text-gray-700';
       if (s === 'pending') {
         if (o.assigned_to === __currentUserId) {
-            badge = 'bg-purple-100 text-purple-800 border border-purple-200'; // ✨ Diferenciador visual
-            // Mostrar como Pendiente (para que el colaborador la acepte)
+            badge = 'bg-purple-100 text-purple-800 border border-purple-200';
         } else {
             badge = 'bg-yellow-100 text-yellow-800 border border-yellow-200';
         }
       }
-      else if (s === 'aceptada') badge = 'bg-blue-100 text-blue-700';
-      else if (s.includes('curso') || s.includes('camino')) badge = 'bg-indigo-100 text-indigo-700';
-      else if (s === 'cancelada') badge = 'bg-red-100 text-red-700';
-      else if (s === 'completada' || s === 'entregada') badge = 'bg-green-100 text-green-700';
+      else if (s === 'accepted' || s === 'aceptada') badge = 'bg-blue-100 text-blue-700';
+      else if (s.includes('curso') || s.includes('camino') || s === 'cargando') badge = 'bg-indigo-100 text-indigo-700';
+      else if (s === 'cancelada' || s === 'cancelled') badge = 'bg-red-100 text-red-700';
+      else if (s === 'completed' || s === 'completada') badge = 'bg-green-100 text-green-700';
 
-      // Boton Aceptar solo si está pendiente y no tengo orden activa (o lógica de negocio)
-      // Aquí permitimos aceptar si está pendiente.
-      const canAccept = (dbStatus === 'pending' && (!o.assigned_to || o.assigned_to === __currentUserId))
-        || (dbStatus === 'accepted' && o.assigned_to === __currentUserId);
+      const canAccept = dbStatus === 'pending' && (!o.assigned_to || o.assigned_to === __currentUserId);
+      const isAcceptedButNotMine = dbStatus === 'accepted' && o.assigned_to !== __currentUserId;
       
       const extraTag = (s === 'pending' && o.assigned_to === __currentUserId)
         ? `<span class="ml-2 px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[10px]">Asignada a ti</span>`
         : '';
       
-      // Obtener direcciones (pueden ser de texto o coordenadas)
       const coordRegex = /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/;
-      
-      const pickupDisplay = o.pickup && !coordRegex.test(o.pickup) 
-        ? o.pickup 
-        : (o.origin_coords ? `${o.origin_coords.lat?.toFixed(4)}, ${o.origin_coords.lng?.toFixed(4)}` : o.pickup || 'Sin origen');
-      
-      const deliveryDisplay = o.delivery && !coordRegex.test(o.delivery)
-        ? o.delivery
-        : (o.destination_coords ? `${o.destination_coords.lat?.toFixed(4)}, ${o.destination_coords.lng?.toFixed(4)}` : o.delivery || 'Sin destino');
+      const pickupDisplay = o.pickup && !coordRegex.test(o.pickup) ? o.pickup : (o.origin_coords ? `${o.origin_coords.lat?.toFixed(4)}, ${o.origin_coords.lng?.toFixed(4)}` : o.pickup || 'Sin origen');
+      const deliveryDisplay = o.delivery && !coordRegex.test(o.delivery) ? o.delivery : (o.destination_coords ? `${o.destination_coords.lat?.toFixed(4)}, ${o.destination_coords.lng?.toFixed(4)}` : o.delivery || 'Sin destino');
       
       return `
         <div class="group bg-white rounded-2xl shadow hover:shadow-lg border border-gray-200 overflow-hidden transition-shadow">
           <div class="flex items-center justify-between px-4 py-3 border-b">
             <span class="inline-flex items-center justify-center w-auto min-w-[36px] px-2 h-9 rounded-xl bg-blue-600 text-white font-bold text-sm">#${escapeHtml(idDisplay)}</span>
-            <span class="px-2 py-1 rounded ${badge} text-xs font-medium uppercase tracking-wide">${escapeHtml(status)}</span>
+            <span class="px-2 py-1 rounded ${badge} text-xs font-medium uppercase tracking-wide">${escapeHtml(label)}</span>
             ${extraTag}
           </div>
           <div class="p-4 space-y-3">
@@ -1277,12 +1178,11 @@ function renderOrdersHTML() {
                  ${escapeHtml(deliveryDisplay)}
                </div>
             </div>
-
-            </div>
+          </div>
           <div class="px-4 py-3 border-t flex items-center justify-end gap-2 bg-gray-50">
             <button class="btn-open px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors" data-id="${escapeHtml(o.id)}">Detalles</button>
             ${canAccept ? `<button class="btn-accept px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${escapeHtml(o.id)}">Aceptar</button>` : ''}
-            ${!canAccept && o.assigned_to ? `<button class="btn-continue px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${escapeHtml(o.id)}">Continuar</button>` : ''}
+            ${!canAccept && !isAcceptedButNotMine && o.assigned_to === __currentUserId ? `<button class="btn-continue px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${escapeHtml(o.id)}">Continuar</button>` : ''}
           </div>
         </div>
       `;

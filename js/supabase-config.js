@@ -362,17 +362,18 @@ if (!window.supabaseConfig) {
       try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
     }
     // Intentar consulta completa con relaciones
+    const sel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name)';
     let resp = await this.withAuthRetry(() => this.client
       .from('orders')
-      .select('*, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name)')
+      .select(sel)
     );
     
-    // Fallback si la consulta compleja falla (ej. error de relación 400)
+    // Fallback si la consulta compleja falla
     if (resp?.error) {
       console.warn('getOrders: Fallback a consulta simple debido a:', resp.error);
       resp = await this.withAuthRetry(() => this.client
         .from('orders')
-        .select('*, service:services(name), vehicle:vehicles(name)')
+        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, name, phone, service:services(name), vehicle:vehicles(name)')
       );
     }
     
@@ -381,9 +382,10 @@ if (!window.supabaseConfig) {
   },
 
   async getOrderById(orderId) {
+    const sel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name, description), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name)';
     let resp = await this.withAuthRetry(() => this.client
       .from('orders')
-      .select('*, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name)')
+      .select(sel)
       .eq('id', orderId)
       .maybeSingle()
     );
@@ -391,7 +393,7 @@ if (!window.supabaseConfig) {
     if (resp?.error) {
       resp = await this.withAuthRetry(() => this.client
         .from('orders')
-        .select('*, service:services(name), vehicle:vehicles(name)')
+        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, name, phone, service:services(name), vehicle:vehicles(name)')
         .eq('id', orderId)
         .maybeSingle()
       );
@@ -737,7 +739,7 @@ if (!window.supabaseConfig) {
       if (!orderId) return null;
       const resp = await this.client
         .from('orders')
-        .select('*, service:services(name), vehicle:vehicles(name)')
+        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name), vehicle:vehicles(name)')
         .eq('id', orderId)
         .maybeSingle();
       return resp?.data || null;
@@ -751,7 +753,7 @@ if (!window.supabaseConfig) {
       if (error) return { order: null, error };
       const { data: ord } = await this.client
         .from('orders')
-        .select('*, service:services(name), vehicle:vehicles(name)')
+        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name), vehicle:vehicles(name)')
         .eq('id', Number(orderId))
         .maybeSingle();
       return { order: ord || null, error: null };

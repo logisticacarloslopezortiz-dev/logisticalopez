@@ -259,7 +259,8 @@
           updated_at timestamptz not null default now(),
           customer_comment text,
           onesignal_id text,
-          onesignal_player_id text
+          onesignal_player_id text,
+          last_ui_status text
         );
 
         -- Índices Orders

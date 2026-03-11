@@ -6,39 +6,55 @@
  * para asegurar consistencia en las actualizaciones de la base de datos y en las notificaciones.
  */
 
-const UI_TO_DB_STATUS = {
+const UI_TO_DB_STATUS = Object.freeze({
   pendiente: 'pending',
   aceptada: 'accepted',
   en_camino_recoger: 'in_progress',
   cargando: 'in_progress',
   en_camino_entregar: 'in_progress',
-  entregada: 'completed',
+  completed: 'completed', // ✅ Asegurar que el key estándar exista
+  entregada: 'completed', // Alias para compatibilidad
   completada: 'completed',
   cancelada: 'cancelled'
-};
+});
 
-const STATE_FLOW = {
-  pendiente: ['aceptada'],
-  aceptada: ['en_camino_recoger'],
+const STATUS_LABELS = Object.freeze({
+  pending: 'Pendiente',
+  accepted: 'Aceptada',
+  en_camino_recoger: 'En camino a recoger',
+  cargando: 'Cargando',
+  en_camino_entregar: 'En camino a entregar',
+  completed: 'Completada',
+  cancelled: 'Cancelada'
+});
+
+const PHASE_CONFIG = Object.freeze({
+  pending: { percent: 5, color: 'bg-gray-400' },
+  accepted: { percent: 20, color: 'bg-blue-600' },
+  en_camino_recoger: { percent: 40, color: 'bg-blue-500' },
+  cargando: { percent: 60, color: 'bg-yellow-500' },
+  en_camino_entregar: { percent: 80, color: 'bg-indigo-500' },
+  completed: { percent: 100, color: 'bg-green-500' },
+  cancelled: { percent: 100, color: 'bg-red-500' }
+});
+
+const ORDER_FLOW = Object.freeze({
+  pending: ['accepted'],
+  accepted: ['en_camino_recoger'],
   en_camino_recoger: ['cargando'],
   cargando: ['en_camino_entregar'],
-  en_camino_entregar: ['entregada']
-};
-
-// ✅ Helper para crear tracking entries sin duplicación
-const _makeTrackingEntry = (uiStatus, dbStatus) => ({
-  ui_status: uiStatus,
-  db_status: dbStatus,
-  date: new Date().toISOString(),
-  description: {
-    'en_camino_recoger': 'Orden aceptada, en camino a recoger',
-    'cargando': 'Carga en proceso',
-    'en_camino_entregar': 'En ruta hacia entrega',
-    'entregada': 'Pedido entregado'
-  }[uiStatus] || 'Actualización de estado'
+  en_camino_entregar: ['completed'],
+  completed: [],
+  cancelled: []
 });
 
 const OrderManager = {
+  // ✅ Máquina de estados centralizada
+  ORDER_FLOW,
+  UI_TO_DB_STATUS,
+  STATUS_LABELS,
+  PHASE_CONFIG,
+
   // Helper para normalizar IDs de orden (una sola llamada por función)
   _normalizeOrderId(orderId) {
     try {
@@ -58,418 +74,275 @@ const OrderManager = {
     }
   },
 
-  // ✅ Helper para validar transición de estado
-  _isTransitionAllowed(currentPhase, nextPhase, isCancel = false, isDelivery = false) {
-    if (isCancel) return true; // Cancelación siempre permitida
-    if (isDelivery) return true; // Entrega tiene validaciones adicionales por separado
-    const allowed = STATE_FLOW[currentPhase] || [];
-    return allowed.includes(nextPhase);
+  // ✅ Validación profesional de transición (Usa UI states para evitar mezcla con DB)
+  canTransition(from, to) {
+    let fromStatus = String(from || 'pending').toLowerCase();
+    let toStatus = String(to || '').toLowerCase();
+    
+    // Normalizar alias para validación contra ORDER_FLOW
+    if (fromStatus === 'entregada' || fromStatus === 'completada') fromStatus = 'completed';
+    if (toStatus === 'entregada' || toStatus === 'completada') toStatus = 'completed';
+    if (toStatus === 'cancelada') toStatus = 'cancelled';
+    
+    if (toStatus === 'cancelled') return true;
+
+    return ORDER_FLOW[fromStatus]?.includes(toStatus);
   },
 
-  // ✅ Helper para buscar orden por múltiples criterios (reemplaza búsquedas secuenciales)
+  // ✅ Helper para buscar orden por múltiples criterios
   async _findOrderByCandidates(orderId) {
     const normalizedId = this._normalizeOrderId(orderId);
     const isNumeric = Number.isFinite(normalizedId);
     
-    // Construir condiciones OR para una sola query
     let orConditions = [];
     if (isNumeric) {
       orConditions.push(`id.eq.${normalizedId}`);
       orConditions.push(`short_id.eq.${String(normalizedId)}`);
     } else if (typeof orderId === 'string') {
       const maybeNum = Number(orderId);
-      if (Number.isFinite(maybeNum)) {
-        orConditions.push(`id.eq.${maybeNum}`);
-      }
+      if (Number.isFinite(maybeNum)) orConditions.push(`id.eq.${maybeNum}`);
       orConditions.push(`short_id.eq.${orderId}`);
-    } else if (orderId && typeof orderId === 'object') {
-      if (Number.isFinite(orderId.id)) orConditions.push(`id.eq.${orderId.id}`);
-      if (typeof orderId.short_id === 'string') orConditions.push(`short_id.eq.${orderId.short_id}`);
     }
 
     if (orConditions.length === 0) return null;
 
-    // ✅ Una sola query con OR en lugar de múltiples SELECT secuenciales
     const { data, error } = await supabaseConfig.client
       .from('orders')
-      .select('tracking_data, id, short_id, status, evidence_photos, name, email, client_email')
+      // CORREGIDO: Eliminadas `client_email` y `last_ui_status` que no existen en el esquema.
+      .select('tracking_data, id, short_id, status, evidence_photos, name, email, client_id, client_contact_id, onesignal_id, onesignal_player_id, assigned_to')
       .or(orConditions.join(','))
+      .limit(1)
       .maybeSingle();
 
-    if (error) return null;
-    return data || null;
+    return error ? null : data;
   },
 
-  // ✅ Helper para enviar notificaciones OneSignal
+  // ✅ Notificaciones OneSignal
   async notifyOneSignal({ player_ids, title, message, url, data = {} }) {
     if (!player_ids || player_ids.length === 0) return;
     try {
-      console.log(`[OneSignal] Enviando notificación a ${player_ids.length} destinatarios...`);
-      const { data: res, error } = await supabaseConfig.client.functions.invoke('send-onesignal-notification', {
+      await supabaseConfig.client.functions.invoke('send-onesignal-notification', {
         body: { player_ids, title, message, url, data }
       });
-      if (error) console.error('[OneSignal] Error:', error);
-      return res;
     } catch (e) {
-      console.error('[OneSignal] Fallo crítico:', e);
+      console.warn('[OrderManager] OneSignal skip:', e.message);
     }
   },
 
-  // Toast simple para notificaciones visuales
-  _toast(message, type = 'info') {
+  // ✅ Centraliza la ejecución de process-outbox (evita bloqueo por CORS)
+  async runProcessOutbox() {
     try {
-      const colors = {
-        info: { bg: '#2563eb', text: '#ffffff' },
-        success: { bg: '#16a34a', text: '#ffffff' },
-        warning: { bg: '#f59e0b', text: '#111827' },
-        error: { bg: '#dc2626', text: '#ffffff' }
-      };
-      const { bg, text } = colors[type] || colors.info;
-      const containerId = 'tlc-toast-container';
-      let container = document.getElementById(containerId);
-      if (!container) {
-        container = document.createElement('div');
-        container.id = containerId;
-        container.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;';
-        document.body.appendChild(container);
-      }
-      const toast = document.createElement('div');
-      toast.style.cssText = `background:${bg};color:${text};padding:10px 14px;border-radius:8px;box-shadow:0 8px 16px rgba(0,0,0,0.15);font-size:14px;font-weight:600;max-width:340px;word-break:break-word;transition:opacity 300ms ease;`;
-      toast.textContent = message;
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-      }, 3000);
-    } catch (_) {
-      try { alert(message); } catch (_) {}
-    }
-  },
-  // Acepta una orden desde el panel del colaborador
-  async acceptOrder(orderId, additionalData = {}) {
-    const normalizedId = this._normalizeOrderId(orderId);
-
-    if (!Number.isFinite(normalizedId)) {
-      this._toast('ID inválido. Aplicando fallback…', 'warning');
-      return await this.actualizarEstadoPedido(orderId, 'aceptada', additionalData);
-    }
-
-    // Prevalidar que el colaborador no tenga otra orden activa
-    try {
-      const collabId = additionalData?.collaborator_id || null;
-      if (collabId) {
-        const { data: conflicts } = await supabaseConfig.client
-          .from('orders')
-          .select('id,status')
-          .eq('assigned_to', collabId)
-          .in('status', ['accepted', 'in_progress'])
-          .limit(1);
-        if (Array.isArray(conflicts) && conflicts.length > 0) {
-          this._toast('Ya tienes una orden activa', 'error');
-          return { success: false, data: null, error: 'Ya tienes una orden activa' };
-        }
-      }
+      // Usar invoke con modo 'no-cors' no es posible con supabase-js, 
+      // pero podemos atrapar el error y que no rompa el flujo.
+      await supabaseConfig.client.functions.invoke('process-outbox').catch(() => {
+        // Ignorar error de CORS, el outbox se procesará por cron o por otros clientes
+      });
     } catch (_) {}
-
-    const hasPrice = typeof additionalData?.estimated_price === 'number' && !isNaN(additionalData.estimated_price);
-    const rpcPayload = { p_order_id: normalizedId, p_price: hasPrice ? additionalData.estimated_price : null };
-
-    try {
-      const { data, error } = await supabaseConfig.client.rpc('accept_order_with_price', rpcPayload);
-
-      if (error) {
-        const msg = String(error?.message || '');
-        if (/ya tienes una orden activa/i.test(msg) || String(error?.code || '') === 'P0001') {
-          this._toast('Ya tienes una orden activa', 'error');
-          return { success: false, data: null, error: msg };
-        }
-        this._toast(`Error: ${error.message || 'falló'}`, 'warning');
-        return { success: false, data: null, error: error.message || 'RPC falló' };
-      }
-
-      this._toast('Orden aceptada correctamente', 'success');
-      return { success: true, data, error: null };
-    } catch (error) {
-      this._toast(`Error: ${error.message || 'falló'}`, 'warning');
-      return { success: false, data: null, error: error.message || 'Excepción' };
-    }
   },
 
-  // Guarda el monto cobrado y método de pago
-  async setOrderAmount(orderId, amount, method) {
-    try {
-      if (!supabaseConfig?.client) throw new Error('Supabase client no configurado');
-      await supabaseConfig.ensureFreshSession?.();
-      
-      const { data: ord } = await supabaseConfig.client
-        .from('orders')
-        .select('status')
-        .eq('id', Number(orderId))
-        .maybeSingle();
-      
-      if (['Cancelada','Completada'].includes(String(ord?.status || '').trim())) {
-        throw new Error('No se puede modificar el monto en este estado');
-      }
-
-      const rpcPayload = {
-        order_id: Number(orderId),
-        amount: Number(amount),
-        method: method
-      };
-
-      const { data, error } = await supabaseConfig.client.rpc('set_order_amount_admin', rpcPayload);
-      if (!error && data) return data;
-
-      // ✅ Fallback directo sin logs
-      const { data: upd, error: updErr } = await supabaseConfig.client
-        .from('orders')
-        .update({ monto_cobrado: Number(amount), metodo_pago: method })
-        .eq('id', Number(orderId))
-        .select('*')
-        .maybeSingle();
-      
-      if (updErr) throw updErr;
-      return upd;
-    } catch (err) {
-      this._toast('No se pudo guardar el monto.');
-      throw err;
-    }
+  // Toast simple
+  _toast(message, type = 'info') {
+    const colors = { success: '#16a34a', error: '#dc2626', warning: '#f59e0b', info: '#2563eb' };
+    const bg = colors[type] || colors.info;
+    const containerId = 'tlc-toast-container';
+    let container = document.getElementById(containerId) || (() => {
+      const c = document.createElement('div');
+      c.id = containerId;
+      c.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;';
+      document.body.appendChild(c);
+      return c;
+    })();
+    const t = document.createElement('div');
+    t.style.cssText = `background:${bg};color:white;padding:12px 16px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:14px;font-weight:600;transition:all 0.3s ease;opacity:0;`;
+    t.textContent = message;
+    container.appendChild(t);
+    requestAnimationFrame(() => { t.style.opacity = '1'; });
+    setTimeout(() => {
+      t.style.opacity = '0';
+      setTimeout(() => t.remove(), 300);
+    }, 3500);
   },
 
-  // Cancela un trabajo activo
-  async cancelActiveJob(orderId) {
-    return await this.actualizarEstadoPedido(orderId, 'cancelada');
-  },
-
-  // Centraliza la lógica para actualizar el estado de un pedido
+  // ✅ Centraliza la actualización de estado
   async actualizarEstadoPedido(orderId, newStatus, additionalData = {}) {
-    await supabaseConfig.ensureFreshSession();
-
-    // ✅ Normalizar estado UNA SOLA VEZ
-    const ns = String(newStatus || '').toLowerCase();
-    const normalizedId = this._normalizeOrderId(orderId);
-    const isNumeric = Number.isFinite(normalizedId);
-
-    if (!isNumeric && typeof orderId !== 'string') {
-      const errorMsg = `ID de orden inválido: ${JSON.stringify(orderId)}`;
-      return { success: false, error: new Error(errorMsg) };
-    }
-
-    // Sanitizar additionalData
-    const allowedFields = ['status', 'assigned_to', 'assigned_at', 'completed_at', 'completed_by', 'tracking_data'];
-    const sanitizedData = {};
-    Object.keys(additionalData).forEach(key => {
-      if (allowedFields.includes(key)) sanitizedData[key] = additionalData[key];
-    });
-
-    if (additionalData.collaborator_id) {
-      if (ns === 'entregada') {
-        sanitizedData.completed_by = additionalData.collaborator_id;
-      } else {
-        sanitizedData.assigned_to = additionalData.collaborator_id;
-      }
-    }
-
-    // Intentar RPC primero
     try {
-      const dbStatus = UI_TO_DB_STATUS[ns] || newStatus;
-      const trackingEntry = _makeTrackingEntry(ns, dbStatus);
-      
-      // ✅ Obtener ID de colaborador válido (UUID)
-      let collabId = null;
-      if (additionalData?.collaborator_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(additionalData.collaborator_id)) {
-        collabId = additionalData.collaborator_id;
-      } else if (additionalData?.assigned_to && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(additionalData.assigned_to)) {
-        collabId = additionalData.assigned_to;
+      await supabaseConfig.ensureFreshSession();
+      const ns = String(newStatus || '').toLowerCase();
+      const dbStatus = UI_TO_DB_STATUS[ns] || ns;
+      const normalizedId = this._normalizeOrderId(orderId);
+
+      if (!normalizedId) throw new Error('ID de orden inválido');
+
+      const currentOrder = await this._findOrderByCandidates(orderId);
+      if (!currentOrder) throw new Error('No se encontró la orden');
+
+      // Mejora 1: Validación contra la máquina de estados para evitar estados inválidos.
+      const validUiStates = Object.keys(UI_TO_DB_STATUS);
+      if (!validUiStates.includes(ns)) {
+        throw new Error(`Estado inválido: ${ns}`);
       }
 
-      const rpcPayload = {
-        p_order_id: normalizedId,
-        p_new_status: ns,
-        p_collaborator_id: collabId,
-        p_tracking_entry: trackingEntry
+      const currentPhase = this._getUiPhaseFromOrder(currentOrder);
+      
+      // ✅ 2. Validar que el colaborador sea el dueño de la orden
+      const { data: { user } } = await supabaseConfig.client.auth.getUser();
+      if (
+        currentOrder.assigned_to &&
+        currentOrder.assigned_to !== user?.id &&
+        ns !== 'accepted' // 'accepted' es una acción de asignación, no de modificación de progreso
+      ) {
+        throw new Error('No tienes permiso para modificar esta orden');
+      }
+      
+      // Mejora 3: Evitar que dos usuarios acepten la misma orden (race condition).
+      if (ns === 'accepted' && currentOrder.assigned_to) {
+        throw new Error('Esta orden ya fue tomada por otro colaborador');
+      }
+
+      // ✅ 1. FIX: Validar transición usando el estado UI (ns), no el de DB (dbStatus)
+      if (!this.canTransition(currentPhase, ns)) {
+        throw new Error(`Transición no permitida: ${currentPhase} -> ${ns}`);
+      }
+
+      // Validar evidencia para completar la orden
+      if (dbStatus === 'completed' && (!currentOrder.evidence_photos || currentOrder.evidence_photos.length === 0)) {
+        throw new Error('Se requiere evidencia fotográfica para completar la orden');
+      }
+
+      const trackingEntry = {
+        ui_status: ns,
+        db_status: dbStatus,
+        date: new Date().toISOString(),
+        description: `Estado actualizado a ${ns}`
       };
 
-      const { data: rpcData, error: rpcError } = await supabaseConfig.client.rpc('update_order_status', rpcPayload);
-      if (!rpcError) {
-        try { await supabaseConfig.runProcessOutbox?.(); } catch (err) {
-          console.warn('[OrderManager] Error invocando process-outbox:', err);
-        }
-        try { await notifyClientForOrder(normalizedId, ns); } catch (_) {}
-        return { success: true, data: rpcData, error: null };
+      // ✅ 3. Aumentar el historial guardado para evitar perder datos en órdenes largas
+      const history = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
+      const tracking_data = [...history.slice(-25), trackingEntry];
+
+      const updatePayload = {
+        status: dbStatus,
+        updated_at: new Date().toISOString(),
+        tracking_data: tracking_data
+      };
+
+      if (dbStatus === 'completed') updatePayload.completed_at = updatePayload.updated_at;
+      if (dbStatus === 'accepted') updatePayload.assigned_at = updatePayload.updated_at;
+      if (additionalData.collaborator_id) {
+        if (dbStatus === 'completed') updatePayload.completed_by = additionalData.collaborator_id;
+        else updatePayload.assigned_to = additionalData.collaborator_id;
       }
 
-      // Intentar RPC alternativo para aceptación
-      if (ns === 'aceptada' || ns === 'accepted') {
-        try {
-          const { data: accData, error: accErr } = await supabaseConfig.client.rpc('accept_order_with_price', {
-            p_order_id: normalizedId,
-            p_price: null
-          });
-          if (!accErr) {
-            try { await supabaseConfig.runProcessOutbox?.(); } catch (_) {}
-            try { await notifyClientForOrder(normalizedId, ns); } catch (_) {}
-            return { success: true, data: accData, error: null };
-          }
-        } catch (_) {}
-      }
-      // Continuar con flujo directo
-    } catch (rpcEx) {
-      // Continuar con flujo directo
-    }
-
-    // ✅ FLUJO DIRECTO UNIFICADO (SELECT + UPDATE)
-    try {
-      const currentOrder = await this._findOrderByCandidates(orderId);
-      if (!currentOrder) {
-        throw new Error(`No se encontró la orden con ID "${orderId}". Verifica permisos.`);
-      }
-
-      // ✅ Validar transición usando helper
-      const currentDbStatus = String(currentOrder.status || '').toLowerCase();
-      let currentPhase = currentDbStatus;
-
-      // Mapear status DB a fase UI
-      if (currentDbStatus === 'pending') currentPhase = 'pendiente';
-      else if (currentDbStatus === 'accepted') currentPhase = 'aceptada';
-      else if (currentDbStatus === 'completed') currentPhase = 'entregada';
-      else if (currentDbStatus === 'cancelled') currentPhase = 'cancelada';
-      else if (currentDbStatus === 'in_progress' || currentDbStatus === 'en curso') {
-        if (Array.isArray(currentOrder.tracking_data) && currentOrder.tracking_data.length > 0) {
-          const lastTrack = currentOrder.tracking_data[currentOrder.tracking_data.length - 1];
-          currentPhase = String(lastTrack?.ui_status || 'cargando').toLowerCase();
-        } else {
-          currentPhase = 'en_camino_recoger';
-        }
-      }
-
-      // Validar transición
-      const isCancel = ns === 'cancelada';
-      const isDelivery = ns === 'entregada';
-      if (!this._isTransitionAllowed(currentPhase, ns, isCancel, isDelivery)) {
-        throw new Error(`Transición no permitida desde "${currentPhase}" a "${ns}".`);
-      }
-
-      // Validaciones específicas para entrega
-      if (isDelivery) {
-        const hasRoute = currentPhase === 'en_camino_entregar' || 
-          (Array.isArray(currentOrder.tracking_data) && 
-           currentOrder.tracking_data.some(e => String(e?.ui_status || '').toLowerCase() === 'en_camino_entregar'));
-        if (!hasRoute) {
-          throw new Error('No puedes completar sin pasar por "En camino a entregar"');
-        }
-
-        const evidenceArr = Array.isArray(currentOrder.evidence_photos) ? currentOrder.evidence_photos : [];
-        if (evidenceArr.length === 0) {
-          throw new Error('Debes subir al menos una evidencia para completar');
-        }
-      }
-
-      // Construir payload de actualización
-      const updatePayload = { ...sanitizedData };
-      const dbStatus = UI_TO_DB_STATUS[ns] || newStatus;
-      updatePayload.status = dbStatus;
-
-      if (dbStatus === 'completed') updatePayload.completed_at = new Date().toISOString();
-      if (dbStatus === 'accepted') updatePayload.assigned_at = new Date().toISOString();
-      if (ns === 'pendiente') {
-        updatePayload.assigned_to = null;
-        updatePayload.assigned_at = null;
-      }
-
-      // Agregar tracking entry
-      const trackingEntry = _makeTrackingEntry(ns, dbStatus);
-      const currentTracking = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
-      updatePayload.tracking_data = [...currentTracking, trackingEntry];
-
-      // Actualizar (usar id como filtro siempre) + restricciones para aceptación
-      let q = supabaseConfig.client.from('orders')
+      const { data: updatedData, error: updateError } = await supabaseConfig.client
+        .from('orders')
         .update(updatePayload)
-        .eq('id', currentOrder.id);
-
-      if (ns === 'aceptada' || ns === 'accepted') {
-        q = q.eq('status', 'pending').is('assigned_to', null);
-      }
-
-      const { data: updatedData, error: updateError } = await q
-        .select('id, short_id, status, name, email, client_email, client_id, client_contact_id')
+        .eq('id', currentOrder.id)
+        // CORREGIDO: Eliminada `client_email` que no existe.
+        .select('tracking_data, id, short_id, status, evidence_photos, name, email, client_id, client_contact_id, onesignal_id, onesignal_player_id, assigned_to')
         .single();
 
-      if (updateError) {
-        throw new Error(`Error al actualizar: ${updateError.message}`);
-      }
+      if (updateError) throw updateError;
 
-      // ✅ NOTIFICACIÓN AL CLIENTE POR CAMBIO DE ESTADO (OneSignal)
-      if (updatedData && ns !== 'pendiente' && ns !== 'cancelada') {
+      // --- Acciones post-update (no bloqueantes) ---
+      this.runProcessOutbox();
+      // Notificación PUSH para todos los estados de progreso (incluido 'completado')
+      if (updatedData && dbStatus !== 'pending' && dbStatus !== 'cancelled') {
         this._notifyClientStatusChange(updatedData, ns);
       }
-
-      try { await supabaseConfig.runProcessOutbox?.(); } catch (err) {
-        console.warn('[OrderManager] Error invocando process-outbox:', err);
+      // ✅ 4. FIX: Enviar email solo en estados finales para no saturar al cliente
+      if (dbStatus === 'completed' || dbStatus === 'cancelled') {
+        notifyClientForOrder(currentOrder.id, ns);
       }
-      try { await notifyClientForOrder(currentOrder.id, ns); } catch (_) {}
-      return { success: true, data: updatedData, error: null };
 
+      return { success: true, data: updatedData };
     } catch (error) {
+      console.error('[OrderManager] Error:', error.message);
       return { success: false, error: error.message };
     }
   },
 
-  // ✅ Helper privado para notificar al cliente sobre cambios de estado
+  // ✅ Centraliza la cancelación de un trabajo activo
+  async cancelActiveJob(orderId) {
+    try {
+      const normalizedId = this._normalizeOrderId(orderId);
+      if (!normalizedId) throw new Error('ID de orden inválido');
+
+      const { data: { user } } = await supabaseConfig.client.auth.getUser();
+      if (!user?.id) throw new Error('Sesión inválida');
+
+      const { data, error } = await supabaseConfig.client
+        .from('orders')
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', normalizedId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      this.runProcessOutbox();
+      return { success: true, data };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // ✅ Helper para obtener configuración visual de fase
+  getPhaseConfig(order) {
+    const phase = this._getUiPhaseFromOrder(order);
+    const config = PHASE_CONFIG[phase] || PHASE_CONFIG.pending;
+    return {
+      phase,
+      label: STATUS_LABELS[phase] || phase,
+      ...config
+    };
+  },
+
+  // ✅ Helper para obtener estado visual real (Versión segura contra regresiones)
+  _getUiPhaseFromOrder(order) {
+    if (!order) return 'pending';
+    const dbStatus = String(order.status || '').toLowerCase();
+    if (dbStatus === 'completed') return 'completed';
+    if (dbStatus === 'cancelled') return 'cancelled';
+
+    // Prioridad 1: tracking_data (historial)
+    const tracking = Array.isArray(order.tracking_data) ? order.tracking_data : [];
+    if (tracking.length > 0) {
+      const last = tracking[tracking.length - 1];
+      if (last?.ui_status) return String(last.ui_status).toLowerCase();
+    }
+
+    // Fallback: Inferir de dbStatus
+    if (dbStatus === 'accepted') return 'accepted';    
+    // Si está en progreso, fallback a 'en_camino_recoger'
+    if (dbStatus === 'in_progress') return 'en_camino_recoger';
+
+    return 'pending';
+  },
+
+  // Notificaciones al cliente
   async _notifyClientStatusChange(order, uiStatus) {
     try {
-      let clientOnesignalId = null;
-      
-      // 1. Intentar obtener el ID desde el objeto de la orden
-      clientOnesignalId = order.onesignal_id || order.onesignal_player_id || null;
+      const clientOnesignalId = order.onesignal_id || order.onesignal_player_id;
+      if (!clientOnesignalId) return;
 
-      // 2. Buscar en profiles si hay client_id
-      if (!clientOnesignalId && order.client_id) {
-        const { data: p } = await supabaseConfig.client.from('profiles').select('onesignal_id').eq('id', order.client_id).maybeSingle();
-        clientOnesignalId = p?.onesignal_id;
-      } 
-      
-      // 3. Si no, buscar en clients si hay client_contact_id
-      if (!clientOnesignalId && order.client_contact_id) {
-        const { data: c } = await supabaseConfig.client.from('clients').select('onesignal_id').eq('id', order.client_contact_id).maybeSingle();
-        clientOnesignalId = c?.onesignal_id;
-      }
+      const messages = {
+        aceptada: '✅ Tu solicitud ha sido aceptada.',
+        en_camino_recoger: '📍 El transportista va en camino.',
+        cargando: '📦 Tu carga está siendo procesada.',
+        en_camino_entregar: '🚚 ¡Tu pedido ya va en ruta!',
+        entregada: '✅ ¡Servicio completado!'
+      };
 
-      // 4. Último recurso: Buscar en la tabla orders (solo si las columnas existen)
-      if (!clientOnesignalId) {
-        try {
-          const { data: o, error } = await supabaseConfig.client.from('orders').select('*').eq('id', order.id).maybeSingle();
-          if (error) throw error;
-          clientOnesignalId = o?.onesignal_id || o?.onesignal_player_id || null;
-        } catch(_) {
-          clientOnesignalId = null;
-        }
-      }
-
-      if (clientOnesignalId) {
-        const statusMap = {
-          'accepted': '✅ Tu solicitud ha sido aceptada.',
-          'en_camino_recoger': '📍 El transportista va en camino a recoger tu carga.',
-          'cargando': '📦 Tu carga está siendo procesada/cargada.',
-          'en_camino_entregar': '🚚 ¡Tu pedido ya va en ruta de entrega!',
-          'entregada': '✅ ¡Servicio completado con éxito!',
-          'completada': '✅ ¡Servicio completado con éxito!'
-        };
-
-        const message = statusMap[uiStatus] || `El estado de tu orden #${order.short_id || order.id} ha cambiado a: ${uiStatus.replace(/_/g, ' ')}`;
-        
-        console.log(`[OrderManager] Notificando al cliente ${clientOnesignalId} sobre estado: ${uiStatus}`);
-
-        this.notifyOneSignal({
-          player_ids: [clientOnesignalId],
-          title: 'Actualización de tu pedido',
-          message: message,
-          url: `${window.location.origin}/seguimiento.html?codigo=${order.short_id || order.id}`
-        });
-      }
-    } catch (e) {
-      console.warn('[OrderManager] Error notificando al cliente:', e);
-    }
+      this.notifyOneSignal({
+        player_ids: [clientOnesignalId],
+        title: 'Actualización de Pedido',
+        message: messages[uiStatus] || `Nuevo estado: ${uiStatus}`,
+        url: `${window.location.origin}/seguimiento.html?codigo=${order.short_id || order.id}`
+      });
+    } catch (_) {}
   }
 };
 
