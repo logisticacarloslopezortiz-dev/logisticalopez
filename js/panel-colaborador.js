@@ -171,7 +171,64 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeMap = null;
   let activePickupMarker = null;
   let activeDeliveryMarker = null;
-  let locationWatcher = null;
+
+  // ✅ 1. FUNCIÓN PARA LIMPIAR (OBLIGATORIA)
+  function clearActiveOrder() {
+    console.log('[ActiveJob] Limpiando orden activa...');
+    localStorage.removeItem('activeJobId');
+    localStorage.removeItem('activeOrder'); // Por si acaso se usó antes
+    currentOrder = null;
+    window._currentActiveOrder = null;
+
+    // Limpiar UI
+    if (activeView) activeView.classList.add('hidden');
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) mainContent.classList.remove('hidden');
+    
+    // Detener rastreo
+    LocationManager.stop();
+    
+    // Volver a la lista
+    showView('grid');
+    fetchOrdersForCollaborator(true);
+  }
+
+  // ✅ 2. VALIDAR ORDEN AL INICIAR (CRÍTICO)
+  async function loadActiveOrder() {
+    const savedId = localStorage.getItem('activeJobId');
+    if (!savedId) return null;
+
+    try {
+      console.log('[ActiveJob] Validando orden guardada:', savedId);
+      // 🔥 Validar contra DB
+      const { data, error } = await supabaseConfig.client
+        .from('orders')
+        .select('id, status, short_id, name, phone, pickup, delivery, origin_coords, destination_coords, evidence_photos, tracking_data, service:services(name, description), vehicle:vehicles(name)')
+        .eq('id', savedId)
+        .maybeSingle();
+
+      if (error || !data) {
+        console.warn('[ActiveJob] Orden no encontrada en DB, limpiando...');
+        clearActiveOrder();
+        return null;
+      }
+
+      // 🚨 CLAVE: si ya NO está activa → eliminar
+      const inactiveStatuses = ['completed', 'cancelled', 'entregada', 'cancelada'];
+      const dbStatus = String(data.status || '').toLowerCase();
+      
+      if (inactiveStatuses.includes(dbStatus)) {
+        console.info('[ActiveJob] La orden ya está finalizada en DB, limpiando...');
+        clearActiveOrder();
+        return null;
+      }
+
+      return data;
+    } catch (e) {
+      console.error('[ActiveJob] Error cargando orden activa:', e);
+      return null;
+    }
+  }
 
   // Prevenir XSS escapando HTML
   const escapeHtml = (unsafe) => {
@@ -591,9 +648,19 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    // 1. Establecer como orden actual para que funcionen los botones de acción
+    // 🧠 5. NO RENDERICES SI ESTÁ COMPLETADA
+    const inactiveStatuses = ['completed', 'cancelled', 'entregada', 'cancelada'];
+    const dbStatus = String(order.status || '').toLowerCase();
+    
+    if (inactiveStatuses.includes(dbStatus)) {
+      console.warn('[ActiveJob] Intentando renderizar orden ya finalizada, limpiando...');
+      clearActiveOrder();
+      return;
+    }
+    
+    // 1. Establecer como orden actual
     currentOrder = order;
-    window._currentActiveOrder = order; // Backup global
+    window._currentActiveOrder = order;
     localStorage.setItem('activeJobId', order.id);
     
     // 2. Cambiar vista
@@ -636,6 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const { data: { session } } = await supabaseConfig.client.auth.getSession();
       if (session?.user?.id) await registerCollaboratorPush(session.user.id);
+      // ✅ ENTERPRISE: Iniciar rastreo solo cuando hay trabajo activo
+      if (session?.user?.id) LocationManager.start(session.user.id);
     } catch(_){}
   }
   
@@ -643,12 +712,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.openActiveJob = openActiveJob;
 
   function closeActiveJob() {
-    currentOrder = null;
-    window._currentActiveOrder = null;
-    localStorage.removeItem('activeJobId');
-    localStorage.setItem('collab_current_view', 'grid');
-    showView('grid');
-    fetchOrdersForCollaborator(); // Recargar lista al salir
+    clearActiveOrder();
+    document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
   }
   window.closeActiveJob = closeActiveJob;
 
@@ -826,6 +891,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         notifications?.success?.('Solicitud completada');
+        // UX: Pequeña pausa para que el usuario vea el éxito antes de cerrar
+        await new Promise(r => setTimeout(r, 500));
         closeActiveJob();
         document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
         fetchOrdersForCollaborator();
@@ -845,7 +912,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await OrderManager.cancelActiveJob(currentOrder.id);
         if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
         
-        // Eliminado para evitar doble notificación (OrderManager maneja el estado)
 
         notifications?.success?.('Solicitud cancelada');
         try { window.sendStatusEmail?.(currentOrder, 'cancelled'); } catch(_){}
@@ -1043,19 +1109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       renderOrdersHTML();
 
-      // ✅ Auto-abrir trabajo activo si existe y está en progreso
-      const activeIdInStorage = localStorage.getItem('activeJobId');
-      if (activeIdInStorage) {
-        const activeOrder = rawOrders.find(o => String(o.id) === String(activeIdInStorage));
-        if (activeOrder && !isFinalOrder(activeOrder)) {
-          // Si ya estamos en la vista activa, solo actualizar datos
-          // Si no, y el localStorage dice que deberíamos estar ahí, abrirla
-          if (localStorage.getItem('collab_current_view') === 'active') {
-             openActiveJob(activeOrder);
-          }
-        }
-      }
-
+      // El trabajo activo ya se maneja en init() con loadActiveOrder()
     } catch (e) {
       console.error('Error in fetchOrdersForCollaborator:', e);
       notifications?.error?.('Error cargando solicitudes.');
@@ -1099,6 +1153,19 @@ document.addEventListener('DOMContentLoaded', () => {
     },
 
     async handleEvent(payload) {
+      const updated = payload.new;
+      const eventType = payload.eventType;
+
+      // 📡 4. ARREGLAR REALTIME (MUY IMPORTANTE)
+      if (eventType === 'UPDATE' && currentOrder && updated.id === currentOrder.id) {
+        const inactiveStatuses = ['completed', 'cancelled', 'entregada', 'cancelada'];
+        if (inactiveStatuses.includes(String(updated.status).toLowerCase())) {
+          console.log('[Realtime] Orden activa finalizada remotamente, limpiando...');
+          clearActiveOrder();
+          return;
+        }
+      }
+
       if (this.refreshTimer) clearTimeout(this.refreshTimer);
 
       this.refreshTimer = setTimeout(async () => {
@@ -1307,34 +1374,45 @@ function renderOrdersHTML() {
     });
   }
 
-  async function startLocationTracking(uid) {
-    if (!uid || !navigator.geolocation) return;
+  // ✅ ENTERPRISE: Location Manager Optimizado
+  const LocationManager = {
+    watchId: null,
+    isTracking: false,
     
-    const options = {
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 5000
-    };
-
-    navigator.geolocation.watchPosition(async (pos) => {
-      try {
-        await supabaseConfig.client
-          .from('collaborator_locations')
-          .upsert({
-            collaborator_id: uid,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            speed: pos.coords.speed,
-            heading: pos.coords.heading,
-            updated_at: new Date()
-          }, { onConflict: 'collaborator_id' });
-      } catch (e) {
-        console.error('Error updating location:', e);
+    start(uid) {
+      if (this.isTracking || !uid || !navigator.geolocation) return;
+      
+      console.log('[LocationManager] Iniciando rastreo de alta precisión');
+      this.isTracking = true;
+      
+      this.watchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          // Debounce simple: actualizar DB
+          try {
+            await supabaseConfig.client.from('collaborator_locations').upsert({
+              collaborator_id: uid,
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              speed: pos.coords.speed,
+              heading: pos.coords.heading,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'collaborator_id' });
+          } catch (e) { console.warn('[Location] Error db update:', e); }
+        },
+        (err) => console.warn('[Location] Error:', err),
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+      );
+    },
+    
+    stop() {
+      if (this.watchId !== null) {
+        navigator.geolocation.clearWatch(this.watchId);
+        this.watchId = null;
       }
-    }, (err) => {
-      console.warn('Geolocation error:', err);
-    }, options);
-  }
+      this.isTracking = false;
+      console.log('[LocationManager] Rastreo detenido');
+    }
+  };
 
   const init = async () => {
     const ok = await ensureAuthOrRedirect();
@@ -1364,8 +1442,7 @@ function renderOrdersHTML() {
         // ✅ AUTOMATIZACIÓN: Registrar push al cargar
         registerCollaboratorPush(uid);
         
-        // Iniciar tracking de ubicación
-        startLocationTracking(uid);
+        // Nota: El tracking ahora se inicia solo si hay un trabajo activo (ver abajo)
         
         // Suscribirse a notificaciones personales
         if (window.notifications && window.notifications.subscribeToUserNotifications) {
@@ -1377,13 +1454,23 @@ function renderOrdersHTML() {
       }
     } catch(e) { console.error("Realtime error", e); }
 
-    // Cargar trabajo activo real desde DB
+    // ✅ 6. CARGA INICIAL PROFESIONAL
     try {
-      const active = await supabaseConfig.getActiveJobOrder();
+      const active = await loadActiveOrder();
       if (active) {
+        console.log('[Init] Retomando trabajo activo:', active.id);
         openActiveJob(active);
+      } else {
+        // Si no hay en cache, intentar cargar desde DB directamente (por si cambió de dispositivo)
+        const dbActive = await supabaseConfig.getActiveJobOrder();
+        if (dbActive) {
+          const inactiveStatuses = ['completed', 'cancelled', 'entregada', 'cancelada'];
+          if (!inactiveStatuses.includes(String(dbActive.status).toLowerCase())) {
+            openActiveJob(dbActive);
+          }
+        }
       }
-    } catch(_){}
+    } catch(e) { console.error("[Init] Error recuperando orden activa:", e); }
 
     await fetchOrdersForCollaborator();
   };
@@ -1442,6 +1529,8 @@ function renderOrdersHTML() {
     try {
       await supabaseConfig.client.auth.signOut();
     } catch(_) {}
+    // ✅ ENTERPRISE: Limpieza total al salir
+    LocationManager.stop();
     try { localStorage.removeItem('userRole'); } catch(_){}
     window.location.href = 'login-colaborador.html';
   });

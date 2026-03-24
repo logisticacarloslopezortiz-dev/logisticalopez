@@ -362,7 +362,7 @@ if (!window.supabaseConfig) {
       try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
     }
     // Intentar consulta completa con relaciones
-    const sel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name)';
+    const sel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions';
     let resp = await this.withAuthRetry(() => this.client
       .from('orders')
       .select(sel)
@@ -373,7 +373,7 @@ if (!window.supabaseConfig) {
       console.warn('getOrders: Fallback a consulta simple debido a:', resp.error);
       resp = await this.withAuthRetry(() => this.client
         .from('orders')
-        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, name, phone, service:services(name), vehicle:vehicles(name)')
+        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, name, phone, service:services(name), vehicle:vehicles(name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions')
       );
     }
     
@@ -382,7 +382,7 @@ if (!window.supabaseConfig) {
   },
 
   async getOrderById(orderId) {
-    const sel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name, description), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name)';
+    const sel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name, description), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions';
     let resp = await this.withAuthRetry(() => this.client
       .from('orders')
       .select(sel)
@@ -393,7 +393,7 @@ if (!window.supabaseConfig) {
     if (resp?.error) {
       resp = await this.withAuthRetry(() => this.client
         .from('orders')
-        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, name, phone, service:services(name), vehicle:vehicles(name)')
+        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, name, phone, service:services(name), vehicle:vehicles(name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions')
         .eq('id', orderId)
         .maybeSingle()
       );

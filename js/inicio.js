@@ -315,8 +315,7 @@ function renderOrders() {
 
 // Función auxiliar para agregar listeners a filas (prevenir duplicados)
 function attachRowListeners(tr, orderId) {
-  tr.removeEventListener('dblclick', openAssignModal);
-  tr.addEventListener('dblclick', () => openAssignModal(orderId));
+  tr.ondblclick = () => openAssignModal(orderId);
 }
 
 // --- Menú de acciones eliminado ---
@@ -339,7 +338,8 @@ async function updateOrderStatus(orderId, newStatus) {
     'cancelada': 'cancelled'
   };
   
-  const normalizedStatus = statusMap[String(newStatus).toLowerCase()] || String(newStatus).toLowerCase();
+  const key = String(newStatus).toLowerCase().trim();
+  const normalizedStatus = statusMap[key] || key;
 
   try {
     const { success, error } = await OrderManager.actualizarEstadoPedido(orderId, normalizedStatus, {});
@@ -910,7 +910,10 @@ function renderRowHtml(o) {
     </td>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle?.name || 'N/A'}</td>
     <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><div>${o.date}</div><div class="text-gray-500">${o.time}</div></td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+      <div>${o.date || 'N/A'}</div>
+      <div class="text-xs text-gray-500">${o.time || ''}</div>
+    </td>
     <td class="px-6 py-4 whitespace-nowrap">
       <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColorClass} border-0 focus:ring-2 focus:ring-blue-500">
         <option value="${ORDER_STATUS.PENDIENTE}" ${displayStatus === ORDER_STATUS.PENDIENTE ? 'selected' : ''}>${ORDER_STATUS.PENDIENTE}</option>
@@ -986,6 +989,9 @@ function updateRow(o) {
     tr.innerHTML = renderRowHtml(o);
     // Volver a agregar listener después de actualizar HTML
     attachRowListeners(tr, o.id);
+    // ⚡ UX: Highlight update
+    tr.classList.add('bg-green-50');
+    setTimeout(() => tr.classList.remove('bg-green-50'), 800);
   }
 
   // Actualizar tarjeta móvil
@@ -1043,6 +1049,11 @@ async function handleRealtimeUpdate(payload) {
       return;
     }
 
+
+// ✅ Exponer funciones globales para handlers inline
+window.showServiceDetails = showServiceDetails;
+window.updateOrderStatus = updateOrderStatus;
+window.openAssignModal = openAssignModal;
     if (eventType === 'DELETE') {
       const id = oldRecord?.id;
       if (!id) return;

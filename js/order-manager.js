@@ -163,6 +163,18 @@ const OrderManager = {
     }, 3500);
   },
 
+  // ✅ ENTERPRISE: Helper centralizado para liberar al colaborador
+  async _releaseCollaboratorActiveJob(orderId) {
+    try {
+      // Intentar primero la función RPC segura si existe
+      if (supabaseConfig.completeOrderWork) {
+        await supabaseConfig.completeOrderWork(orderId);
+      }
+      // Fallback: eliminación directa para asegurar limpieza
+      await supabaseConfig.client.from('collaborator_active_jobs').delete().eq('order_id', orderId);
+    } catch (e) { console.warn('[OrderManager] Warning releasing active job:', e); }
+  },
+
   // ✅ Centraliza la actualización de estado
   async actualizarEstadoPedido(orderId, newStatus, additionalData = {}) {
     try {
@@ -243,6 +255,11 @@ const OrderManager = {
 
       if (updateError) throw updateError;
 
+      // ✅ ENTERPRISE: Limpieza automática de trabajo activo al completar
+      if (dbStatus === 'completed') {
+        await this._releaseCollaboratorActiveJob(currentOrder.id);
+      }
+
       // --- Acciones post-update (no bloqueantes) ---
       this.runProcessOutbox();
       // Notificación PUSH para todos los estados de progreso (incluido 'completado')
@@ -282,10 +299,45 @@ const OrderManager = {
 
       if (error) throw error;
       
+      // ✅ ENTERPRISE: Limpieza automática al cancelar
+      await this._releaseCollaboratorActiveJob(normalizedId);
+
       this.runProcessOutbox();
       return { success: true, data };
     } catch (e) {
       return { success: false, error: e.message };
+    }
+  },
+
+  // ✅ Centraliza la aceptación de una orden
+  async acceptOrder(orderId, additionalData = {}) {
+    return this.actualizarEstadoPedido(orderId, 'accepted', additionalData);
+  },
+
+  // ✅ NUEVO: Función faltante para actualizar precio y método de pago
+  async setOrderAmount(orderId, amount, method) {
+    try {
+      await supabaseConfig.ensureFreshSession();
+      const normalizedId = this._normalizeOrderId(orderId);
+      if (!normalizedId) throw new Error('ID de orden inválido');
+
+      let cleanAmount = amount;
+      if (typeof amount === 'string') {
+        cleanAmount = parseFloat(amount.replace(/[^0-9.]/g, ''));
+      }
+
+      const { data, error } = await supabaseConfig.client
+        .from('orders')
+        .update({ monto_cobrado: cleanAmount, metodo_pago: method })
+        .eq('id', normalizedId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (e) {
+      console.error('[OrderManager] setOrderAmount error:', e);
+      throw e;
     }
   },
 
