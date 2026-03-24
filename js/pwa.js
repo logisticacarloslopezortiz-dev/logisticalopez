@@ -33,9 +33,9 @@
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    // Show Android/Desktop install button if available
-    const installBtn = document.getElementById('pwa-install-btn');
-    if (installBtn) installBtn.classList.remove('hidden');
+    // Muestra el botón de instalación para Android/Escritorio si no está en modo standalone
+    const installBtn = document.getElementById('install-app-btn');
+    if (installBtn && !isStandalone()) installBtn.classList.remove('hidden');
   });
 
   window.pwaManager = {
@@ -44,16 +44,21 @@
     isStandalone,
     
     checkInstallation: () => {
+      const installBtn = document.getElementById('install-app-btn');
       const modal = document.getElementById('ios-install-modal');
-      if (!modal) return;
+      const installedBadge = document.getElementById('app-installed-badge');
 
-      // Solo mostrar guía en iOS si NO está instalada
-      if (isIOS() && !isStandalone()) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
+      if (isStandalone()) {
+        // La app está instalada y en modo standalone
+        if (installBtn) installBtn.classList.add('hidden');
+        if (modal) modal.classList.add('hidden');
+        if (installedBadge) installedBadge.classList.remove('hidden');
       } else {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
+        // La app no está instalada, mostrar el botón de instalación para iOS
+        if (installedBadge) installedBadge.classList.add('hidden');
+        if (isIOS() && installBtn) {
+          installBtn.classList.remove('hidden');
+        }
       }
     },
 
@@ -64,7 +69,6 @@
         deferredPrompt = null;
         return outcome === 'accepted';
       } else if (isIOS() && !isStandalone()) {
-        // En iOS, solo podemos mostrar el modal de instrucciones
         const modal = document.getElementById('ios-install-modal');
         if (modal) {
           modal.classList.remove('hidden');
@@ -99,7 +103,16 @@
 
   // Run initial check
   document.addEventListener('DOMContentLoaded', () => {
-    window.pwaManager.checkInstallation();
+    const installBtn = document.getElementById('install-app-btn');
+    if(installBtn) {
+      installBtn.addEventListener('click', () => {
+        window.pwaManager.promptInstall();
+      });
+    }
+
+    // Esto gestiona la visibilidad del badge "App Instalada" y el botón en iOS.
+    // El evento 'beforeinstallprompt' gestiona el botón para Android/Escritorio.
+    window.pwaManager.checkInstallation(); 
   });
 
 })();
