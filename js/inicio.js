@@ -199,13 +199,12 @@ function filterOrders() {
 
 // Función para ordenar tabla
 function sortTable(column, element) {
-  if (element) { // Solo cambiar dirección si se hace clic en un header
-    if (sortColumn === column) {
-      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-      sortColumn = column;
-      sortDirection = 'asc';
-    }
+  // Solo cambiar dirección si se hace clic en un header o si no se pasó elemento
+  if (sortColumn === column) {
+    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortColumn = column;
+    sortDirection = 'asc';
   }
   
   filteredOrders.sort((a, b) => {
@@ -225,16 +224,21 @@ function sortTable(column, element) {
   renderOrders();
 
   // Actualizar íconos de ordenación
-  if (element) {
-    document.querySelectorAll('th i[data-lucide]').forEach(icon => {
-      icon.setAttribute('data-lucide', 'chevrons-up-down');
-      icon.classList.remove('text-blue-600');
-    });
-    const icon = element.querySelector('i');
-    icon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
-    icon.classList.add('text-blue-600');
-    refreshLucide();
+  document.querySelectorAll('th i[data-lucide]').forEach(icon => {
+    icon.setAttribute('data-lucide', 'chevrons-up-down');
+    icon.classList.remove('text-blue-600');
+  });
+
+  // Intentar encontrar el header si no se pasó
+  const targetHeader = element || document.querySelector(`th[onclick*="'${column}'"]`);
+  if (targetHeader) {
+    const icon = targetHeader.querySelector('i');
+    if (icon) {
+      icon.setAttribute('data-lucide', sortDirection === 'asc' ? 'chevron-up' : 'chevron-down');
+      icon.classList.add('text-blue-600');
+    }
   }
+  refreshLucide();
 }
 
 // Agregar debounce a refreshLucide para evitar recrear íconos demasiadas veces
@@ -408,20 +412,26 @@ function updateResumen(){
     const v = String(o.status || '').toLowerCase();
     return v === 'completed' || v === 'completada' || o.status === ORDER_STATUS.COMPLETADA;
   }).length;
-  const pendingOrders = allOrders.filter(o => isVisibleStatus(o.status));
-  const urgentOrders = pendingOrders.filter(o => {
-    const serviceTime = getOrderDate(o) || new Date(8640000000000000);
+  const pendingOrders = allOrders.filter(o => {
+    const v = String(o.status || '').toLowerCase();
+    return v === 'pending' || v === 'pendiente' || o.status === ORDER_STATUS.PENDIENTE;
+  }).length;
+
+  const urgentOrders = allOrders.filter(o => {
+    if (isFinalOrderStatus(o.status)) return false;
+    const serviceTime = getOrderDate(o);
+    if (!serviceTime) return false;
     const now = new Date();
     const diffHours = (serviceTime - now) / (1000 * 60 * 60);
     return diffHours > 0 && diffHours <= 24;
-  });
+  }).length;
 
   const totalEl = document.getElementById('totalPedidos'); if (totalEl) totalEl.textContent = allOrders.length;
   const hoyEl = document.getElementById('pedidosHoy'); if (hoyEl) hoyEl.textContent = todayOrders.length;
   const compEl = document.getElementById('pedidosCompletados'); if (compEl) compEl.textContent = completedOrders;
   const pctEl = document.getElementById('porcentajeCompletados'); if (pctEl) pctEl.textContent = allOrders.length > 0 ? Math.round((completedOrders / allOrders.length) * 100) : 0;
-  const pendEl = document.getElementById('pedidosPendientes'); if (pendEl) pendEl.textContent = pendingOrders.length;
-  const urgEl = document.getElementById('urgentes'); if (urgEl) urgEl.textContent = urgentOrders.length;
+  const pendEl = document.getElementById('pedidosPendientes'); if (pendEl) pendEl.textContent = pendingOrders;
+  const urgEl = document.getElementById('urgentes'); if (urgEl) urgEl.textContent = urgentOrders;
 }
 
 // Función para actualizar gráficos
@@ -1046,19 +1056,11 @@ async function handleRealtimeUpdate(payload) {
           duration: 10000 
         });
       }
-      return;
-    }
-
-
-// ✅ Exponer funciones globales para handlers inline
-window.showServiceDetails = showServiceDetails;
-window.updateOrderStatus = updateOrderStatus;
-window.openAssignModal = openAssignModal;
-    if (eventType === 'DELETE') {
+    } else if (eventType === 'DELETE') {
       const id = oldRecord?.id;
-      if (!id) return;
-      AppState.delete(id);
-      return;
+      if (id) {
+        AppState.delete(id);
+      }
     }
   } catch (err) {
     console.error('[handleRealtimeUpdate] Error en actualización en tiempo real:', err);
@@ -1229,6 +1231,48 @@ async function initAdminOrdersPage() {
   // checkVapidStatus(); // Ya no es necesario con OneSignal
   registerAdminPush(); // ✅ Registrar Admin
   setupRealtime();
+
+  // --- Exportar a CSV ---
+  const exportBtn = document.getElementById('exportBtn');
+  if (exportBtn) {
+    exportBtn.onclick = () => {
+      if (!filteredOrders || filteredOrders.length === 0) {
+        notifications.warning('No hay datos para exportar.');
+        return;
+      }
+
+      const headers = ['ID', 'Cliente', 'Servicio', 'Vehículo', 'Recogida', 'Entrega', 'Fecha', 'Hora', 'Estado', 'Monto'];
+      const rows = filteredOrders.map(o => [
+        o.id,
+        o.name || '',
+        o.service?.name || '',
+        o.vehicle?.name || '',
+        o.pickup || '',
+        o.delivery || '',
+        o.date || '',
+        o.time || '',
+        formatUiStatus(o.status),
+        o.monto_cobrado || ''
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `pedidos_recientes_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      notifications.success('Pedidos exportados correctamente.');
+    };
+  }
+
   refreshLucide();
 }
 

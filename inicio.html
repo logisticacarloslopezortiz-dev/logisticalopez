@@ -199,15 +199,15 @@
         <table class="min-w-full">
           <thead class="bg-gray-50">
             <tr>
-              <th class="table-header" onclick="sortTable('id')">ID <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
-              <th class="table-header" onclick="sortTable('name')">Cliente <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
-              <th class="table-header" onclick="sortTable('service')">Servicio</th>
+              <th class="table-header" onclick="sortTable('id', this)">ID <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
+              <th class="table-header" onclick="sortTable('name', this)">Cliente <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
+              <th class="table-header" onclick="sortTable('service', this)">Servicio</th>
               <th class="table-header">Vehículo</th>
               <th class="table-header">Ruta</th>
-              <th class="table-header" onclick="sortTable('date')">Fecha/Hora <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
-              <th class="table-header" onclick="sortTable('status')">Estado</th>
+              <th class="table-header" onclick="sortTable('date', this)">Fecha/Hora <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
+              <th class="table-header" onclick="sortTable('status', this)">Estado <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
               <th class="table-header">Colaborador</th>
-              <th class="table-header">Monto Cobrado</th>
+              <th class="table-header" onclick="sortTable('monto_cobrado', this)">Monto <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
             </tr>
           </thead>
           <tbody id="ordersTableBody" class="bg-white divide-y divide-gray-200">
@@ -390,7 +390,6 @@
    <script src="js/sidebar.js"></script>
    <script src="js/notifications.js"></script>
    <script src="js/order-manager.js?v=20260310"></script>
-   <script src="js/admin.js"></script>
    <script src="js/inicio.js"></script>
 </body>
 </html>
