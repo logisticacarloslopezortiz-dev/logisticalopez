@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+﻿document.addEventListener('DOMContentLoaded', () => {
   // ✅ Sistema de Notificaciones Local
   const notifications = {
     success: (msg) => OrderManager._toast(msg, 'success'),
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // 🚨 CLAVE: si ya NO está activa → eliminar
-      const inactiveStatuses = ['completed', 'cancelled', 'entregada', 'cancelada'];
+      const inactiveStatuses = ['completed', 'cancelled'];
       const dbStatus = String(data.status || '').toLowerCase();
       
       if (inactiveStatuses.includes(dbStatus)) {
@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function formatStatus(status) {
     const s = String(status || '').toLowerCase();
-    return OrderManager.STATUS_LABELS[s] || 'Pendiente';
+    return OrderManager.STATUS_LABELS[s] || 'pending';
   }
 
   // --- Utilidades ---
@@ -343,18 +343,18 @@ document.addEventListener('DOMContentLoaded', () => {
       // 2. Preparar mensaje según el estado
       const statusMap = {
         'accepted': 'Tu solicitud ha sido aceptada.',
-        'en_camino_recoger': '📍 El colaborador va en camino a recoger tu pedido.',
-        'cargando': '📦 Tu pedido está siendo cargado.',
-        'en_camino_entregar': '🚚 El colaborador va en camino a entregar tu pedido.',
+        'in_progress': '📍 El colaborador va en camino a recoger tu pedido.',
+        'loading': '📦 Tu pedido está siendo cargado.',
+        'delivering': '🚚 El colaborador va en camino a entregar tu pedido.',
         'completed': '✅ ¡Tu servicio ha sido completado con éxito!',
         'cancelled': '❌ Tu solicitud ha sido cancelada.'
       };
       
       const titleMap = {
         'accepted': '✅ Solicitud Aceptada',
-        'en_camino_recoger': '🚚 En Camino',
-        'cargando': '📦 Cargando Pedido',
-        'en_camino_entregar': '🚛 En Ruta de Entrega',
+        'in_progress': '🚚 En Camino',
+        'loading': '📦 Cargando Pedido',
+        'delivering': '🚛 En Ruta de Entrega',
         'completed': '🏁 Servicio Completado',
         'cancelled': '❌ Servicio Cancelado'
       };
@@ -649,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // 🧠 5. NO RENDERICES SI ESTÁ COMPLETADA
-    const inactiveStatuses = ['completed', 'cancelled', 'entregada', 'cancelada'];
+    const inactiveStatuses = ['completed', 'cancelled'];
     const dbStatus = String(order.status || '').toLowerCase();
     
     if (inactiveStatuses.includes(dbStatus)) {
@@ -757,37 +757,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateActionButtons(phase, order) {
       const allBtns = [btnGoPickup, btnLoading, btnGoDeliver, btnComplete, btnCancel];
-      allBtns.forEach(btn => {
-        if(btn) btn.classList.add('hidden');
-      });
+      allBtns.forEach(btn => { if(btn) btn.classList.add('hidden'); });
 
-      if (phase === 'completed' || phase === 'cancelled') {
-        return;
-      }
+      if (phase === 'completed' || phase === 'cancelled') return;
 
-      // El botón de cancelar siempre visible si no es final
       if (btnCancel) btnCancel.classList.remove('hidden');
 
-      // ✅ MEJORA PROFESIONAL: Usar máquina de estados para determinar botones
       const nextStates = OrderManager.ORDER_FLOW[phase] || [];
-      
-      // Fallback manual si la máquina de estados falla por inconsistencia de nombres
-      if (phase === 'en_camino_entregar' && !nextStates.includes('completed')) {
-          nextStates.push('completed');
-      }
 
-      if (nextStates.includes('en_camino_recoger') && btnGoPickup) btnGoPickup.classList.remove('hidden');
-      if (nextStates.includes('cargando') && btnLoading) btnLoading.classList.remove('hidden');
-      if (nextStates.includes('en_camino_entregar') && btnGoDeliver) btnGoDeliver.classList.remove('hidden');
-      
-      if ((nextStates.includes('completed') || nextStates.includes('entregada')) && btnComplete) {
+      if (nextStates.includes('in_progress') && btnGoPickup)  btnGoPickup.classList.remove('hidden');
+      if (nextStates.includes('loading')      && btnLoading)   btnLoading.classList.remove('hidden');
+      if (nextStates.includes('delivering')   && btnGoDeliver) btnGoDeliver.classList.remove('hidden');
+      if (nextStates.includes('completed')    && btnComplete) {
         btnComplete.classList.remove('hidden');
-        // Validación visual: deshabilitar si no hay evidencia
         const hasEvidence = Array.isArray(order?.evidence_photos) && order.evidence_photos.length > 0;
         btnComplete.disabled = !hasEvidence;
-        if (!hasEvidence) {
-            btnComplete.title = "Sube evidencia para completar";
-        }
+        if (!hasEvidence) btnComplete.title = 'Sube evidencia para completar';
       }
     },
 
@@ -830,7 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fresh) currentOrder = fresh;
       }
 
-      if (newStatus === 'cargando') {
+      if (newStatus === 'loading') {
         try {
           notifications?.info?.('Sube evidencia fotográfica para continuar');
           document.getElementById('evidenceInput')?.focus();
@@ -848,15 +833,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Listeners de botones de estado
-  if (btnGoPickup) btnGoPickup.addEventListener('click', () => handleStatusUpdate('en_camino_recoger', 'En camino a recoger', btnGoPickup));
-  if (btnLoading) btnLoading.addEventListener('click', () => handleStatusUpdate('cargando', 'Cargando', btnLoading));
+  if (btnGoPickup) btnGoPickup.addEventListener('click', () => handleStatusUpdate('in_progress', 'En camino a recoger', btnGoPickup));
+  if (btnLoading) btnLoading.addEventListener('click', () => handleStatusUpdate('loading', 'loading', btnLoading));
   if (btnGoDeliver) btnGoDeliver.addEventListener('click', () => {
     const phase = getUiStatus(currentOrder);
-    if (phase !== 'cargando') {
+    if (phase !== 'loading') {
       try { notifications?.warning?.('Debes pasar por "Cargando" antes de entregar'); } catch(_){}
       return;
     }
-    handleStatusUpdate('en_camino_entregar', 'En camino a entregar', btnGoDeliver);
+    handleStatusUpdate('delivering', 'En camino a entregar', btnGoDeliver);
   });
   
   if (btnComplete) btnComplete.addEventListener('click', async () => {
@@ -870,7 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const phase = getUiStatus(currentOrder);
-    if (phase !== 'en_camino_entregar') {
+    if (phase !== 'delivering') {
       try { notifications?.warning?.('Debes estar "En camino a entregar" para completar'); } catch(_){}
       return;
     }
@@ -882,7 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const { success, error } = await OrderManager.actualizarEstadoPedido(
           currentOrder.id,
-          'entregada', // CORREGIDO: Usar el alias 'entregada' que es un estado UI válido
+          'completed',
           { collaborator_id: user.id }
         );
 
@@ -906,22 +891,22 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (btnCancel) btnCancel.addEventListener('click', async () => {
     if (!currentOrder?.id) return;
-    showConfirm('¿Seguro que deseas cancelar esta solicitud?', async () => {
+    showConfirm('¿Seguro que deseas cancelar esta solicitud? El cliente será notificado.', async () => {
       btnCancel.disabled = true;
+      btnCancel.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Cancelando...';
       try {
         const res = await OrderManager.cancelActiveJob(currentOrder.id);
         if (!res?.success) throw new Error(res?.error || 'No se pudo cancelar');
-        
-
         notifications?.success?.('Solicitud cancelada');
         try { window.sendStatusEmail?.(currentOrder, 'cancelled'); } catch(_){}
         closeActiveJob();
-        document.getElementById('main-content')?.scrollIntoView({ behavior: 'smooth' });
         fetchOrdersForCollaborator();
       } catch (e) {
         notifications?.error?.(e?.message || 'No se pudo cancelar');
       } finally {
         btnCancel.disabled = false;
+        btnCancel.innerHTML = '<i data-lucide="x-circle" class="w-4 h-4 mr-1 inline"></i> Cancelar servicio';
+        try { window.lucide?.createIcons(); } catch(_){}
       }
     });
   });
@@ -940,7 +925,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function uploadEvidence(file){
     if (!currentOrder || !file) return;
     const phase = getUiStatus(currentOrder);
-    if (!['cargando', 'en_camino_entregar'].includes(phase)) {
+    if (!['loading', 'delivering'].includes(phase)) {
       try { notifications?.warning?.('No puedes subir evidencia en este estado'); } catch(_) {}
       return;
     }
@@ -1087,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return { ...o, __visual_status: visualStatus };
         });
       
-      const ACTIVE_STATES = ['in_progress', 'en_camino_recoger', 'cargando', 'en_camino_entregar'];
+      const ACTIVE_STATES = ['in_progress', 'loading', 'delivering', 'accepted'];
       
       const weight = (o) => {
         const s = (o.__visual_status || '').toLowerCase();
@@ -1158,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 📡 4. ARREGLAR REALTIME (MUY IMPORTANTE)
       if (eventType === 'UPDATE' && currentOrder && updated.id === currentOrder.id) {
-        const inactiveStatuses = ['completed', 'cancelled', 'entregada', 'cancelada'];
+        const inactiveStatuses = ['completed', 'cancelled'];
         if (inactiveStatuses.includes(String(updated.status).toLowerCase())) {
           console.log('[Realtime] Orden activa finalizada remotamente, limpiando...');
           clearActiveOrder();
@@ -1183,7 +1168,15 @@ function renderOrdersHTML() {
     if (!grid) return;
     
     if (total === 0) {
-      grid.innerHTML = '<div class="col-span-full bg-white rounded-xl border p-6 text-center text-gray-600">No hay solicitudes pendientes o asignadas por ahora.</div>';
+      grid.innerHTML = `
+        <div class="col-span-full flex flex-col items-center justify-center py-16 text-center">
+          <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            <i data-lucide="inbox" class="w-8 h-8 text-gray-400"></i>
+          </div>
+          <p class="text-gray-700 font-semibold text-base">Sin solicitudes por ahora</p>
+          <p class="text-gray-400 text-sm mt-1">Las nuevas órdenes aparecerán aquí automáticamente.</p>
+        </div>`;
+      try { window.lucide?.createIcons(); } catch(_){}
       return;
     }
 
@@ -1203,9 +1196,9 @@ function renderOrdersHTML() {
             badge = 'bg-yellow-100 text-yellow-800 border border-yellow-200';
         }
       }
-      else if (s === 'accepted' || s === 'aceptada') badge = 'bg-blue-100 text-blue-700';
-      else if (s.includes('curso') || s.includes('camino') || s === 'cargando') badge = 'bg-indigo-100 text-indigo-700';
-      else if (s === 'cancelada' || s === 'cancelled') badge = 'bg-red-100 text-red-700';
+      else if (s === 'accepted') badge = 'bg-blue-100 text-blue-700';
+      else if (['in_progress','loading','delivering'].includes(s)) badge = 'bg-indigo-100 text-indigo-700';
+      else if (s === 'cancelled' || s === 'cancelled') badge = 'bg-red-100 text-red-700';
       else if (s === 'completed' || s === 'completada') badge = 'bg-green-100 text-green-700';
 
       const canAccept = dbStatus === 'pending' && (!o.assigned_to || o.assigned_to === __currentUserId);
@@ -1220,36 +1213,32 @@ function renderOrdersHTML() {
       const deliveryDisplay = o.delivery && !coordRegex.test(o.delivery) ? o.delivery : (o.destination_coords ? `${o.destination_coords.lat?.toFixed(4)}, ${o.destination_coords.lng?.toFixed(4)}` : o.delivery || 'Sin destino');
       
       return `
-        <div class="group bg-white rounded-2xl shadow hover:shadow-lg border border-gray-200 overflow-hidden transition-shadow">
-          <div class="flex items-center justify-between px-4 py-3 border-b">
-            <span class="inline-flex items-center justify-center w-auto min-w-[36px] px-2 h-9 rounded-xl bg-blue-600 text-white font-bold text-sm">#${escapeHtml(idDisplay)}</span>
-            <span class="px-2 py-1 rounded ${badge} text-xs font-medium uppercase tracking-wide">${escapeHtml(label)}</span>
-            ${extraTag}
-          </div>
-          <div class="p-4 space-y-3">
-            <div class="flex items-start gap-2">
-               <i data-lucide="package" class="w-4 h-4 text-gray-400 mt-0.5"></i>
-               <p class="text-sm font-semibold text-gray-900">${service}</p>
-            </div>
-            <div class="flex items-start gap-2">
-               <i data-lucide="map-pin" class="w-4 h-4 text-gray-400 mt-0.5"></i>
-               <div class="text-xs text-gray-600">
-                 <div class="font-medium text-gray-900">Origen:</div>
-                 ${escapeHtml(pickupDisplay)}
-               </div>
-            </div>
-            <div class="flex items-start gap-2">
-               <i data-lucide="flag" class="w-4 h-4 text-gray-400 mt-0.5"></i>
-               <div class="text-xs text-gray-600">
-                 <div class="font-medium text-gray-900">Destino:</div>
-                 ${escapeHtml(deliveryDisplay)}
-               </div>
+        <div class="group bg-white rounded-2xl shadow-sm hover:shadow-md border border-gray-100 overflow-hidden transition-all duration-200">
+          <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50/60">
+            <span class="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-1 rounded-lg">#${escapeHtml(String(idDisplay))}</span>
+            <div class="flex items-center gap-1.5">
+              ${extraTag}
+              <span class="px-2 py-0.5 rounded-full ${badge} text-[11px] font-semibold uppercase tracking-wide">${escapeHtml(label)}</span>
             </div>
           </div>
-          <div class="px-4 py-3 border-t flex items-center justify-end gap-2 bg-gray-50">
-            <button class="btn-open px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors" data-id="${escapeHtml(o.id)}">Detalles</button>
-            ${canAccept ? `<button class="btn-accept px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${escapeHtml(o.id)}">Aceptar</button>` : ''}
-            ${!canAccept && !isAcceptedButNotMine && o.assigned_to === __currentUserId ? `<button class="btn-continue px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm" data-id="${escapeHtml(o.id)}">Continuar</button>` : ''}
+          <div class="p-4 space-y-2.5">
+            <div class="flex items-start gap-2">
+               <i data-lucide="package" class="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0"></i>
+               <p class="text-sm font-semibold text-gray-900 leading-tight">${service}</p>
+            </div>
+            <div class="flex items-start gap-2">
+               <i data-lucide="map-pin" class="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0"></i>
+               <p class="text-xs text-gray-600 leading-snug line-clamp-2">${escapeHtml(pickupDisplay)}</p>
+            </div>
+            <div class="flex items-start gap-2">
+               <i data-lucide="flag" class="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0"></i>
+               <p class="text-xs text-gray-600 leading-snug line-clamp-2">${escapeHtml(deliveryDisplay)}</p>
+            </div>
+          </div>
+          <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+            <button class="btn-open px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium transition-colors" data-id="${escapeHtml(String(o.id))}">Ver detalles</button>
+            ${canAccept ? `<button class="btn-accept px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm" data-id="${escapeHtml(String(o.id))}">Aceptar</button>` : ''}
+            ${!canAccept && !isAcceptedButNotMine && o.assigned_to === __currentUserId ? `<button class="btn-continue px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm" data-id="${escapeHtml(String(o.id))}">Continuar</button>` : ''}
           </div>
         </div>
       `;
@@ -1464,7 +1453,7 @@ function renderOrdersHTML() {
         // Si no hay en cache, intentar cargar desde DB directamente (por si cambió de dispositivo)
         const dbActive = await supabaseConfig.getActiveJobOrder();
         if (dbActive) {
-          const inactiveStatuses = ['completed', 'cancelled', 'entregada', 'cancelada'];
+          const inactiveStatuses = ['completed', 'cancelled'];
           if (!inactiveStatuses.includes(String(dbActive.status).toLowerCase())) {
             openActiveJob(dbActive);
           }
@@ -1597,3 +1586,6 @@ function renderOrdersHTML() {
   })();
 
 });
+
+
+

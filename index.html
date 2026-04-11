@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="scroll-smooth">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -268,7 +268,7 @@
   <!-- HERO: Imagen de fondo, texto alineado a la izquierda -->
   <section class="hero relative min-h-screen flex items-center bg-cover bg-center text-white" style="background-image: url('img/cargo.jpg');">
     <!-- Overlay oscuro para legibilidad -->
-    <div class="absolute inset-0 bg-black bg-opacity-60" aria-hidden="true"></div>
+    <div class="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-[2px]" aria-hidden="true"></div>
 
     <!-- Contenedor del contenido -->
     <div class="relative z-10 max-w-7xl mx-auto px-6 w-full">
@@ -425,23 +425,58 @@
     </div>
   </section>
 
-  <section id="testimonios" class="py-16 lg:py-24 bg-white">
-    <div class="max-w-7xl mx-auto px-6 text-center mb-12">
-      <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mb-4 animate-on-scroll">Qué opinan nuestros clientes</h3>
-      <p class="max-w-2xl mx-auto text-gray-600 animate-on-scroll">Experiencias reales que destacan puntualidad, cuidado y comunicación clara en cada servicio.</p>
+  <section id="testimonios" class="py-16 lg:py-24 bg-gray-50 overflow-hidden">
+    <div class="max-w-7xl mx-auto px-6 text-center mb-10">
+      <span class="text-acento font-bold tracking-wider uppercase text-sm animate-on-scroll">Testimonios</span>
+      <h3 class="text-3xl md:text-4xl font-bold text-azulOscuro mt-2 mb-4 animate-on-scroll">La confianza se mueve con nosotros</h3>
+      <p class="max-w-2xl mx-auto text-gray-600 animate-on-scroll text-lg">
+        Descubre por qué somos la opción preferida para mudanzas y transporte de carga en República Dominicana.
+      </p>
+      
+      <!-- Trust Badges (Prueba Social) -->
+      <div class="mt-8 flex flex-wrap justify-center gap-4 animate-on-scroll">
+         <div class="flex items-center gap-2 bg-white px-5 py-2 rounded-full shadow-sm border border-gray-200 transform hover:scale-105 transition-transform">
+            <div class="flex text-yellow-400 text-sm">
+              <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
+            </div>
+            <span class="text-sm font-bold text-gray-700">4.9/5 Excelencia</span>
+         </div>
+         <div class="flex items-center gap-2 bg-white px-5 py-2 rounded-full shadow-sm border border-gray-200 transform hover:scale-105 transition-transform">
+            <i class="fas fa-shield-alt text-green-500 text-lg"></i>
+            <span class="text-sm font-bold text-gray-700">Carga Asegurada</span>
+         </div>
+      </div>
     </div>
     
     <!-- Galería Animada -->
-    <div class="relative w-full overflow-hidden">
-      <!-- Degradados laterales para efecto suave -->
-      <div class="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"></div>
-      <div class="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none"></div>
+    <div class="relative w-full">
+      <!-- Degradados laterales más suaves y anchos para efecto profesional -->
+      <div class="absolute left-0 top-0 bottom-0 w-24 md:w-48 bg-gradient-to-r from-gray-50 via-gray-50/90 to-transparent z-20 pointer-events-none"></div>
+      <div class="absolute right-0 top-0 bottom-0 w-24 md:w-48 bg-gradient-to-l from-gray-50 via-gray-50/90 to-transparent z-20 pointer-events-none"></div>
       
-      <div id="testimonialsTrack" class="flex gap-6 w-max animate-marquee hover:pause px-4 pb-8">
-        <!-- Los testimonios se cargarán aquí dinámicamente -->
+      <div class="overflow-hidden py-4">
+        <div id="testimonialsTrack" class="flex gap-6 w-max animate-marquee hover:pause px-4">
+          <!-- Skeletons de Carga (Se verán antes de que el JS cargue los reales) -->
+          <!-- Esto evita el salto visual (CLS) y mejora la percepción de velocidad -->
+          <div class="w-80 md:w-96 h-56 bg-white rounded-2xl shadow-md border border-gray-100 p-6 flex flex-col justify-between opacity-60">
+             <div class="space-y-3">
+               <div class="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+               <div class="h-4 bg-gray-200 rounded w-full animate-pulse"></div>
+               <div class="h-4 bg-gray-200 rounded w-5/6 animate-pulse"></div>
+             </div>
+             <div class="flex items-center gap-3 mt-4 pt-4 border-t border-gray-50">
+               <div class="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+               <div class="space-y-1">
+                 <div class="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
+                 <div class="h-2 bg-gray-200 rounded w-16 animate-pulse"></div>
+               </div>
+             </div>
+          </div>
+          <!-- Los testimonios reales reemplazarán o se añadirán aquí dinámicamente -->
+        </div>
       </div>
     </div>
-    <div id="testimonialsEmpty" class="hidden text-center text-gray-500">No hay testimonios disponibles.</div>
+    <div id="testimonialsEmpty" class="hidden text-center text-gray-500 mt-6">No hay testimonios disponibles.</div>
   </section>
 
   <!-- Colaboradores -->
@@ -499,6 +534,8 @@
       </a>
     </div>
   </section>
+
+  <noscript><div class="fixed bottom-0 w-full bg-red-600 text-white text-center p-4 z-50">Para utilizar todas las funciones de este sitio, por favor habilita JavaScript en tu navegador.</div></noscript>
 
   <!-- Footer -->
   <footer class="bg-azulOscuro text-white py-8">

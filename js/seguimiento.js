@@ -98,13 +98,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (x === 'created') return 'Orden Recibida';
     if (x === 'pending' || x === 'pendiente') return 'Pendiente';
     if (x === 'accepted' || x === 'aceptada' || x === 'assigned') return 'Aceptada';
-    if (x === 'in_progress' || x === 'en curso') return 'En curso';
-    if (x === 'en_camino_recoger' || x === 'en camino a recoger') return 'En camino a recoger';
-    if (x === 'cargando' || x === 'loading') return 'Cargando';
-    if (x === 'en_camino_entregar' || x === 'en camino a entregar') return 'En camino a entregar';
+    if (x === 'in_progress' || x === 'en curso' || x === 'en_camino_recoger' || x === 'en camino a recoger') return 'En camino a recoger';
+    if (x === 'loading' || x === 'cargando') return 'Cargando';
+    if (x === 'delivering' || x === 'en_camino_entregar' || x === 'en camino a entregar') return 'En camino a entregar';
     if (x === 'en_origen' || x === 'en origen') return 'En origen';
     if (x === 'en_destino' || x === 'en destino') return 'En destino';
-    if (x === 'completed' || x === 'completada' || x === 'entregado' || x === 'entregada') return 'Completada';
+    if (x === 'completed' || x === 'completada' || x === 'entregado' || x === 'entregada' || x === 'delivering') return 'Completada';
     if (x === 'cancelled' || x === 'cancelada') return 'Cancelada';
     if (x === 'delay' || x.includes('retraso')) return 'Retraso por tapón';
     return s;

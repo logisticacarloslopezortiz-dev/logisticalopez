@@ -7,45 +7,53 @@
  */
 
 const UI_TO_DB_STATUS = Object.freeze({
-  pendiente: 'pending',
-  aceptada: 'accepted',
-  en_camino_recoger: 'in_progress',
-  cargando: 'in_progress',
+  // UI español → DB enum Supabase
+  pendiente:          'pending',
+  aceptada:           'accepted',
+  en_camino_recoger:  'in_progress',
+  cargando:           'in_progress',
   en_camino_entregar: 'in_progress',
-  completed: 'completed', // ✅ Asegurar que el key estándar exista
-  entregada: 'completed', // Alias para compatibilidad
-  completada: 'completed',
-  cancelada: 'cancelled'
+  completada:         'completed',
+  entregada:          'completed',
+  completed:          'completed',
+  cancelada:          'cancelled',
+  // Flow keys internos → DB enum Supabase
+  pending:            'pending',
+  accepted:           'accepted',
+  in_progress:        'in_progress',
+  loading:            'in_progress',
+  delivering:         'in_progress',
+  cancelled:          'cancelled'
 });
 
 const STATUS_LABELS = Object.freeze({
-  pending: 'Pendiente',
-  accepted: 'Aceptada',
-  en_camino_recoger: 'En camino a recoger',
-  cargando: 'Cargando',
-  en_camino_entregar: 'En camino a entregar',
-  completed: 'Completada',
-  cancelled: 'Cancelada'
+  pending:     'Pendiente',
+  accepted:    'Aceptada',
+  in_progress: 'En camino a recoger',
+  loading:     'Cargando',
+  delivering:  'En camino a entregar',
+  completed:   'Completada',
+  cancelled:   'Cancelada'
 });
 
 const PHASE_CONFIG = Object.freeze({
-  pending: { percent: 5, color: 'bg-gray-400' },
-  accepted: { percent: 20, color: 'bg-blue-600' },
-  en_camino_recoger: { percent: 40, color: 'bg-blue-500' },
-  cargando: { percent: 60, color: 'bg-yellow-500' },
-  en_camino_entregar: { percent: 80, color: 'bg-indigo-500' },
-  completed: { percent: 100, color: 'bg-green-500' },
-  cancelled: { percent: 100, color: 'bg-red-500' }
+  pending:     { percent: 5,   color: 'bg-gray-400' },
+  accepted:    { percent: 20,  color: 'bg-blue-600' },
+  in_progress: { percent: 40,  color: 'bg-blue-500' },
+  loading:     { percent: 60,  color: 'bg-yellow-500' },
+  delivering:  { percent: 80,  color: 'bg-indigo-500' },
+  completed:   { percent: 100, color: 'bg-green-500' },
+  cancelled:   { percent: 100, color: 'bg-red-500' }
 });
 
 const ORDER_FLOW = Object.freeze({
-  pending: ['accepted'],
-  accepted: ['en_camino_recoger'],
-  en_camino_recoger: ['cargando'],
-  cargando: ['en_camino_entregar'],
-  en_camino_entregar: ['completed'],
-  completed: [],
-  cancelled: []
+  pending:              ['accepted'],
+  accepted:             ['in_progress'],
+  in_progress:          ['loading'],
+  loading:              ['delivering'],
+  delivering:           ['completed'],
+  completed:            [],
+  cancelled:            []
 });
 
 const OrderManager = {
@@ -74,19 +82,36 @@ const OrderManager = {
     }
   },
 
-  // ✅ Validación profesional de transición (Usa UI states para evitar mezcla con DB)
-  canTransition(from, to) {
-    let fromStatus = String(from || 'pending').toLowerCase();
-    let toStatus = String(to || '').toLowerCase();
-    
-    // Normalizar alias para validación contra ORDER_FLOW
-    if (fromStatus === 'entregada' || fromStatus === 'completada') fromStatus = 'completed';
-    if (toStatus === 'entregada' || toStatus === 'completada') toStatus = 'completed';
-    if (toStatus === 'cancelada') toStatus = 'cancelled';
-    
-    if (toStatus === 'cancelled') return true;
+  // Normalización bidireccional UI ↔ DB para la máquina de estados
+  _normalizeToFlowKey(status) {
+    const s = String(status || '').toLowerCase().trim();
+    const map = {
+      // UI español
+      pendiente:          'pending',
+      aceptada:           'accepted',
+      en_camino_recoger:  'in_progress',
+      cargando:           'loading',
+      en_camino_entregar: 'delivering',
+      completada:         'completed',
+      entregada:          'completed',
+      cancelada:          'cancelled',
+      // DB inglés directo
+      pending:            'pending',
+      accepted:           'accepted',
+      in_progress:        'in_progress',
+      loading:            'loading',
+      delivering:         'delivering',
+      completed:          'completed',
+      cancelled:          'cancelled'
+    };
+    return map[s] ?? s;
+  },
 
-    return ORDER_FLOW[fromStatus]?.includes(toStatus);
+  canTransition(from, to) {
+    const fromKey = this._normalizeToFlowKey(from);
+    const toKey   = this._normalizeToFlowKey(to);
+    if (toKey === 'cancelled') return true;
+    return ORDER_FLOW[fromKey]?.includes(toKey) ?? false;
   },
 
   // ✅ Helper para buscar orden por múltiples criterios
@@ -140,27 +165,32 @@ const OrderManager = {
     } catch (_) {}
   },
 
-  // Toast simple
+  // Toast profesional con íconos y animación suave
   _toast(message, type = 'info') {
-    const colors = { success: '#16a34a', error: '#dc2626', warning: '#f59e0b', info: '#2563eb' };
-    const bg = colors[type] || colors.info;
+    const cfg = {
+      success: { bg: '#16a34a', icon: '✓' },
+      error:   { bg: '#dc2626', icon: '✗' },
+      warning: { bg: '#d97706', icon: '⚠' },
+      info:    { bg: '#2563eb', icon: 'ℹ' }
+    };
+    const { bg, icon } = cfg[type] || cfg.info;
     const containerId = 'tlc-toast-container';
-    let container = document.getElementById(containerId) || (() => {
-      const c = document.createElement('div');
-      c.id = containerId;
-      c.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;';
-      document.body.appendChild(c);
-      return c;
-    })();
+    let container = document.getElementById(containerId);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = containerId;
+      container.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column-reverse;gap:8px;max-width:320px;';
+      document.body.appendChild(container);
+    }
     const t = document.createElement('div');
-    t.style.cssText = `background:${bg};color:white;padding:12px 16px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:14px;font-weight:600;transition:all 0.3s ease;opacity:0;`;
-    t.textContent = message;
+    t.style.cssText = `background:${bg};color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.18);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transform:translateY(8px);opacity:0;transition:all 0.25s ease;`;
+    t.innerHTML = `<span style="font-size:15px;flex-shrink:0">${icon}</span><span>${String(message).replace(/</g,'&lt;')}</span>`;
     container.appendChild(t);
-    requestAnimationFrame(() => { t.style.opacity = '1'; });
+    requestAnimationFrame(() => { t.style.transform = 'translateY(0)'; t.style.opacity = '1'; });
     setTimeout(() => {
-      t.style.opacity = '0';
-      setTimeout(() => t.remove(), 300);
-    }, 3500);
+      t.style.opacity = '0'; t.style.transform = 'translateY(8px)';
+      setTimeout(() => t.remove(), 280);
+    }, 3200);
   },
 
   // ✅ ENTERPRISE: Helper centralizado para liberar al colaborador
@@ -180,7 +210,6 @@ const OrderManager = {
     try {
       await supabaseConfig.ensureFreshSession();
       const ns = String(newStatus || '').toLowerCase();
-      const dbStatus = UI_TO_DB_STATUS[ns] || ns;
       const normalizedId = this._normalizeOrderId(orderId);
 
       if (!normalizedId) throw new Error('ID de orden inválido');
@@ -188,32 +217,35 @@ const OrderManager = {
       const currentOrder = await this._findOrderByCandidates(orderId);
       if (!currentOrder) throw new Error('No se encontró la orden');
 
-      // Mejora 1: Validación contra la máquina de estados para evitar estados inválidos.
-      const validUiStates = Object.keys(UI_TO_DB_STATUS);
-      if (!validUiStates.includes(ns)) {
+      // Normalizar ns a flow key (acepta español, inglés viejo y nuevo)
+      const flowKey  = this._normalizeToFlowKey(ns);
+      const dbStatus = UI_TO_DB_STATUS[ns] ?? UI_TO_DB_STATUS[flowKey] ?? flowKey;
+
+      // Validar que el flowKey sea una key conocida del ORDER_FLOW
+      if (!Object.prototype.hasOwnProperty.call(ORDER_FLOW, flowKey)) {
         throw new Error(`Estado inválido: ${ns}`);
       }
 
       const currentPhase = this._getUiPhaseFromOrder(currentOrder);
-      
-      // ✅ 2. Validar que el colaborador sea el dueño de la orden
+
+      // Validar que el colaborador sea el dueño de la orden
       const { data: { user } } = await supabaseConfig.client.auth.getUser();
       if (
         currentOrder.assigned_to &&
         currentOrder.assigned_to !== user?.id &&
-        ns !== 'accepted' // 'accepted' es una acción de asignación, no de modificación de progreso
+        flowKey !== 'accepted'
       ) {
         throw new Error('No tienes permiso para modificar esta orden');
       }
-      
-      // Mejora 3: Evitar que dos usuarios acepten la misma orden (race condition).
-      if (ns === 'accepted' && currentOrder.assigned_to) {
+
+      // Evitar race condition: dos colaboradores aceptando la misma orden
+      if (flowKey === 'accepted' && currentOrder.assigned_to) {
         throw new Error('Esta orden ya fue tomada por otro colaborador');
       }
 
-      // ✅ 1. FIX: Validar transición usando el estado UI (ns), no el de DB (dbStatus)
-      if (!this.canTransition(currentPhase, ns)) {
-        throw new Error(`Transición no permitida: ${currentPhase} -> ${ns}`);
+      // Validar transición
+      if (!this.canTransition(currentPhase, flowKey)) {
+        throw new Error(`Transición no permitida: ${currentPhase} -> ${flowKey}`);
       }
 
       // Validar evidencia para completar la orden
@@ -222,13 +254,12 @@ const OrderManager = {
       }
 
       const trackingEntry = {
-        ui_status: ns,
+        ui_status: flowKey,
         db_status: dbStatus,
         date: new Date().toISOString(),
-        description: `Estado actualizado a ${ns}`
+        description: `Estado actualizado a ${flowKey}`
       };
 
-      // ✅ 3. Aumentar el historial guardado para evitar perder datos en órdenes largas
       const history = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
       const tracking_data = [...history.slice(-25), trackingEntry];
 
@@ -239,7 +270,7 @@ const OrderManager = {
       };
 
       if (dbStatus === 'completed') updatePayload.completed_at = updatePayload.updated_at;
-      if (dbStatus === 'accepted') updatePayload.assigned_at = updatePayload.updated_at;
+      if (dbStatus === 'accepted')  updatePayload.assigned_at  = updatePayload.updated_at;
       if (additionalData.collaborator_id) {
         if (dbStatus === 'completed') updatePayload.completed_by = additionalData.collaborator_id;
         else updatePayload.assigned_to = additionalData.collaborator_id;
@@ -249,26 +280,21 @@ const OrderManager = {
         .from('orders')
         .update(updatePayload)
         .eq('id', currentOrder.id)
-        // CORREGIDO: Eliminada `client_email` que no existe.
         .select('tracking_data, id, short_id, status, evidence_photos, name, email, client_id, client_contact_id, onesignal_id, onesignal_player_id, assigned_to')
         .single();
 
       if (updateError) throw updateError;
 
-      // ✅ ENTERPRISE: Limpieza automática de trabajo activo al completar
       if (dbStatus === 'completed') {
         await this._releaseCollaboratorActiveJob(currentOrder.id);
       }
 
-      // --- Acciones post-update (no bloqueantes) ---
       this.runProcessOutbox();
-      // Notificación PUSH para todos los estados de progreso (incluido 'completado')
       if (updatedData && dbStatus !== 'pending' && dbStatus !== 'cancelled') {
-        this._notifyClientStatusChange(updatedData, ns);
+        this._notifyClientStatusChange(updatedData, flowKey);
       }
-      // ✅ 4. FIX: Enviar email solo en estados finales para no saturar al cliente
       if (dbStatus === 'completed' || dbStatus === 'cancelled') {
-        notifyClientForOrder(currentOrder.id, ns);
+        notifyClientForOrder(currentOrder.id, flowKey);
       }
 
       return { success: true, data: updatedData };
@@ -359,19 +385,18 @@ const OrderManager = {
     if (dbStatus === 'completed') return 'completed';
     if (dbStatus === 'cancelled') return 'cancelled';
 
-    // Prioridad 1: tracking_data (historial)
+    // Prioridad: último tracking_data con ui_status válido
     const tracking = Array.isArray(order.tracking_data) ? order.tracking_data : [];
-    if (tracking.length > 0) {
-      const last = tracking[tracking.length - 1];
-      if (last?.ui_status) return String(last.ui_status).toLowerCase();
+    for (let i = tracking.length - 1; i >= 0; i--) {
+      const raw = tracking[i]?.ui_status;
+      if (raw) {
+        const normalized = this._normalizeToFlowKey(String(raw).toLowerCase());
+        if (normalized && normalized !== 'pending') return normalized;
+      }
     }
 
-    // Fallback: Inferir de dbStatus
-    if (dbStatus === 'accepted') return 'accepted';    
-    // Si está en progreso, fallback a 'en_camino_recoger'
-    if (dbStatus === 'in_progress') return 'en_camino_recoger';
-
-    return 'pending';
+    // Fallback desde dbStatus — siempre normalizado al ORDER_FLOW
+    return this._normalizeToFlowKey(dbStatus) || 'pending';
   },
 
   // Notificaciones al cliente

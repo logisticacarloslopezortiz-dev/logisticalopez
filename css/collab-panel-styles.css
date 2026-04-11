@@ -121,3 +121,118 @@ body {
 
 /* Estilo para enlace activo */
 #collabSidebar nav a[aria-current="page"] { background-color: var(--color-secundario); }
+
+/* ─── Mejoras UX/UI Panel Colaborador ─────────────────────────────────── */
+
+/* Sidebar nav links */
+#collabSidebar nav a {
+  border-radius: 0.6rem;
+  transition: background 0.18s, color 0.18s;
+  font-size: 0.9rem;
+}
+#collabSidebar nav a:hover {
+  background-color: rgba(255,255,255,0.12);
+}
+
+/* Cards del grid — mejor en móvil */
+@media (max-width: 639px) {
+  #ordersGrid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+    padding: 0 0.25rem;
+  }
+}
+
+/* Trabajo activo — barra de progreso */
+#jobProgressBar {
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+  min-width: 4px;
+}
+
+/* Botones de acción del trabajo activo */
+#activeJobView button[id^="btn"] {
+  min-height: 44px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 0.65rem;
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.15s;
+}
+#activeJobView button[id^="btn"]:active:not(:disabled) {
+  transform: scale(0.97);
+}
+#activeJobView button[id^="btn"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mapa trabajo activo */
+#activeMap {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  min-height: 200px;
+}
+
+/* Vista activa — scroll suave en móvil */
+#activeJobView {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Evidencia — grid responsive */
+#activeEvidence,
+#evidencePreview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.5rem;
+}
+#activeEvidence img,
+#evidencePreview img {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+#activeEvidence img:hover,
+#evidencePreview img:hover { opacity: 0.85; }
+
+/* Modal de confirmación */
+#confirmationModal > div {
+  border-radius: 1rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  max-width: 360px;
+  width: calc(100% - 2rem);
+}
+
+/* Toast — posición bottom en móvil */
+#tlc-toast-container {
+  bottom: 1rem !important;
+  right: 1rem !important;
+  top: auto !important;
+  max-width: min(320px, calc(100vw - 2rem));
+}
+
+/* Overlay de carga */
+#loadingOverlay {
+  backdrop-filter: blur(2px);
+}
+
+/* Botón móvil del sidebar — más grande para touch */
+#mobileSidebarToggle {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Animación entrada cards */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#ordersGrid > div {
+  animation: cardIn 0.22s ease both;
+}
