@@ -195,22 +195,22 @@
         </div>
       </div>
       <!-- Vista de tabla para pantallas medianas y grandes -->
-      <div class="overflow-x-auto">
-        <table class="min-w-full">
-          <thead class="bg-gray-50">
+      <div class="table-wrapper">
+        <table id="ordersTable" class="min-w-full">
+          <thead>
             <tr>
-              <th class="table-header" onclick="sortTable('id')">ID <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
-              <th class="table-header" onclick="sortTable('name')">Cliente <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
-              <th class="table-header" onclick="sortTable('service')">Servicio</th>
+              <th class="table-header" onclick="sortTable('id', this)" style="width:60px">ID <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
+              <th class="table-header" onclick="sortTable('name', this)">Cliente <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
+              <th class="table-header">Servicio</th>
               <th class="table-header">Vehículo</th>
               <th class="table-header">Ruta</th>
-              <th class="table-header" onclick="sortTable('date')">Fecha/Hora <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
-              <th class="table-header" onclick="sortTable('status')">Estado</th>
-              <th class="table-header">Colaborador</th>
-              <th class="table-header">Monto Cobrado</th>
+              <th class="table-header" onclick="sortTable('date', this)">Fecha/Hora <i data-lucide="chevrons-up-down" class="w-3 h-3 inline ml-1"></i></th>
+              <th class="table-header" onclick="sortTable('status', this)">Estado</th>
+              <th class="table-header" style="min-width:130px">Colaborador</th>
+              <th class="table-header">Monto</th>
             </tr>
           </thead>
-          <tbody id="ordersTableBody" class="bg-white divide-y divide-gray-200">
+          <tbody id="ordersTableBody" class="bg-white divide-y divide-gray-100">
             <!-- Filas generadas dinámicamente -->
           </tbody>
         </table>

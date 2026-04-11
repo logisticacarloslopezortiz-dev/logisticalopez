@@ -271,9 +271,11 @@ const OrderManager = {
 
       if (dbStatus === 'completed') updatePayload.completed_at = updatePayload.updated_at;
       if (dbStatus === 'accepted')  updatePayload.assigned_at  = updatePayload.updated_at;
-      if (additionalData.collaborator_id) {
-        if (dbStatus === 'completed') updatePayload.completed_by = additionalData.collaborator_id;
-        else updatePayload.assigned_to = additionalData.collaborator_id;
+      // Aceptar tanto collaborator_id como assigned_to para compatibilidad
+      const collabId = additionalData.collaborator_id || additionalData.assigned_to || null;
+      if (collabId) {
+        if (dbStatus === 'completed') updatePayload.completed_by = collabId;
+        else updatePayload.assigned_to = collabId;
       }
 
       const { data: updatedData, error: updateError } = await supabaseConfig.client

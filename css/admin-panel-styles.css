@@ -171,3 +171,92 @@ body {
 .icon-pill.blue { background-color: #93c5fd; }
 .icon-pill.white { background-color: rgba(255,255,255,.2); }
 html { text-size-adjust: 100%; }
+
+/* ===== MEJORAS PANEL ADMIN 2026 ===== */
+
+/* Tabla más compacta y legible */
+#ordersTable th {
+  padding: 0.6rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+}
+#ordersTable td {
+  padding: 0.6rem 1rem;
+  font-size: 0.82rem;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+#ordersTable tbody tr:hover { background: #f0f9ff; }
+#ordersTable tbody tr:last-child td { border-bottom: none; }
+
+/* Columna colaborador — siempre visible, no truncar */
+#ordersTable td:nth-child(8) { min-width: 120px; }
+
+/* Sidebar nav buttons (igual que links) */
+#sidebar nav button {
+  color: #E5E7EB;
+  transition: all 0.2s ease-in-out;
+  border-left: 3px solid transparent;
+  width: 100%;
+  text-align: left;
+}
+#sidebar nav button:hover {
+  background-color: rgba(30, 138, 149, 0.2);
+  color: #fff;
+  border-left-color: var(--color-primario-turquesa);
+}
+
+/* Cards de estadísticas con gradiente */
+.stat-card {
+  background: linear-gradient(135deg, var(--color-primario-oscuro), #1E8A95) !important;
+  border: none;
+  box-shadow: 0 4px 15px rgba(23,79,87,0.25);
+}
+
+/* Badge de colaborador asignado */
+.collab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Scroll horizontal suave en tabla */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+/* Animación de entrada para filas nuevas */
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#ordersTable tbody tr { animation: row-in 0.2s ease both; }
+
+/* Responsive: ocultar columnas menos importantes en móvil */
+@media (max-width: 768px) {
+  .main-content { margin-left: 0; }
+  #ordersTable th:nth-child(4),
+  #ordersTable td:nth-child(4),
+  #ordersTable th:nth-child(5),
+  #ordersTable td:nth-child(5) { display: none; }
+}

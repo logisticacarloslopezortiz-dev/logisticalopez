@@ -1,4 +1,4 @@
-(() => {
+﻿﻿(() => {
 'use strict';
 
 // ============================================
@@ -16,11 +16,13 @@ const ORDER_STATUS = Object.freeze({
 
 // Mapeo de estados de base de datos a UI
 const DB_TO_UI_STATUS = Object.freeze({
-  pending: ORDER_STATUS.PENDIENTE,
-  accepted: ORDER_STATUS.ACEPTADA,
+  pending:     ORDER_STATUS.PENDIENTE,
+  accepted:    ORDER_STATUS.ACEPTADA,
   in_progress: ORDER_STATUS.EN_CURSO,
-  completed: ORDER_STATUS.COMPLETADA,
-  cancelled: ORDER_STATUS.CANCELADA
+  loading:     ORDER_STATUS.EN_CURSO,
+  delivering:  ORDER_STATUS.EN_CURSO,
+  completed:   ORDER_STATUS.COMPLETADA,
+  cancelled:   ORDER_STATUS.CANCELADA
 });
 
 // Colores por estado (reutilizable en todo el código)
@@ -331,11 +333,17 @@ async function updateOrderStatus(orderId, newStatus) {
 
   // Normalizar estados: UI español → DB inglés
   const statusMap = {
-    'pendiente': 'pending',
-    'aceptada': 'accepted',
-    'en curso': 'in_progress',
+    'pendiente':  'pending',
+    'aceptada':   'accepted',
+    'en curso':   'in_progress',
     'completada': 'completed',
-    'cancelada': 'cancelled'
+    'cancelada':  'cancelled',
+    // también aceptar valores DB directos
+    'pending':    'pending',
+    'accepted':   'accepted',
+    'in_progress':'in_progress',
+    'completed':  'completed',
+    'cancelled':  'cancelled'
   };
   
   const key = String(newStatus).toLowerCase().trim();
@@ -656,6 +664,7 @@ async function assignSelectedCollaborator() {
         Number(selectedOrderIdForAssign),
         'accepted',
         {
+          collaborator_id: String(collaboratorId),
           assigned_to: String(collaboratorId)
         }
       );
@@ -673,7 +682,8 @@ async function assignSelectedCollaborator() {
     AppState.update({
       id: Number(selectedOrderIdForAssign),
       assigned_to: collaboratorId,
-      status: 'accepted'
+      status: 'accepted',
+      collaborator: { full_name: col.name, name: col.name }
     });
 
     filterOrders();
@@ -853,7 +863,7 @@ function renderCardHtml(o) {
   const displayStatus = formatUiStatus(o.status);
   const badgeClass = STATUS_COLOR[displayStatus] || 'bg-gray-100 text-gray-800';
   const collabId = getCollaboratorIdFromOrder(o);
-  const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || o.nombre_chofer || '';
+  const collabName = o.collaborator?.full_name || o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || o.nombre_chofer || '';
 
   return `
     <div class="flex justify-between items-start mb-2">
@@ -886,50 +896,63 @@ function renderCardHtml(o) {
  
 
 function renderRowHtml(o) {
-  const displayStatus = formatUiStatus(o.status);
-  const statusColorClass = STATUS_COLOR[displayStatus] || 'bg-gray-100 text-gray-800';
-  const collabId = getCollaboratorIdFromOrder(o);
-  const collabName = o.collaborator?.name || (__collaboratorsById?.[collabId]?.name) || o.nombre_chofer || '';
+  const ds = formatUiStatus(o.status);
+  const sc = STATUS_COLOR[ds] || 'bg-gray-100 text-gray-800';
+  const cid = getCollaboratorIdFromOrder(o);
+  const cn = o.collaborator?.full_name || o.collaborator?.name
+    || (__collaboratorsById?.[cid]?.name) || o.nombre_chofer || '';
+  const active = ['accepted','in_progress','loading','delivering']
+    .includes(String(o.status).toLowerCase());
+
+  const svc = (o.service_questions && Object.keys(o.service_questions).length > 0)
+    ? `<button onclick="showServiceDetails(${o.id})" class="text-xs text-blue-500 hover:underline">Ver detalles</button>`
+    : '';
+
+  const colCell = cn
+    ? `<div class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-100" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${cn}"><i data-lucide="user" class="w-3 h-3"></i>${cn}</div>`
+    : active
+      ? `<button onclick="openAssignModal(${o.id})" class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-medium"><i data-lucide="user-plus" class="w-3 h-3"></i>Asignar</button>`
+      : '<span class="text-xs text-gray-400 italic">Sin asignar</span>';
+
+  const montoHtml = o.monto_cobrado
+    ? `<div class="font-semibold text-green-700">$${Number(o.monto_cobrado).toLocaleString('es-DO')}</div>`
+    : '<div class="text-gray-400 text-xs">—</div>';
 
   return `
-    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.id || 'N/A'}</td>
-    <td class="px-6 py-4 whitespace-nowrap">
-      <div class="text-sm font-medium text-gray-900">${o.name || 'N/A'}</div>
-      <div class="text-sm text-gray-500">${o.client_phone || o.phone || ''}</div>
-      ${o.client_email || o.email ? `<div class="text-sm text-gray-500 truncate" title="${o.client_email || o.email}">${o.client_email || o.email}</div>` : ''}
-      ${o.rnc ? `<div class="mt-1 text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block" title="Empresa: ${o.empresa || 'N/A'}">RNC: ${o.rnc}</div>` : ''}
+    <td class="px-4 py-3 text-xs font-mono text-gray-400">#${o.short_id || o.id || 'N/A'}</td>
+    <td class="px-4 py-3">
+      <div class="text-sm font-semibold text-gray-900">${o.name || 'N/A'}</div>
+      <div class="text-xs text-gray-500">${o.phone || o.client_phone || ''}</div>
+      ${o.rnc ? '<span class="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">RNC</span>' : ''}
     </td>
-    <td class="px-6 py-4 whitespace-nowrap">
+    <td class="px-4 py-3 whitespace-nowrap">
       <div class="text-sm text-gray-900">${o.service?.name || 'N/A'}</div>
-      ${o.service_questions && Object.keys(o.service_questions).length > 0 ?
-        `<button onclick="showServiceDetails(${o.id})" class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline">
-            <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>Ver detalles
-          </button>`
-        : ''
-      }
+      ${svc}
     </td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${o.vehicle?.name || 'N/A'}</td>
-    <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title="${o.pickup} → ${o.delivery}">${o.pickup} → ${o.delivery}</td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-      <div>${o.date || 'N/A'}</div>
-      <div class="text-xs text-gray-500">${o.time || ''}</div>
+    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${o.vehicle?.name || 'N/A'}</td>
+    <td class="px-4 py-3 text-xs text-gray-600" style="max-width:160px">
+      <div class="truncate">📍 ${o.pickup || '—'}</div>
+      <div class="truncate">🏁 ${o.delivery || '—'}</div>
     </td>
-    <td class="px-6 py-4 whitespace-nowrap">
-      <select onchange="updateOrderStatus('${o.id}', this.value)" class="px-2 py-1 rounded-full text-xs font-semibold ${statusColorClass} border-0 focus:ring-2 focus:ring-blue-500">
-        <option value="${ORDER_STATUS.PENDIENTE}" ${displayStatus === ORDER_STATUS.PENDIENTE ? 'selected' : ''}>${ORDER_STATUS.PENDIENTE}</option>
-        <option value="${ORDER_STATUS.ACEPTADA}" ${displayStatus === ORDER_STATUS.ACEPTADA ? 'selected' : ''}>${ORDER_STATUS.ACEPTADA}</option>
-        <option value="${ORDER_STATUS.EN_CURSO}" ${displayStatus === ORDER_STATUS.EN_CURSO ? 'selected' : ''}>${ORDER_STATUS.EN_CURSO}</option>
-        <option value="${ORDER_STATUS.COMPLETADA}" ${displayStatus === ORDER_STATUS.COMPLETADA ? 'selected' : ''}>${ORDER_STATUS.COMPLETADA}</option>
-        <option value="${ORDER_STATUS.CANCELADA}" ${displayStatus === ORDER_STATUS.CANCELADA ? 'selected' : ''}>${ORDER_STATUS.CANCELADA}</option>
+    <td class="px-4 py-3 whitespace-nowrap text-sm">
+      <div class="font-medium text-gray-800">${o.date || 'N/A'}</div>
+      <div class="text-xs text-gray-400">${o.time || ''}</div>
+    </td>
+    <td class="px-4 py-3 whitespace-nowrap">
+      <select onchange="updateOrderStatus('${o.id}', this.value)"
+        class="px-2 py-1 rounded-full text-xs font-semibold ${sc} border-0 cursor-pointer">
+        <option value="${ORDER_STATUS.PENDIENTE}"  ${ds === ORDER_STATUS.PENDIENTE  ? 'selected' : ''}>${ORDER_STATUS.PENDIENTE}</option>
+        <option value="${ORDER_STATUS.ACEPTADA}"   ${ds === ORDER_STATUS.ACEPTADA   ? 'selected' : ''}>${ORDER_STATUS.ACEPTADA}</option>
+        <option value="${ORDER_STATUS.EN_CURSO}"   ${ds === ORDER_STATUS.EN_CURSO   ? 'selected' : ''}>${ORDER_STATUS.EN_CURSO}</option>
+        <option value="${ORDER_STATUS.COMPLETADA}" ${ds === ORDER_STATUS.COMPLETADA ? 'selected' : ''}>${ORDER_STATUS.COMPLETADA}</option>
+        <option value="${ORDER_STATUS.CANCELADA}"  ${ds === ORDER_STATUS.CANCELADA  ? 'selected' : ''}>${ORDER_STATUS.CANCELADA}</option>
       </select>
     </td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-      ${collabName ? `<div class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><i data-lucide="user" class="w-3 h-3"></i> ${collabName}</div>` : '<span class="text-gray-400 text-xs">Sin asignar</span>'}
-    </td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-      <button onclick="openPriceModal('${o.id}')" class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 transition-colors">
-        <span class="font-semibold text-green-700">${o.monto_cobrado ? `$${Number(o.monto_cobrado).toLocaleString('es-DO')}` : 'Confirmar'}</span>
-        <div class="text-xs text-gray-500">${o.metodo_pago || 'No especificado'}</div>
+    <td class="px-4 py-3 whitespace-nowrap text-sm" style="min-width:130px">${colCell}</td>
+    <td class="px-4 py-3 whitespace-nowrap text-sm">
+      <button onclick="openPriceModal('${o.id}')" class="text-left hover:bg-gray-50 rounded px-1 w-full">
+        ${montoHtml}
+        <div class="text-xs text-gray-400">${o.metodo_pago || ''}</div>
       </button>
     </td>
   `;
