@@ -10,19 +10,24 @@
   // ✅ MODIFICADO: No registrar manualmente el worker si OneSignal está presente.
   window.addEventListener('load', async () => {
     if ('serviceWorker' in navigator) {
+      // Registrar nuestro SW propio primero (maneja cache y start_url)
+      try {
+        await navigator.serviceWorker.register('/sw.js');
+        console.log('[PWA] sw.js registrado');
+      } catch (e) {
+        console.warn('[PWA] Error registrando sw.js:', e);
+      }
+
       setTimeout(async () => {
         const registrations = await navigator.serviceWorker.getRegistrations();
         const isOneSignalRegistered = registrations.some(r => r.active && r.active.scriptURL.includes('OneSignalSDKWorker'));
-        
         if (!isOneSignalRegistered) {
           try {
-            const reg = await navigator.serviceWorker.register('/OneSignalSDKWorker.js');
-            console.log('ServiceWorker (PWA Fallback) registrado:', reg.scope);
+            await navigator.serviceWorker.register('/OneSignalSDKWorker.js');
+            console.log('[PWA] OneSignalSDKWorker registrado');
           } catch (e) {
-            console.warn('Error registrando SW Fallback:', e);
+            console.warn('[PWA] Error registrando OneSignalSDKWorker:', e);
           }
-        } else {
-          console.log('ServiceWorker ya gestionado por OneSignal.');
         }
       }, 3000);
     }

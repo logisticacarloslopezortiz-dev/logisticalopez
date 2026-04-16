@@ -23,21 +23,37 @@ try {
 
 // Service Worker para Logística López Ortiz
 
+const CACHE_NAME = 'tlc-static-v2';
+
+// Archivos críticos a pre-cachear en install
+const PRECACHE = [
+  './login.html',
+  './login-colaborador.html',
+  './manifest-cliente.json',
+  './manifest-colaborador.json'
+];
+
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  // Limpiar caches viejos
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
 });
-
-const CACHE_NAME = 'tlc-static-v1';
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.hostname.endsWith('.supabase.co')) return;
+
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       try {
@@ -46,15 +62,21 @@ self.addEventListener('fetch', (event) => {
         try { await cache.put(req, net.clone()); } catch (_){}
         return net;
       } catch (_) {
+        // Offline: devolver la página cacheada exacta que se solicitó
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(req);
-        return cached || Response.error();
+        if (cached) return cached;
+        // Fallback: si la URL solicitada no está cacheada, devolver login.html
+        const fallback = await cache.match('./login.html');
+        return fallback || Response.error();
       }
     })());
     return;
   }
-  const isStatic = /\.(?:js|css|png|jpg|jpeg|svg|ico|webp|gif|woff2?|ttf|eot|html)$/.test(url.pathname);
+
+  const isStatic = /\.(?:js|css|png|jpg|jpeg|svg|ico|webp|gif|woff2?|ttf|eot|html|json)$/.test(url.pathname);
   if (!isStatic) return;
+
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(req);

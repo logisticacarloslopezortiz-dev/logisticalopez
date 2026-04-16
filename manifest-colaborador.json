@@ -1,0 +1,32 @@
+{
+  "name": "LLO Colaborador",
+  "short_name": "LLO Collab",
+  "description": "Panel de trabajo para colaboradores de Logística López Ortiz.",
+  "start_url": "./login-colaborador.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0C375D",
+  "theme_color": "#0C375D",
+  "icons": [
+    {
+      "src": "img/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "img/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "img/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}
