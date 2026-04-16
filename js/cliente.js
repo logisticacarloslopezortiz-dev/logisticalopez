@@ -1091,12 +1091,18 @@ window.handleAfterCopy = handleAfterCopy;
  */
 function copyToClipboard(text) {
   text = String(text).replace(/[`<>]/g, '');
+  const goToTracking = () => {
+    setTimeout(() => {
+      window.location.href = `seguimiento.html?codigo=${encodeURIComponent(text)}`;
+    }, 800);
+  };
   try {
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       navigator.clipboard.writeText(text).then(() => {
-        window.showSuccess?.('ID copiado al portapapeles');
+        window.showSuccess?.('ID copiado — abriendo seguimiento...');
+        goToTracking();
       }).catch(() => {
-        window.showError?.('No se pudo copiar el ID');
+        goToTracking();
       });
       return;
     }
@@ -1107,14 +1113,14 @@ function copyToClipboard(text) {
     document.body.appendChild(ta);
     ta.focus();
     ta.select();
-    const ok = document.execCommand('copy');
+    document.execCommand('copy');
     document.body.removeChild(ta);
-    if (ok) {
-      window.showSuccess?.('ID copiado al portapapeles');
-    } else {
-      window.showError?.('No se pudo copiar el ID');
-    }
+    window.showSuccess?.('ID copiado — abriendo seguimiento...');
+    goToTracking();
   } catch {
+    goToTracking();
+  }
+}
     window.showError?.('No se pudo copiar el ID');
   }
 }

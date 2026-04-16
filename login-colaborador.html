@@ -70,8 +70,8 @@
     </div>
 
     <!-- Botón de Instalación PWA -->
-    <div class="mt-6 text-center">
-      <button type="button" id="install-app-btn" class="hidden inline-flex items-center justify-center gap-2 bg-acento hover:bg-yellow-500 text-azulOscuro px-4 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 shadow-md" aria-label="Instalar aplicación">
+    <div class="mt-6 text-center" id="install-btn-wrapper">
+      <button type="button" id="install-app-btn" class="inline-flex items-center justify-center gap-2 bg-acento hover:bg-yellow-500 text-azulOscuro px-4 py-2 rounded-lg font-semibold text-sm transition-all hover:scale-105 shadow-md" aria-label="Instalar aplicación">
         <i data-lucide="download" class="w-4 h-4"></i>
         <span>Instalar App</span>
       </button>
@@ -112,6 +112,52 @@
   <script src="js/supabase-config.js?v=20260310"></script>
   <script src="js/pwa.js?v=20260310"></script>
   <script src="js/login-colaborador.js?v=20260310"></script>
-  <script>lucide.createIcons();</script>
+  <script>
+    lucide.createIcons();
+
+    // ── PWA Install — captura temprana del beforeinstallprompt ──────────────
+    (function() {
+      let _prompt = null;
+      const btn = document.getElementById('install-app-btn');
+
+      // Registrar sw.js inmediatamente para que el browser lo considere instalable
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        _prompt = e;
+        if (btn) btn.classList.remove('hidden');
+      });
+
+      window.addEventListener('appinstalled', () => {
+        if (btn) btn.classList.add('hidden');
+        const badge = document.getElementById('app-installed-badge');
+        if (badge) badge.classList.remove('hidden');
+      });
+
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          if (_prompt) {
+            _prompt.prompt();
+            const { outcome } = await _prompt.userChoice;
+            _prompt = null;
+            if (outcome === 'accepted') btn.classList.add('hidden');
+          } else if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            // iOS: mostrar modal de instrucciones
+            const modal = document.getElementById('ios-install-modal');
+            if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+          }
+        });
+      }
+
+      // Mostrar botón en iOS aunque no haya beforeinstallprompt
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      if (!isStandalone && /iPhone|iPad|iPod/i.test(navigator.userAgent) && btn) {
+        btn.classList.remove('hidden');
+      }
+    })();
+  </script>
 </body>
 </html>

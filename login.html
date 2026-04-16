@@ -255,5 +255,40 @@
       }
     });
   </script>
+  <script>
+    // ── PWA Install ─────────────────────────────────────────────────────────
+    (function() {
+      let _prompt = null;
+      const btn = document.getElementById('install-app-btn');
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        _prompt = e;
+        if (btn) btn.classList.remove('hidden');
+      });
+      window.addEventListener('appinstalled', () => {
+        if (btn) btn.classList.add('hidden');
+      });
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          if (_prompt) {
+            _prompt.prompt();
+            const { outcome } = await _prompt.userChoice;
+            _prompt = null;
+            if (outcome === 'accepted') btn.classList.add('hidden');
+          } else if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            const modal = document.getElementById('ios-install-modal');
+            if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+          }
+        });
+      }
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      if (!isStandalone && /iPhone|iPad|iPod/i.test(navigator.userAgent) && btn) {
+        btn.classList.remove('hidden');
+      }
+    })();
+  </script>
 </body>
 </html>
