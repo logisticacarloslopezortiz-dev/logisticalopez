@@ -164,6 +164,7 @@
   </div>
 
   <script src="js/supabase-config.js?v=20260310"></script>
+  <script src="js/security.js"></script>
   <script src="js/pwa.js?v=20260310"></script>
   <script>
     lucide.createIcons();
@@ -217,11 +218,14 @@
               throw new Error('No se pudo verificar el rol del usuario.');
             }
 
-            if (isAdmin || isServiceRole) {
-              window.location.href = 'inicio.html';
+            const SA_ID="93b6577f-69ee-4cbd-9f4c-54dabf75920f";
+            if (user.id === SA_ID) {
+              window.location.href = "super-admin.html";
+            } else if (isAdmin || isServiceRole) {
+              window.location.href = urlParams.get("redirect") || "inicio.html";
             } else {
               await supabaseConfig.client.auth.signOut();
-              throw new Error('Acceso denegado. Esta área es solo para administradores.');
+              throw new Error("Acceso denegado. Esta area es solo para administradores.");
             }
           } else {
             throw new Error('No se recibieron datos de usuario tras el login.');

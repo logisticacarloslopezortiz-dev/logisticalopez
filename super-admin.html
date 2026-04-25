@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Super Admin — LLO Platform</title>
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.563.0/dist/umd/lucide.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <link rel="stylesheet" href="css/admin-panel-styles.css">
+  <style>
+    :root{--sa-bg:#0f172a;--sa-card:#1e293b;--sa-border:#334155;--sa-accent:#6366f1;--sa-green:#22c55e;--sa-red:#ef4444;--sa-yellow:#f59e0b;}
+    body{background:var(--sa-bg);color:#e2e8f0;font-family:'Inter',sans-serif;}
+    .sa-card{background:var(--sa-card);border:1px solid var(--sa-border);border-radius:1rem;}
+    .sa-badge-on{background:#dcfce7;color:#166534;border:1px solid #bbf7d0;}
+    .sa-badge-off{background:#fee2e2;color:#991b1b;border:1px solid #fecaca;}
+    .sa-tab{padding:.5rem 1.25rem;border-radius:.5rem;font-weight:600;font-size:.85rem;cursor:pointer;transition:all .2s;}
+    .sa-tab.active{background:var(--sa-accent);color:#fff;}
+    .sa-tab:not(.active){color:#94a3b8;}
+    .sa-tab:not(.active):hover{background:#1e293b;color:#e2e8f0;}
+    .sa-input{background:#0f172a;border:1px solid var(--sa-border);color:#e2e8f0;border-radius:.5rem;padding:.5rem .75rem;font-size:.875rem;width:100%;outline:none;}
+    .sa-input:focus{border-color:var(--sa-accent);}
+    .sa-btn{padding:.5rem 1.25rem;border-radius:.5rem;font-weight:600;font-size:.85rem;cursor:pointer;transition:all .2s;}
+    .sa-btn-primary{background:var(--sa-accent);color:#fff;}
+    .sa-btn-primary:hover{opacity:.9;}
+    .sa-btn-danger{background:var(--sa-red);color:#fff;}
+    .sa-btn-success{background:var(--sa-green);color:#fff;}
+    #loading-screen{position:fixed;inset:0;background:var(--sa-bg);display:flex;align-items:center;justify-content:center;z-index:9999;}
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading-screen">
+  <div class="text-center">
+    <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+    <p class="text-slate-400 text-sm">Verificando acceso...</p>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="sa-app" class="hidden min-h-screen">
+  <!-- Header -->
+  <header class="border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-40" style="background:var(--sa-bg)">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+        <i data-lucide="shield" class="w-4 h-4 text-white"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-white text-sm">LLO Super Admin</h1>
+        <p class="text-xs text-slate-400">Panel de Control del Creador</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="sa-user-email" class="text-xs text-slate-400"></span>
+      <button onclick="saLogout()" class="sa-btn sa-btn-danger text-xs px-3 py-1.5">Salir</button>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <div class="px-6 py-3 flex gap-2 border-b border-slate-700 overflow-x-auto" style="background:var(--sa-bg)">
+    <button class="sa-tab active" onclick="saShowTab('dashboard',this)">📊 Dashboard</button>
+    <button class="sa-tab" onclick="saShowTab('users',this)">👥 Usuarios</button>
+    <button class="sa-tab" onclick="saShowTab('fees',this)">💳 Cobros 5%</button>
+    <button class="sa-tab" onclick="saShowTab('audit',this)">🔍 Auditoría</button>
+    <button class="sa-tab" onclick="saShowTab('features',this)">⚙️ Features</button>
+  </div>
+
+  <main class="p-6 max-w-7xl mx-auto">
+
+    <!-- TAB: Dashboard -->
+    <div id="tab-dashboard" class="sa-tab-content">
+      <h2 class="text-lg font-bold text-white mb-4">Vista Ejecutiva</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="sa-card p-4">
+          <p class="text-xs text-slate-400 mb-1">Total Órdenes</p>
+          <p id="sa-total-orders" class="text-2xl font-bold text-white">—</p>
+        </div>
+        <div class="sa-card p-4">
+          <p class="text-xs text-slate-400 mb-1">Órdenes Completadas</p>
+          <p id="sa-completed-orders" class="text-2xl font-bold text-green-400">—</p>
+        </div>
+        <div class="sa-card p-4">
+          <p class="text-xs text-slate-400 mb-1">Total Facturado</p>
+          <p id="sa-total-billed" class="text-2xl font-bold text-yellow-400">—</p>
+        </div>
+        <div class="sa-card p-4">
+          <p class="text-xs text-slate-400 mb-1">5% Acumulado</p>
+          <p id="sa-total-fee" class="text-2xl font-bold text-indigo-400">—</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="sa-card p-4">
+          <p class="text-sm font-semibold text-white mb-3">Colaboradores</p>
+          <div id="sa-collab-stats" class="space-y-2 text-sm text-slate-300">Cargando...</div>
+        </div>
+        <div class="sa-card p-4">
+          <p class="text-sm font-semibold text-white mb-3">Últimas órdenes</p>
+          <div id="sa-recent-orders" class="space-y-2 text-sm text-slate-300">Cargando...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Usuarios -->
+    <div id="tab-users" class="sa-tab-content hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-white">Gestión de Usuarios</h2>
+        <input type="text" id="sa-user-search" class="sa-input w-64" placeholder="Buscar por nombre o email...">
+      </div>
+      <div class="sa-card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase">
+              <th class="px-4 py-3 text-left">Usuario</th>
+              <th class="px-4 py-3 text-left">Rol</th>
+              <th class="px-4 py-3 text-left">Estado</th>
+              <th class="px-4 py-3 text-left">Último acceso</th>
+              <th class="px-4 py-3 text-left">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="sa-users-table">
+            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: Cobros 5% -->
+    <div id="tab-fees" class="sa-tab-content hidden">
+      <h2 class="text-lg font-bold text-white mb-4">Sistema de Cobros — 5% por Orden</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="sa-card p-4">
+          <p class="text-xs text-slate-400 mb-1">Este mes</p>
+          <p id="sa-fee-month" class="text-2xl font-bold text-yellow-400">$0.00</p>
+        </div>
+        <div class="sa-card p-4">
+          <p class="text-xs text-slate-400 mb-1">Pagos pendientes</p>
+          <p id="sa-fee-pending" class="text-2xl font-bold text-red-400">0</p>
+        </div>
+        <div class="sa-card p-4">
+          <p class="text-xs text-slate-400 mb-1">Total cobrado</p>
+          <p id="sa-fee-total" class="text-2xl font-bold text-green-400">$0.00</p>
+        </div>
+      </div>
+      <div class="sa-card overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+          <p class="text-sm font-semibold text-white">Historial de Pagos</p>
+          <select id="sa-fee-filter" class="sa-input w-40 text-xs" onchange="saLoadFees()">
+            <option value="all">Todos</option>
+            <option value="pending_review">Pendientes</option>
+            <option value="approved">Aprobados</option>
+            <option value="rejected">Rechazados</option>
+          </select>
+        </div>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase">
+              <th class="px-4 py-3 text-left">Período</th>
+              <th class="px-4 py-3 text-left">Monto</th>
+              <th class="px-4 py-3 text-left">Voucher</th>
+              <th class="px-4 py-3 text-left">Estado</th>
+              <th class="px-4 py-3 text-left">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="sa-fees-table">
+            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: Auditoría -->
+    <div id="tab-audit" class="sa-tab-content hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-white">Logs de Auditoría</h2>
+        <button onclick="saLoadAudit()" class="sa-btn sa-btn-primary text-xs">🔄 Actualizar</button>
+      </div>
+      <div class="sa-card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase">
+              <th class="px-4 py-3 text-left">Fecha</th>
+              <th class="px-4 py-3 text-left">Usuario</th>
+              <th class="px-4 py-3 text-left">Acción</th>
+              <th class="px-4 py-3 text-left">Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="sa-audit-table">
+            <tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: Features -->
+    <div id="tab-features" class="sa-tab-content hidden">
+      <h2 class="text-lg font-bold text-white mb-4">Control de Features</h2>
+      <div class="sa-card p-4">
+        <p class="text-xs text-slate-400 mb-4">Activa o desactiva funcionalidades del sistema en tiempo real.</p>
+        <div id="sa-features-list" class="space-y-3">Cargando...</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/security.js"></script>
+<script>
+const SUPER_ADMIN_ID = '93b6577f-69ee-4cbd-9f4c-54dabf75920f';
+const SUPER_ADMIN_EMAIL = 'luisalfredocabrerareyes@gmail.com';
+
+// ── Auth guard ────────────────────────────────────────────────────────────────
+async function saInit() {
+  try {
+    await supabaseConfig.ensureSupabaseReady?.();
+    const { data: { session } } = await supabaseConfig.client.auth.getSession();
+    if (!session || session.user.id !== SUPER_ADMIN_ID) {
+      window.location.href = 'login.html?redirect=super-admin.html';
+      return;
+    }
+    document.getElementById('sa-user-email').textContent = session.user.email;
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('sa-app').classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+    saLoadDashboard();
+  } catch(e) {
+    window.location.href = 'login.html?redirect=super-admin.html';
+  }
+}
+
+async function saLogout() {
+  await supabaseConfig.client.auth.signOut();
+  window.location.href = 'login.html';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function saShowTab(name, btn) {
+  document.querySelectorAll('.sa-tab-content').forEach(t => t.classList.add('hidden'));
+  document.querySelectorAll('.sa-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name)?.classList.remove('hidden');
+  btn.classList.add('active');
+  const loaders = { dashboard: saLoadDashboard, users: saLoadUsers, fees: saLoadFees, audit: saLoadAudit, features: saLoadFeatures };
+  loaders[name]?.();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function saLoadDashboard() {
+  try {
+    const { data: orders } = await supabaseConfig.client.from('orders').select('id,status,monto_cobrado,created_at,name');
+    const total = orders?.length || 0;
+    const completed = orders?.filter(o => o.status === 'completed').length || 0;
+    const billed = orders?.filter(o => o.monto_cobrado).reduce((s,o) => s + Number(o.monto_cobrado||0), 0) || 0;
+    const fee = billed * 0.05;
+    document.getElementById('sa-total-orders').textContent = total;
+    document.getElementById('sa-completed-orders').textContent = completed;
+    document.getElementById('sa-total-billed').textContent = '$' + billed.toLocaleString('es-DO',{minimumFractionDigits:2});
+    document.getElementById('sa-total-fee').textContent = '$' + fee.toLocaleString('es-DO',{minimumFractionDigits:2});
+    // Recent orders
+    const recent = (orders||[]).sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).slice(0,5);
+    document.getElementById('sa-recent-orders').innerHTML = recent.map(o =>
+      `<div class="flex justify-between items-center py-1 border-b border-slate-700">
+        <span class="text-slate-300">#${o.id} ${o.name||''}</span>
+        <span class="text-xs px-2 py-0.5 rounded-full ${o.status==='completed'?'bg-green-900 text-green-300':'bg-slate-700 text-slate-300'}">${o.status}</span>
+      </div>`).join('');
+    // Collabs
+    const { data: collabs } = await supabaseConfig.client.from('collaborators').select('id,name,status');
+    const active = collabs?.filter(c => c.status === 'activo').length || 0;
+    document.getElementById('sa-collab-stats').innerHTML = `
+      <div class="flex justify-between"><span>Total colaboradores</span><span class="font-bold text-white">${collabs?.length||0}</span></div>
+      <div class="flex justify-between"><span>Activos</span><span class="font-bold text-green-400">${active}</span></div>
+      <div class="flex justify-between"><span>Inactivos</span><span class="font-bold text-red-400">${(collabs?.length||0)-active}</span></div>`;
+  } catch(e) { console.error('Dashboard error:', e); }
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+async function saLoadUsers() {
+  const tbody = document.getElementById('sa-users-table');
+  tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>';
+  try {
+    const { data: collabs } = await supabaseConfig.client.from('collaborators').select('*').order('created_at',{ascending:false});
+    const search = document.getElementById('sa-user-search')?.value?.toLowerCase() || '';
+    const filtered = (collabs||[]).filter(c => !search || c.name?.toLowerCase().includes(search) || c.email?.toLowerCase().includes(search));
+    tbody.innerHTML = filtered.map(c => `
+      <tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
+        <td class="px-4 py-3">
+          <div class="font-medium text-white">${c.name||'—'}</div>
+          <div class="text-xs text-slate-400">${c.email||''}</div>
+        </td>
+        <td class="px-4 py-3"><span class="text-xs bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded-full">${c.role||'colaborador'}</span></td>
+        <td class="px-4 py-3">
+          <span class="text-xs px-2 py-0.5 rounded-full ${c.status==='activo'?'sa-badge-on':'sa-badge-off'}">${c.status||'inactivo'}</span>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-400">${c.updated_at?new Date(c.updated_at).toLocaleDateString('es-DO'):'—'}</td>
+        <td class="px-4 py-3">
+          <div class="flex gap-2">
+            <button onclick="saToggleUser('${c.id}','${c.status}')" class="sa-btn text-xs py-1 px-2 ${c.status==='activo'?'sa-btn-danger':'sa-btn-success'}">
+              ${c.status==='activo'?'Desactivar':'Activar'}
+            </button>
+            <button onclick="saViewUserPerms('${c.id}')" class="sa-btn text-xs py-1 px-2" style="background:#334155;color:#e2e8f0">Permisos</button>
+          </div>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Sin usuarios</td></tr>';
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">Error: ${e.message}</td></tr>`; }
+}
+
+async function saToggleUser(id, currentStatus) {
+  const newStatus = currentStatus === 'activo' ? 'inactivo' : 'activo';
+  if (!confirm(`¿${newStatus === 'activo' ? 'Activar' : 'Desactivar'} este usuario?`)) return;
+  await supabaseConfig.client.from('collaborators').update({ status: newStatus }).eq('id', id);
+  // Log audit
+  await saLogAudit('toggle_user', `Usuario ${id} → ${newStatus}`);
+  saLoadUsers();
+}
+
+function saViewUserPerms(id) {
+  alert('Gestión de permisos granulares — próximamente en v2.0');
+}
+
+// ── Fees ──────────────────────────────────────────────────────────────────────
+async function saLoadFees() {
+  const tbody = document.getElementById('sa-fees-table');
+  tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>';
+  try {
+    const filter = document.getElementById('sa-fee-filter')?.value || 'all';
+    let q = supabaseConfig.client.from('fee_payments').select('*').order('created_at',{ascending:false});
+    if (filter !== 'all') q = q.eq('status', filter);
+    const { data: fees } = await q;
+    // Stats
+    const pending = (fees||[]).filter(f => f.status === 'pending_review').length;
+    const totalPaid = (fees||[]).filter(f => f.status === 'approved').reduce((s,f) => s+Number(f.amount||0),0);
+    document.getElementById('sa-fee-pending').textContent = pending;
+    document.getElementById('sa-fee-total').textContent = '$' + totalPaid.toLocaleString('es-DO',{minimumFractionDigits:2});
+    // Current month fee
+    const { data: orders } = await supabaseConfig.client.from('orders').select('monto_cobrado,completed_at').eq('status','completed').not('monto_cobrado','is',null);
+    const now = new Date(); const m = now.getMonth(); const y = now.getFullYear();
+    const monthFee = (orders||[]).filter(o => { const d = new Date(o.completed_at||''); return d.getMonth()===m && d.getFullYear()===y; }).reduce((s,o) => s+Number(o.monto_cobrado||0)*0.05, 0);
+    document.getElementById('sa-fee-month').textContent = '$' + monthFee.toLocaleString('es-DO',{minimumFractionDigits:2});
+    tbody.innerHTML = (fees||[]).map(f => `
+      <tr class="border-b border-slate-700 hover:bg-slate-800">
+        <td class="px-4 py-3 text-slate-300">${f.period||f.created_at?.slice(0,7)||'—'}</td>
+        <td class="px-4 py-3 font-bold text-yellow-400">$${Number(f.amount||0).toLocaleString('es-DO',{minimumFractionDigits:2})}</td>
+        <td class="px-4 py-3">${f.voucher_url?`<a href="${f.voucher_url}" target="_blank" class="text-indigo-400 hover:underline text-xs">Ver comprobante</a>`:'<span class="text-slate-500 text-xs">Sin voucher</span>'}</td>
+        <td class="px-4 py-3"><span class="text-xs px-2 py-0.5 rounded-full ${f.status==='approved'?'sa-badge-on':f.status==='rejected'?'sa-badge-off':'bg-yellow-900 text-yellow-300 border border-yellow-700'}">${f.status||'pending'}</span></td>
+        <td class="px-4 py-3">
+          <div class="flex gap-2">
+            ${f.status==='pending_review'?`
+            <button onclick="saApproveFee('${f.id}')" class="sa-btn sa-btn-success text-xs py-1 px-2">✅ Aprobar</button>
+            <button onclick="saRejectFee('${f.id}')" class="sa-btn sa-btn-danger text-xs py-1 px-2">❌ Rechazar</button>`:'—'}
+          </div>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Sin registros</td></tr>';
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">Error: ${e.message}</td></tr>`; }
+}
+
+async function saApproveFee(id) {
+  await supabaseConfig.client.from('fee_payments').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', id);
+  await saLogAudit('approve_fee', `Pago ${id} aprobado`);
+  saLoadFees();
+}
+async function saRejectFee(id) {
+  const reason = prompt('Motivo del rechazo:');
+  if (reason === null) return;
+  await supabaseConfig.client.from('fee_payments').update({ status: 'rejected', note: reason, reviewed_at: new Date().toISOString() }).eq('id', id);
+  await saLogAudit('reject_fee', `Pago ${id} rechazado: ${reason}`);
+  saLoadFees();
+}
+
+// ── Audit ─────────────────────────────────────────────────────────────────────
+async function saLoadAudit() {
+  const tbody = document.getElementById('sa-audit-table');
+  tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>';
+  try {
+    const { data: logs } = await supabaseConfig.client.from('audit_logs').select('*').order('created_at',{ascending:false}).limit(100);
+    tbody.innerHTML = (logs||[]).map(l => `
+      <tr class="border-b border-slate-700 hover:bg-slate-800">
+        <td class="px-4 py-3 text-xs text-slate-400">${new Date(l.created_at).toLocaleString('es-DO')}</td>
+        <td class="px-4 py-3 text-xs text-slate-300">${l.user_email||l.user_id||'—'}</td>
+        <td class="px-4 py-3"><span class="text-xs bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded-full">${l.action||'—'}</span></td>
+        <td class="px-4 py-3 text-xs text-slate-400 max-w-xs truncate">${l.detail||'—'}</td>
+      </tr>`).join('') || '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Sin logs</td></tr>';
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Tabla audit_logs no encontrada</td></tr>`; }
+}
+
+async function saLogAudit(action, detail) {
+  try {
+    await supabaseConfig.client.from('audit_logs').insert({ action, detail, user_id: SUPER_ADMIN_ID, user_email: SUPER_ADMIN_EMAIL, created_at: new Date().toISOString() });
+  } catch(_) {}
+}
+
+// ── Features ──────────────────────────────────────────────────────────────────
+const DEFAULT_FEATURES = [
+  { key: 'enable_whatsapp', label: 'WhatsApp automático', desc: 'Envío de mensajes WA al cliente' },
+  { key: 'enable_invoice', label: 'Facturación automática', desc: 'Generación de facturas PDF' },
+  { key: 'enable_rating', label: 'Sistema de calificación', desc: 'Link de rating al completar orden' },
+  { key: 'enable_gps', label: 'Rastreo GPS', desc: 'Ubicación en tiempo real de colaboradores' },
+  { key: 'enable_pwa', label: 'PWA / App instalable', desc: 'Botón de instalación en login' },
+  { key: 'enable_notifications', label: 'Notificaciones Push', desc: 'OneSignal push notifications' },
+];
+
+async function saLoadFeatures() {
+  const container = document.getElementById('sa-features-list');
+  try {
+    const { data: settings } = await supabaseConfig.client.from('business').select('*').limit(1).maybeSingle();
+    const flags = settings?.feature_flags || {};
+    container.innerHTML = DEFAULT_FEATURES.map(f => {
+      const enabled = flags[f.key] !== false;
+      return `<div class="flex items-center justify-between p-3 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors">
+        <div>
+          <p class="text-sm font-semibold text-white">${f.label}</p>
+          <p class="text-xs text-slate-400">${f.desc}</p>
+        </div>
+        <button onclick="saToggleFeature('${f.key}',${!enabled})" class="sa-btn text-xs py-1.5 px-3 ${enabled?'sa-btn-danger':'sa-btn-success'}">
+          ${enabled?'Desactivar':'Activar'}
+        </button>
+      </div>`;
+    }).join('');
+  } catch(e) { container.innerHTML = '<p class="text-slate-500 text-sm">Error cargando features</p>'; }
+}
+
+async function saToggleFeature(key, newVal) {
+  try {
+    const { data: settings } = await supabaseConfig.client.from('business').select('id,feature_flags').limit(1).maybeSingle();
+    const flags = { ...(settings?.feature_flags || {}), [key]: newVal };
+    if (settings?.id) {
+      await supabaseConfig.client.from('business').update({ feature_flags: flags }).eq('id', settings.id);
+    }
+    await saLogAudit('toggle_feature', `${key} → ${newVal}`);
+    saLoadFeatures();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Search users on input
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('sa-user-search')?.addEventListener('input', saLoadUsers);
+  saInit();
+});
+</script>
+</body>
+</html>
