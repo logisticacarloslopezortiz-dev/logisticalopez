@@ -1,442 +1,434 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Super Admin — LLO Platform</title>
+  <title>Creator Panel — LLO Platform</title>
   <link rel="icon" type="image/x-icon" href="img/favicon.ico"/>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.563.0/dist/umd/lucide.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-  <link rel="stylesheet" href="css/admin-panel-styles.css">
   <style>
-    :root{--sa-bg:#0f172a;--sa-card:#1e293b;--sa-border:#334155;--sa-accent:#6366f1;--sa-green:#22c55e;--sa-red:#ef4444;--sa-yellow:#f59e0b;}
-    body{background:var(--sa-bg);color:#e2e8f0;font-family:'Inter',sans-serif;}
-    .sa-card{background:var(--sa-card);border:1px solid var(--sa-border);border-radius:1rem;}
-    .sa-badge-on{background:#dcfce7;color:#166534;border:1px solid #bbf7d0;}
-    .sa-badge-off{background:#fee2e2;color:#991b1b;border:1px solid #fecaca;}
-    .sa-tab{padding:.5rem 1.25rem;border-radius:.5rem;font-weight:600;font-size:.85rem;cursor:pointer;transition:all .2s;}
-    .sa-tab.active{background:var(--sa-accent);color:#fff;}
-    .sa-tab:not(.active){color:#94a3b8;}
-    .sa-tab:not(.active):hover{background:#1e293b;color:#e2e8f0;}
-    .sa-input{background:#0f172a;border:1px solid var(--sa-border);color:#e2e8f0;border-radius:.5rem;padding:.5rem .75rem;font-size:.875rem;width:100%;outline:none;}
-    .sa-input:focus{border-color:var(--sa-accent);}
-    .sa-btn{padding:.5rem 1.25rem;border-radius:.5rem;font-weight:600;font-size:.85rem;cursor:pointer;transition:all .2s;}
-    .sa-btn-primary{background:var(--sa-accent);color:#fff;}
-    .sa-btn-primary:hover{opacity:.9;}
-    .sa-btn-danger{background:var(--sa-red);color:#fff;}
-    .sa-btn-success{background:var(--sa-green);color:#fff;}
-    #loading-screen{position:fixed;inset:0;background:var(--sa-bg);display:flex;align-items:center;justify-content:center;z-index:9999;}
+    :root {
+      --bg: #060b18; --surface: #0d1526; --card: #111d35;
+      --border: #1e2d4a; --accent: #4f6ef7; --accent2: #7c3aed;
+      --green: #10b981; --red: #ef4444; --yellow: #f59e0b; --cyan: #06b6d4;
+      --text: #e2e8f0; --muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; margin: 0; }
+    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--surface); } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Sidebar */
+    #sa-sidebar { width: 240px; background: var(--surface); border-right: 1px solid var(--border); height: 100vh; position: fixed; top: 0; left: 0; display: flex; flex-direction: column; z-index: 50; transition: transform .3s; }
+    #sa-sidebar .logo-area { padding: 1.5rem 1.25rem 1rem; border-bottom: 1px solid var(--border); }
+    #sa-sidebar nav a, #sa-sidebar nav button { display: flex; align-items: center; gap: .75rem; padding: .65rem 1rem; border-radius: .5rem; font-size: .82rem; font-weight: 500; color: var(--muted); text-decoration: none; width: 100%; background: none; border: none; cursor: pointer; transition: all .2s; margin-bottom: 2px; }
+    #sa-sidebar nav a:hover, #sa-sidebar nav button:hover { background: var(--card); color: var(--text); }
+    #sa-sidebar nav a.active { background: linear-gradient(135deg, rgba(79,110,247,.2), rgba(124,58,237,.15)); color: #fff; border: 1px solid rgba(79,110,247,.3); }
+    #sa-sidebar nav .nav-section { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: .75rem 1rem .25rem; }
+
+    /* Main */
+    #sa-main { margin-left: 240px; min-height: 100vh; }
+    #sa-topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: .85rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 40; }
+
+    /* Cards */
+    .sa-card { background: var(--card); border: 1px solid var(--border); border-radius: .875rem; }
+    .sa-stat { background: var(--card); border: 1px solid var(--border); border-radius: .875rem; padding: 1.25rem; position: relative; overflow: hidden; }
+    .sa-stat::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .sa-stat.blue::before { background: linear-gradient(90deg, var(--accent), var(--cyan)); }
+    .sa-stat.green::before { background: linear-gradient(90deg, var(--green), #34d399); }
+    .sa-stat.purple::before { background: linear-gradient(90deg, var(--accent2), #a78bfa); }
+    .sa-stat.yellow::before { background: linear-gradient(90deg, var(--yellow), #fcd34d); }
+    .sa-stat.red::before { background: linear-gradient(90deg, var(--red), #f87171); }
+
+    /* Table */
+    .sa-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .sa-table th { padding: .65rem 1rem; text-align: left; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--surface); }
+    .sa-table td { padding: .7rem 1rem; border-bottom: 1px solid var(--border); color: var(--text); }
+    .sa-table tr:hover td { background: rgba(255,255,255,.02); }
+    .sa-table tr:last-child td { border-bottom: none; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; gap: .25rem; font-size: .7rem; font-weight: 600; padding: .2rem .6rem; border-radius: 9999px; }
+    .badge-green { background: rgba(16,185,129,.15); color: #34d399; border: 1px solid rgba(16,185,129,.3); }
+    .badge-red { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+    .badge-yellow { background: rgba(245,158,11,.15); color: #fcd34d; border: 1px solid rgba(245,158,11,.3); }
+    .badge-blue { background: rgba(79,110,247,.15); color: #818cf8; border: 1px solid rgba(79,110,247,.3); }
+    .badge-purple { background: rgba(124,58,237,.15); color: #a78bfa; border: 1px solid rgba(124,58,237,.3); }
+
+    /* Buttons */
+    .sa-btn { padding: .45rem 1rem; border-radius: .5rem; font-size: .8rem; font-weight: 600; cursor: pointer; border: none; transition: all .2s; }
+    .sa-btn-primary { background: var(--accent); color: #fff; }
+    .sa-btn-primary:hover { opacity: .85; }
+    .sa-btn-danger { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+    .sa-btn-danger:hover { background: rgba(239,68,68,.25); }
+    .sa-btn-success { background: rgba(16,185,129,.15); color: #34d399; border: 1px solid rgba(16,185,129,.3); }
+    .sa-btn-success:hover { background: rgba(16,185,129,.25); }
+    .sa-btn-ghost { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+    .sa-btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+
+    /* Input */
+    .sa-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: .5rem; padding: .5rem .75rem; font-size: .82rem; outline: none; transition: border-color .2s; }
+    .sa-input:focus { border-color: var(--accent); }
+
+    /* Tab content */
+    .sa-tab-content { display: none; } .sa-tab-content.active { display: block; }
+
+    /* Loading */
+    #sa-loading { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+
+    /* Pulse dot */
+    .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse-anim 2s infinite; display: inline-block; }
+    @keyframes pulse-anim { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+    /* Mobile sidebar */
+    @media(max-width:768px) { #sa-sidebar{transform:translateX(-100%)} #sa-sidebar.open{transform:translateX(0)} #sa-main{margin-left:0} }
+
+    /* Gradient text */
+    .grad-text { background: linear-gradient(135deg, var(--accent), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
   </style>
 </head>
 <body>
 
 <!-- Loading -->
-<div id="loading-screen">
+<div id="sa-loading">
   <div class="text-center">
-    <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-    <p class="text-slate-400 text-sm">Verificando acceso...</p>
+    <div style="width:48px;height:48px;border:3px solid #1e2d4a;border-top-color:#4f6ef7;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem"></div>
+    <p style="color:#64748b;font-size:.85rem">Verificando acceso de creador...</p>
   </div>
 </div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
-<!-- Main -->
-<div id="sa-app" class="hidden min-h-screen">
-  <!-- Header -->
-  <header class="border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-40" style="background:var(--sa-bg)">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-        <i data-lucide="shield" class="w-4 h-4 text-white"></i>
-      </div>
-      <div>
-        <h1 class="font-bold text-white text-sm">LLO Super Admin</h1>
-        <p class="text-xs text-slate-400">Panel de Control del Creador</p>
-      </div>
-    </div>
-    <div class="flex items-center gap-3">
-      <span id="sa-user-email" class="text-xs text-slate-400"></span>
-      <button onclick="saLogout()" class="sa-btn sa-btn-danger text-xs px-3 py-1.5">Salir</button>
-    </div>
-  </header>
+<!-- App -->
+<div id="sa-app" style="display:none">
 
-  <!-- Tabs -->
-  <div class="px-6 py-3 flex gap-2 border-b border-slate-700 overflow-x-auto" style="background:var(--sa-bg)">
-    <button class="sa-tab active" onclick="saShowTab('dashboard',this)">📊 Dashboard</button>
-    <button class="sa-tab" onclick="saShowTab('users',this)">👥 Usuarios</button>
-    <button class="sa-tab" onclick="saShowTab('fees',this)">💳 Cobros 5%</button>
-    <button class="sa-tab" onclick="saShowTab('audit',this)">🔍 Auditoría</button>
-    <button class="sa-tab" onclick="saShowTab('features',this)">⚙️ Features</button>
-  </div>
-
-  <main class="p-6 max-w-7xl mx-auto">
-
-    <!-- TAB: Dashboard -->
-    <div id="tab-dashboard" class="sa-tab-content">
-      <h2 class="text-lg font-bold text-white mb-4">Vista Ejecutiva</h2>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div class="sa-card p-4">
-          <p class="text-xs text-slate-400 mb-1">Total Órdenes</p>
-          <p id="sa-total-orders" class="text-2xl font-bold text-white">—</p>
+  <!-- Sidebar -->
+  <aside id="sa-sidebar">
+    <div class="logo-area">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
+        <div style="width:36px;height:36px;background:linear-gradient(135deg,#4f6ef7,#7c3aed);border-radius:.625rem;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i data-lucide="shield-check" style="width:18px;height:18px;color:#fff"></i>
         </div>
-        <div class="sa-card p-4">
-          <p class="text-xs text-slate-400 mb-1">Órdenes Completadas</p>
-          <p id="sa-completed-orders" class="text-2xl font-bold text-green-400">—</p>
-        </div>
-        <div class="sa-card p-4">
-          <p class="text-xs text-slate-400 mb-1">Total Facturado</p>
-          <p id="sa-total-billed" class="text-2xl font-bold text-yellow-400">—</p>
-        </div>
-        <div class="sa-card p-4">
-          <p class="text-xs text-slate-400 mb-1">5% Acumulado</p>
-          <p id="sa-total-fee" class="text-2xl font-bold text-indigo-400">—</p>
+        <div>
+          <div style="font-weight:800;font-size:.9rem;color:#fff">Creator Panel</div>
+          <div style="font-size:.68rem;color:#64748b">LLO Platform v2.0</div>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="sa-card p-4">
-          <p class="text-sm font-semibold text-white mb-3">Colaboradores</p>
-          <div id="sa-collab-stats" class="space-y-2 text-sm text-slate-300">Cargando...</div>
-        </div>
-        <div class="sa-card p-4">
-          <p class="text-sm font-semibold text-white mb-3">Últimas órdenes</p>
-          <div id="sa-recent-orders" class="space-y-2 text-sm text-slate-300">Cargando...</div>
-        </div>
+      <div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:.5rem">
+        <span class="pulse-dot"></span>
+        <span style="font-size:.72rem;color:#34d399;font-weight:600">Sistema activo</span>
       </div>
     </div>
 
-    <!-- TAB: Usuarios -->
-    <div id="tab-users" class="sa-tab-content hidden">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-bold text-white">Gestión de Usuarios</h2>
-        <input type="text" id="sa-user-search" class="sa-input w-64" placeholder="Buscar por nombre o email...">
+    <nav style="flex:1;padding:.75rem .75rem;overflow-y:auto">
+      <div class="nav-section">Principal</div>
+      <a href="#" class="active" onclick="saNav('dashboard',this)"><i data-lucide="layout-dashboard" style="width:16px;height:16px"></i> Dashboard</a>
+      <a href="#" onclick="saNav('analytics',this)"><i data-lucide="bar-chart-3" style="width:16px;height:16px"></i> Analíticas</a>
+      <a href="#" onclick="saNav('behavior',this)"><i data-lucide="activity" style="width:16px;height:16px"></i> Comportamiento</a>
+
+      <div class="nav-section">Gestión</div>
+      <a href="#" onclick="saNav('users',this)"><i data-lucide="users" style="width:16px;height:16px"></i> Usuarios</a>
+      <a href="#" onclick="saNav('orders',this)"><i data-lucide="package" style="width:16px;height:16px"></i> Órdenes</a>
+      <a href="#" onclick="saNav('fees',this)"><i data-lucide="credit-card" style="width:16px;height:16px"></i> Cobros 5%</a>
+
+      <div class="nav-section">Sistema</div>
+      <a href="#" onclick="saNav('features',this)"><i data-lucide="toggle-left" style="width:16px;height:16px"></i> Features</a>
+      <a href="#" onclick="saNav('audit',this)"><i data-lucide="file-search" style="width:16px;height:16px"></i> Auditoría</a>
+
+    </nav>
+
+    <div style="padding:.75rem;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;background:var(--bg);border-radius:.5rem;margin-bottom:.5rem">
+        <div style="width:28px;height:28px;background:linear-gradient(135deg,#4f6ef7,#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0">SA</div>
+        <div style="overflow:hidden">
+          <div style="font-size:.75rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Super Admin</div>
+          <div id="sa-email-display" style="font-size:.65rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        </div>
       </div>
-      <div class="sa-card overflow-hidden">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase">
-              <th class="px-4 py-3 text-left">Usuario</th>
-              <th class="px-4 py-3 text-left">Rol</th>
-              <th class="px-4 py-3 text-left">Estado</th>
-              <th class="px-4 py-3 text-left">Último acceso</th>
-              <th class="px-4 py-3 text-left">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="sa-users-table">
-            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>
-          </tbody>
-        </table>
+      <button onclick="saLogout()" class="sa-btn sa-btn-danger" style="width:100%;justify-content:center;display:flex;align-items:center;gap:.4rem">
+        <i data-lucide="log-out" style="width:14px;height:14px"></i> Cerrar sesión
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div id="sa-main">
+    <!-- Topbar -->
+    <div id="sa-topbar">
+      <div style="display:flex;align-items:center;gap:.75rem">
+        <button id="sa-menu-btn" onclick="document.getElementById('sa-sidebar').classList.toggle('open')" style="display:none;background:none;border:none;color:var(--muted);cursor:pointer">
+          <i data-lucide="menu" style="width:20px;height:20px"></i>
+        </button>
+        <div>
+          <h1 id="sa-page-title" style="font-size:1rem;font-weight:700;color:#fff;margin:0">Dashboard</h1>
+          <p id="sa-page-sub" style="font-size:.72rem;color:var(--muted);margin:0">Vista ejecutiva del sistema</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:.75rem">
+        <button onclick="saRefresh()" class="sa-btn sa-btn-ghost" style="display:flex;align-items:center;gap:.4rem">
+          <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Actualizar
+        </button>
+        <div id="sa-last-update" style="font-size:.7rem;color:var(--muted)"></div>
       </div>
     </div>
 
-    <!-- TAB: Cobros 5% -->
-    <div id="tab-fees" class="sa-tab-content hidden">
-      <h2 class="text-lg font-bold text-white mb-4">Sistema de Cobros — 5% por Orden</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="sa-card p-4">
-          <p class="text-xs text-slate-400 mb-1">Este mes</p>
-          <p id="sa-fee-month" class="text-2xl font-bold text-yellow-400">$0.00</p>
+    <div style="padding:1.5rem">
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <div id="tab-dashboard" class="sa-tab-content active">
+        <!-- Stats row -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
+          <div class="sa-stat blue">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <p style="font-size:.72rem;color:var(--muted);margin:0 0 .4rem">Total Órdenes</p>
+                <p id="st-total" style="font-size:1.75rem;font-weight:800;color:#fff;margin:0">—</p>
+                <p id="st-total-sub" style="font-size:.7rem;color:var(--muted);margin:.25rem 0 0">este mes</p>
+              </div>
+              <div style="width:40px;height:40px;background:rgba(79,110,247,.15);border-radius:.625rem;display:flex;align-items:center;justify-content:center">
+                <i data-lucide="package" style="width:18px;height:18px;color:#818cf8"></i>
+              </div>
+            </div>
+          </div>
+          <div class="sa-stat green">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <p style="font-size:.72rem;color:var(--muted);margin:0 0 .4rem">Completadas</p>
+                <p id="st-completed" style="font-size:1.75rem;font-weight:800;color:#fff;margin:0">—</p>
+                <p id="st-rate" style="font-size:.7rem;color:#34d399;margin:.25rem 0 0">tasa de éxito</p>
+              </div>
+              <div style="width:40px;height:40px;background:rgba(16,185,129,.15);border-radius:.625rem;display:flex;align-items:center;justify-content:center">
+                <i data-lucide="check-circle" style="width:18px;height:18px;color:#34d399"></i>
+              </div>
+            </div>
+          </div>
+          <div class="sa-stat yellow">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <p style="font-size:.72rem;color:var(--muted);margin:0 0 .4rem">Total Facturado</p>
+                <p id="st-billed" style="font-size:1.75rem;font-weight:800;color:#fff;margin:0">—</p>
+                <p style="font-size:.7rem;color:var(--muted);margin:.25rem 0 0">acumulado</p>
+              </div>
+              <div style="width:40px;height:40px;background:rgba(245,158,11,.15);border-radius:.625rem;display:flex;align-items:center;justify-content:center">
+                <i data-lucide="dollar-sign" style="width:18px;height:18px;color:#fcd34d"></i>
+              </div>
+            </div>
+          </div>
+          <div class="sa-stat purple">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <p style="font-size:.72rem;color:var(--muted);margin:0 0 .4rem">5% Plataforma</p>
+                <p id="st-fee" style="font-size:1.75rem;font-weight:800;color:#fff;margin:0">—</p>
+                <p id="st-fee-pending" style="font-size:.7rem;color:#f59e0b;margin:.25rem 0 0">pendiente de cobro</p>
+              </div>
+              <div style="width:40px;height:40px;background:rgba(124,58,237,.15);border-radius:.625rem;display:flex;align-items:center;justify-content:center">
+                <i data-lucide="percent" style="width:18px;height:18px;color:#a78bfa"></i>
+              </div>
+            </div>
+          </div>
+          <div class="sa-stat blue">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <p style="font-size:.72rem;color:var(--muted);margin:0 0 .4rem">Colaboradores</p>
+                <p id="st-collabs" style="font-size:1.75rem;font-weight:800;color:#fff;margin:0">—</p>
+                <p id="st-collabs-active" style="font-size:.7rem;color:#34d399;margin:.25rem 0 0">activos</p>
+              </div>
+              <div style="width:40px;height:40px;background:rgba(6,182,212,.15);border-radius:.625rem;display:flex;align-items:center;justify-content:center">
+                <i data-lucide="users" style="width:18px;height:18px;color:#22d3ee"></i>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="sa-card p-4">
-          <p class="text-xs text-slate-400 mb-1">Pagos pendientes</p>
-          <p id="sa-fee-pending" class="text-2xl font-bold text-red-400">0</p>
+
+        <!-- Charts row -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1.5rem">
+          <div class="sa-card" style="padding:1.25rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+              <div>
+                <h3 style="font-size:.9rem;font-weight:700;color:#fff;margin:0">Órdenes por mes</h3>
+                <p style="font-size:.72rem;color:var(--muted);margin:.2rem 0 0">Últimos 6 meses</p>
+              </div>
+              <span class="badge badge-blue">Tendencia</span>
+            </div>
+            <canvas id="chart-orders-month" height="200"></canvas>
+          </div>
+          <div class="sa-card" style="padding:1.25rem">
+            <div style="margin-bottom:1rem">
+              <h3 style="font-size:.9rem;font-weight:700;color:#fff;margin:0">Por estado</h3>
+              <p style="font-size:.72rem;color:var(--muted);margin:.2rem 0 0">Distribución actual</p>
+            </div>
+            <canvas id="chart-status-pie" height="200"></canvas>
+          </div>
         </div>
-        <div class="sa-card p-4">
-          <p class="text-xs text-slate-400 mb-1">Total cobrado</p>
-          <p id="sa-fee-total" class="text-2xl font-bold text-green-400">$0.00</p>
+
+        <!-- Recent + Top services -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div class="sa-card">
+            <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+              <h3 style="font-size:.85rem;font-weight:700;color:#fff;margin:0">Órdenes recientes</h3>
+              <a href="inicio.html" target="_blank" style="font-size:.72rem;color:var(--accent);text-decoration:none">Ver todas →</a>
+            </div>
+            <div id="sa-recent-orders" style="padding:.5rem 0"></div>
+          </div>
+          <div class="sa-card">
+            <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border)">
+              <h3 style="font-size:.85rem;font-weight:700;color:#fff;margin:0">Top servicios solicitados</h3>
+            </div>
+            <div id="sa-top-services" style="padding:.75rem 1.25rem;space-y:.5rem"></div>
+          </div>
         </div>
       </div>
-      <div class="sa-card overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-          <p class="text-sm font-semibold text-white">Historial de Pagos</p>
-          <select id="sa-fee-filter" class="sa-input w-40 text-xs" onchange="saLoadFees()">
-            <option value="all">Todos</option>
-            <option value="pending_review">Pendientes</option>
-            <option value="approved">Aprobados</option>
-            <option value="rejected">Rechazados</option>
+
+      <!-- ═══ ANALYTICS ═══ -->
+      <div id="tab-analytics" class="sa-tab-content">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+          <div class="sa-card" style="padding:1.25rem">
+            <h3 style="font-size:.9rem;font-weight:700;color:#fff;margin:0 0 1rem">Ingresos mensuales</h3>
+            <canvas id="chart-revenue" height="220"></canvas>
+          </div>
+          <div class="sa-card" style="padding:1.25rem">
+            <h3 style="font-size:.9rem;font-weight:700;color:#fff;margin:0 0 1rem">5% Plataforma por mes</h3>
+            <canvas id="chart-fee-monthly" height="220"></canvas>
+          </div>
+        </div>
+        <div class="sa-card" style="padding:1.25rem">
+          <h3 style="font-size:.9rem;font-weight:700;color:#fff;margin:0 0 1rem">Rendimiento por colaborador</h3>
+          <canvas id="chart-collab-perf" height="160"></canvas>
+        </div>
+      </div>
+
+      <!-- ═══ BEHAVIOR ═══ -->
+      <div id="tab-behavior" class="sa-tab-content">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+          <div class="sa-card" style="padding:1.25rem">
+            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem">
+              <div style="width:32px;height:32px;background:rgba(79,110,247,.15);border-radius:.5rem;display:flex;align-items:center;justify-content:center"><i data-lucide="user" style="width:16px;height:16px;color:#818cf8"></i></div>
+              <h3 style="font-size:.85rem;font-weight:700;color:#fff;margin:0">Clientes</h3>
+            </div>
+            <div id="beh-clients" style="font-size:.8rem;color:var(--muted);space-y:.4rem"></div>
+          </div>
+          <div class="sa-card" style="padding:1.25rem">
+            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem">
+              <div style="width:32px;height:32px;background:rgba(16,185,129,.15);border-radius:.5rem;display:flex;align-items:center;justify-content:center"><i data-lucide="truck" style="width:16px;height:16px;color:#34d399"></i></div>
+              <h3 style="font-size:.85rem;font-weight:700;color:#fff;margin:0">Colaboradores</h3>
+            </div>
+            <div id="beh-collabs" style="font-size:.8rem;color:var(--muted)"></div>
+          </div>
+          <div class="sa-card" style="padding:1.25rem">
+            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem">
+              <div style="width:32px;height:32px;background:rgba(245,158,11,.15);border-radius:.5rem;display:flex;align-items:center;justify-content:center"><i data-lucide="settings" style="width:16px;height:16px;color:#fcd34d"></i></div>
+              <h3 style="font-size:.85rem;font-weight:700;color:#fff;margin:0">Administrador</h3>
+            </div>
+            <div id="beh-admin" style="font-size:.8rem;color:var(--muted)"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div class="sa-card" style="padding:1.25rem">
+            <h3 style="font-size:.9rem;font-weight:700;color:#fff;margin:0 0 1rem">Frecuencia de solicitudes por día</h3>
+            <canvas id="chart-freq-day" height="200"></canvas>
+          </div>
+          <div class="sa-card" style="padding:1.25rem">
+            <h3 style="font-size:.9rem;font-weight:700;color:#fff;margin:0 0 1rem">Hora pico de solicitudes</h3>
+            <canvas id="chart-freq-hour" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ USERS ═══ -->
+      <div id="tab-users" class="sa-tab-content">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem">
+          <input type="text" id="sa-user-search" class="sa-input" placeholder="Buscar por nombre o email..." style="flex:1;max-width:320px" oninput="saLoadUsers()">
+          <select id="sa-user-role-filter" class="sa-input" style="width:140px" onchange="saLoadUsers()">
+            <option value="all">Todos los roles</option>
+            <option value="colaborador">Colaboradores</option>
+            <option value="administrador">Administradores</option>
           </select>
         </div>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase">
-              <th class="px-4 py-3 text-left">Período</th>
-              <th class="px-4 py-3 text-left">Monto</th>
-              <th class="px-4 py-3 text-left">Voucher</th>
-              <th class="px-4 py-3 text-left">Estado</th>
-              <th class="px-4 py-3 text-left">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="sa-fees-table">
-            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>
-          </tbody>
-        </table>
+        <div class="sa-card" style="overflow:hidden">
+          <table class="sa-table">
+            <thead><tr>
+              <th>Usuario</th><th>Rol</th><th>Estado</th><th>Órdenes</th><th>Último acceso</th><th>Acciones</th>
+            </tr></thead>
+            <tbody id="sa-users-tbody"><tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">Cargando...</td></tr></tbody>
+          </table>
+        </div>
       </div>
-    </div>
 
-    <!-- TAB: Auditoría -->
-    <div id="tab-audit" class="sa-tab-content hidden">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-bold text-white">Logs de Auditoría</h2>
-        <button onclick="saLoadAudit()" class="sa-btn sa-btn-primary text-xs">🔄 Actualizar</button>
+      <!-- ═══ ORDERS ═══ -->
+      <div id="tab-orders" class="sa-tab-content">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem">
+          <input type="text" id="sa-order-search" class="sa-input" placeholder="Buscar por ID, cliente..." style="flex:1;max-width:320px" oninput="saLoadOrders()">
+          <select id="sa-order-status-filter" class="sa-input" style="width:140px" onchange="saLoadOrders()">
+            <option value="all">Todos</option>
+            <option value="pending">Pendientes</option>
+            <option value="accepted">Aceptadas</option>
+            <option value="in_progress">En curso</option>
+            <option value="completed">Completadas</option>
+            <option value="cancelled">Canceladas</option>
+          </select>
+        </div>
+        <div class="sa-card" style="overflow:hidden">
+          <table class="sa-table">
+            <thead><tr>
+              <th>ID</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th>Monto</th><th>Fecha</th>
+            </tr></thead>
+            <tbody id="sa-orders-tbody"><tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">Cargando...</td></tr></tbody>
+          </table>
+        </div>
       </div>
-      <div class="sa-card overflow-hidden">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase">
-              <th class="px-4 py-3 text-left">Fecha</th>
-              <th class="px-4 py-3 text-left">Usuario</th>
-              <th class="px-4 py-3 text-left">Acción</th>
-              <th class="px-4 py-3 text-left">Detalle</th>
-            </tr>
-          </thead>
-          <tbody id="sa-audit-table">
-            <tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
 
-    <!-- TAB: Features -->
-    <div id="tab-features" class="sa-tab-content hidden">
-      <h2 class="text-lg font-bold text-white mb-4">Control de Features</h2>
-      <div class="sa-card p-4">
-        <p class="text-xs text-slate-400 mb-4">Activa o desactiva funcionalidades del sistema en tiempo real.</p>
-        <div id="sa-features-list" class="space-y-3">Cargando...</div>
+      <!-- ═══ FEES ═══ -->
+      <div id="tab-fees" class="sa-tab-content">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+          <div class="sa-stat yellow"><p style="font-size:.72rem;color:var(--muted);margin:0 0 .4rem">Este mes</p><p id="fee-month" style="font-size:1.5rem;font-weight:800;color:#fff;margin:0">$0.00</p></div>
+          <div class="sa-stat red"><p style="font-size:.72rem;color:var(--muted);margin:0 0 .4rem">Pendientes de revisión</p><p id="fee-pending-count" style="font-size:1.5rem;font-weight:800;color:#fff;margin:0">0</p></div>
+          <div class="sa-stat green"><p style="font-size:.72rem;color:var(--muted);margin:0 0 .4rem">Total cobrado</p><p id="fee-total-collected" style="font-size:1.5rem;font-weight:800;color:#fff;margin:0">$0.00</p></div>
+        </div>
+        <div class="sa-card" style="overflow:hidden">
+          <div style="padding:.85rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+            <h3 style="font-size:.85rem;font-weight:700;color:#fff;margin:0">Historial de pagos</h3>
+            <select id="sa-fee-filter" class="sa-input" style="width:160px;font-size:.75rem" onchange="saLoadFees()">
+              <option value="all">Todos</option><option value="pending_review">Pendientes</option><option value="approved">Aprobados</option><option value="rejected">Rechazados</option>
+            </select>
+          </div>
+          <table class="sa-table">
+            <thead><tr><th>Período</th><th>Monto</th><th>Comprobante</th><th>Nota</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="sa-fees-tbody"><tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">Cargando...</td></tr></tbody>
+          </table>
+        </div>
       </div>
-    </div>
 
-  </main>
-</div>
+      <!-- ═══ FEATURES ═══ -->
+      <div id="tab-features" class="sa-tab-content">
+        <div class="sa-card" style="padding:1.25rem">
+          <h3 style="font-size:.9rem;font-weight:700;color:#fff;margin:0 0 .5rem">Control de funcionalidades</h3>
+          <p style="font-size:.78rem;color:var(--muted);margin:0 0 1.25rem">Activa o desactiva módulos del sistema en tiempo real.</p>
+          <div id="sa-features-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.75rem"></div>
+        </div>
+      </div>
+
+      <!-- ═══ AUDIT ═══ -->
+      <div id="tab-audit" class="sa-tab-content">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+          <button onclick="saLoadAudit()" class="sa-btn sa-btn-ghost" style="display:flex;align-items:center;gap:.4rem">
+            <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Actualizar
+          </button>
+        </div>
+        <div class="sa-card" style="overflow:hidden">
+          <table class="sa-table">
+            <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
+            <tbody id="sa-audit-tbody"><tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--muted)">Cargando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /padding -->
+  </div><!-- /sa-main -->
+</div><!-- /sa-app -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/security.js"></script>
-<script>
-const SUPER_ADMIN_ID = '93b6577f-69ee-4cbd-9f4c-54dabf75920f';
-const SUPER_ADMIN_EMAIL = 'luisalfredocabrerareyes@gmail.com';
-
-// ── Auth guard ────────────────────────────────────────────────────────────────
-async function saInit() {
-  try {
-    await supabaseConfig.ensureSupabaseReady?.();
-    const { data: { session } } = await supabaseConfig.client.auth.getSession();
-    if (!session || session.user.id !== SUPER_ADMIN_ID) {
-      window.location.href = 'login.html?redirect=super-admin.html';
-      return;
-    }
-    document.getElementById('sa-user-email').textContent = session.user.email;
-    document.getElementById('loading-screen').style.display = 'none';
-    document.getElementById('sa-app').classList.remove('hidden');
-    if (window.lucide) lucide.createIcons();
-    saLoadDashboard();
-  } catch(e) {
-    window.location.href = 'login.html?redirect=super-admin.html';
-  }
-}
-
-async function saLogout() {
-  await supabaseConfig.client.auth.signOut();
-  window.location.href = 'login.html';
-}
-
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-function saShowTab(name, btn) {
-  document.querySelectorAll('.sa-tab-content').forEach(t => t.classList.add('hidden'));
-  document.querySelectorAll('.sa-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-' + name)?.classList.remove('hidden');
-  btn.classList.add('active');
-  const loaders = { dashboard: saLoadDashboard, users: saLoadUsers, fees: saLoadFees, audit: saLoadAudit, features: saLoadFeatures };
-  loaders[name]?.();
-}
-
-// ── Dashboard ─────────────────────────────────────────────────────────────────
-async function saLoadDashboard() {
-  try {
-    const { data: orders } = await supabaseConfig.client.from('orders').select('id,status,monto_cobrado,created_at,name');
-    const total = orders?.length || 0;
-    const completed = orders?.filter(o => o.status === 'completed').length || 0;
-    const billed = orders?.filter(o => o.monto_cobrado).reduce((s,o) => s + Number(o.monto_cobrado||0), 0) || 0;
-    const fee = billed * 0.05;
-    document.getElementById('sa-total-orders').textContent = total;
-    document.getElementById('sa-completed-orders').textContent = completed;
-    document.getElementById('sa-total-billed').textContent = '$' + billed.toLocaleString('es-DO',{minimumFractionDigits:2});
-    document.getElementById('sa-total-fee').textContent = '$' + fee.toLocaleString('es-DO',{minimumFractionDigits:2});
-    // Recent orders
-    const recent = (orders||[]).sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).slice(0,5);
-    document.getElementById('sa-recent-orders').innerHTML = recent.map(o =>
-      `<div class="flex justify-between items-center py-1 border-b border-slate-700">
-        <span class="text-slate-300">#${o.id} ${o.name||''}</span>
-        <span class="text-xs px-2 py-0.5 rounded-full ${o.status==='completed'?'bg-green-900 text-green-300':'bg-slate-700 text-slate-300'}">${o.status}</span>
-      </div>`).join('');
-    // Collabs
-    const { data: collabs } = await supabaseConfig.client.from('collaborators').select('id,name,status');
-    const active = collabs?.filter(c => c.status === 'activo').length || 0;
-    document.getElementById('sa-collab-stats').innerHTML = `
-      <div class="flex justify-between"><span>Total colaboradores</span><span class="font-bold text-white">${collabs?.length||0}</span></div>
-      <div class="flex justify-between"><span>Activos</span><span class="font-bold text-green-400">${active}</span></div>
-      <div class="flex justify-between"><span>Inactivos</span><span class="font-bold text-red-400">${(collabs?.length||0)-active}</span></div>`;
-  } catch(e) { console.error('Dashboard error:', e); }
-}
-
-// ── Users ─────────────────────────────────────────────────────────────────────
-async function saLoadUsers() {
-  const tbody = document.getElementById('sa-users-table');
-  tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>';
-  try {
-    const { data: collabs } = await supabaseConfig.client.from('collaborators').select('*').order('created_at',{ascending:false});
-    const search = document.getElementById('sa-user-search')?.value?.toLowerCase() || '';
-    const filtered = (collabs||[]).filter(c => !search || c.name?.toLowerCase().includes(search) || c.email?.toLowerCase().includes(search));
-    tbody.innerHTML = filtered.map(c => `
-      <tr class="border-b border-slate-700 hover:bg-slate-800 transition-colors">
-        <td class="px-4 py-3">
-          <div class="font-medium text-white">${c.name||'—'}</div>
-          <div class="text-xs text-slate-400">${c.email||''}</div>
-        </td>
-        <td class="px-4 py-3"><span class="text-xs bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded-full">${c.role||'colaborador'}</span></td>
-        <td class="px-4 py-3">
-          <span class="text-xs px-2 py-0.5 rounded-full ${c.status==='activo'?'sa-badge-on':'sa-badge-off'}">${c.status||'inactivo'}</span>
-        </td>
-        <td class="px-4 py-3 text-xs text-slate-400">${c.updated_at?new Date(c.updated_at).toLocaleDateString('es-DO'):'—'}</td>
-        <td class="px-4 py-3">
-          <div class="flex gap-2">
-            <button onclick="saToggleUser('${c.id}','${c.status}')" class="sa-btn text-xs py-1 px-2 ${c.status==='activo'?'sa-btn-danger':'sa-btn-success'}">
-              ${c.status==='activo'?'Desactivar':'Activar'}
-            </button>
-            <button onclick="saViewUserPerms('${c.id}')" class="sa-btn text-xs py-1 px-2" style="background:#334155;color:#e2e8f0">Permisos</button>
-          </div>
-        </td>
-      </tr>`).join('') || '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Sin usuarios</td></tr>';
-  } catch(e) { tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">Error: ${e.message}</td></tr>`; }
-}
-
-async function saToggleUser(id, currentStatus) {
-  const newStatus = currentStatus === 'activo' ? 'inactivo' : 'activo';
-  if (!confirm(`¿${newStatus === 'activo' ? 'Activar' : 'Desactivar'} este usuario?`)) return;
-  await supabaseConfig.client.from('collaborators').update({ status: newStatus }).eq('id', id);
-  // Log audit
-  await saLogAudit('toggle_user', `Usuario ${id} → ${newStatus}`);
-  saLoadUsers();
-}
-
-function saViewUserPerms(id) {
-  alert('Gestión de permisos granulares — próximamente en v2.0');
-}
-
-// ── Fees ──────────────────────────────────────────────────────────────────────
-async function saLoadFees() {
-  const tbody = document.getElementById('sa-fees-table');
-  tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>';
-  try {
-    const filter = document.getElementById('sa-fee-filter')?.value || 'all';
-    let q = supabaseConfig.client.from('fee_payments').select('*').order('created_at',{ascending:false});
-    if (filter !== 'all') q = q.eq('status', filter);
-    const { data: fees } = await q;
-    // Stats
-    const pending = (fees||[]).filter(f => f.status === 'pending_review').length;
-    const totalPaid = (fees||[]).filter(f => f.status === 'approved').reduce((s,f) => s+Number(f.amount||0),0);
-    document.getElementById('sa-fee-pending').textContent = pending;
-    document.getElementById('sa-fee-total').textContent = '$' + totalPaid.toLocaleString('es-DO',{minimumFractionDigits:2});
-    // Current month fee
-    const { data: orders } = await supabaseConfig.client.from('orders').select('monto_cobrado,completed_at').eq('status','completed').not('monto_cobrado','is',null);
-    const now = new Date(); const m = now.getMonth(); const y = now.getFullYear();
-    const monthFee = (orders||[]).filter(o => { const d = new Date(o.completed_at||''); return d.getMonth()===m && d.getFullYear()===y; }).reduce((s,o) => s+Number(o.monto_cobrado||0)*0.05, 0);
-    document.getElementById('sa-fee-month').textContent = '$' + monthFee.toLocaleString('es-DO',{minimumFractionDigits:2});
-    tbody.innerHTML = (fees||[]).map(f => `
-      <tr class="border-b border-slate-700 hover:bg-slate-800">
-        <td class="px-4 py-3 text-slate-300">${f.period||f.created_at?.slice(0,7)||'—'}</td>
-        <td class="px-4 py-3 font-bold text-yellow-400">$${Number(f.amount||0).toLocaleString('es-DO',{minimumFractionDigits:2})}</td>
-        <td class="px-4 py-3">${f.voucher_url?`<a href="${f.voucher_url}" target="_blank" class="text-indigo-400 hover:underline text-xs">Ver comprobante</a>`:'<span class="text-slate-500 text-xs">Sin voucher</span>'}</td>
-        <td class="px-4 py-3"><span class="text-xs px-2 py-0.5 rounded-full ${f.status==='approved'?'sa-badge-on':f.status==='rejected'?'sa-badge-off':'bg-yellow-900 text-yellow-300 border border-yellow-700'}">${f.status||'pending'}</span></td>
-        <td class="px-4 py-3">
-          <div class="flex gap-2">
-            ${f.status==='pending_review'?`
-            <button onclick="saApproveFee('${f.id}')" class="sa-btn sa-btn-success text-xs py-1 px-2">✅ Aprobar</button>
-            <button onclick="saRejectFee('${f.id}')" class="sa-btn sa-btn-danger text-xs py-1 px-2">❌ Rechazar</button>`:'—'}
-          </div>
-        </td>
-      </tr>`).join('') || '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Sin registros</td></tr>';
-  } catch(e) { tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">Error: ${e.message}</td></tr>`; }
-}
-
-async function saApproveFee(id) {
-  await supabaseConfig.client.from('fee_payments').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', id);
-  await saLogAudit('approve_fee', `Pago ${id} aprobado`);
-  saLoadFees();
-}
-async function saRejectFee(id) {
-  const reason = prompt('Motivo del rechazo:');
-  if (reason === null) return;
-  await supabaseConfig.client.from('fee_payments').update({ status: 'rejected', note: reason, reviewed_at: new Date().toISOString() }).eq('id', id);
-  await saLogAudit('reject_fee', `Pago ${id} rechazado: ${reason}`);
-  saLoadFees();
-}
-
-// ── Audit ─────────────────────────────────────────────────────────────────────
-async function saLoadAudit() {
-  const tbody = document.getElementById('sa-audit-table');
-  tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Cargando...</td></tr>';
-  try {
-    const { data: logs } = await supabaseConfig.client.from('audit_logs').select('*').order('created_at',{ascending:false}).limit(100);
-    tbody.innerHTML = (logs||[]).map(l => `
-      <tr class="border-b border-slate-700 hover:bg-slate-800">
-        <td class="px-4 py-3 text-xs text-slate-400">${new Date(l.created_at).toLocaleString('es-DO')}</td>
-        <td class="px-4 py-3 text-xs text-slate-300">${l.user_email||l.user_id||'—'}</td>
-        <td class="px-4 py-3"><span class="text-xs bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded-full">${l.action||'—'}</span></td>
-        <td class="px-4 py-3 text-xs text-slate-400 max-w-xs truncate">${l.detail||'—'}</td>
-      </tr>`).join('') || '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Sin logs</td></tr>';
-  } catch(e) { tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Tabla audit_logs no encontrada</td></tr>`; }
-}
-
-async function saLogAudit(action, detail) {
-  try {
-    await supabaseConfig.client.from('audit_logs').insert({ action, detail, user_id: SUPER_ADMIN_ID, user_email: SUPER_ADMIN_EMAIL, created_at: new Date().toISOString() });
-  } catch(_) {}
-}
-
-// ── Features ──────────────────────────────────────────────────────────────────
-const DEFAULT_FEATURES = [
-  { key: 'enable_whatsapp', label: 'WhatsApp automático', desc: 'Envío de mensajes WA al cliente' },
-  { key: 'enable_invoice', label: 'Facturación automática', desc: 'Generación de facturas PDF' },
-  { key: 'enable_rating', label: 'Sistema de calificación', desc: 'Link de rating al completar orden' },
-  { key: 'enable_gps', label: 'Rastreo GPS', desc: 'Ubicación en tiempo real de colaboradores' },
-  { key: 'enable_pwa', label: 'PWA / App instalable', desc: 'Botón de instalación en login' },
-  { key: 'enable_notifications', label: 'Notificaciones Push', desc: 'OneSignal push notifications' },
-];
-
-async function saLoadFeatures() {
-  const container = document.getElementById('sa-features-list');
-  try {
-    const { data: settings } = await supabaseConfig.client.from('business').select('*').limit(1).maybeSingle();
-    const flags = settings?.feature_flags || {};
-    container.innerHTML = DEFAULT_FEATURES.map(f => {
-      const enabled = flags[f.key] !== false;
-      return `<div class="flex items-center justify-between p-3 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors">
-        <div>
-          <p class="text-sm font-semibold text-white">${f.label}</p>
-          <p class="text-xs text-slate-400">${f.desc}</p>
-        </div>
-        <button onclick="saToggleFeature('${f.key}',${!enabled})" class="sa-btn text-xs py-1.5 px-3 ${enabled?'sa-btn-danger':'sa-btn-success'}">
-          ${enabled?'Desactivar':'Activar'}
-        </button>
-      </div>`;
-    }).join('');
-  } catch(e) { container.innerHTML = '<p class="text-slate-500 text-sm">Error cargando features</p>'; }
-}
-
-async function saToggleFeature(key, newVal) {
-  try {
-    const { data: settings } = await supabaseConfig.client.from('business').select('id,feature_flags').limit(1).maybeSingle();
-    const flags = { ...(settings?.feature_flags || {}), [key]: newVal };
-    if (settings?.id) {
-      await supabaseConfig.client.from('business').update({ feature_flags: flags }).eq('id', settings.id);
-    }
-    await saLogAudit('toggle_feature', `${key} → ${newVal}`);
-    saLoadFeatures();
-  } catch(e) { alert('Error: ' + e.message); }
-}
-
-// Search users on input
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('sa-user-search')?.addEventListener('input', saLoadUsers);
-  saInit();
-});
-</script>
+<script src="js/super-admin.js"></script>
 </body>
 </html>

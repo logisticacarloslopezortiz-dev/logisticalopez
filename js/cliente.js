@@ -1117,11 +1117,9 @@ function copyToClipboard(text) {
     document.body.removeChild(ta);
     window.showSuccess?.('ID copiado — abriendo seguimiento...');
     goToTracking();
-  } catch {
-    goToTracking();
-  }
-}
+  } catch (error) {
     window.showError?.('No se pudo copiar el ID');
+    goToTracking();
   }
 }
 

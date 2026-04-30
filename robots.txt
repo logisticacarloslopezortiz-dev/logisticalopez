@@ -1,0 +1,27 @@
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /cliente.html
+Allow: /seguimiento.html
+Allow: /calificar.html
+
+# Bloquear paneles administrativos
+Disallow: /inicio.html
+Disallow: /colaboradores.html
+Disallow: /ganancias.html
+Disallow: /historial-solicitudes.html
+Disallow: /mi-negocio.html
+Disallow: /servicios.html
+Disallow: /rendimiento.html
+Disallow: /super-admin.html
+Disallow: /admin-register.html
+Disallow: /panel-colaborador.html
+Disallow: /login.html
+Disallow: /login-colaborador.html
+
+# Bloquear archivos de configuración
+Disallow: /.env
+Disallow: /sql/
+Disallow: /android/
+
+Sitemap: https://logisticalopezortiz.com/sitemap.xml

@@ -7,29 +7,24 @@
   const isAndroid = () => /Android/i.test(navigator.userAgent);
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-  // ✅ MODIFICADO: No registrar manualmente el worker si OneSignal está presente.
+  // ✅ CORREGIDO: Registrar SOLO OneSignalSDKWorker.js que importa sw.js internamente
+  // Esto evita conflictos de múltiples listeners de mensaje y conexiones cerradas
   window.addEventListener('load', async () => {
     if ('serviceWorker' in navigator) {
-      // Registrar nuestro SW propio primero (maneja cache y start_url)
       try {
-        await navigator.serviceWorker.register('/sw.js');
-        console.log('[PWA] sw.js registrado');
+        // OneSignalSDKWorker.js importa internamente /sw.js, no duplicar registraciones
+        await navigator.serviceWorker.register('/OneSignalSDKWorker.js');
+        console.log('[PWA] OneSignalSDKWorker registrado (incluye sw.js)');
       } catch (e) {
-        console.warn('[PWA] Error registrando sw.js:', e);
-      }
-
-      setTimeout(async () => {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        const isOneSignalRegistered = registrations.some(r => r.active && r.active.scriptURL.includes('OneSignalSDKWorker'));
-        if (!isOneSignalRegistered) {
-          try {
-            await navigator.serviceWorker.register('/OneSignalSDKWorker.js');
-            console.log('[PWA] OneSignalSDKWorker registrado');
-          } catch (e) {
-            console.warn('[PWA] Error registrando OneSignalSDKWorker:', e);
-          }
+        console.warn('[PWA] Error registrando OneSignalSDKWorker:', e);
+        // Fallback: si OneSignal falla, registrar solo sw.js
+        try {
+          await navigator.serviceWorker.register('/sw.js');
+          console.log('[PWA] sw.js registrado como fallback');
+        } catch (e2) {
+          console.warn('[PWA] Error registrando sw.js fallback:', e2);
         }
-      }, 3000);
+      }
     }
   });
 

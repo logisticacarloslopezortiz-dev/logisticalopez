@@ -2,7 +2,9 @@
 class GoogleSheetsIntegration {
     constructor() {
         // Google Apps Script Web App URL - Replace with your actual deployment URL
-        this.webAppUrl = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+        this.webAppUrl = 'https://script.google.com/macros/s/AKfycbxYOUR_DEPLOYED_SCRIPT_ID/exec';
+        // ⚠️ IMPORTANTE: Reemplaza AKfycbxYOUR_DEPLOYED_SCRIPT_ID con el ID real
+        // Sheet ID: 1oVFJLmOaSQ-hz0DdqnHh_tCW5ON__jPM6GBqJQjIwGs
         this.isEnabled = true; // Set to false to disable Google Sheets integration
     }
 

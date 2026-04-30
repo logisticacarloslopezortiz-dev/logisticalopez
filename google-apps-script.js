@@ -12,11 +12,13 @@
  * 7. Copy the web app URL and update it in google-sheets.js
  */
 
-// Configuration
-// IMPORTANTE: Reemplaza por el ID real del Google Sheet (lo ves en la URL entre /d/ y /edit)
-// Ejemplo: https://docs.google.com/spreadsheets/d/1AbCDefGHIjklMNopQRstuVWxyz1234567890/edit
-const SHEET_ID = 'REPLACE_WITH_YOUR_SHEET_ID';
-const SHEET_NAME = 'TLC Orders'; // Nombre de la pestaña de la hoja
+// ✅ SHEET ID REAL — Logística López Ortiz
+const SHEET_ID = '1oVFJLmOaSQ-hz0DdqnHh_tCW5ON__jPM6GBqJQjIwGs';
+const SHEET_NAME = 'TLC Orders';
+
+// Supabase config para backup
+const SUPABASE_URL = 'https://fkprllkxyjtosjhtikxy.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrcHJsbGt4eWp0b3NqaHRpa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3ODgzNzEsImV4cCI6MjA3NTM2NDM3MX0.FOcnxNujiA6gBzHQt9zLSRFCkOpiHDOu9QdLuEmbtqQ';
 
 /**
  * Handle POST requests from the web application
@@ -256,5 +258,134 @@ function updateOrderStatus(orderId, newStatus) {
   } catch (error) {
     console.error('Error updating order status:', error);
     throw error;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BACKUP AUTOMÁTICO SUPABASE → GOOGLE SHEETS
+// Configura un trigger en Apps Script: backupOrdersFromSupabase
+// cada 24 horas (Time-driven → Day timer)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Backup completo de órdenes desde Supabase.
+ * Ejecutar manualmente o via trigger diario.
+ */
+function backupOrdersFromSupabase() {
+  try {
+    const response = UrlFetchApp.fetch(
+      SUPABASE_URL + '/rest/v1/orders?select=id,short_id,name,phone,email,status,pickup,delivery,date,time,monto_cobrado,metodo_pago,created_at&order=created_at.desc&limit=1000',
+      {
+        method: 'get',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json'
+        },
+        muteHttpExceptions: true
+      }
+    );
+
+    if (response.getResponseCode() !== 200) {
+      Logger.log('Error Supabase: ' + response.getContentText());
+      return;
+    }
+
+    const data = JSON.parse(response.getContentText());
+    if (!data || data.length === 0) { Logger.log('Sin datos para backup'); return; }
+
+    const spreadsheet = SpreadsheetApp.openById(SHEET_ID);
+    let sheet = spreadsheet.getSheetByName('Backup Órdenes');
+    if (!sheet) sheet = spreadsheet.insertSheet('Backup Órdenes');
+
+    sheet.clear();
+    const headers = Object.keys(data[0]);
+    const rows = data.map(obj => headers.map(h => obj[h] !== null && obj[h] !== undefined ? String(obj[h]) : ''));
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    if (rows.length > 0) sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+
+    // Formato de cabecera
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground('#1e293b').setFontColor('#ffffff').setFontWeight('bold');
+
+    Logger.log('✅ Backup completado: ' + rows.length + ' órdenes — ' + new Date().toISOString());
+  } catch (error) {
+    Logger.log('❌ Error en backup: ' + error);
+  }
+}
+
+/**
+ * Backup incremental — solo órdenes nuevas desde la última ejecución.
+ * Más eficiente para uso diario.
+ */
+function backupIncrementalOrders() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SHEET_ID);
+    let sheet = spreadsheet.getSheetByName('Backup Incremental');
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet('Backup Incremental');
+      sheet.appendRow(['id','short_id','name','phone','status','monto_cobrado','created_at']);
+    }
+
+    // Obtener la fecha del último registro
+    const lastRow = sheet.getLastRow();
+    let lastDate = '2020-01-01T00:00:00Z';
+    if (lastRow > 1) {
+      const lastVal = sheet.getRange(lastRow, 7).getValue();
+      if (lastVal) lastDate = new Date(lastVal).toISOString();
+    }
+
+    const response = UrlFetchApp.fetch(
+      SUPABASE_URL + '/rest/v1/orders?select=id,short_id,name,phone,status,monto_cobrado,created_at&created_at=gt.' + lastDate + '&order=created_at.asc',
+      {
+        method: 'get',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+        muteHttpExceptions: true
+      }
+    );
+
+    const data = JSON.parse(response.getContentText());
+    if (!data || data.length === 0) { Logger.log('Sin nuevas órdenes'); return; }
+
+    const rows = data.map(o => [o.id, o.short_id, o.name, o.phone, o.status, o.monto_cobrado, o.created_at]);
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 7).setValues(rows);
+    Logger.log('✅ Incremental: ' + rows.length + ' nuevas órdenes agregadas');
+  } catch (error) {
+    Logger.log('❌ Error incremental: ' + error);
+  }
+}
+
+/**
+ * Recibe webhook en tiempo real desde Supabase Edge Function.
+ * Cada nueva orden se guarda automáticamente.
+ * URL del Web App → configurar en Supabase como webhook destino.
+ */
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+
+    // Si es un webhook de nueva orden
+    if (data.type === 'INSERT' && data.table === 'orders') {
+      const order = data.record;
+      const spreadsheet = SpreadsheetApp.openById(SHEET_ID);
+      let sheet = spreadsheet.getSheetByName('Tiempo Real');
+      if (!sheet) {
+        sheet = spreadsheet.insertSheet('Tiempo Real');
+        sheet.appendRow(['ID','Short ID','Cliente','Teléfono','Servicio','Estado','Monto','Fecha']);
+        sheet.getRange(1,1,1,8).setBackground('#1e293b').setFontColor('#fff').setFontWeight('bold');
+      }
+      sheet.appendRow([
+        order.id, order.short_id, order.name, order.phone,
+        order.service_id, order.status, order.monto_cobrado, order.created_at
+      ]);
+      return ContentService.createTextOutput(JSON.stringify({ success: true })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Flujo original de la app
+    const result = saveToSheet(data);
+    return ContentService.createTextOutput(JSON.stringify({ success: true, rowNumber: result.rowNumber })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: error.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 }

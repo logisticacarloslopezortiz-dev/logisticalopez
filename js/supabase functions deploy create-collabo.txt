@@ -1,0 +1,2 @@
+supabase functions deploy create-collaborator
+supabase functions deploy send-push-notification

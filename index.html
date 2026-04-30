@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es" class="scroll-smooth">
 <head>
   <meta charset="UTF-8">
@@ -156,6 +156,7 @@
   </script>
 </head>
 <body class="bg-white text-gray-800">
+  <!-- Offline indicator --><div id="offline-indicator" class="hidden fixed top-0 inset-x-0 z-[9999] bg-red-600 text-white text-center text-xs py-2 font-semibold">📡 Sin conexión a internet — algunas funciones no están disponibles</div>
 
   <!-- Ejemplo de comentario: Esta línea sirve solo para documentar -->
 
@@ -591,7 +592,7 @@
     });
   </script>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/health-check.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase-config.js?v=20260310"></script>
     <script src="js/pwa.js?v=20260310"></script>
     <script src="js/index.js?v=20260310"></script>
