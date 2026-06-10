@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -9,39 +9,6 @@
 
   <style>
     html { text-size-adjust: 100%; }
-    .tracking-timeline-dot {
-      position: absolute;
-      top: 50%;
-      width: 40px;
-      height: 40px;
-      border-radius: 9999px;
-      background-color: #0C375D;
-      border: 2px solid #0C375D;
-      box-shadow: 0 0 0 4px rgba(12, 55, 93, 0.35);
-      transform: translate(-50%, -50%);
-      animation: tracking-dot-move 5s ease-in-out infinite;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    }
-    @keyframes tracking-dot-move {
-      0% {
-        left: 6%;
-      }
-      25% {
-        left: 32%;
-      }
-      50% {
-        left: 58%;
-      }
-      75% {
-        left: 84%;
-      }
-      100% {
-        left: 6%;
-      }
-    }
   </style>
 
   <!-- PWA Support -->
@@ -70,36 +37,6 @@
 
   <!-- OneSignal SDK -->
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-  <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
-        allowLocalhostAsSecureOrigin: true,
-      });
-
-      // Manejar el registro del Player ID para Seguimiento (Clientes)
-      OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
-        if (event.current.id) {
-          console.log("OneSignal Subscription ID (Seguimiento):", event.current.id);
-          if (window.supabaseConfig) {
-            const contactId = localStorage.getItem('tlc_client_contact_id');
-            await window.supabaseConfig.updateOneSignalId(event.current.id, contactId);
-          }
-        }
-      });
-
-      // Captura inicial si ya está suscrito
-      const subscriptionId = OneSignal.User.PushSubscription.id;
-      if (subscriptionId) {
-        console.log("OneSignal Initial ID (Seguimiento):", subscriptionId);
-        if (window.supabaseConfig) {
-          const contactId = localStorage.getItem('tlc_client_contact_id');
-          await window.supabaseConfig.updateOneSignalId(subscriptionId, contactId);
-        }
-      }
-    });
-  </script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
@@ -115,21 +52,6 @@
       </div>
       
       <div class="space-y-6">
-        <div>
-          <div class="flex items-center justify-between text-xs font-semibold text-gray-500 mb-2">
-            <span>Recibido</span>
-            <span>En ruta</span>
-            <span>Cerca de ti</span>
-            <span>Entregado</span>
-          </div>
-          <div class="relative h-2 rounded-full bg-gray-200 overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-r from-emerald-400 via-sky-500 to-indigo-500 opacity-90"></div>
-            <div class="tracking-timeline-dot">
-              <i data-lucide="truck" class="w-5 h-5 text-white"></i>
-              <img src="img/2vertical.png" alt="LLO" class="absolute -bottom-1 -right-1 w-4 h-4 rounded-sm border border-white bg-white">
-            </div>
-          </div>
-        </div>
         <div class="relative">
           <i data-lucide="hash" class="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
           <input type="text" id="orderIdInput" name="orderId" autocomplete="off" inputmode="text" class="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow" placeholder="ID de seguimiento o UUID" maxlength="40" aria-label="ID de seguimiento">
@@ -174,7 +96,6 @@
             </a>
           </div>
         </div>
-        <div id="notifLatencyIndicator" class="mt-2 text-xs text-white/80">Notificaciones en tiempo real</div>
       </div>
     </header>
 
@@ -295,6 +216,31 @@
         if (!btn) return;
         
         window.OneSignalDeferred = window.OneSignalDeferred || [];
+
+        // ✅ Inicialización consolidada de OneSignal
+        OneSignalDeferred.push(async function(OneSignal) {
+          await OneSignal.init({
+            appId: "751b4b08-a3e9-473b-bbf5-636a1c083727",
+            allowLocalhostAsSecureOrigin: true,
+          });
+
+          // Manejar el registro del Player ID
+          const syncPushId = async (id) => {
+            if (id && window.supabaseConfig) {
+              const contactId = localStorage.getItem('tlc_client_contact_id');
+              await window.supabaseConfig.updateOneSignalId(id, contactId);
+            }
+          };
+
+          OneSignal.User.PushSubscription.addEventListener("change", (event) => {
+            if (event.current.id) syncPushId(event.current.id);
+            updateBtn();
+          });
+
+          if (OneSignal.User.PushSubscription.id) {
+            syncPushId(OneSignal.User.PushSubscription.id);
+          }
+        });
         
         const updateBtn = () => {
           OneSignalDeferred.push(async function(OneSignal) {
@@ -315,11 +261,6 @@
         
         updateBtn();
         
-        // Escuchar cambios en la suscripción
-        OneSignalDeferred.push(function(OneSignal) {
-          OneSignal.User.PushSubscription.addEventListener("change", updateBtn);
-        });
-
         btn.addEventListener('click', async () => {
           OneSignalDeferred.push(async function(OneSignal) {
             await OneSignal.Slidedown.promptPush();

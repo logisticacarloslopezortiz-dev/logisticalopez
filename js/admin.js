@@ -7,10 +7,27 @@ let currentAssigningOrder = null;
  * Carga las órdenes desde Supabase y las renderiza.
  */
 async function loadOrders() {
-  if (!document.getElementById('ordersTableBody')) return;
+  const tableBody = document.getElementById('ordersTableBody');
+  if (!tableBody) return;
+
+  // Mostrar skeleton state o spinner ligero
+  tableBody.innerHTML = Array(5).fill(0).map(() => `
+    <tr class="animate-pulse">
+      <td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded w-8"></div></td>
+      <td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded w-24 mb-2"></div><div class="h-3 bg-gray-100 rounded w-16"></div></td>
+      <td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded w-20"></div></td>
+      <td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded w-20"></div></td>
+      <td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded w-32"></div></td>
+      <td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded w-24"></div></td>
+      <td class="px-6 py-4"><div class="h-6 bg-gray-200 rounded-full w-16"></div></td>
+      <td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded w-12"></div></td>
+      <td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded w-16"></div></td>
+    </tr>
+  `).join('');
 
   try {
-    const orders = await supabaseConfig.getOrders();
+    // 🚀 OPTIMIZACIÓN: Solo traer el resumen para el inicio
+    const orders = await supabaseConfig.getOrdersSummary();
     allOrders = orders || [];
     filterAndRender();
     updateSummaryCards();
@@ -18,6 +35,35 @@ async function loadOrders() {
   } catch (err) {
     console.error('Error al cargar las órdenes:', err);
     notifications.show('Error al cargar las órdenes.', 'error');
+  }
+}
+
+/**
+ * Maneja las actualizaciones en tiempo real de las órdenes.
+ */
+function handleOrderUpdate(payload) {
+  const { eventType, new: newOrder, old: oldOrder } = payload;
+  
+  if (eventType === 'INSERT') {
+    // Si ya existe (por alguna razón), no duplicar
+    if (!allOrders.find(o => o.id === newOrder.id)) {
+      allOrders.unshift(newOrder);
+    }
+  } else if (eventType === 'UPDATE') {
+    const index = allOrders.findIndex(o => o.id === newOrder.id);
+    if (index !== -1) {
+      allOrders[index] = { ...allOrders[index], ...newOrder };
+    }
+  } else if (eventType === 'DELETE') {
+    allOrders = allOrders.filter(o => o.id !== oldOrder.id);
+  }
+  
+  filterAndRender();
+  updateSummaryCards();
+  
+  // Refrescar iconos de Lucide para los nuevos elementos
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
   }
 }
 
@@ -97,9 +143,15 @@ function renderOrders(orders) {
             ${order.status}
           </span>
         </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">${order.estimated_price}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-          <button class="text-blue-600 hover:text-blue-900 manage-btn" data-order-id="${order.id}">Gestionar</button>
+        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">${order.estimated_price || '0.00'}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium flex items-center gap-3">
+          <button class="text-blue-600 hover:text-blue-900 manage-btn flex items-center gap-1" data-order-id="${order.id}">
+            <i data-lucide="settings-2" class="w-4 h-4"></i> Gestionar
+          </button>
+          <button class="text-green-600 hover:text-green-900 whatsapp-quick-btn p-1 rounded-full hover:bg-green-50" 
+                  data-order-id="${order.id}" title="WhatsApp rápido">
+            <i data-lucide="message-circle" class="w-5 h-5"></i>
+          </button>
         </td>
       `;
       tableBody.appendChild(tr);
@@ -113,6 +165,21 @@ function renderOrders(orders) {
   document.querySelectorAll('.manage-btn').forEach(btn => {
     btn.addEventListener('click', () => openAssignModal(btn.dataset.orderId));
   });
+
+  // Añadir listeners a los botones de WhatsApp rápido
+  document.querySelectorAll('.whatsapp-quick-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const orderId = btn.dataset.orderId;
+      const order = allOrders.find(o => o.id === Number(orderId));
+      if (order) sendWhatsAppMessage(order);
+    });
+  });
+
+  // Refrescar iconos de Lucide
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
 }
 
 /**
@@ -443,6 +510,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Esperar confirmación del rol admin por servidor
   document.addEventListener('admin-session-ready', () => {
     loadOrders();
+    
+    // 🔔 Suscribirse a cambios en tiempo real para que la lista se actualice sola
+    supabaseConfig.subscribeToOrders((payload) => {
+      handleOrderUpdate(payload);
+    });
+
     // Inicializar Lucide Icons tras carga
     try { lucide.createIcons(); } catch(_) {}
   });

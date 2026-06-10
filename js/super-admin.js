@@ -82,7 +82,7 @@ async function saLoadDashboard() {
     const [r1, r2, r3] = await Promise.all([
       supabaseConfig.client.from('orders').select('id,status,monto_cobrado,created_at,name,service:services(name)'),
       supabaseConfig.client.from('collaborators').select('id,name,status'),
-      supabaseConfig.client.from('fee_payments').select('amount,status').catch(() => ({ data: [] }))
+      supabaseConfig.client.from('fee_payments').select('amount,status').then(r => r).catch(() => ({ data: [] }))
     ]);
     const orders = r1.data || [];
     const collabs = r2.data || [];
@@ -238,23 +238,38 @@ async function saToggleUser(id, cur) {
 async function saLoadOrders() {
   const tbody = document.getElementById('sa-orders-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">Cargando...</td></tr>';
   try {
     const search = (document.getElementById('sa-order-search')?.value || '').toLowerCase();
     const status = document.getElementById('sa-order-status-filter')?.value || 'all';
-    let q = supabaseConfig.client.from('orders').select('id,short_id,name,phone,status,monto_cobrado,created_at,service:services(name)').order('created_at', { ascending: false }).limit(100);
+    let q = supabaseConfig.client.from('orders')
+      .select('id,short_id,name,phone,status,monto_cobrado,created_at,assigned_to,created_by,service:services(name),creator:profiles!created_by(full_name),collaborator:profiles!assigned_to(full_name)')
+      .order('created_at', { ascending: false })
+      .limit(100);
     if (status !== 'all') q = q.eq('status', status);
     const { data: orders } = await q;
     const filtered = (orders || []).filter(o => !search || o.name?.toLowerCase().includes(search) || String(o.id).includes(search) || o.short_id?.toLowerCase().includes(search));
-    tbody.innerHTML = filtered.map(o => `<tr>
-      <td style="font-family:monospace;color:var(--muted);font-size:.78rem">#${o.short_id||o.id}</td>
-      <td><div style="color:#fff;font-weight:600">${o.name||'—'}</div><div style="font-size:.72rem;color:var(--muted)">${o.phone||''}</div></td>
-      <td style="color:var(--text)">${o.service?.name||'—'}</td>
-      <td><span class="badge ${o.status==='completed'?'badge-green':o.status==='cancelled'?'badge-red':o.status==='pending'?'badge-yellow':'badge-blue'}">${o.status}</span></td>
-      <td style="color:#fcd34d;font-weight:600">${o.monto_cobrado ? fmt$(o.monto_cobrado) : '—'}</td>
-      <td style="color:var(--muted);font-size:.78rem">${fmtDate(o.created_at)}</td>
-    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">Sin órdenes</td></tr>';
-  } catch(e) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:#f87171">Error: ${e.message}</td></tr>`; }
+    const statusBadge = s => {
+      const cls = s === 'completed' ? 'badge-green' : s === 'cancelled' ? 'badge-red' : s === 'pending' ? 'badge-yellow' : 'badge-blue';
+      const lbl = { pending: 'Pendiente', accepted: 'Aceptada', in_progress: 'En Curso', completed: 'Completada', cancelled: 'Cancelada' }[s] || s;
+      return `<span class="badge ${cls}">${lbl}</span>`;
+    };
+    tbody.innerHTML = filtered.map(o => {
+      const registradoPor = o.creator?.full_name || '—';
+      const asignadoA = o.collaborator?.full_name
+        ? `<span style="color:#34d399;font-weight:600">${o.collaborator.full_name}</span>`
+        : `<span style="color:var(--muted);font-size:.75rem">Buscando transportista…</span>`;
+      return `<tr>
+        <td style="font-family:monospace;color:var(--muted);font-size:.78rem">#${o.short_id || o.id}</td>
+        <td><div style="color:#fff;font-weight:600">${o.name || '—'}</div><div style="font-size:.72rem;color:var(--muted)">${o.phone || ''}</div></td>
+        <td style="color:var(--text)">${o.service?.name || '—'}</td>
+        <td>${statusBadge(o.status)}</td>
+        <td style="font-size:.78rem"><div style="color:var(--muted)">${registradoPor}</div><div style="margin-top:.15rem">${asignadoA}</div></td>
+        <td style="color:#fcd34d;font-weight:600">${o.monto_cobrado ? fmt$(o.monto_cobrado) : '—'}</td>
+        <td style="color:var(--muted);font-size:.78rem">${fmtDate(o.created_at)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">Sin órdenes</td></tr>';
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:#f87171">Error: ${e.message}</td></tr>`; }
 }
 
 // ── Fees ──────────────────────────────────────────────────────────────────────

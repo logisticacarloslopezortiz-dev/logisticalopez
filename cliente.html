@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -11,7 +11,6 @@
   <title>Logística López Ortiz - Solicitud de Servicio</title>
   <link href="css/tailwind.min.css" rel="stylesheet">
   <link href="css/custom-styles.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
   
 
@@ -29,6 +28,44 @@
     .text-acento{ color: var(--color-acento) !important; }
     .btn-primary-custom{ background: linear-gradient(90deg,var(--color-primario), #2D5A7B); color: #fff; }
     .btn-acento{ background: var(--color-acento); color: #0C375D; }
+
+    /* Splash Screen */
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, var(--color-primario) 0%, #0C375D 100%);
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s ease, visibility 0.8s;
+    }
+    #splash-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .splash-logo {
+      width: 120px;
+      height: 120px;
+      margin-bottom: 2rem;
+      animation: pulse-logo 2s infinite ease-in-out;
+    }
+    @keyframes pulse-logo {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0px rgba(255,255,255,0)); }
+      50% { transform: scale(1.1); filter: drop-shadow(0 0 20px rgba(255,255,255,0.4)); }
+    }
+    .splash-loader {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--color-acento);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
 
     /* Header de marca */
     .brand-header {
@@ -49,8 +86,9 @@
       align-items: center;
       justify-content: center;
       gap: 0;
-      padding: 1.25rem 1rem 0.5rem;
-      overflow-x: auto;
+      padding: 1rem 0.5rem 0.5rem;
+      overflow: hidden; /* Evitar que sobresalga */
+      max-width: 100%;
     }
     .step-dot {
       display: flex;
@@ -60,12 +98,12 @@
       flex-shrink: 0;
     }
     .step-dot .dot {
-      width: 32px; height: 32px;
+      width: 28px; height: 28px; /* Un poco más pequeño */
       border-radius: 50%;
       border: 2px solid #d1d5db;
       background: #fff;
       display: flex; align-items: center; justify-content: center;
-      font-size: 0.75rem; font-weight: 700; color: #9ca3af;
+      font-size: 0.7rem; font-weight: 700; color: #9ca3af;
       transition: all 0.3s ease;
       position: relative; z-index: 2;
     }
@@ -81,33 +119,36 @@
       color: #fff;
     }
     .step-dot .step-label {
-      font-size: 0.6rem; color: #9ca3af; margin-top: 4px;
+      font-size: 0.55rem; color: #9ca3af; margin-top: 4px;
       white-space: nowrap; font-weight: 500;
     }
     .step-dot.active .step-label { color: var(--color-secundario); font-weight: 700; }
     .step-dot.completed .step-label { color: var(--color-primario); }
     .step-connector {
-      width: 32px; height: 2px;
+      width: 24px; height: 2px; /* Un poco más pequeño */
       background: #e5e7eb;
       flex-shrink: 0;
-      margin-bottom: 18px;
+      margin-bottom: 15px; /* Ajustado por el nuevo tamaño del dot */
       transition: background 0.3s;
     }
     .step-connector.done { background: var(--color-primario); }
 
     /* Inputs mejorados */
-    .field-group { margin-bottom: 1.25rem; }
+    .field-group { margin-bottom: 1.5rem; } /* Más espacio entre grupos */
     .field-group label {
-      display: block; font-size: 0.8rem; font-weight: 600;
-      color: #374151; margin-bottom: 0.35rem;
+      display: block; font-size: 0.85rem; font-weight: 600;
+      color: #374151; margin-bottom: 0.5rem;
+      letter-spacing: 0.01em;
     }
     .field-group label .required { color: #ef4444; margin-left: 2px; }
     .field-input {
       width: 100%; border: 1.5px solid #d1d5db;
-      border-radius: 0.5rem; padding: 0.6rem 0.85rem;
+      border-radius: 0.6rem; padding: 0.75rem 1rem; /* Más padding */
       font-size: 0.95rem; color: #111827;
       transition: border-color 0.2s, box-shadow 0.2s;
       background: #fff;
+      line-height: 1.5; /* Mejor lectura */
+      letter-spacing: 0.02em; /* Menos pegado */
     }
     .field-input:focus {
       outline: none;
@@ -473,6 +514,12 @@
   </script>
 </head>
 <body class="bg-gray-100">
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+      <img src="img/1vertical.png" alt="Logo" class="splash-logo">
+      <div class="splash-loader"></div>
+      <p style="color: rgba(255,255,255,0.7); margin-top: 1rem; font-size: 0.8rem; font-weight: 500;">Cargando experiencia...</p>
+    </div>
 
   <!-- Header de marca -->
   <header class="brand-header">
@@ -480,7 +527,7 @@
       <div class="brand-title">Logística López Ortiz</div>
       <div class="brand-subtitle">Solicitud de Servicio</div>
     </div>
-    <img src="img/1horizontal (1).png" alt="Logo" class="brand-logo" onerror="this.style.display='none'">
+    <img src="img/1horizontal (1).png" alt="Logo" class="brand-logo">
   </header>
 
   <!-- Contenedor principal para el formulario -->
@@ -622,7 +669,7 @@
             <!-- ✅ Tarjeta Guía Animada -->
             <div id="map-guide-card" class="mb-4 p-4 rounded-xl border-2 transition-all duration-500 flex items-center gap-4 shadow-sm hidden">
                 <div id="map-guide-icon" class="flex-shrink-0 w-12 h-12 rounded-full bg-white shadow-inner flex items-center justify-center">
-                    <i class="fa-solid fa-location-dot text-green-600 text-xl"></i>
+                    <i data-lucide="map-pin" class="text-green-600 w-6 h-6"></i>
                 </div>
                 <div class="flex-1">
                     <h5 id="map-guide-title" class="font-bold text-gray-800 text-sm md:text-base">Punto de Recogida</h5>
@@ -640,14 +687,14 @@
                              <label class="block text-xs font-semibold text-gray-500 mb-1">Origen (Recogida)</label>
                              <div class="relative">
                                 <input type="text" id="pickupAddress" class="w-full border p-2 pl-8 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none transition-all" placeholder="Buscar o pegar dirección de recogida...">
-                                <i class="fa-solid fa-location-dot absolute left-2.5 top-1/2 -translate-y-1/2 text-green-500 text-xs"></i>
+                                <i data-lucide="map-pin" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-green-500 w-4 h-4"></i>
                              </div>
                         </div>
                         <div class="relative group">
                              <label class="block text-xs font-semibold text-gray-500 mb-1">Destino (Entrega)</label>
                              <div class="relative">
                                 <input type="text" id="deliveryAddress" class="w-full border p-2 pl-8 rounded-lg text-sm focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed" placeholder="Buscar o pegar dirección de entrega..." disabled>
-                                <i class="fa-solid fa-flag-checkered absolute left-2.5 top-1/2 -translate-y-1/2 text-red-500 text-xs"></i>
+                                <i data-lucide="flag" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-red-500 w-4 h-4"></i>
                              </div>
                         </div>
                     </div>
@@ -678,6 +725,23 @@
                                     <p id="destination-address-display" class="text-xs text-gray-700 break-words">Sin dirección definida</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- ✅ NUEVO: Indicador de Distancia y Precio -->
+                    <div id="distance-container" class="hidden mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between shadow-sm animate-pulse-subtle">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                <i data-lucide="route" class="text-blue-600 w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <p class="text-[10px] uppercase font-bold text-blue-400 tracking-wider">Distancia estimada</p>
+                                <p class="text-lg font-black text-blue-800"><span id="distance-value">0</span> km</p>
+                            </div>
+                        </div>
+                        <div class="text-right hidden" id="price-container">
+                            <p class="text-[10px] uppercase font-bold text-green-500 tracking-wider">Precio Estimado</p>
+                            <p id="estimated-price-display" class="text-xl font-black text-green-600">$0</p>
                         </div>
                     </div>
                     
@@ -712,7 +776,7 @@
               <input type="time" id="orderTime" name="orderTime" class="field-input" aria-label="Hora del servicio">
             </div>
             <div id="time-message" class="hidden mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-start gap-2">
-              <i class="fa-solid fa-info-circle mt-0.5 flex-shrink-0"></i>
+              <i data-lucide="info" class="w-4 h-4 mt-0.5 flex-shrink-0"></i>
               <span>Haremos todo lo posible para cumplir con la hora solicitada. Nos pondremos en contacto para confirmar.</span>
             </div>
           </div>
@@ -725,7 +789,7 @@
               <p class="text-center text-gray-400 text-sm py-4">Cargando resumen...</p>
             </div>
             <button type="submit" id="submitBtn" class="nav-btn-submit">
-              <i class="fa-solid fa-paper-plane"></i>
+              <i data-lucide="send" class="w-5 h-5"></i>
               Enviar Solicitud
             </button>
           </div>
@@ -733,11 +797,11 @@
           <!-- Botones de navegación -->
           <div class="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
             <button type="button" id="prevBtn" class="nav-btn-prev hidden">
-              <i class="fa-solid fa-arrow-left text-xs"></i> Anterior
+              <i data-lucide="arrow-left" class="w-4 h-4"></i> Anterior
             </button>
             <div class="flex-1"></div>
             <button type="button" id="nextBtn" class="nav-btn-next">
-              Siguiente <i class="fa-solid fa-arrow-right text-xs"></i>
+              Siguiente <i data-lucide="arrow-right" class="w-4 h-4"></i>
             </button>
           </div>
 
@@ -1382,4 +1446,3 @@
   </body>
 
 </html>
-

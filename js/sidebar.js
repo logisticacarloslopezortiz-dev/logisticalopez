@@ -74,12 +74,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       const user = session.user;
       let adminName = '';
       try {
-        const { data: collab } = await supabaseConfig.client
-          .from('collaborators')
-          .select('name')
+        const { data: profile } = await supabaseConfig.client
+          .from('profiles')
+          .select('full_name')
           .eq('id', user.id)
           .maybeSingle();
-        if (collab && collab.name) adminName = String(collab.name).trim();
+        if (profile && profile.full_name) adminName = String(profile.full_name).trim();
       } catch(_) {}
       if (!adminName) {
         if (user.user_metadata?.full_name) {

@@ -165,34 +165,6 @@ const OrderManager = {
     } catch (_) {}
   },
 
-  // Toast profesional con íconos y animación suave
-  _toast(message, type = 'info') {
-    const cfg = {
-      success: { bg: '#16a34a', icon: '✓' },
-      error:   { bg: '#dc2626', icon: '✗' },
-      warning: { bg: '#d97706', icon: '⚠' },
-      info:    { bg: '#2563eb', icon: 'ℹ' }
-    };
-    const { bg, icon } = cfg[type] || cfg.info;
-    const containerId = 'tlc-toast-container';
-    let container = document.getElementById(containerId);
-    if (!container) {
-      container = document.createElement('div');
-      container.id = containerId;
-      container.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column-reverse;gap:8px;max-width:320px;';
-      document.body.appendChild(container);
-    }
-    const t = document.createElement('div');
-    t.style.cssText = `background:${bg};color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.18);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transform:translateY(8px);opacity:0;transition:all 0.25s ease;`;
-    t.innerHTML = `<span style="font-size:15px;flex-shrink:0">${icon}</span><span>${String(message).replace(/</g,'&lt;')}</span>`;
-    container.appendChild(t);
-    requestAnimationFrame(() => { t.style.transform = 'translateY(0)'; t.style.opacity = '1'; });
-    setTimeout(() => {
-      t.style.opacity = '0'; t.style.transform = 'translateY(8px)';
-      setTimeout(() => t.remove(), 280);
-    }, 3200);
-  },
-
   // ✅ ENTERPRISE: Helper centralizado para liberar al colaborador
   async _releaseCollaboratorActiveJob(orderId) {
     try {
@@ -228,19 +200,19 @@ const OrderManager = {
 
       const currentPhase = this._getUiPhaseFromOrder(currentOrder);
 
+      // Evitar race condition: dos colaboradores aceptando la misma orden
+      // (accepted ya tiene su propia ruta atómica vía acceptOrder + RPC)
+      if (flowKey === 'accepted') {
+        return this.acceptOrder(orderId, additionalData);
+      }
+
       // Validar que el colaborador sea el dueño de la orden
       const { data: { user } } = await supabaseConfig.client.auth.getUser();
       if (
         currentOrder.assigned_to &&
-        currentOrder.assigned_to !== user?.id &&
-        flowKey !== 'accepted'
+        currentOrder.assigned_to !== user?.id
       ) {
         throw new Error('No tienes permiso para modificar esta orden');
-      }
-
-      // Evitar race condition: dos colaboradores aceptando la misma orden
-      if (flowKey === 'accepted' && currentOrder.assigned_to) {
-        throw new Error('Esta orden ya fue tomada por otro colaborador');
       }
 
       // Validar transición
@@ -337,9 +309,67 @@ const OrderManager = {
     }
   },
 
-  // ✅ Centraliza la aceptación de una orden
+  // ✅ Centraliza la aceptación de una orden (RPC atómica contra race conditions)
   async acceptOrder(orderId, additionalData = {}) {
-    return this.actualizarEstadoPedido(orderId, 'accepted', additionalData);
+    try {
+      await supabaseConfig.ensureFreshSession();
+      const normalizedId = this._normalizeOrderId(orderId);
+      if (!normalizedId) throw new Error('ID de orden inválido');
+
+      const { data: { user } } = await supabaseConfig.client.auth.getUser();
+      const collabId = additionalData.collaborator_id || additionalData.assigned_to || user?.id;
+      if (!collabId) throw new Error('Sesión inválida');
+
+      // Llamada atómica: la DB garantiza que solo 1 colaborador gana la orden
+      // Aseguramos tipos: ID como entero y CollabId como string (UUID)
+      const { data: rpcResult, error: rpcError } = await supabaseConfig.client
+        .rpc('accept_order_atomic', {
+          p_order_id: Math.floor(Number(normalizedId)),
+          p_collaborator_id: String(collabId)
+        });
+
+      if (rpcError) {
+        // Error específico de PostgREST si no encuentra la función
+        if (rpcError.code === 'PGRST202' || String(rpcError.message).includes('Could not find the function')) {
+          console.error('[OrderManager] RPC accept_order_atomic no encontrada. Por favor ejecuta el SQL de schema.sql.');
+          throw new Error('Error de configuración en el servidor (RPC faltante). Contacta soporte.');
+        }
+        throw rpcError;
+      }
+
+      if (!rpcResult?.success) throw new Error(rpcResult?.error || 'Error al aceptar la orden');
+
+      // Insertar en active_jobs y registrar tracking
+      const currentOrder = await this._findOrderByCandidates(orderId);
+      if (currentOrder) {
+        const history = Array.isArray(currentOrder.tracking_data) ? currentOrder.tracking_data : [];
+        const trackingEntry = {
+          ui_status: 'accepted',
+          db_status: 'accepted',
+          date: new Date().toISOString(),
+          description: 'Orden aceptada por colaborador'
+        };
+        await supabaseConfig.client
+          .from('orders')
+          .update({ tracking_data: [...history.slice(-25), trackingEntry] })
+          .eq('id', normalizedId);
+
+        try {
+          await supabaseConfig.client
+            .from('collaborator_active_jobs')
+            .upsert({ collaborator_id: collabId, order_id: normalizedId, started_at: new Date().toISOString() });
+        } catch (_) {}
+      }
+
+      this.runProcessOutbox();
+      const updatedOrder = await this._findOrderByCandidates(orderId);
+      if (updatedOrder) this._notifyClientStatusChange(updatedOrder, 'accepted');
+
+      return { success: true, data: updatedOrder };
+    } catch (error) {
+      console.error('[OrderManager] acceptOrder error:', error.message);
+      return { success: false, error: error.message };
+    }
   },
 
   // ✅ NUEVO: Función faltante para actualizar precio y método de pago
@@ -399,6 +429,36 @@ const OrderManager = {
 
     // Fallback desde dbStatus — siempre normalizado al ORDER_FLOW
     return this._normalizeToFlowKey(dbStatus) || 'pending';
+  },
+
+  // ✅ Sistema de notificaciones integrado (Resuelve error de panel-colaborador.js)
+  _toast(message, type = 'info') {
+    // Intentar usar el sistema global si existe
+    if (typeof window !== 'undefined' && window.notifications && typeof window.notifications.show === 'function') {
+      window.notifications.show(message, type);
+    } else {
+      console.log(`[OrderManager Toast] ${type.toUpperCase()}: ${message}`);
+      // Fallback visual mínimo
+      if (typeof document !== 'undefined') {
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-4 right-4 p-4 rounded-xl text-white z-[9999] shadow-2xl transition-all duration-300 transform translate-y-0 opacity-100 ${
+          type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600'
+        }`;
+        toast.style.minWidth = '200px';
+        toast.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="font-bold">${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span>
+            <span>${message}</span>
+          </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(20px)';
+          setTimeout(() => toast.remove(), 300);
+        }, 3500);
+      }
+    }
   },
 
   // Notificaciones al cliente

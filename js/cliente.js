@@ -3,7 +3,6 @@ let currentStep = 1;
 let selectedService = null; // Ahora será un objeto {id, name}
 let serviceQuestions = {};
 let modalFilledByService = {}; // Mapa: servicio.id -> modal completado
-const DRAFT_KEY = 'tlc_draft_order';
 
 function getClientId() {
   let clientId = localStorage.getItem('client_id');
@@ -14,17 +13,6 @@ function getClientId() {
   }
   return clientId;
 }
-
-// ✅ 5. SAFE NOTIFY GLOBAL (OBLIGATORIO)
-window.safeNotify = function(type, msg, opts = {}) {
-  if (typeof notify === 'function') {
-    notify(type, msg, opts);
-  } else {
-    // Fallback a la consola si el sistema de notificaciones no está listo
-    const style = type === 'error' ? 'color: red; font-weight: bold;' : 'color: blue;';
-    console.warn(`%c[${type.toUpperCase()}]`, style, msg);
-  }
-};
 
 // Utilidad: escapar texto para evitar inyección HTML al insertar en innerHTML
 function escapeHtml(input) {
@@ -185,7 +173,7 @@ function updateStepUI() {
 }
 
 // Elementos del DOM
-let steps, nextBtn, prevBtn, progressBar, helpText;
+let steps, nextBtn, progressBar, helpText;
 let mapContainer = null;
 
 function showStep(step, direction = 'next') {
@@ -209,12 +197,21 @@ function showStep(step, direction = 'next') {
     }
   });
 
-  if (prevBtn) prevBtn.classList.toggle('hidden', step === 1);
   const isLastStep = step === steps.length;
+  const isFirstStep = step === 1;
+
+  // Lógica de visibilidad de botones solicitada por el usuario
   if (nextBtn) nextBtn.classList.toggle('hidden', isLastStep);
-  // Ocultar también el div de navegación completo en paso 6 para no mostrar espacio vacío
+  if (prevBtn) prevBtn.classList.toggle('hidden', isFirstStep);
+
+  // Ocultar también el div de navegación completo en paso 6 para no mostrar espacio vacío si es necesario
+  // Pero el usuario quiere que el botón anterior aparezca en el paso 6.
   const navDiv = nextBtn?.parentElement;
-  if (navDiv) navDiv.style.display = isLastStep ? 'none' : '';
+  if (navDiv) {
+    // Si estamos en el paso 6, nextBtn está oculto, pero prevBtn debe ser visible.
+    // Solo ocultamos el navDiv si AMBOS botones estuvieran ocultos (que no es el caso).
+    navDiv.style.display = ''; 
+  }
 
   // Lógica para mostrar/ocultar el mapa a pantalla completa
   if (step === 4) { // Asumiendo que el paso 4 es el del mapa
@@ -374,7 +371,7 @@ async function loadServices() {
     });
   } catch (err) {
     console.error('❌ loadServices error:', err);
-    safeNotify('error', 'Error cargando servicios');
+    if (window.notifications) window.notifications.show('Error cargando servicios', 'error');
   }
 }
 
@@ -445,8 +442,8 @@ async function loadVehicles() {
     });
   } catch (err) {
     console.error('❌ loadVehicles error:', err);
-    // ✅ FIX 5: Usar safeNotify en lugar de notify?.
-    safeNotify('error', 'Error cargando vehículos');
+    // ✅ FIX 5: Usar notifications.show.
+    if (window.notifications) window.notifications.show('Error cargando vehículos', 'error');
   }
 }
 
@@ -476,13 +473,13 @@ function validateCurrentStep() {
     emailInput.classList.add(isEmailValid ? 'valid' : 'invalid');
 
     if (!isNombreValid || !isTelefonoValid || !isEmailValid) {
-      safeNotify('warning', 'Revisa los campos marcados en rojo.', { title: 'Datos incompletos' });
+      if (window.notifications) window.notifications.show('Revisa los campos marcados en rojo.', 'warning', 5000, { title: 'Datos incompletos' });
       return false;
     }
   }
   
   if (currentStep === 2 && (!selectedService || !selectedService.name)) {
-    safeNotify('warning', 'Debes seleccionar un servicio para continuar.', { title: 'Paso Incompleto' });
+    if (window.notifications) window.notifications.show('Debes seleccionar un servicio para continuar.', 'warning', 5000, { title: 'Paso Incompleto' });
     return false;
   }
 
@@ -490,7 +487,7 @@ function validateCurrentStep() {
   if (currentStep === 2 && selectedService?.id) {
     const filled = !!modalFilledByService[selectedService.id];
     if (!filled) {
-      safeNotify('warning', 'Completa y guarda la información adicional del servicio antes de continuar.', { title: 'Información Requerida' });
+      if (window.notifications) window.notifications.show('Completa y guarda la información adicional del servicio antes de continuar.', 'warning', 5000, { title: 'Información Requerida' });
       return false;
     }
   }
@@ -498,7 +495,7 @@ function validateCurrentStep() {
   if (currentStep === 3) {
     const selectedVehicle = document.querySelector('.vehicle-item.selected');
     if (!selectedVehicle) {
-      safeNotify('warning', 'Debes seleccionar un vehículo para continuar.', { title: 'Paso Incompleto' });
+      if (window.notifications) window.notifications.show('Debes seleccionar un vehículo para continuar.', 'warning', 5000, { title: 'Paso Incompleto' });
       return false;
     }
   }
@@ -510,7 +507,7 @@ function validateCurrentStep() {
     const destino = deliveryEl && deliveryEl.value ? String(deliveryEl.value).trim() : '';
 
     if (!origen || !destino) {
-      safeNotify('warning', 'Debes establecer una dirección de origen y una de destino en el mapa.', { title: 'Paso Incompleto' });
+      if (window.notifications) window.notifications.show('Debes establecer una dirección de origen y una de destino en el mapa.', 'warning', 5000, { title: 'Paso Incompleto' });
       return false;
     }
   }
@@ -522,7 +519,7 @@ function validateCurrentStep() {
     const hora = horaEl ? horaEl.value : '';
     
     if (!fecha || !hora) {
-      safeNotify('warning', 'Debes seleccionar una fecha y hora para el servicio.', { title: 'Paso Incompleto' });
+      if (window.notifications) window.notifications.show('Debes seleccionar una fecha y hora para el servicio.', 'warning', 5000, { title: 'Paso Incompleto' });
       return false;
     }
   }
@@ -728,178 +725,126 @@ async function initMap() {
   const mapElement = document.getElementById("map");
   if (!mapElement) return;
 
+  // ✅ Cargar plugins de Leaflet necesarios
+  await ensureClientMapPluginsLoaded();
+
   const loader = document.getElementById('map-loader');
   if (loader) loader.style.display = 'flex';
 
   rdBounds = L.latLngBounds(L.latLng(17.47004, -72.00742), L.latLng(19.93298, -68.32254));
   const sanCristobalCenter = [18.4160, -70.1090];
 
-  // Configuración Leaflet recomendada (Regla 7)
   map = L.map(mapElement, {
     maxBounds: rdBounds,
     maxBoundsViscosity: 1.0,
-    scrollWheelZoom: false, // Evita zoom accidental
+    scrollWheelZoom: false,
     tap: true
   }).setView(sanCristobalCenter, 12);
+
+  // ✅ INTEGRACIÓN: Geocoder (Buscador)
+  if (L.Control.Geocoder) {
+    const geocoder = L.Control.Geocoder.nominatim({
+      geocodingQueryParams: { countrycodes: 'do' }
+    });
+    L.Control.geocoder({
+      geocoder: geocoder,
+      defaultMarkGeocode: false,
+      placeholder: 'Buscar dirección en RD...',
+      errorMessage: 'No se encontró la dirección'
+    })
+    .on('markgeocode', function(e) {
+      const latlng = e.geocode.center;
+      const label = e.geocode.name;
+      map.flyTo(latlng, 16);
+      confirmPoint(latlng, label);
+    })
+    .addTo(map);
+  }
+
+  // ✅ INTEGRACIÓN: Routing Machine (OSRM)
+  let routingControl = null;
 
   map.on('click', () => { map.scrollWheelZoom.enable(); });
 
   // Layers
   const cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap & CARTO', subdomains: 'abcd', maxZoom: 19 });
   const stadiaOutdoors = L.tileLayer('https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}{r}.png', { attribution: 'Map tiles by Stadia Maps', maxZoom: 20 });
-  const osmStandard = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 });
   
-  let baseLoaded = false;
-  const baseLayer = stadiaOutdoors.addTo(map);
-  if (baseLayer && typeof baseLayer.on === 'function') {
-      baseLayer.on('load', () => { if(loader) loader.style.display = 'none'; mapElement.style.background = ''; baseLoaded = true; });
-      baseLayer.on('tileerror', () => {
-          if (!baseLoaded) {
-              cartoVoyager.addTo(map).on('load', () => { if(loader) loader.style.display = 'none'; });
-          }
-      });
-  } else { if(loader) loader.style.display = 'none'; }
+  stadiaOutdoors.addTo(map);
+  if (loader) loader.style.display = 'none';
 
-  if (L.control && typeof L.control.layers === 'function') {
-      L.control.layers({ 'Stadia Outdoors': stadiaOutdoors, 'CARTO Voyager': cartoVoyager, 'OSM Standard': osmStandard }).addTo(map);
-  }
+  // ... resto de la lógica de iconos ...
+  originIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
+  destinationIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
 
-  // Helpers de búsqueda
-  async function forwardGeocode(q){
-    try{
-      const { data, error } = await supabaseConfig.client.functions.invoke('forward-geocode', { body: { q, countrycodes: 'do', lang: 'es', addressdetails: 1, limit: 1 } });
-      if (error) return null;
-      const res = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
-      if (Array.isArray(res) && res.length > 0){
-        const r = res[0];
-        return { lat: parseFloat(r.lat ?? r.y), lng: parseFloat(r.lon ?? r.x), label: r.display_name ?? r.label ?? r.name ?? q };
-      }
-      return null;
-    } catch(_) { return null; }
-  }
-
-async function searchPlace(query) {
-  const q = String(query || '').trim();
-  if (!q || q.length < 3) return null;
-  
-  // 1. Intentar geocodificación principal
-  let res = await forwardGeocode(q);
-  if (res) return res;
-
-  // 2. Fallback a Photon (OpenStreetMap) con soporte mejorado para calles/barrios
-  try {
-    const qSan = q.replace(/[^\p{L}\s0-9,-]/gu, '').trim();
-    if (!qSan || qSan.length < 3) return null;
-    
-    // Añadir contexto de país si no está presente para mejorar precisión
-    const qContext = qSan.toLowerCase().includes('dominicana') ? qSan : `${qSan}, República Dominicana`;
-    
-    const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(qContext) + '&lang=es&limit=1';
-    const r = await fetch(url);
-    if (r.ok) {
-      const j = await r.json();
-      const f = j.features?.[0];
-      if (f) {
-        // Construir etiqueta más descriptiva
-        const props = f.properties;
-        const label = [props.name, props.street, props.city, props.state].filter(Boolean).join(', ') || q;
-        return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label };
-      }
-    }
-  } catch(_){ }
-  return null;
+  map.on('click', (e) => confirmPoint(e.latlng));
 }
 
-  const inputLastResult = new WeakMap();
-  // MEJORA: Autocompletado silencioso con debounce optimizado
-  const previewSearch = debounce(async (inputEl) => {
-    const q = (inputEl && inputEl.value ? inputEl.value : '').trim();
-    if (q.length < 4) return; // Evitar búsquedas muy cortas
-
-    const res = await searchPlace(q);
-    if (!res) return;
-    const latlng = L.latLng(res.lat, res.lng);
-    
-    // MEJORA: Eliminadas notificaciones rojas (silencioso)
-    if (rdBounds && !rdBounds.contains(latlng)) { 
-      console.debug('Resultado fuera de RD ignorado:', latlng);
-      return; 
-    }
-    
-    inputLastResult.set(inputEl, res);
-    
-    // MEJORA: UX fluida con animación
-    map.flyTo(latlng, 16, { animate: true, duration: 1.2 });
-    
-    if (!MapState.preview) {
-      MapState.preview = L.marker(latlng, { icon: previewIcon, opacity: 0.7, interactive: true }).addTo(map);
-      // MEJORA: Selección automática al hacer click en el preview
-      MapState.preview.on('click', () => confirmPoint(latlng, res.label));
+async function ensureClientMapPluginsLoaded() {
+  const plugins = [
+    { id: 'geocoder-js', src: 'https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js' },
+    { id: 'geocoder-css', href: 'https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css', type: 'css' },
+    { id: 'routing-js', src: 'https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js' },
+    { id: 'routing-css', href: 'https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css', type: 'css' }
+  ];
+  for (const p of plugins) {
+    if (document.getElementById(p.id)) continue;
+    if (p.type === 'css') {
+      const link = document.createElement('link'); link.id = p.id; link.rel = 'stylesheet'; link.href = p.href;
+      document.head.appendChild(link);
     } else {
-      MapState.preview.setLatLng(latlng);
-      MapState.preview.setOpacity(0.7);
-      MapState.preview.off('click');
-      MapState.preview.on('click', () => confirmPoint(latlng, res.label));
+      await new Promise(r => { const s = document.createElement('script'); s.id = p.id; s.src = p.src; s.onload = r; document.head.appendChild(s); });
     }
-  }, 500);
-
-  async function confirmSearch(inputEl) {
-    const q = (inputEl && inputEl.value ? inputEl.value : '').trim();
-    if (!q || q.length < 3) return;
-    let res = inputLastResult.get(inputEl);
-    if (!res) res = await searchPlace(q);
-    if (res) confirmPoint(L.latLng(res.lat, res.lng), q || res.label);
   }
+}
 
-  // Iconos
-  originIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-  destinationIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-  previewIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-
-  // Inputs y Listeners
-  pickupInput = document.getElementById('pickupAddress');
-  deliveryInput = document.getElementById('deliveryAddress');
+// ✅ CÁLCULO DE DISTANCIA Y PRECIO
+async function calculateRoute() {
+  if (!MapState.origin || !MapState.destination || !window.L.Routing) return;
   
-  if (pickupInput) {
-    pickupInput.addEventListener('input', () => previewSearch(pickupInput));
-    pickupInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmSearch(pickupInput); } });
-  }
-  if (deliveryInput) {
-    deliveryInput.addEventListener('input', () => previewSearch(deliveryInput));
-    deliveryInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmSearch(deliveryInput); } });
+  if (window._routingControl) {
+    map.removeControl(window._routingControl);
   }
 
-  // Botón Expandir Mapa
-  const expandMapBtn = document.getElementById('expand-map-btn');
-  if (expandMapBtn) {
-      expandMapBtn.addEventListener('click', () => {
-          const layout = document.querySelector('.map-layout');
-          if (layout) {
-              layout.classList.toggle('map-full');
-              document.body.classList.toggle('no-scroll');
-              setTimeout(() => map.invalidateSize(), 300);
-          }
-      });
-  }
+  window._routingControl = L.Routing.control({
+    waypoints: [
+      L.latLng(MapState.origin.latlng),
+      L.latLng(MapState.destination.latlng)
+    ],
+    router: L.Routing.osrmv1({
+      serviceUrl: 'https://router.project-osrm.org/route/v1'
+    }),
+    lineOptions: {
+      styles: [{ color: '#2563eb', weight: 5, opacity: 0.7 }]
+    },
+    createMarker: () => null, // No crear marcadores extra
+    addWaypoints: false,
+    routeWhileDragging: false,
+    show: false // Ocultar panel de instrucciones
+  }).on('routesfound', function(e) {
+    const routes = e.routes;
+    const summary = routes[0].summary;
+    const distanceKm = (summary.totalDistance / 1000).toFixed(1);
+    
+    // Actualizar UI con distancia
+    const distEl = document.getElementById('distance-value');
+    const distCont = document.getElementById('distance-container');
+    if (distEl) distEl.textContent = distanceKm;
+    if (distCont) distCont.classList.remove('hidden');
 
-  // Ubicación Actual
-  const useLocBtn = document.getElementById('use-current-location');
-  if (useLocBtn) {
-      useLocBtn.classList.remove('hidden');
-      useLocBtn.addEventListener('click', () => {
-          if (navigator.geolocation && MapState.mode === 'origin') {
-              navigator.geolocation.getCurrentPosition(
-                  (pos) => confirmPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                  () => safeNotify('error', 'No se pudo obtener tu ubicación')
-              );
-          }
-      });
-  }
-
-  // Evento Click en Mapa
-  map.on('click', (e) => {
-      confirmPoint(e.latlng);
-  });
+    // ✅ Lógica de negocio: Precio Estimado (Ejemplo: $200 base + $50 por km)
+    const basePrice = 200;
+    const kmPrice = 50;
+    const totalEstimated = basePrice + (distanceKm * kmPrice);
+    
+    // Mostrar precio estimado al cliente
+    const priceEl = document.getElementById('estimated-price-display');
+    const priceCont = document.getElementById('price-container');
+    if (priceEl) {
+      priceEl.textContent = `$${Math.round(totalEstimated).toLocaleString('es-DO')}`;
+      if (priceCont) priceCont.classList.remove('hidden');
+    }
+  }).addTo(map);
 }
 
 // --- Función CENTRAL del mapa (OBLIGATORIA) ---
@@ -908,7 +853,7 @@ async function confirmPoint(latlng, label = null) {
 
     // 1. Validar límites de República Dominicana
     if (rdBounds && !rdBounds.contains(latlng)) {
-      safeNotify('error', 'La ubicación seleccionada está fuera de la República Dominicana. Por favor, marca un punto dentro del territorio nacional.', { title: 'Ubicación no permitida' });
+      if (window.notifications) window.notifications.show('La ubicación seleccionada está fuera de la República Dominicana. Por favor, marca un punto dentro del territorio nacional.', 'error', 5000, { title: 'Ubicación no permitida' });
       return;
     }
 
@@ -934,12 +879,12 @@ async function confirmPoint(latlng, label = null) {
       setPoint('origin', latlng, label);
       MapState.mode = 'destination';
       // Notificar éxito al fijar origen
-      safeNotify('success', 'Punto de recogida fijado correctamente.', { duration: 2000 });
+      if (window.notifications) window.notifications.show('Punto de recogida fijado correctamente.', 'success', 2000);
     } else if (MapState.mode === 'destination') {
       setPoint('destination', latlng, label);
       MapState.mode = 'complete';
       // Notificar éxito al fijar destino
-      safeNotify('success', 'Ruta completada. Ya puedes continuar al siguiente paso.', { duration: 3000 });
+      if (window.notifications) window.notifications.show('Ruta completada. Ya puedes continuar al siguiente paso.', 'success', 3000);
     }
 
     // 5. Actualizar UI
@@ -982,7 +927,6 @@ function setPoint(type, latlng, label = '') {
   const cardId = type === 'origin' ? 'origin-card' : 'destination-card';
   const dispId = type === 'origin' ? 'origin-address-display' : 'destination-address-display';
   const coordsId = type === 'origin' ? 'origin-coords-display' : 'destination-coords-display';
-  const editBtnId = type === 'origin' ? 'origin-edit-btn' : 'destination-edit-btn';
 
   if (!MapState[type] || !MapState[type].marker) {
     const marker = L.marker(latlng, { draggable: true, icon }).addTo(map);
@@ -1013,6 +957,11 @@ function setPoint(type, latlng, label = '') {
     coordsEl.textContent = `Coords.: ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
   }
 
+  // ✅ AUTO-ROUTE: Trazar ruta si ambos puntos existen
+  if (MapState.origin && MapState.destination) {
+    calculateRoute();
+  }
+
   // Ajustar vista
   if (typeof fitMapToBounds === 'function') fitMapToBounds();
 }
@@ -1028,51 +977,6 @@ function fitMapToBounds() {
     map.fitBounds(b, { padding: [50, 50], maxZoom: 16 });
   }
 }
-
-// --- Lógica de Notificaciones Push ---
-// Wrapper seguro para notificaciones con soporte de mensajes persistentes
-function notify(kind, message, a3, a4) {
-  try {
-    // Normalizar parámetros
-    let type = kind;
-    let options = {};
-    let duration;
-
-    // Soporte para formato especial: notify('persistent', msg, 'success', { ... })
-    if (kind === 'persistent') {
-      type = typeof a3 === 'string' ? a3 : 'info';
-      options = (a4 && typeof a4 === 'object') ? a4 : {};
-      // Forzar persistencia (no autodesaparece)
-      duration = options.duration != null ? options.duration : 999999;
-    } else {
-      options = (a3 && typeof a3 === 'object') ? a3 : {};
-    }
-
-    // Sanitizar mensaje para prevenir XSS
-    const safeMessage = escapeHtml(String(message));
-
-    // Usar API global del sistema de notificaciones si está disponible
-    if (typeof window.showNotification === 'function') {
-      return window.showNotification(safeMessage, String(type), duration, options);
-    }
-
-    // Fallback a helpers individuales si existen
-    const map = { success: 'showSuccess', error: 'showError', warning: 'showWarning', info: 'showInfo' };
-    const fnName = map[String(type)] || null;
-    if (fnName && typeof window[fnName] === 'function') {
-      return window[fnName](safeMessage, options);
-    }
-  } catch (_) {}
-
-    // Último recurso: log discreto en consola
-  try { console[kind === 'error' ? 'error' : 'log']('[Aviso]', String(message)); } catch (_) {}
-}
-
-// Exponer atajos si no existen aún
-if (!window.showSuccess) window.showSuccess = (message, options) => notify('success', message, options);
-if (!window.showError) window.showError = (message, options) => notify('error', message, options);
-if (!window.showWarning) window.showWarning = (message, options) => notify('warning', message, options);
-if (!window.showInfo) window.showInfo = (message, options) => notify('info', message, options);
 
 // Redirección después de copiar el ID
 function handleAfterCopy(orderId) {
@@ -1099,7 +1003,7 @@ function copyToClipboard(text) {
   try {
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       navigator.clipboard.writeText(text).then(() => {
-        window.showSuccess?.('ID copiado — abriendo seguimiento...');
+        if (window.notifications) window.notifications.show('ID copiado — abriendo seguimiento...', 'success');
         goToTracking();
       }).catch(() => {
         goToTracking();
@@ -1115,35 +1019,11 @@ function copyToClipboard(text) {
     ta.select();
     document.execCommand('copy');
     document.body.removeChild(ta);
-    window.showSuccess?.('ID copiado — abriendo seguimiento...');
+    if (window.notifications) window.notifications.show('ID copiado — abriendo seguimiento...', 'success');
     goToTracking();
   } catch {
     goToTracking();
   }
-}
-
-function saveDraft() {
-  try {
-    const draft = {
-      step: currentStep,
-      client: {
-        name: document.getElementById('clientName')?.value,
-        phone: document.getElementById('clientPhone')?.value,
-        email: document.getElementById('clientEmail')?.value,
-      },
-      service: selectedService,
-      questions: serviceQuestions
-    };
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  } catch(_) {}
-}
-
-function restoreDraftIfExists() {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return;
-    // Lógica de restauración simplificada (opcional)
-  } catch(_) {}
 }
 
 // Actualiza los dots de navegación visual
@@ -1165,10 +1045,18 @@ function updateStepsNav(step) {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('[Cliente] Init...');
 
+  // ✅ Splash Screen: Ocultar después de un tiempo prudente
+  const hideSplash = () => {
+    const splash = document.getElementById('splash-screen');
+    if (splash) {
+      splash.style.opacity = '0';
+      setTimeout(() => splash.classList.add('hidden'), 800);
+    }
+  };
+
   try {
     steps = document.querySelectorAll('.step[data-step]');
     nextBtn = document.getElementById('nextBtn');
-    prevBtn = document.getElementById('prevBtn');
     progressBar = document.getElementById('progress-bar');
     helpText = document.getElementById('help-text');
     pickupInput = document.getElementById('pickupAddress');
@@ -1176,6 +1064,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!steps || steps.length === 0) {
       console.error('❌ No se encontraron los pasos del formulario.');
+      hideSplash();
       return;
     }
 
@@ -1185,12 +1074,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       nextBtn.addEventListener('click', () => {
         if (validateCurrentStep()) {
           showStep(currentStep + 1, 'next');
-          saveDraft();
+          // saveDraft(); // Eliminado según limpieza anterior
         }
       });
     }
+
     if (prevBtn) {
-      prevBtn.addEventListener('click', () => showStep(currentStep - 1, 'prev'));
+      prevBtn.addEventListener('click', () => {
+        if (currentStep > 1) {
+          showStep(currentStep - 1, 'prev');
+        }
+      });
     }
 
     document.getElementById('hasRNC')?.addEventListener('change', toggleRNCField);
@@ -1267,12 +1161,12 @@ document.addEventListener('DOMContentLoaded', async () => {
               </div>`;
           }
           if (submitBtn) submitBtn.style.display = 'none';
-          safeNotify('success', '¡Solicitud enviada correctamente!', { duration: 4000 });
+          if (window.notifications) window.notifications.show('¡Solicitud enviada correctamente!', 'success', 4000);
 
         } catch (err) {
           console.error('❌ Error al enviar solicitud:', err);
-          safeNotify('error', 'No se pudo enviar la solicitud. Intenta de nuevo.', { title: 'Error' });
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Solicitud'; }
+          if (window.notifications) window.notifications.show('No se pudo enviar la solicitud. Intenta de nuevo.', 'error', 5000, { title: 'Error' });
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i data-lucide="send" class="w-5 h-5"></i> Enviar Solicitud'; }
         }
       });
     }
@@ -1298,7 +1192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (modal) modal.classList.add('hidden');
         document.documentElement.classList.remove('overflow-hidden');
         document.body.classList.remove('overflow-hidden');
-        safeNotify('success', 'Información guardada. Puedes continuar.', { duration: 2000 });
+        if (window.notifications) window.notifications.show('Información guardada. Puedes continuar.', 'success', 2000);
       });
     });
 
@@ -1324,9 +1218,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     showStep(1);
     console.log('✅ Cliente listo');
+    
+    // Ocultar splash screen tras carga exitosa
+    setTimeout(hideSplash, 1500);
 
   } catch (err) {
     console.error('❌ Error en la inicialización del cliente:', err);
-    safeNotify('error', 'Hubo un problema al cargar la página. Por favor, recarga.');
+    hideSplash();
+    if (window.notifications) window.notifications.show('Hubo un problema al cargar la página. Por favor, recarga.', 'error');
   }
 });

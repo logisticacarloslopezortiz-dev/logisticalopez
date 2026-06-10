@@ -1,4 +1,4 @@
-﻿﻿(() => {
+(() => {
 'use strict';
 
 // ============================================
@@ -125,15 +125,24 @@ function normalizePhoneDR(phone) {
 
 // Carga inicial de órdenes
 async function loadOrders() {
+  const tableBody = document.getElementById('ordersTableBody');
+  if (tableBody) {
+    tableBody.innerHTML = `<tr><td colspan="9" class="text-center py-12">
+      <div class="flex flex-col items-center gap-3">
+        <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-gray-500 font-medium">Cargando tablero operativo...</p>
+      </div>
+    </td></tr>`;
+  }
+
   try {
-    const orders = await supabaseConfig.getOrders();
+    // Cargamos todos los estados para que los contadores de "Completados hoy" funcionen
+    const activeStates = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+    const orders = await supabaseConfig.getOrdersSummary({ status: activeStates }, { range: [0, 49] });
     allOrders = orders || [];
     filterOrders();
   } catch (err) {
     console.error('Fallo inesperado al cargar órdenes:', err?.message || err);
-    if (window.showError) {
-      window.showError('Fallo inesperado al cargar solicitudes.', { title: 'Error inesperado' });
-    }
   }
 }
 
@@ -354,20 +363,30 @@ async function updateOrderStatus(orderId, newStatus) {
 
     if (success) {
       notifications.success(`Estado del pedido #${orderId} actualizado a "${newStatus}".`);
-      AppState.update({ id: Number(orderId), status: normalizedStatus });
-      refreshLucide();
-
-      if (normalizedStatus === 'completed' || normalizedStatus === 'cancelled') {
-        try { window.location.href = 'historial-solicitudes.html'; } catch (_) {}
+      // Actualizar en memoria
+      const idx = allOrders.findIndex(o => String(o.id) === String(orderId));
+      if (idx >= 0) {
+        allOrders[idx] = { ...allOrders[idx], status: normalizedStatus };
+        // Si pasó a estado final, sacarlo de la vista
+        if (normalizedStatus === 'completed' || normalizedStatus === 'cancelled') {
+          allOrders.splice(idx, 1);
+          removeRowDom(orderId);
+          filterOrders();
+          renderOrders();
+          return;
+        }
       }
+      filterOrders();
+      renderOrders();
+      refreshLucide();
     } else {
       notifications.error('No se pudo actualizar el estado de la orden.', error);
-      await loadOrders(); // Revertir cambios visuales optimistas
+      loadOrders();
     }
   } catch (err) {
     console.error('[updateOrderStatus] Error inesperado:', err);
     notifications.error('Error al actualizar estado', err?.message || 'Error desconocido');
-    await loadOrders();
+    loadOrders();
   }
 }
 
@@ -409,38 +428,56 @@ function showServiceDetails(orderId) {
 }
 
 // Función para actualizar resumen
-function updateResumen(){
-  const today = new Date().toISOString().split('T')[0];
-  const todayOrders = allOrders.filter(o => o.date === today);
-  const completedOrders = allOrders.filter(o => {
-    const v = String(o.status || '').toLowerCase();
-    return v === 'completed' || v === 'completada' || o.status === ORDER_STATUS.COMPLETADA;
-  }).length;
-  const pendingOrders = allOrders.filter(o => isVisibleStatus(o.status));
-  const urgentOrders = pendingOrders.filter(o => {
-    const serviceTime = getOrderDate(o) || new Date(8640000000000000);
-    const now = new Date();
-    const diffHours = (serviceTime - now) / (1000 * 60 * 60);
-    return diffHours > 0 && diffHours <= 24;
-  });
+// Función helper centralizada para comparar fechas ignorando horas (robusta a formatos)
+function isSameDay(dateA, dateB) {
+  const a = dateA instanceof Date ? dateA : new Date(dateA);
+  const b = dateB instanceof Date ? dateB : new Date(dateB);
+  if (isNaN(a) || isNaN(b)) return false;
+  return a.getFullYear() === b.getFullYear() &&
+         a.getMonth()    === b.getMonth()    &&
+         a.getDate()     === b.getDate();
+}
 
-  const totalEl = document.getElementById('totalPedidos'); if (totalEl) totalEl.textContent = allOrders.length;
-  const hoyEl = document.getElementById('pedidosHoy'); if (hoyEl) hoyEl.textContent = todayOrders.length;
-  const compEl = document.getElementById('pedidosCompletados'); if (compEl) compEl.textContent = completedOrders;
-  const pctEl = document.getElementById('porcentajeCompletados'); if (pctEl) pctEl.textContent = allOrders.length > 0 ? Math.round((completedOrders / allOrders.length) * 100) : 0;
-  const pendEl = document.getElementById('pedidosPendientes'); if (pendEl) pendEl.textContent = pendingOrders.length;
-  const urgEl = document.getElementById('urgentes'); if (urgEl) urgEl.textContent = urgentOrders.length;
+function updateResumen(){
+  const now = new Date();
+  
+  const isPending   = (s) => s === 'pending' || s === 'pendiente';
+  const isActive    = (s) => ['accepted','in_progress','loading','delivering','aceptada','en curso'].includes(s);
+  const isCompleted = (s) => s === 'completed' || s === 'completada';
+
+  // Pendientes con fecha de servicio = hoy
+  const pendientesHoy = allOrders.filter(o => {
+    if (!isPending(String(o.status).toLowerCase())) return false;
+    const d = o.date ? new Date(o.date + 'T00:00:00') : (o.created_at ? new Date(o.created_at) : null);
+    return d && isSameDay(d, now);
+  }).length;
+
+  // En ruta (activos, sin importar el día)
+  const enRuta = allOrders.filter(o => isActive(String(o.status).toLowerCase())).length;
+
+  // Completados hoy (por completed_at si existe, sino por date)
+  const completadosHoy = allOrders.filter(o => {
+    if (!isCompleted(String(o.status).toLowerCase())) return false;
+    const d = o.completed_at ? new Date(o.completed_at) : (o.date ? new Date(o.date + 'T00:00:00') : null);
+    return d && isSameDay(d, now);
+  }).length;
+
+  // Incidencias: pendientes sin atender hace más de 2 horas
+  const incidencias = allOrders.filter(o => {
+    if (String(o.status || '').toLowerCase() !== 'pending') return false;
+    const createdAt = o.created_at ? new Date(o.created_at) : null;
+    return createdAt && (now - createdAt) / (1000 * 60 * 60) > 2;
+  }).length;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('pendientesHoy', pendientesHoy);
+  set('enRuta', enRuta);
+  set('completadosHoy', completadosHoy);
+  set('incidencias', incidencias);
 }
 
 // Función para actualizar gráficos
-function updateDashboardPanels(){
-  const showingCount = document.getElementById('showingCount');
-  const totalCount = document.getElementById('totalCount');
-  if (showingCount) showingCount.textContent = filteredOrders.length;
-  if (totalCount) totalCount.textContent = allOrders.length;
-  updateResumen();
-  updateAlerts();
-}
+  // updateDashboardPanels() eliminada — redundante con renderOrders()
 
 function updateAlerts() {
   const alertasEl = document.getElementById('alertasLista');
@@ -899,8 +936,11 @@ function renderRowHtml(o) {
   const ds = formatUiStatus(o.status);
   const sc = STATUS_COLOR[ds] || 'bg-gray-100 text-gray-800';
   const cid = getCollaboratorIdFromOrder(o);
+  
+  // ✅ CORRECCIÓN 4: Resolver nombre del colaborador correctamente
   const cn = o.collaborator?.full_name || o.collaborator?.name
-    || (__collaboratorsById?.[cid]?.name) || o.nombre_chofer || '';
+    || (__collaboratorsById?.[cid]?.name) || o.nombre_chofer || o.driver_name_snapshot || '';
+    
   const active = ['accepted','in_progress','loading','delivering']
     .includes(String(o.status).toLowerCase());
 
@@ -910,19 +950,25 @@ function renderRowHtml(o) {
 
   const colCell = cn
     ? `<div class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-100" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${cn}"><i data-lucide="user" class="w-3 h-3"></i>${cn}</div>`
-    : active
-      ? `<button onclick="openAssignModal(${o.id})" class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-medium"><i data-lucide="user-plus" class="w-3 h-3"></i>Asignar</button>`
-      : '<span class="text-xs text-gray-400 italic">Sin asignar</span>';
+    : (o.status === 'pending' || o.status === 'pendiente')
+      ? '<span class="text-xs text-gray-400 italic">Sin asignar</span>'
+      : `<button onclick="openAssignModal(${o.id})" class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-medium"><i data-lucide="user-plus" class="w-3 h-3"></i>Asignar</button>`;
 
-  const montoHtml = o.monto_cobrado
-    ? `<div class="font-semibold text-green-700">$${Number(o.monto_cobrado).toLocaleString('es-DO')}</div>`
+  // ✅ CORRECCIÓN 6: Mostrar estimated_price si monto_cobrado es 0
+  const montoMostrado = (o.monto_cobrado && Number(o.monto_cobrado) > 0) 
+    ? o.monto_cobrado 
+    : (o.estimated_price || 0);
+
+  const montoHtml = montoMostrado > 0
+    ? `<div class="font-semibold text-green-700">$${Number(montoMostrado).toLocaleString('es-DO')}</div>`
     : '<div class="text-gray-400 text-xs">—</div>';
 
   return `
-    <td class="px-4 py-3 text-xs font-mono text-gray-400">#${o.short_id || o.id || 'N/A'}</td>
+    <td class="px-4 py-3 text-xs font-mono text-gray-400">#${o.id || 'N/A'}</td>
     <td class="px-4 py-3">
       <div class="text-sm font-semibold text-gray-900">${o.name || 'N/A'}</div>
-      <div class="text-xs text-gray-500">${o.phone || o.client_phone || ''}</div>
+      <!-- ✅ CORRECCIÓN 1: Usar .phone (esquema oficial) -->
+      <div class="text-xs text-gray-500">${o.phone || ''}</div>
       ${o.rnc ? '<span class="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">RNC</span>' : ''}
     </td>
     <td class="px-4 py-3 whitespace-nowrap">
@@ -930,17 +976,19 @@ function renderRowHtml(o) {
       ${svc}
     </td>
     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700">${o.vehicle?.name || 'N/A'}</td>
-    <td class="px-4 py-3 text-xs text-gray-600" style="max-width:160px">
-      <div class="truncate">📍 ${o.pickup || '—'}</div>
-      <div class="truncate">🏁 ${o.delivery || '—'}</div>
+    <!-- ✅ CORRECCIÓN 5: Truncado de ruta con max-width y title para ver completo -->
+    <td class="px-4 py-3 text-xs text-gray-600" style="max-width:200px">
+      <div class="truncate mb-1" title="${o.pickup || ''}">📍 ${o.pickup || '—'}</div>
+      <div class="truncate" title="${o.delivery || ''}">🏁 ${o.delivery || '—'}</div>
     </td>
     <td class="px-4 py-3 whitespace-nowrap text-sm">
       <div class="font-medium text-gray-800">${o.date || 'N/A'}</div>
       <div class="text-xs text-gray-400">${o.time || ''}</div>
     </td>
     <td class="px-4 py-3 whitespace-nowrap">
+      <!-- ✅ CORRECCIÓN 3: Mapeo visual de estados (Badges) -->
       <select onchange="updateOrderStatus('${o.id}', this.value)"
-        class="px-2 py-1 rounded-full text-xs font-semibold ${sc} border-0 cursor-pointer">
+        class="px-2 py-1 rounded-full text-xs font-semibold ${sc} border-0 cursor-pointer focus:ring-2 focus:ring-blue-500">
         <option value="${ORDER_STATUS.PENDIENTE}"  ${ds === ORDER_STATUS.PENDIENTE  ? 'selected' : ''}>${ORDER_STATUS.PENDIENTE}</option>
         <option value="${ORDER_STATUS.ACEPTADA}"   ${ds === ORDER_STATUS.ACEPTADA   ? 'selected' : ''}>${ORDER_STATUS.ACEPTADA}</option>
         <option value="${ORDER_STATUS.EN_CURSO}"   ${ds === ORDER_STATUS.EN_CURSO   ? 'selected' : ''}>${ORDER_STATUS.EN_CURSO}</option>
@@ -948,11 +996,11 @@ function renderRowHtml(o) {
         <option value="${ORDER_STATUS.CANCELADA}"  ${ds === ORDER_STATUS.CANCELADA  ? 'selected' : ''}>${ORDER_STATUS.CANCELADA}</option>
       </select>
     </td>
-    <td class="px-4 py-3 whitespace-nowrap text-sm" style="min-width:130px">${colCell}</td>
+    <td class="px-4 py-3 whitespace-nowrap text-sm" style="min-width:140px">${colCell}</td>
     <td class="px-4 py-3 whitespace-nowrap text-sm">
-      <button onclick="openPriceModal('${o.id}')" class="text-left hover:bg-gray-50 rounded px-1 w-full">
+      <button onclick="openPriceModal('${o.id}')" class="text-left hover:bg-gray-50 rounded px-1 w-full group">
         ${montoHtml}
-        <div class="text-xs text-gray-400">${o.metodo_pago || ''}</div>
+        <div class="text-[10px] text-gray-400 group-hover:text-blue-500 transition-colors">${o.metodo_pago || 'Pend. Pago'}</div>
       </button>
     </td>
   `;
@@ -1046,6 +1094,15 @@ async function handleRealtimeUpdate(payload) {
 
   try {
     if (eventType === 'INSERT' || eventType === 'UPDATE') {
+      // Si la orden pasó a estado final, sacarla de la tabla
+      if (isFinalOrderStatus(newRecord.status)) {
+        allOrders = allOrders.filter(o => String(o.id) !== String(newRecord.id));
+        removeRowDom(newRecord.id);
+        updateResumen();
+        renderOrders();
+        return;
+      }
+
       // Solo traer datos extra si realmente es necesario
       let orderObj = newRecord;
 
@@ -1060,7 +1117,11 @@ async function handleRealtimeUpdate(payload) {
         }
       }
 
-      AppState.update(orderObj);
+      // Actualizar allOrders en memoria
+      const idx = allOrders.findIndex(o => String(o.id) === String(orderObj.id));
+      if (idx >= 0) allOrders[idx] = { ...allOrders[idx], ...orderObj };
+      else allOrders.unshift(orderObj);
+
       resolveCollaboratorName(orderObj).then(() => updateRow(orderObj));
 
       if (eventType === 'INSERT' && window.notifications) {
@@ -1080,7 +1141,9 @@ window.openAssignModal = openAssignModal;
     if (eventType === 'DELETE') {
       const id = oldRecord?.id;
       if (!id) return;
-      AppState.delete(id);
+      allOrders = allOrders.filter(o => String(o.id) !== String(id));
+      removeRowDom(id);
+      updateResumen();
       return;
     }
   } catch (err) {
@@ -1157,11 +1220,17 @@ async function savePriceData() {
   try {
     const updated = await OrderManager.setOrderAmount(selectedOrderIdForPrice, monto, metodo);
     
-    AppState.update({
-      id: selectedOrderIdForPrice,
-      monto_cobrado: updated?.monto_cobrado ?? parseFloat(monto),
-      metodo_pago: updated?.metodo_pago ?? metodo
-    });
+    // Actualizar en memoria sin recargar todo
+    const idx = allOrders.findIndex(o => String(o.id) === String(selectedOrderIdForPrice));
+    if (idx >= 0) {
+      allOrders[idx] = {
+        ...allOrders[idx],
+        monto_cobrado: updated?.monto_cobrado ?? parseFloat(monto),
+        metodo_pago: updated?.metodo_pago ?? metodo
+      };
+      filterOrders();
+      renderOrders();
+    }
 
     refreshLucide();
     notifications.success('Éxito', 'El monto y método de pago han sido actualizados.');

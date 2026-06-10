@@ -94,51 +94,45 @@
         create table if not exists public.collaborators (
           id uuid primary key references public.profiles(id) on delete cascade,
           created_at timestamptz not null default now(),
-          name text,
-          email text,
-          phone text,
           matricula text,
           status text not null default 'activo',
           role text not null default 'colaborador' check (lower(role) in ('administrador','colaborador')),
-          push_subscription jsonb,
           notes text,
           commission_percent numeric default 0.10,
           can_take_orders boolean default false,
           puede_ver_todas_las_ordenes boolean default false,
-          availability text default 'available',
+          is_online boolean default false,
+          last_seen_at timestamptz default now(),
           updated_at timestamptz not null default now()
         );
+
+        -- Asegurar columnas para compatibilidad con versiones previas
+        alter table public.collaborators add column if not exists is_online boolean default false;
+        alter table public.collaborators add column if not exists last_seen_at timestamptz default now();
+        alter table public.collaborators add column if not exists puede_ver_todas_las_ordenes boolean default false;
+        alter table public.collaborators add column if not exists can_take_orders boolean default false;
+
         create index if not exists idx_collaborators_status on public.collaborators(status);
         create index if not exists idx_collaborators_role on public.collaborators(role);
-        create index if not exists idx_collaborators_email on public.collaborators(email);
         create index if not exists idx_collaborators_can_take on public.collaborators(can_take_orders);
-        create index if not exists idx_collaborators_availability on public.collaborators(availability);
+        create index if not exists idx_collaborators_is_online on public.collaborators(is_online);
 
         drop trigger if exists trg_collaborators_touch_updated on public.collaborators;
         create trigger trg_collaborators_touch_updated
         before update on public.collaborators
         for each row execute function public.set_updated_at();
 
-        -- Sincronizar colaborador -> profile (upsert)
-        create or replace function public.sync_profile_name()
-        returns trigger
-        language plpgsql set search_path = pg_catalog, public as $$
-        begin
-          insert into public.profiles (id, full_name, email, phone, created_at, updated_at)
-          values (new.id, new.name, new.email, new.phone, now(), now())
-          on conflict (id) do update set
-            full_name = excluded.full_name,
-            email = excluded.email,
-            phone = excluded.phone,
-            updated_at = now();
-          return new;
-        end;
-        $$;
+        -- Sincronizar colaborador -> profile (Ya no es necesario si quitamos campos duplicados)
+        -- Eliminado: public.sync_profile_name
 
-        drop trigger if exists trg_sync_profile_name on public.collaborators;
-        create trigger trg_sync_profile_name
-        after insert or update of name, email, phone on public.collaborators
-        for each row execute function public.sync_profile_name();
+        -- Tabla de Matriculas
+        create table if not exists public.matriculas (
+          id bigserial primary key,
+          user_id uuid references auth.users(id) on delete cascade,
+          matricula text not null unique,
+          status text default 'activo',
+          created_at timestamptz default now()
+        );
 
         -- Clients (Anonymous/Guest)
         create table if not exists public.clients (
@@ -164,6 +158,7 @@
           owner_user_id uuid references public.profiles(id) on delete set null,
           vapid_public_key text,
           push_vapid_key text,
+          feature_flags jsonb default '{}',
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now(),
           constraint business_rnc_check check (rnc ~ '^\d{3}-\d{5}-\d{1}$' or rnc is null)
@@ -222,6 +217,25 @@
         end;
         $$;
 
+        -- 4.1) Tablas de Auditoría y Pagos (Super Admin)
+        create table if not exists public.audit_logs (
+          id bigserial primary key,
+          action text not null,
+          detail text,
+          user_id uuid,
+          user_email text,
+          ip_address text,
+          created_at timestamptz default now()
+        );
+
+        create table if not exists public.fee_payments (
+          id bigserial primary key,
+          period text,
+          amount numeric(12,2),
+          status text default 'pending_review',
+          created_at timestamptz default now()
+        );
+
         create table if not exists public.orders (
           id bigserial primary key,
           short_id text unique default public.generate_order_short_id(),
@@ -243,6 +257,7 @@
           "date" date,
           "time" time,
           status public.order_status not null default 'pending',
+          created_by uuid references public.profiles(id) on delete set null,
           assigned_to uuid references public.profiles(id) on delete set null,
           assigned_at timestamptz,
           accepted_by uuid,
@@ -260,11 +275,19 @@
           customer_comment text,
           onesignal_id text,
           onesignal_player_id text,
-          last_ui_status text
+          last_ui_status text,
+          driver_name_snapshot text -- ✅ Snapshot del nombre del chofer para historial
         );
+
+        -- Asegurar columnas para compatibilidad con versiones previas
+        alter table public.orders add column if not exists created_by uuid references public.profiles(id) on delete set null;
+        alter table public.orders add column if not exists last_ui_status text;
+        alter table public.orders add column if not exists driver_name_snapshot text;
 
         -- Índices Orders
         create index if not exists idx_orders_status on public.orders(status);
+        create index if not exists idx_orders_status_btree on public.orders using btree (status);
+        create index if not exists idx_orders_dashboard_status_date on public.orders (status, created_at desc);
         create index if not exists idx_orders_date on public.orders("date");
         create index if not exists idx_orders_short_id on public.orders(short_id);
         create index if not exists idx_orders_short_id_upper on public.orders(upper(short_id));
@@ -274,6 +297,108 @@
         create index if not exists idx_orders_completed_at on public.orders(completed_at);
         create index if not exists idx_orders_status_assigned_to on public.orders(status, assigned_to);
         create index if not exists idx_orders_status_created_at on public.orders(status, created_at);
+
+        -- ── Auto-asignación de created_by al crear una orden ─────────────────────
+        -- Si el usuario está autenticado al crear la orden, se registra como autor fijo.
+        -- Este campo nunca cambia aunque assigned_to se actualice al aceptar la orden.
+        create or replace function public.set_order_created_by()
+        returns trigger
+        language plpgsql
+        security definer
+        set search_path = pg_catalog, public
+        as $$
+        begin
+          if new.created_by is null and auth.uid() is not null then
+            new.created_by := auth.uid();
+          end if;
+          return new;
+        end;
+        $$;
+
+        drop trigger if exists trg_orders_set_created_by on public.orders;
+        create trigger trg_orders_set_created_by
+        before insert on public.orders
+        for each row execute function public.set_order_created_by();
+
+        -- Columna created_by: quién registró la orden (fijo, no cambia al ser tomada)
+        alter table public.orders add column if not exists created_by uuid references public.profiles(id) on delete set null;
+        create index if not exists idx_orders_created_by on public.orders(created_by);
+
+        -- Proteger created_by contra sobreescritura después del INSERT
+        create or replace function public.protect_order_created_by()
+        returns trigger
+        language plpgsql
+        security definer
+        set search_path = pg_catalog, public
+        as $$
+        begin
+          -- Si ya tiene un valor, no permitir cambios (ni siquiera a NULL)
+          if old.created_by is not null and new.created_by is distinct from old.created_by then
+            new.created_by := old.created_by;
+          end if;
+          return new;
+        end;
+        $$;
+
+        drop trigger if exists trg_orders_protect_created_by on public.orders;
+        create trigger trg_orders_protect_created_by
+        before update on public.orders
+        for each row execute function public.protect_order_created_by();
+
+        -- ── Prevención de doble toma (concurrencia) ───────────────────────────────
+        -- RPC atómica: acepta la orden solo si assigned_to IS NULL (previene race condition)
+        create or replace function public.accept_order_atomic(
+          p_order_id bigint,
+          p_collaborator_id uuid
+        )
+        returns jsonb
+        language plpgsql
+        security definer
+        set search_path = pg_catalog, public
+        as $$
+        declare
+          v_updated int;
+          v_driver_name text;
+          v_last_seen timestamptz;
+        begin
+          -- 1. Validar disponibilidad del colaborador (last_seen < 10 min)
+          select last_seen_at into v_last_seen 
+          from public.collaborators 
+          where id = p_collaborator_id;
+
+          if v_last_seen is null or v_last_seen < (now() - interval '10 minutes') then
+            return jsonb_build_object(
+              'success', false,
+              'error',   'Tu ubicación no está actualizada. Abre la app para reconectar.'
+            );
+          end if;
+
+          -- 2. Obtener nombre para el snapshot
+          select full_name into v_driver_name from public.profiles where id = p_collaborator_id;
+
+          update public.orders
+          set
+            status      = 'accepted',
+            assigned_to = p_collaborator_id,
+            assigned_at = now(),
+            driver_name_snapshot = v_driver_name, -- ✅ Snapshot
+            updated_at  = now()
+          where id          = p_order_id
+            and status      = 'pending'
+            and assigned_to is null;
+
+          get diagnostics v_updated = row_count;
+
+          if v_updated = 0 then
+            return jsonb_build_object(
+              'success', false,
+              'error',   'Esta orden ya fue tomada por otro colaborador o ya no está disponible'
+            );
+          end if;
+
+          return jsonb_build_object('success', true);
+        end;
+        $$;
 
         -- Order Helpers
         create or replace function public.set_order_tracking_url()
@@ -516,24 +641,6 @@
           data jsonb
         );
 
-        create table if not exists public.collaborator_performance (
-          id bigserial primary key,
-          collaborator_id uuid not null references public.profiles(id) on delete cascade,
-          metric_date date not null default (current_date),
-          accepted_count int not null default 0,
-          in_progress_count int not null default 0,
-          completed_count int not null default 0,
-          canceled_count int not null default 0,
-          avg_completion_minutes numeric,
-          sum_completion_minutes numeric default 0,
-          sum_rating numeric default 0,
-          count_ratings int default 0,
-          total_amount numeric not null default 0,
-          avg_rating numeric,
-          updated_at timestamptz not null default now(),
-          unique(collaborator_id, metric_date)
-        );
-
         create table if not exists public.collaborator_active_jobs (
           collaborator_id uuid not null references public.profiles(id) on delete cascade,
           order_id bigint not null references public.orders(id) on delete cascade,
@@ -565,27 +672,6 @@
         );
 
         -- 8) FUNCIONES DE NEGOCIO
-
-        -- Sync Push from Collaborator
-        create or replace function public.sync_collaborator_push_subscription()
-        returns trigger as $$
-        declare endpoint text; keys jsonb;
-        begin
-          if new.push_subscription is null then return new; end if;
-          endpoint := new.push_subscription->>'endpoint';
-          keys := new.push_subscription->'keys';
-          if endpoint is null or endpoint = '' then return new; end if;
-          insert into public.push_subscriptions(user_id, endpoint, keys, created_at)
-          values (new.id, endpoint, coalesce(keys,'{}'::jsonb), now())
-          on conflict (user_id, endpoint) where user_id is not null do update set keys = excluded.keys;
-          return new;
-        end;
-        $$ language plpgsql set search_path = pg_catalog, public;
-
-        drop trigger if exists trg_collaborators_sync_push_subscription on public.collaborators;
-        create trigger trg_collaborators_sync_push_subscription
-        after update of push_subscription on public.collaborators
-        for each row execute function public.sync_collaborator_push_subscription();
 
         -- Create Order (Safe)
         create or replace function public.create_order_with_contact(order_payload jsonb)
@@ -634,6 +720,7 @@
                 "date", "time",
                 status, estimated_price, tracking_data,
                 client_contact_id,
+                created_by, -- ✅ Agregado para trazabilidad
                 onesignal_id, onesignal_player_id
               ) values (
                 nullif(order_payload->>'name',''),
@@ -653,6 +740,7 @@
                 v_status,
                 (CASE WHEN order_payload->>'estimated_price' ~ '^[0-9]+(\.[0-9]+)?$' THEN (order_payload->>'estimated_price')::numeric ELSE NULL END),
                 order_payload->'tracking_data', v_contact_id,
+                v_client_id, -- auth.uid()
                 nullif(order_payload->>'onesignal_id',''),
                 nullif(order_payload->>'onesignal_player_id','')
               ) returning * into v_order;
@@ -685,6 +773,7 @@
                 status, estimated_price,
                 tracking_data,
                 client_id,
+                created_by, -- ✅ Agregado para trazabilidad
                 onesignal_id, onesignal_player_id
               ) values (
                 nullif(order_payload->>'name',''),
@@ -705,6 +794,7 @@
                 (CASE WHEN order_payload->>'estimated_price' ~ '^[0-9]+(\.[0-9]+)?$' THEN (order_payload->>'estimated_price')::numeric ELSE NULL END),
                 order_payload->'tracking_data',
                 v_client_id,
+                v_client_id, -- auth.uid()
                 nullif(order_payload->>'onesignal_id',''),
                 nullif(order_payload->>'onesignal_player_id','')
               ) returning * into v_order;
@@ -746,31 +836,42 @@
           v_current_status public.order_status;
           v_uid uuid;
           v_target_collab uuid;
+          v_driver_name text;
+          v_dest jsonb;
+          v_curr_loc record;
         begin
           if auth.uid() is null then raise exception 'No autorizado'; end if;
           v_uid := auth.uid();
           v_normalized := public.normalize_order_status(p_new_status);
 
-          -- Determinar colaborador objetivo (explícito > en json > usuario actual)
-          v_target_collab := p_collaborator_id;
-          if v_target_collab is null and p_tracking_entry ? 'assigned_to' then
-            begin
-              v_target_collab := (p_tracking_entry->>'assigned_to')::uuid;
-            exception when others then
-              v_target_collab := null;
-            end;
+          select status, destination_coords, assigned_to into v_current_status, v_dest, v_target_collab 
+          from public.orders where id = p_order_id;
+
+          -- 1. Geofencing: Validar ubicación al completar (solo si es colaborador)
+          if v_normalized = 'completed' and not (public.is_admin(v_uid) or public.is_owner(v_uid)) then
+            select lat, lng into v_curr_loc from public.collaborator_locations where collaborator_id = v_uid;
+            
+            -- Si hay coordenadas de destino y ubicación actual, validar (tolerancia ~500m)
+            -- Nota: Simplificado, en producción real usar PostGIS para mayor precisión
+            if v_dest is not null and v_curr_loc is not null then
+               -- Validación básica de proximidad (aprox 0.005 grados ~= 500m)
+               if abs(v_curr_loc.lat - (v_dest->>'lat')::double precision) > 0.005 or 
+                  abs(v_curr_loc.lng - (v_dest->>'lng')::double precision) > 0.005 then
+                  raise exception 'Debes estar cerca del destino para completar la orden';
+               end if;
+            end if;
           end if;
 
-          select status into v_current_status from public.orders where id = p_order_id;
+          -- Determinar colaborador objetivo
+          v_target_collab := coalesce(p_collaborator_id, v_target_collab, v_uid);
           
-          -- Validaciones (Admin puede saltarse algunas, Colaborador no)
+          -- Obtener nombre para snapshot si se está asignando o completando
+          select full_name into v_driver_name from public.profiles where id = v_target_collab;
+
+          -- Validaciones de transición
           if not (public.is_admin(v_uid) or public.is_owner(v_uid)) then
             if not public.validate_transition(v_current_status, v_normalized) then
-              raise exception 'Transición de estado inválida: % -> %', v_current_status, v_normalized;
-            end if;
-            -- Colaborador solo puede asignarse a sí mismo
-            if v_target_collab is not null and v_target_collab <> v_uid then
-              raise exception 'No puedes asignar a otros';
+              raise exception 'Transición de estado inválida';
             end if;
           end if;
 
@@ -779,71 +880,27 @@
             status = v_normalized,
             assigned_to = CASE 
               WHEN v_normalized = 'pending' THEN NULL 
-              WHEN v_target_collab IS NOT NULL THEN v_target_collab
-              ELSE COALESCE(o.assigned_to, v_uid) 
+              ELSE v_target_collab
             END,
             assigned_at = CASE WHEN v_normalized = 'accepted' AND o.assigned_at IS NULL THEN now() ELSE assigned_at END,
             completed_by = CASE WHEN v_normalized = 'completed' THEN v_uid ELSE completed_by END,
             completed_at = CASE WHEN v_normalized = 'completed' THEN now() ELSE completed_at END,
+            driver_name_snapshot = coalesce(o.driver_name_snapshot, v_driver_name), -- ✅ Mantener o crear snapshot
             tracking_data = CASE WHEN p_tracking_entry IS NOT NULL THEN COALESCE(o.tracking_data,'[]'::jsonb) || jsonb_build_array(p_tracking_entry) ELSE o.tracking_data END,
             updated_at = now()
           where o.id = p_order_id
           returning to_jsonb(o) into v_updated;
 
+          -- Mantenimiento de trabajos activos
           if v_normalized in ('accepted','in_progress') then
-            -- Verificar si el colaborador objetivo ya tiene trabajo (si se está asignando)
-            -- Nota: Si es admin asignando, quizás queramos permitir override, pero por seguridad mantenemos la regla
-            -- Usamos v_target_collab si existe, sino v_uid (auto-asignación)
-            if exists (select 1 from public.collaborator_active_jobs j where j.collaborator_id = coalesce(v_target_collab, v_uid) and j.order_id <> p_order_id) then
-              raise exception 'Ya tienes otra orden activa' using errcode = 'P0001';
-            end if;
             insert into public.collaborator_active_jobs(collaborator_id, order_id)
-            values (coalesce(v_target_collab, v_uid), p_order_id)
+            values (v_target_collab, p_order_id)
             on conflict (collaborator_id) do update set order_id = excluded.order_id;
           elsif v_normalized in ('completed','cancelled') then
             delete from public.collaborator_active_jobs where order_id = p_order_id;
           end if;
 
           return v_updated;
-        end;
-        $$;
-
-        -- Accept Order Wrapper
-        create or replace function public.accept_order_by_short_id(p_short_id text)
-        returns table (order_id bigint, success boolean, message text)
-        language plpgsql security definer set search_path = pg_catalog, public as $$
-        declare v_order_id bigint;
-        begin
-          if auth.uid() is null then raise exception 'No autorizado'; end if;
-          
-          if not exists (select 1 from public.collaborators c where c.id = auth.uid() and c.status = 'activo' and lower(c.role) = 'colaborador') then
-            return query select null::bigint, false, 'Colaborador no activo o sin permisos'::text;
-            return;
-          end if;
-
-          update public.orders
-          set
-            status = 'accepted',
-            accepted_at = now(),
-            accepted_by = auth.uid(),
-            assigned_to = auth.uid(),
-            assigned_at = now(),
-            tracking_data = coalesce(tracking_data, '[]'::jsonb) || jsonb_build_array(jsonb_build_object('status', 'accepted', 'date', now(), 'description', 'Orden aceptada'))
-          where upper(short_id) = upper(p_short_id)
-            and status = 'pending'
-          returning id into v_order_id;
-
-          if v_order_id is null then
-            return query select null::bigint, false, 'Orden no encontrada o ya está asignada'::text;
-            return;
-          end if;
-
-          -- Active Job Maintenance
-          insert into public.collaborator_active_jobs(collaborator_id, order_id)
-          values (auth.uid(), v_order_id)
-          on conflict (collaborator_id) do update set order_id = excluded.order_id, started_at = now();
-
-          return query select v_order_id, true, 'Orden aceptada exitosamente'::text;
         end;
         $$;
 
@@ -952,98 +1009,69 @@
         after insert or update on public.orders
         for each row execute function public.trg_orders_emit_event();
 
-        -- Metrics Logic
-        create or replace function public.upsert_collaborator_metric_fixed(
-          p_collaborator_id uuid,
-          p_metric_date date,
-          p_accept_inc int,
-          p_in_progress_inc int,
-          p_complete_inc int,
-          p_cancel_inc int,
-          p_amount numeric,
-          p_rating numeric,
-          p_completion_minutes numeric
-        ) returns void
-        language plpgsql security definer set search_path = pg_catalog, public as $$
+        -- 7) TABLAS DE NEGOCIO ADICIONALES
+
+        create table if not exists public.invoices (
+          id bigserial primary key,
+          created_at timestamptz not null default now(),
+          order_id bigint references public.orders(id) on delete set null,
+          client_id uuid references public.profiles(id) on delete set null,
+          file_path text not null,
+          file_url text,
+          total numeric,
+          status public.invoice_status default 'generada',
+          data jsonb,
+          recipient_email text
+        );
+
+        -- Append Order Evidence (Thread-safe)
+        create or replace function public.append_order_evidence(
+          p_order_id bigint,
+          p_evidence jsonb
+        )
+        returns void
+        language plpgsql security definer
+        set search_path = pg_catalog, public as $$
         begin
-          insert into public.collaborator_performance(
-            collaborator_id, metric_date, accepted_count, in_progress_count,
-            completed_count, canceled_count, total_amount,
-            avg_rating, avg_completion_minutes, updated_at,
-            sum_completion_minutes, sum_rating, count_ratings
-          ) values (
-            p_collaborator_id, p_metric_date,
-            greatest(p_accept_inc,0), greatest(p_in_progress_inc,0), greatest(p_complete_inc,0), greatest(p_cancel_inc,0),
-            coalesce(p_amount,0), null, null, now(),
-            coalesce(p_completion_minutes, 0), coalesce(p_rating, 0), case when p_rating is not null then 1 else 0 end
-          )
-          on conflict (collaborator_id, metric_date)
-          do update set
-            accepted_count = public.collaborator_performance.accepted_count + greatest(p_accept_inc,0),
-            in_progress_count = public.collaborator_performance.in_progress_count + greatest(p_in_progress_inc,0),
-            completed_count = public.collaborator_performance.completed_count + greatest(p_complete_inc,0),
-            canceled_count = public.collaborator_performance.canceled_count + greatest(p_cancel_inc,0),
-            total_amount = public.collaborator_performance.total_amount + coalesce(p_amount,0),
-            sum_completion_minutes = public.collaborator_performance.sum_completion_minutes + coalesce(p_completion_minutes, 0),
-            sum_rating = public.collaborator_performance.sum_rating + coalesce(p_rating, 0),
-            count_ratings = public.collaborator_performance.count_ratings + (case when p_rating is not null then 1 else 0 end),
-            avg_rating = case
-              when (public.collaborator_performance.count_ratings + (case when p_rating is not null then 1 else 0 end)) > 0 
-              then (public.collaborator_performance.sum_rating + coalesce(p_rating, 0)) / (public.collaborator_performance.count_ratings + (case when p_rating is not null then 1 else 0 end))
-              else null
-            end,
-            avg_completion_minutes = case
-              when (public.collaborator_performance.completed_count + greatest(p_complete_inc,0)) > 0
-              then (public.collaborator_performance.sum_completion_minutes + coalesce(p_completion_minutes, 0)) / (public.collaborator_performance.completed_count + greatest(p_complete_inc,0))
-              else null
-            end,
-            updated_at = now();
-        end;$$;
+          update public.orders
+          set evidence_photos = coalesce(evidence_photos, '[]'::jsonb) || jsonb_build_array(p_evidence),
+              updated_at = now()
+          where id = p_order_id;
+        end;
+        $$;
 
-        create or replace function public.track_order_metrics()
-        returns trigger language plpgsql security definer set search_path = pg_catalog, public as $$
-        declare
-          v_collab uuid;
-          v_when date := current_date;
-          v_amount numeric := null;
-          v_rating numeric := null;
-          v_minutes numeric := null;
-        begin
-          v_collab := coalesce(new.assigned_to, old.assigned_to);
-          if v_collab is null then return new; end if;
+        create or replace view public.v_collaborator_performance as
+        select
+          p.id as collaborator_id,
+          p.full_name as collaborator_name,
+          count(o.id) filter (where o.status = 'completed') as completed_count,
+          count(o.id) filter (where o.status = 'cancelled') as canceled_count,
+          sum(o.monto_cobrado) as total_earnings,
+          avg((o.rating->>'stars')::numeric) as avg_rating,
+          avg(extract(epoch from (o.completed_at - o.assigned_at)) / 60) as avg_completion_minutes
+        from public.profiles p
+        left join public.orders o on p.id = o.assigned_to
+        group by p.id, p.full_name;
 
-          if new.status = 'completed' and new.completed_at is not null then
-            v_minutes := extract(epoch from (new.completed_at - coalesce(new.assigned_at, new.created_at))) / 60.0;
-            v_rating := coalesce((new.rating->>'stars')::numeric, null);
-            v_amount := new.monto_cobrado;
-          end if;
-
-          if tg_op = 'UPDATE' and old.status is distinct from new.status then
-            if new.status = 'accepted' then
-              perform public.upsert_collaborator_metric_fixed(v_collab, v_when, 1, 0, 0, 0, null, null, null);
-            elsif new.status = 'in_progress' then
-              perform public.upsert_collaborator_metric_fixed(v_collab, v_when, 0, 1, 0, 0, null, null, null);
-            elsif new.status = 'completed' then
-              perform public.upsert_collaborator_metric_fixed(v_collab, v_when, 0, 0, 1, 0, v_amount, v_rating, v_minutes);
-            elsif new.status = 'cancelled' then
-              perform public.upsert_collaborator_metric_fixed(v_collab, v_when, 0, 0, 0, 1, null, null, null);
-            end if;
-          end if;
-          return new;
-        end;$$;
-
-        drop trigger if exists trg_orders_track_metrics on public.orders;
-        create trigger trg_orders_track_metrics
-        after insert or update on public.orders
-        for each row execute function public.track_order_metrics();
-
-        -- 9) VISTAS
         create or replace view public.v_notification_dashboard as
         select
           (select count(*) from public.notification_outbox where status='pending') as pending,
           (select count(*) from public.notification_outbox where status='processing') as processing,
           (select count(*) from public.notification_outbox where status='failed') as failed,
           (select count(*) from public.notification_dlq) as dlq;
+
+        create or replace view public.v_operational_alerts as
+        select 
+            id, short_id, status, created_at,
+            extract(epoch from (now() - created_at)) / 60 as minutes_waiting,
+            case 
+                when extract(epoch from (now() - created_at)) / 60 > 30 then 'CRITICAL'
+                when extract(epoch from (now() - created_at)) / 60 > 15 then 'HIGH'
+                else 'NORMAL'
+            end as priority
+        from public.orders
+        where status = 'pending'
+        order by minutes_waiting desc;
 
         -- 10) RLS POLICIES (Consolidated)
         alter table public.vehicles enable row level security;
@@ -1075,6 +1103,14 @@
         drop policy if exists orders_insert_public on public.orders;
         create policy orders_insert_public on public.orders for insert with check (
           status = 'pending' and assigned_to is null
+        );
+
+        -- Impedir sobreescribir asignación
+        drop policy if exists prevent_overwrite_assignment on public.orders;
+        create policy prevent_overwrite_assignment on public.orders 
+        for update using (
+          (status = 'pending' and assigned_to is null) 
+          OR (public.is_admin(auth.uid()) OR public.is_owner(auth.uid()))
         );
 
         drop policy if exists orders_select_policy on public.orders;
@@ -1408,29 +1444,7 @@
         -- 14) CRON SCHEDULES (pg_cron)
         -- =============================================================
 
-        -- ⚠️ IMPORTANTE: 
-        -- Se recomienda usar un Worker Persistente (supabase functions serve) en lugar de cron.
-        -- El cron se mantiene solo como mecanismo de respaldo "Dead Man Switch" o "Wake Up".
-
-        -- 1. Wake Up / Backup Trigger (cada 30s)
-        -- Intenta despertar al worker si está dormido. URL DEBE SER CONFIGURADA.
-        select cron.schedule(
-          'process-outbox-wakeup',
-          '*/30 * * * * *',
-          $$
-          select net.http_post(
-              url := 'https://fkprllkxyjtosjhtikxy.supabase.co/functions/v1/process-outbox',
-              headers := jsonb_build_object(
-                'Content-Type','application/json',
-                'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
-              ),
-              body := '{}'::jsonb,
-              timeout_milliseconds := 5000
-          ); 
-          $$
-        );
-
-        -- 2. Cleanup Outbox & DLQ (diario 3am)
+        -- 1. Cleanup Outbox & DLQ (diario 3am)
         select cron.schedule(
           'cleanup-outbox',
           '0 3 * * *',
@@ -1460,3 +1474,73 @@ CREATE INDEX IF NOT EXISTS idx_collaborators_onesignal_id ON public.collaborator
 
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS onesignal_id text;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS onesignal_player_id text;
+
+-- =============================================================
+--        PRO-LEVEL OPTIMIZATIONS & VIEWS (PRODUCTION READY)
+-- =============================================================
+
+-- 1. Índices adicionales para rendimiento de consultas complejas
+CREATE INDEX IF NOT EXISTS idx_orders_service_id ON public.orders(service_id);
+CREATE INDEX IF NOT EXISTS idx_orders_vehicle_id ON public.orders(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_orders_completed_by ON public.orders(completed_by);
+CREATE INDEX IF NOT EXISTS idx_orders_client_contact_id ON public.orders(client_contact_id);
+
+-- 2. Vista Administrativa Full (Simplifica el JS y reportes)
+-- Esta vista une las tablas principales para obtener nombres sin Joins complejos en el cliente
+CREATE OR REPLACE VIEW public.v_orders_admin AS
+SELECT 
+    o.*,
+    s.name as service_name,
+    v.name as vehicle_name,
+    p_collab.full_name as collaborator_name,
+    p_creator.full_name as creator_name,
+    c.name as client_contact_name
+FROM public.orders o
+LEFT JOIN public.services s ON o.service_id = s.id
+LEFT JOIN public.vehicles v ON o.vehicle_id = v.id
+LEFT JOIN public.profiles p_collab ON o.assigned_to = p_collab.id
+LEFT JOIN public.profiles p_creator ON o.created_by = p_creator.id
+LEFT JOIN public.clients c ON o.client_contact_id = c.id;
+
+-- 3. Habilitar Realtime para la tabla de órdenes (Crítico para el Panel)
+-- Nota: Esto asume que la publicación 'supabase_realtime' ya existe (estándar en Supabase)
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'No se pudo habilitar Realtime automáticamente. Asegúrate de activarlo en el Dashboard de Supabase.';
+END $$;
+
+-- 4. Función de Auditoría Automática para Órdenes
+CREATE OR REPLACE FUNCTION public.audit_order_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'UPDATE') THEN
+        INSERT INTO public.audit_logs (action, detail, user_id, created_at)
+        VALUES (
+            'ORDER_UPDATE',
+            jsonb_build_object(
+                'order_id', NEW.id,
+                'old_status', OLD.status,
+                'new_status', NEW.status,
+                'changes', (to_jsonb(NEW) - 'updated_at') -- Guarda el objeto pero quita actualizacion de tiempo
+            )::text,
+            auth.uid(),
+            now()
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_audit_orders ON public.orders;
+CREATE TRIGGER trg_audit_orders
+AFTER UPDATE ON public.orders
+FOR EACH ROW EXECUTE FUNCTION public.audit_order_changes();
+
+-- 5. Comentarios de Documentación (Best Practice)
+COMMENT ON TABLE public.orders IS 'Tabla principal de solicitudes de transporte y logística.';
+COMMENT ON COLUMN public.orders.created_by IS 'Referencia al perfil que registró la orden originalmente.';
+COMMENT ON COLUMN public.orders.assigned_to IS 'Referencia al colaborador/chofer que tiene la orden asignada.';

@@ -1,113 +1,52 @@
-// ✅ LISTENER DE MENSAJES - Solo si no está ya registrado (para evitar duplicados cuando se importa desde OneSignalSDKWorker.js)
-// Verificar que no existe ya un listener añadido por OneSignalSDKWorker
-(function() {
-  // Si este worker está siendo importado como script, permitir que el padre maneje el listener
-  // Solo añadir si se ejecuta como worker independiente
-  if (typeof importScripts === 'undefined') {
-    // No es un Service Worker, skip
-    return;
-  }
-  
-  // Verificar si ya hay una instancia del listener (de OneSignalSDKWorker)
-  // En ese caso, no duplicar
-  const hasExistingListener = typeof self._messageListenerInstalled !== 'undefined' && self._messageListenerInstalled;
-  
-  if (!hasExistingListener) {
-    self.addEventListener('message', (event) => {
-      if (event.data && event.data.action === 'skipWaiting') {
-        self.skipWaiting();
-      }
-      // Evitar logs excesivos en producción si es mensaje interno de OneSignal
-      if (event.data && !event.data.command) {
-        console.log('[SW] Mensaje recibido:', event.data);
-      }
-    });
-    self._messageListenerInstalled = true;
-  }
-})();
+const CACHE_NAME = 'llo-cache-v1';
+const OFFLINE_URL = 'offline.html';
 
-// Importar OneSignal si existe el script (Chaining)
-try {
-  // OneSignal usualmente inyecta sus propios workers, 
-  // pero permitimos que sw.js viva como parte de OneSignalSDKWorker.js
-} catch(e){}
-
-// Service Worker para Logísticaexiste el script (Chaining)
-try {
-  // OneSignal usualmente inyecta sus propios workers, 
-  // pero si este worker es el principal, debemos ser cuidadosos.
-} catch (e) {}
-
-// Service Worker para Logística López Ortiz
-
-const CACHE_NAME = 'tlc-static-v3';
-
-const PRECACHE = [
-  './login.html',
-  './login-colaborador.html',
-  './cliente.html',
-  './seguimiento.html',
-  './panel-colaborador.html',
-  './offline.html',
-  './manifest.json',
-  './manifest-cliente.json',
-  './manifest-colaborador.json',
-  './css/admin-panel-styles.css',
-  './img/android-chrome-192x192.png',
-  './img/favicon.ico'
+// Archivos básicos para que la app abra sin internet
+const ASSETS_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/offline.html',
+  '/css/tailwind.min.css',
+  '/css/custom-styles.css',
+  '/img/1vertical.png',
+  '/img/cargo.jpg',
+  '/js/index.js'
 ];
 
+// Instalación: Guardar archivos en caché
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS_TO_CACHE);
+    })
   );
+  self.skipWaiting();
 });
 
+// Activación: Limpiar cachés antiguas
 self.addEventListener('activate', (event) => {
-  // Limpiar caches viejos
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.filter(name => name !== CACHE_NAME).map(name => caches.delete(name))
+      );
+    })
   );
 });
+
+// Estrategia: Network First, falling back to cache
 self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;
-  if (url.hostname.endsWith('.supabase.co')) return;
-
-  if (req.mode === 'navigate') {
-    event.respondWith((async () => {
-      try {
-        const net = await fetch(req);
-        const cache = await caches.open(CACHE_NAME);
-        try { await cache.put(req, net.clone()); } catch (_){}
-        return net;
-      } catch (_) {
-        // Offline: devolver la página cacheada exacta que se solicitó
-        const cache = await caches.open(CACHE_NAME);
-        const cached = await cache.match(req);
-        if (cached) return cached;
-        // Fallback: si la URL solicitada no está cacheada, devolver offline.html
-        const fallback = await cache.match('./offline.html') || await cache.match('./login.html');
-        return fallback || Response.error();
-      }
-    })());
-    return;
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(OFFLINE_URL);
+      })
+    );
+  } else {
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        return response || fetch(event.request);
+      })
+    );
   }
-
-  const isStatic = /\.(?:js|css|png|jpg|jpeg|svg|ico|webp|gif|woff2?|ttf|eot|html|json)$/.test(url.pathname);
-  if (!isStatic) return;
-
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req);
-    const fetched = fetch(req).then(async (net) => {
-      try { await cache.put(req, net.clone()); } catch (_){}
-      return net;
-    }).catch(() => cached);
-    return cached || fetched;
-  })());
 });

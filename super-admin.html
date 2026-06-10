@@ -1,10 +1,21 @@
-﻿<!doctype html>
+﻿﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Creator Panel — LLO Platform</title>
-  <link rel="icon" type="image/x-icon" href="img/favicon.ico"/>
+
+  <!-- ✅ Favicon y PWA -->
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
+  <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
+  <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
+  <link rel="apple-touch-icon" href="img/android-chrome-192x192.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#060b18">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.563.0/dist/umd/lucide.js" defer></script>
@@ -370,9 +381,9 @@
         <div class="sa-card" style="overflow:hidden">
           <table class="sa-table">
             <thead><tr>
-              <th>ID</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th>Monto</th><th>Fecha</th>
+              <th>ID</th><th>Cliente</th><th>Servicio</th><th>Estado</th><th>Registrado / Asignado</th><th>Monto</th><th>Fecha</th>
             </tr></thead>
-            <tbody id="sa-orders-tbody"><tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">Cargando...</td></tr></tbody>
+            <tbody id="sa-orders-tbody"><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">Cargando...</td></tr></tbody>
           </table>
         </div>
       </div>

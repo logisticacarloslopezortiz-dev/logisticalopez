@@ -1,21 +1,27 @@
 {
   "name": "Logística López Ortiz",
   "short_name": "LLO",
-  "description": "Empresa líder en transporte logístico confiable y seguro.",
+  "description": "Servicios profesionales de transporte, mudanzas y fletes en República Dominicana.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0C375D",
+  "orientation": "portrait",
+  "scope": "/",
+  "categories": ["business", "productivity", "shopping"],
   "icons": [
     {
       "src": "img/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "img/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
-  ]
+  ],
+  "lang": "es-DO"
 }

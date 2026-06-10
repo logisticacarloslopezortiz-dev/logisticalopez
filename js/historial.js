@@ -110,20 +110,25 @@
     };
 
     const applyFilters = () => {
-      const df = filters.dateFrom ? new Date(filters.dateFrom).getTime() : null;
-      const dt = filters.dateTo ? new Date(filters.dateTo).getTime() : null;
+      const df = filters.dateFrom ? new Date(filters.dateFrom + 'T00:00:00').getTime() : null;
+      const dt = filters.dateTo   ? new Date(filters.dateTo   + 'T23:59:59').getTime() : null;
       const st = normalize(filters.status);
       const colId = String(filters.collaboratorId || '').trim();
       const svc = normalize(filters.service);
       const veh = normalize(filters.vehicle);
       const q = normalize(filters.search);
       filteredOrders = allHistoryOrders.filter(o => {
-        const okStatus = !st || normalize(o.status) === st || normalize(o.status) === (st === 'completadas' ? 'completada' : st);
-        const compAt = o.completed_at ? new Date(o.completed_at).getTime() : null;
-        const okDate = (!df || (compAt && compAt >= df)) && (!dt || (compAt && compAt <= dt));
+        const okStatus = !st || normalize(o.status) === st ||
+          (st === 'completadas' && ['completed','completada','entregada','entregado'].includes(normalize(o.status)));
+        // Fecha de referencia: completed_at si existe, sino created_at
+        const refDate = o.completed_at
+          ? new Date(o.completed_at).getTime()
+          : (o.created_at ? new Date(o.created_at).getTime() : null);
+        const okDate = (!df || (refDate !== null && refDate >= df)) &&
+                       (!dt || (refDate !== null && refDate <= dt));
         const okCollab = !colId || String(o.assigned_to || o.completed_by || '') === colId;
-        const okSvc = !svc || normalize(o.service?.name) === svc || normalize(o.service?.name).includes(svc);
-        const okVeh = !veh || normalize(o.vehicle?.name) === veh || normalize(o.vehicle?.name).includes(veh);
+        const okSvc = !svc || normalize(o.service?.name).includes(svc);
+        const okVeh = !veh || normalize(o.vehicle?.name).includes(veh);
         const hay = q
           ? (
             normalize(o.name).includes(q) ||
@@ -168,7 +173,7 @@
         histPageState.pageSize = size > 0 ? size : 15;
         const start = (histPageState.currentPage - 1) * histPageState.pageSize;
         const end = start + histPageState.pageSize - 1;
-        const sel = 'id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,monto_cobrado,evidence_photos,assigned_to,rating, service:services(name), vehicle:vehicles(name)';
+      const sel = 'id,name,phone,email,empresa,rnc,service_id,vehicle_id,status,created_at,date,time,pickup,delivery,completed_at,completed_by,assigned_to,monto_cobrado,evidence_photos,rating, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name), completer:profiles!completed_by(full_name)';
         const resp = await (supabaseConfig.withAuthRetry?.(() => client
           .from('orders')
           .select(sel, { count: 'exact' })
@@ -220,24 +225,26 @@
       }
 
       let collaborators = {};
-      let collabCacheKey = 'tlc_collab_cache_v1';
       try {
+        // Los nombres vienen del join profiles — solo como fallback consultamos la tabla collaborators
         const ids = [...new Set((orders || []).flatMap(o => [o.assigned_to, o.completed_by]).filter(Boolean))];
-        try {
-          const cache = JSON.parse(localStorage.getItem(collabCacheKey) || '{}');
-          Object.assign(collaborators, cache || {});
-        } catch(_){ }
+        const cache = JSON.parse(localStorage.getItem(collabCacheKey) || '{}');
+        Object.assign(collaborators, cache);
         if (ids.length > 0) {
-          const { data } = await client.from('collaborators').select('id,name').in('id', ids);
-          (data || []).forEach(c => { collaborators[c.id] = c.name; });
-          try { localStorage.setItem(collabCacheKey, JSON.stringify(collaborators)); } catch(_){ }
+          const missing = ids.filter(id => !collaborators[id]);
+          if (missing.length > 0) {
+            const { data } = await client.from('collaborators').select('id,name').in('id', missing);
+            (data || []).forEach(c => { collaborators[c.id] = c.name; });
+            try { localStorage.setItem(collabCacheKey, JSON.stringify(collaborators)); } catch(_){}
+          }
         }
       } catch (_) {}
 
-      allHistoryOrders = (orders || []).map(o => ({ 
-        ...o, 
-        colaborador: { name: collaborators[o.assigned_to] || '' },
-        completed_by_name: collaborators[o.completed_by] || ''
+      allHistoryOrders = (orders || []).map(o => ({
+        ...o,
+        // Prioridad: join de profiles → cache de collaborators → ID como fallback
+        colaborador: { name: o.collaborator?.full_name || collaborators[o.assigned_to] || '' },
+        completed_by_name: o.completer?.full_name || collaborators[o.completed_by] || ''
       }));
       filterAndRender();
       try {

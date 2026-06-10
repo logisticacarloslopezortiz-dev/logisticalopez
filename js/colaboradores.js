@@ -64,25 +64,7 @@
     let allCollaborators = [];
     const collabPageState = { data: [], currentPage: 1, pageSize: 15, totalPages: 1 };
 
-    // ✅ CORRECCIÓN DE DISEÑO (CSS OBLIGATORIO)
-    const style = document.createElement('style');
-    style.textContent = `
-      #collaboratorsMap, #collaboratorMapDetail { min-height: 400px; width: 100%; }
-      .leaflet-container { z-index: 10; }
-      .modal { z-index: 50; }
-      .pulse-marker.muted { opacity: 0.4; filter: grayscale(1); }
-    `;
-    document.head.appendChild(style);
-
     // --- LÓGICA PRINCIPAL ---
-
-    // Helper para mensajes
-    function showMsg(el, msg, type = 'info') {
-      if (!el) return;
-      el.textContent = msg;
-      el.className = type === 'error' ? 'text-red-600' : 'text-green-600';
-      setTimeout(() => { el.textContent = ''; el.className = ''; }, 5000);
-    }
 
     // Generar avatar (Node)
     function generateAvatarNode(name) {
@@ -111,10 +93,10 @@
         try { await supabaseConfig.ensureFreshSession?.(); } catch(_) {}
         const resp = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client
           .from('collaborators')
-          .select('*')
+          .select('*, profile:profiles(full_name, email, phone)')
           .order('created_at', { ascending: false })) || supabaseConfig.client
           .from('collaborators')
-          .select('*')
+          .select('*, profile:profiles(full_name, email, phone)')
           .order('created_at', { ascending: false }));
         const { data, error } = resp;
 
@@ -122,7 +104,12 @@
           throw error;
         }
 
-        allCollaborators = data || [];
+        allCollaborators = (data || []).map(c => ({
+          ...c,
+          name: c.profile?.full_name || 'Sin nombre',
+          email: c.profile?.email || 'Sin email',
+          phone: c.profile?.phone || 'Sin teléfono'
+        }));
         filterAndRender();
         updateSummary();
         console.log(`[Colaboradores] Cargados ${allCollaborators.length} colaboradores exitosamente`);
@@ -343,7 +330,7 @@
     if (form) {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        showMsg(msgDiv, 'Creando colaborador...', 'info');
+        if (window.notifications) window.notifications.show('Creando colaborador...', 'info');
 
         try {
             // Obtener sesión para usar token seguro
@@ -374,13 +361,13 @@
                 throw new Error(result.error || 'Error desconocido al crear colaborador');
             }
 
-            showMsg(msgDiv, '¡Colaborador creado con éxito!', 'success');
+            if (window.notifications) window.notifications.show('¡Colaborador creado con éxito!', 'success');
             form.reset();
             await loadCollaborators();
 
         } catch (error) {
             console.error('Error al crear colaborador:', error);
-            showMsg(msgDiv, `Error: ${error.message}`, 'error');
+            if (window.notifications) window.notifications.show(`Error: ${error.message}`, 'error');
         }
       });
     }
@@ -454,7 +441,7 @@
         const newPass = generateSecurePassword(12);
         editPassword.type = 'text';
         editPassword.value = newPass;
-        showMsg(editMsg, 'Nueva contraseña generada. Guarda para aplicar los cambios.', 'warning');
+        if (window.notifications) window.notifications.show('Nueva contraseña generada. Guarda para aplicar los cambios.', 'warning');
         setTimeout(() => { editPassword.type = 'password'; }, 2500);
       });
     }
@@ -474,7 +461,7 @@
           can_take_orders: !!(editViewAll && editViewAll.checked)
         };
         // Limpiar mensajes
-        showMsg(editMsg, 'Guardando cambios...', 'info');
+        if (window.notifications) window.notifications.show('Guardando cambios...', 'info');
 
         try {
           // Invocar Edge Function segura para actualizar colaborador
@@ -484,17 +471,16 @@
           if (error) throw error;
           if (data && data.error) throw new Error(data.error);
 
-          showMsg(editMsg, 'Cambios guardados correctamente', 'success');
+          if (window.notifications) window.notifications.show('Cambios guardados correctamente', 'success');
           // Refrescar lista y cerrar
           await loadCollaborators();
           setTimeout(() => {
             closeEditModal();
-            if (editMsg) editMsg.textContent = '';
           }, 800);
         } catch (err) {
           console.error('Error al actualizar colaborador:', err);
           const msg = (err && err.message) ? err.message : 'Error al guardar cambios';
-          showMsg(editMsg, msg, 'error');
+          if (window.notifications) window.notifications.show(msg, 'error');
         }
       });
     }
@@ -594,9 +580,9 @@
               let starsHtml = '';
               for (let i = 1; i <= 5; i++) {
                 if (i <= stars) {
-                  starsHtml += '<i class="fas fa-star text-yellow-400 text-xs"></i>';
+                  starsHtml += '<i data-lucide="star" class="w-3 h-3 fill-yellow-400 text-yellow-400"></i>';
                 } else {
-                  starsHtml += '<i class="far fa-star text-gray-300 text-xs"></i>';
+                  starsHtml += '<i data-lucide="star" class="w-3 h-3 text-gray-300"></i>';
                 }
               }
 
@@ -765,10 +751,10 @@
 
     let __globalMap = null;
     let __globalMarkers = new Map();
-    let __latestLocations = new Map(); // ✅ Almacén local de ubicaciones para filtrado
-    let __mapShowInactive = false;     // ✅ Estado del filtro
+    let __latestLocations = new Map();
+    let __mapShowInactive = false;
+    let __clusterGroup = null; // ✅ Nuevo para clustering
 
-    // ✅ CORRECCIÓN 1: Función para invalidar tamaño del mapa global
     function refreshGlobalMapLayout() {
       if (__globalMap) {
         setTimeout(() => {
@@ -780,18 +766,34 @@
     async function initGlobalCollaboratorsMap() {
       const el = document.getElementById('collaboratorsMap');
       if (!el || typeof L === 'undefined') return;
+      
+      // ✅ Cargar librerías necesarias si no están
+      await Promise.all([
+        ensureLeafletPluginsLoaded()
+      ]);
+
       if (!__globalMap) {
         __globalMap = L.map(el).setView([18.4861, -69.9312], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(__globalMap);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { 
+          attribution: '&copy; OpenStreetMap & CARTO' 
+        }).addTo(__globalMap);
+
+        // ✅ Inicializar Cluster Group
+        if (L.markerClusterGroup) {
+          __clusterGroup = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            spiderfyOnMaxZoom: true
+          });
+          __globalMap.addLayer(__clusterGroup);
+        }
       }
       
-      // ✅ CONTROLES DEL MAPA (Filtro y Zoom)
       const checkbox = document.getElementById('mapShowInactive');
       if (checkbox) {
         checkbox.checked = __mapShowInactive;
         checkbox.addEventListener('change', (e) => {
           __mapShowInactive = e.target.checked;
-          // Refrescar todos los marcadores usando la caché local
           __latestLocations.forEach(loc => updateMarker(loc));
         });
       }
@@ -805,90 +807,155 @@
         });
       }
 
-      // ✅ CORRECCIÓN 3: Limpiar mapa global al reabrir/refrescar
-      __globalMarkers.forEach(m => __globalMap.removeLayer(m));
+      __globalMarkers.forEach(m => {
+        if (__clusterGroup) __clusterGroup.removeLayer(m);
+        else __globalMap.removeLayer(m);
+      });
       __globalMarkers.clear();
 
-      refreshGlobalMapLayout(); // ✅ Asegurar renderizado correcto
-
+      refreshGlobalMapLayout();
       await refreshGlobalCollaboratorsPositions();
+
       try {
         if (window.__locationsRealtimeChannel) supabaseConfig.client.removeChannel(window.__locationsRealtimeChannel);
         window.__locationsRealtimeChannel = supabaseConfig.client
           .channel('public:collaborator_locations')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborator_locations' }, payload => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborator_locations' }, async payload => {
             if (payload.new) {
-              __latestLocations.set(payload.new.collaborator_id, payload.new); // ✅ Actualizar caché
-              updateMarker(payload.new);
+              __latestLocations.set(payload.new.collaborator_id, payload.new);
+              
+              // ✅ Obtener estado actual (si está en viaje) para color de marker
+              const { data: activeJob } = await supabaseConfig.client
+                .from('collaborator_active_jobs')
+                .select('order_id')
+                .eq('collaborator_id', payload.new.collaborator_id)
+                .maybeSingle();
+              
+              updateMarker({ ...payload.new, hasActiveJob: !!activeJob, orderId: activeJob?.order_id });
             }
           })
           .subscribe();
       } catch (_) {}
     }
 
-    function extractLatestLatLng(tracking) {
-      if (!Array.isArray(tracking) || !tracking.length) return null;
-      for (let i = tracking.length - 1; i >= 0; i--) {
-        const t = tracking[i];
-        const lat = Number(t?.lat);
-        const lng = Number(t?.lng);
-        if (Number.isFinite(lat) && Number.isFinite(lng)) {
-          return { lat, lng };
+    async function ensureLeafletPluginsLoaded() {
+      const plugins = [
+        { id: 'cluster-js', src: 'https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js' },
+        { id: 'cluster-css', href: 'https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css', type: 'css' },
+        { id: 'cluster-default-css', href: 'https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css', type: 'css' },
+        { id: 'slide-js', src: 'https://cdn.jsdelivr.net/npm/leaflet-marker-slide@1.0.0/leaflet.marker.slide.min.js' }
+      ];
+
+      for (const p of plugins) {
+        if (document.getElementById(p.id)) continue;
+        if (p.type === 'css') {
+          const link = document.createElement('link');
+          link.id = p.id; link.rel = 'stylesheet'; link.href = p.href;
+          document.head.appendChild(link);
+        } else {
+          await new Promise(r => {
+            const s = document.createElement('script');
+            s.id = p.id; s.src = p.src; s.onload = r;
+            document.head.appendChild(s);
+          });
         }
       }
-      return null;
     }
 
     function updateMarker(location) {
       if (!location || !location.lat || !location.lng) return;
       const id = location.collaborator_id;
       const latlng = [location.lat, location.lng];
-      
-      // Find collaborator info for popup
       const col = allCollaborators.find(c => String(c.id) === String(id));
       
-      // ✅ CORRECCIÓN 2: Mostrar TODOS, diferenciar color (Opción A)
-      const isActive = col?.status === 'activo';
+      const lastSeen = location.updated_at ? new Date(location.updated_at) : new Date(0);
+      const diffMin = (Date.now() - lastSeen.getTime()) / 60000;
+      const isOnline = diffMin < 15;
+      const hasJob = location.hasActiveJob;
 
-      // ✅ LÓGICA DE FILTRADO
-      if (!isActive && !__mapShowInactive) {
-        // Si no está activo y el filtro está apagado, eliminar si existe y salir
+      if (!isOnline && !__mapShowInactive) {
         if (__globalMarkers.has(id)) {
-          __globalMap.removeLayer(__globalMarkers.get(id));
+          const m = __globalMarkers.get(id);
+          if (__clusterGroup) __clusterGroup.removeLayer(m);
+          else __globalMap.removeLayer(m);
           __globalMarkers.delete(id);
         }
         return;
       }
 
+      // ✅ COLORES POR ESTADO
+      let markerClass = 'pulse-marker-gray'; // Offline
+      if (isOnline) {
+        markerClass = hasJob ? 'pulse-marker-blue' : 'pulse-marker-green';
+      }
+
       const name = col ? col.name : 'Colaborador';
-      const time = location.updated_at ? new Date(location.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+      const time = lastSeen.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       
-      // ✅ POPUP MEJORADO CON ACCIÓN
       const popupContent = `
-        <div class="text-center min-w-[120px]">
+        <div class="text-center min-w-[140px] p-1">
           <strong class="block text-sm mb-1">${name}</strong>
-          <span class="text-xs ${isActive ? 'text-green-600 font-medium' : 'text-gray-500'}">${isActive ? 'Activo' : 'Inactivo'} • ${time}</span>
-          <button onclick="window.viewMetrics('${id}')" class="block w-full mt-2 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 py-1 rounded transition-colors">Ver rendimiento</button>
+          <div class="flex items-center justify-center gap-2 mb-2">
+            <span class="w-2 h-2 rounded-full ${isOnline ? (hasJob ? 'bg-blue-500' : 'bg-green-500') : 'bg-gray-400'}"></span>
+            <span class="text-xs font-medium text-gray-600">
+              ${isOnline ? (hasJob ? `En viaje (#${location.orderId})` : 'Disponible') : 'Desconectado'}
+            </span>
+          </div>
+          <p class="text-[10px] text-gray-400 mb-2">Visto: ${time}</p>
+          <button onclick="window.viewMetrics('${id}')" class="w-full text-xs bg-blue-600 text-white py-1.5 rounded-lg font-medium shadow-sm hover:bg-blue-700 transition-colors">Perfil y Métricas</button>
         </div>
       `;
 
       const icon = L.divIcon({
-        className: isActive ? 'pulse-marker' : 'pulse-marker muted',
-        iconSize: [14, 14],
-        iconAnchor: [7, 7]
+        className: `custom-div-icon ${markerClass}`,
+        html: `<div class='marker-pin'></div><i class='fa-solid ${hasJob ? 'fa-truck' : 'fa-user'}'></i>`,
+        iconSize: [30, 42],
+        iconAnchor: [15, 42]
       });
       
       if (__globalMarkers.has(id)) {
         const m = __globalMarkers.get(id);
-        m.setLatLng(latlng).setPopupContent(popupContent);
-        m.setIcon(icon);
+        // ✅ Desplazamiento suave si existe SlideTo
+        if (m.slideTo) m.slideTo(latlng, { duration: 2000 });
+        else m.setLatLng(latlng);
+        m.setPopupContent(popupContent).setIcon(icon);
       } else {
-        const marker = L.marker(latlng, {
-          icon: icon
-        }).addTo(__globalMap).bindPopup(popupContent);
+        const marker = L.marker(latlng, { icon: icon }).bindPopup(popupContent);
+        if (__clusterGroup) __clusterGroup.addLayer(marker);
+        else marker.addTo(__globalMap);
         __globalMarkers.set(id, marker);
       }
     }
+
+    // ✅ ESTILOS CSS PARA LOS NUEVOS MARCADORES
+    const mapStyles = document.createElement('style');
+    mapStyles.textContent = `
+      .custom-div-icon { background: none; border: none; }
+      .marker-pin {
+        width: 30px; height: 30px; border-radius: 50% 50% 50% 0;
+        position: absolute; transform: rotate(-45deg);
+        left: 50%; top: 50%; margin: -15px 0 0 -15px;
+      }
+      .custom-div-icon i {
+        position: absolute; width: 30px; font-size: 14px; color: white;
+        text-align: center; top: 12px; left: 0; z-index: 10;
+      }
+      .pulse-marker-green .marker-pin { background: #10b981; border: 2px solid white; box-shadow: 0 0 10px rgba(16,185,129,0.5); }
+      .pulse-marker-blue .marker-pin { background: #3b82f6; border: 2px solid white; box-shadow: 0 0 10px rgba(59,130,246,0.5); }
+      .pulse-marker-gray .marker-pin { background: #9ca3af; border: 2px solid white; grayscale: 1; }
+      
+      /* Animación de pulso para disponibles */
+      .pulse-marker-green .marker-pin::after {
+        content: ''; position: absolute; width: 100%; height: 100%;
+        border-radius: 50%; border: 2px solid #10b981;
+        animation: pin-pulse 2s infinite;
+      }
+      @keyframes pin-pulse {
+        0% { transform: scale(1); opacity: 1; }
+        100% { transform: scale(2.5); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(mapStyles);
 
     async function refreshGlobalCollaboratorsPositions() {
       try {

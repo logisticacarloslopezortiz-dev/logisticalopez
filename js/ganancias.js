@@ -1,6 +1,152 @@
-document.addEventListener('DOMContentLoaded', async () => {
-  'use strict';
+/**
+ * js/ganancias.js — Módulo de Finanzas y Pagos
+ * Gestiona el cálculo de comisiones, visualización de métricas y registro de pagos.
+ */
 
+'use strict';
+
+// --- Utilidades Globales ---
+
+/**
+ * Formatea un número como moneda RD$.
+ */
+function currency(value) {
+  return `RD$ ${Number(value || 0).toLocaleString('es-DO', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  })}`;
+}
+
+/**
+ * Retorna el nombre del mes dado su número (1-12).
+ */
+function getMonthName(m) {
+  const names = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  return names[m - 1] || '';
+}
+
+// --- Funciones Globales (Expuestas al window para botones dinámicos y HTML) ---
+
+window.openPaymentModal = function(id, name, suggested) {
+  const modal = document.getElementById('paymentModal');
+  if (!modal) return;
+  
+  const idEl = document.getElementById('payCollabId');
+  const nameEl = document.getElementById('payCollabName');
+  const amountEl = document.getElementById('payAmount');
+  const suggestedEl = document.getElementById('paySuggestedAmount');
+  const monthEl = document.getElementById('payMonth');
+  const yearEl = document.getElementById('payYear');
+
+  if (idEl) idEl.value = id;
+  if (nameEl) nameEl.value = name;
+  if (amountEl) amountEl.value = Number(suggested || 0).toFixed(2);
+  if (suggestedEl) suggestedEl.textContent = currency(suggested);
+  
+  const now = new Date();
+  if (monthEl) monthEl.value = now.getMonth() + 1;
+  if (yearEl) yearEl.value = now.getFullYear();
+  
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => {
+    const content = document.getElementById('paymentModalContent');
+    if (content) {
+      content.classList.remove('scale-95', 'opacity-0');
+      content.classList.add('scale-100', 'opacity-100');
+    }
+  }, 10);
+  if (window.lucide) lucide.createIcons();
+};
+
+window.closePaymentModal = function() {
+  const modal = document.getElementById('paymentModal');
+  if (!modal) return;
+  const content = document.getElementById('paymentModalContent');
+  if (content) {
+    content.classList.add('scale-95', 'opacity-0');
+    content.classList.remove('scale-100', 'opacity-100');
+  }
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }, 300);
+};
+
+window.generateReceiptPDF = function(p) {
+  try {
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) {
+      console.error('jsPDF no disponible');
+      if (window.notifications) notifications.error('jsPDF no disponible para generar recibo');
+      return;
+    }
+    const doc = new jsPDF();
+    
+    // Estilos
+    doc.setFillColor(12, 55, 93); // Azul corporativo (#0C375D)
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.text('RECIBO DE PAGO DE COMISIONES', 105, 25, { align: 'center' });
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('LOGÍSTICA LÓPEZ ORTIZ', 20, 55);
+    doc.setFont(undefined, 'normal');
+    doc.text('Servicios de Transporte y Logística', 20, 62);
+    
+    doc.line(20, 70, 190, 70);
+    
+    // Datos del recibo
+    let y = 85;
+    const drawField = (label, value) => {
+      doc.setFont(undefined, 'bold');
+      doc.text(`${label}:`, 20, y);
+      doc.setFont(undefined, 'normal');
+      doc.text(String(value), 70, y);
+      y += 10;
+    };
+    
+    drawField('N° Recibo', `#PAY-${p.id}`);
+    drawField('Fecha de Emisión', new Date(p.created_at).toLocaleString('es-DO'));
+    drawField('Colaborador', p.profiles?.full_name || 'Desconocido');
+    drawField('Período Correspondiente', `${getMonthName(p.payment_month)} ${p.payment_year}`);
+    drawField('Método de Pago', p.payment_method);
+    
+    y += 5;
+    doc.setFillColor(245, 245, 245);
+    doc.rect(20, y, 170, 20, 'F');
+    y += 13;
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('MONTO PAGADO:', 25, y);
+    doc.setTextColor(22, 101, 52); // Verde oscuro
+    doc.text(currency(p.amount), 185, y, { align: 'right' });
+    
+    y += 20;
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.text('NOTAS:', 20, y);
+    doc.setFont(undefined, 'normal');
+    doc.text(p.notes || 'Sin notas adicionales', 20, y + 7, { maxWidth: 170 });
+    
+    y += 40;
+    doc.line(40, y, 90, y);
+    doc.line(120, y, 170, y);
+    doc.text('Firma Administrador', 65, y + 5, { align: 'center' });
+    doc.text('Firma Colaborador', 145, y + 5, { align: 'center' });
+    
+    doc.save(`recibo_${p.id}_${p.payment_month}_${p.payment_year}.pdf`);
+  } catch (e) {
+    console.error(e);
+    if (window.notifications) notifications.error('Error al generar el recibo PDF');
+  }
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
   // 1. --- Verificación de Sesión ---
   if (!window.supabaseConfig || !supabaseConfig.client) {
     console.error('Cliente de Supabase no inicializado.');
@@ -32,14 +178,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     detailCollabSelect: document.getElementById('detailCollabSelect'),
     collabDetailTable: document.getElementById('collabDetailTable'),
     exportFinancePdf: document.getElementById('exportFinancePdf'),
+    paymentHistoryTable: document.getElementById('paymentHistoryTable'),
+    paymentModal: document.getElementById('paymentModal'),
+    paymentForm: document.getElementById('paymentForm')
   };
 
   let chartInstance = null;
   let allOrders = [];
   let collaborators = [];
   let collabPercentMap = new Map();
-
-  // 3. --- Funciones de Lógica de Negocio ---
+  let paymentHistory = [];
 
   /**
    * Obtiene todas las órdenes completadas desde Supabase.
@@ -146,14 +294,54 @@ document.addEventListener('DOMContentLoaded', async () => {
       collaborators = Array.isArray(data) ? data : [];
       collabPercentMap = new Map();
       collaborators.forEach(c => {
-        const pct = typeof c.commission_percent === 'number' ? c.commission_percent : (parseFloat(c.commission_percent) || 0);
-        collabPercentMap.set(String(c.id), Math.max(0, Math.min(100, pct)));
+        // Clamped a [0, 100] para prevenir valores inválidos desde el DB o UI
+        const pct = Math.max(0, Math.min(100, Number(c.commission_percent) || 0));
+        collabPercentMap.set(String(c.id), pct);
       });
+      await fetchPaymentHistory();
     } catch (e) {
       console.error('Error al obtener colaboradores:', e);
       collaborators = [];
       collabPercentMap = new Map();
     }
+  }
+
+  async function fetchPaymentHistory() {
+    try {
+      const { data, error } = await supabaseConfig.client
+        .from('collaborator_payments')
+        .select('*, profiles!collaborator_id(full_name)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      paymentHistory = data || [];
+      renderPaymentHistory();
+    } catch (e) {
+      console.error('Error al obtener historial de pagos:', e);
+    }
+  }
+
+  function renderPaymentHistory() {
+    if (!ui.paymentHistoryTable) return;
+    if (paymentHistory.length === 0) {
+      ui.paymentHistoryTable.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-center text-gray-400">No hay pagos registrados aún.</td></tr>';
+      return;
+    }
+
+    ui.paymentHistoryTable.innerHTML = paymentHistory.map(p => `
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3">${new Date(p.created_at).toLocaleDateString('es-DO')}</td>
+        <td class="px-4 py-3 font-medium">${p.profiles?.full_name || 'Desconocido'}</td>
+        <td class="px-4 py-3">${getMonthName(p.payment_month)} ${p.payment_year}</td>
+        <td class="px-4 py-3 font-bold text-green-700">${currency(p.amount)}</td>
+        <td class="px-4 py-3 text-xs text-gray-600">${p.payment_method}</td>
+        <td class="px-4 py-3">
+          <button onclick="window.generateReceiptPDF(${JSON.stringify(p).replace(/"/g, '&quot;')})" class="text-blue-600 hover:text-blue-800 flex items-center gap-1">
+            <i data-lucide="file-text" class="w-4 h-4"></i> Recibo
+          </button>
+        </td>
+      </tr>
+    `).join('');
+    if (window.lucide) lucide.createIcons();
   }
 
   function isAdmin(session) {
@@ -170,10 +358,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       clearTimeout(t);
       t = setTimeout(() => fn.apply(null, args), wait);
     };
-  }
-
-  function currency(value) {
-    return `RD$ ${Number(value || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   function monthStartOf(date) {
@@ -253,13 +437,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       tdMonth.textContent = currency(stats.month);
 
       const tdTotal = document.createElement('td');
-      tdTotal.className = 'table-cell';
+      tdTotal.className = 'table-cell font-bold';
       tdTotal.textContent = currency(stats.total);
+
+      const tdActions = document.createElement('td');
+      tdActions.className = 'table-cell';
+      const payBtn = document.createElement('button');
+      payBtn.className = 'bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 transition-colors flex items-center gap-1';
+      payBtn.innerHTML = '<i data-lucide="hand-coins" class="w-3 h-3"></i> Pagar';
+      payBtn.onclick = () => window.openPaymentModal(id, c.name || id, stats.month);
+      tdActions.appendChild(payBtn);
 
       tr.appendChild(tdName);
       tr.appendChild(tdPct);
       tr.appendChild(tdMonth);
       tr.appendChild(tdTotal);
+      tr.appendChild(tdActions);
       frag.appendChild(tr);
     });
     ui.collabFinanceTable.appendChild(frag);
@@ -368,24 +561,31 @@ document.addEventListener('DOMContentLoaded', async () => {
    */
   function updateStatCards() {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // isSameDay: compara solo la parte de fecha, sin importar hora ni timezone
+    const isSameDay = (d) => {
+      if (!d || isNaN(d.getTime())) return false;
+      return d.getFullYear() === now.getFullYear() &&
+             d.getMonth()    === now.getMonth()    &&
+             d.getDate()     === now.getDate();
+    };
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const totalEarnings = allOrders.reduce((sum, order) => sum + order.monto_cobrado, 0);
+    const totalEarnings = allOrders.reduce((sum, o) => sum + o.monto_cobrado, 0);
     const todayEarnings = allOrders
-      .filter(order => order.completed_at >= todayStart)
-      .reduce((sum, order) => sum + order.monto_cobrado, 0);
+      .filter(o => isSameDay(o.completed_at))
+      .reduce((sum, o) => sum + o.monto_cobrado, 0);
     const monthEarnings = allOrders
-      .filter(order => order.completed_at >= monthStart)
-      .reduce((sum, order) => sum + order.monto_cobrado, 0);
-    const avgOrderValue = totalEarnings > 0 && allOrders.length > 0 ? totalEarnings / allOrders.length : 0;
+      .filter(o => o.completed_at >= monthStart)
+      .reduce((sum, o) => sum + o.monto_cobrado, 0);
+    const avgOrderValue = totalEarnings > 0 && allOrders.length > 0
+      ? totalEarnings / allOrders.length : 0;
 
-    const formatCurrency = (value) => `RD$ ${Number(value||0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmt = (v) => `RD$ ${Number(v||0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    ui.totalEarnings.textContent = formatCurrency(totalEarnings);
-    ui.todayEarnings.textContent = formatCurrency(todayEarnings);
-    ui.monthEarnings.textContent = formatCurrency(monthEarnings);
-    ui.avgOrderValue.textContent = formatCurrency(avgOrderValue);
+    ui.totalEarnings.textContent = fmt(totalEarnings);
+    ui.todayEarnings.textContent = fmt(todayEarnings);
+    ui.monthEarnings.textContent = fmt(monthEarnings);
+    ui.avgOrderValue.textContent = fmt(avgOrderValue);
   }
 
   /**
@@ -517,6 +717,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function initialize() {
+    // Cargar desde caché para UI inmediata (si hay datos previos)
     try {
       const raw = localStorage.getItem('tlc_earnings_orders_cache');
       if (raw) {
@@ -526,13 +727,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             ...o,
             monto_cobrado: parseFloat(o.monto_cobrado) || 0,
             completed_at: new Date(o.completed_at)
-          })).filter(order => order.monto_cobrado > 0 && !isNaN(order.completed_at.getTime()));
+          })).filter(o => o.monto_cobrado > 0 && !isNaN(o.completed_at.getTime()));
+          updateStatCards();
+          renderChart();
         }
       }
     } catch (_) {}
-    updateStatCards();
-    renderChart();
-    await renderFinance(session);
+
+    // Fetch fresh data
     await Promise.all([fetchCompletedOrders(), fetchCollaborators()]);
     updateStatCards();
     renderChart();
@@ -543,16 +745,81 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (ui.exportFinancePdf) ui.exportFinancePdf.addEventListener('click', exportFinanceToPdf);
     if (ui.detailCollabSelect) ui.detailCollabSelect.addEventListener('change', (e) => renderCollabDetail(e.target.value));
 
+    // --- Manejo del Formulario de Pago ---
+    if (ui.paymentForm) {
+      ui.paymentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = ui.paymentForm.querySelector('button[type="submit"]');
+        const originalBtnContent = submitBtn ? submitBtn.innerHTML : '';
+        
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<i class="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full"></i> Procesando...';
+        }
+
+        try {
+          const collabId = document.getElementById('payCollabId').value;
+          const amount = parseFloat(document.getElementById('payAmount').value);
+          const method = document.getElementById('payMethod').value;
+          const month = parseInt(document.getElementById('payMonth').value);
+          const year = parseInt(document.getElementById('payYear').value);
+          const notes = document.getElementById('payNotes').value;
+
+          if (!collabId || isNaN(amount) || amount <= 0) {
+            throw new Error('Datos de pago inválidos');
+          }
+
+          const { data, error } = await supabaseConfig.client
+            .from('collaborator_payments')
+            .insert([{
+              collaborator_id: collabId,
+              amount,
+              payment_method: method,
+              payment_month: month,
+              payment_year: year,
+              notes,
+              processed_by: session.user.id
+            }])
+            .select('*, profiles:profiles!collaborator_id(full_name)')
+            .single();
+
+          if (error) throw error;
+
+          notifications.success('Pago registrado correctamente');
+          window.closePaymentModal();
+          ui.paymentForm.reset();
+          
+          // Actualizar historial y finanzas localmente
+          await fetchPaymentHistory();
+          await renderFinance(session);
+          
+          // Generar recibo automáticamente
+          if (data) {
+            // Ajustar el objeto para que coincida con lo esperado por generateReceiptPDF
+            // La respuesta de single() ya trae profiles si el join funcionó
+            window.generateReceiptPDF(data);
+          }
+
+        } catch (err) {
+          console.error('Error al registrar pago:', err);
+          notifications.error(err.message || 'No se pudo registrar el pago');
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnContent;
+          }
+        }
+      });
+    }
+
     if (!realtimeSetup) {
       realtimeSetup = true;
       const ordersChannel = supabaseConfig.client
         .channel('public:orders')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, async () => {
-          console.log('Cambio en órdenes → refrescando métricas');
           await refreshUI();
         })
         .subscribe();
-
       const collabChannel = supabaseConfig.client
         .channel('public:collaborators')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'collaborators' }, async () => {
@@ -560,7 +827,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           await renderFinance(session);
         })
         .subscribe();
-      // Guardar referencias si luego se requiere cerrar
       window.__tlc_ordersChannel = ordersChannel;
       window.__tlc_collabChannel = collabChannel;
     }

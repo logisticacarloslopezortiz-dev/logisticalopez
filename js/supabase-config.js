@@ -59,35 +59,11 @@ if (!window.supabaseConfig) {
       document.dispatchEvent(new CustomEvent('supabase-session-ready'));
     },
     
-    /**
-     * Obtiene un cliente de Supabase optimizado para operaciones públicas (sin persistencia de sesión).
-     * Esto evita advertencias de "Tracking Prevention" en el navegador al cargar datos públicos (ej. testimonios).
-     */
-    getPublicClient() {
-      if (this._publicClient) return this._publicClient;
-      if (typeof supabase === 'undefined' || !supabase?.createClient) return this.client;
-      
-      try {
-        this._publicClient = supabase.createClient(this.projectUrl, this.anonKey, {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false
-          }
-        });
-        return this._publicClient;
-      } catch (e) {
-        console.warn('Error al crear public client:', e);
-        return this.client;
-      }
-    },
-
     __creatingMain: false,
     __creatingPublic: false,
     projectUrl: SUPABASE_URL,
     anonKey: SUPABASE_ANON_KEY,
     functionsUrl: SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co'),
-    useLocalStorage: false,
     vapidPublicKey: null,
     buckets: { evidence: 'order-evidence', fallbackEvidence: 'public' },
     getEvidenceBucket() { return (this.buckets && this.buckets.evidence) ? this.buckets.evidence : 'evidence'; },
@@ -151,6 +127,33 @@ if (!window.supabaseConfig) {
       } catch (e) {
         return { error: e.message };
       }
+    },
+
+    /**
+     * Actualiza la ubicación GPS y el estado online del colaborador.
+     */
+    async updateCollaboratorStatus(lat, lng, isOnline = true) {
+      try {
+        const { data: { user } } = await this.client.auth.getUser();
+        if (!user) return;
+
+        // Actualizar presencia
+        await this.client
+          .from('collaborators')
+          .update({ 
+            is_online: isOnline, 
+            last_seen_at: new Date().toISOString() 
+          })
+          .eq('id', user.id);
+
+        // Actualizar ubicación si hay coordenadas
+        if (lat && lng) {
+          await this.client.rpc('update_collaborator_location_atomic', {
+            p_lat: lat,
+            p_lng: lng
+          });
+        }
+      } catch (e) { console.error('Error updating presence:', e); }
     },
 
   // Asegura que la sesión JWT esté fresca antes de consultas
@@ -304,11 +307,6 @@ if (!window.supabaseConfig) {
    * @returns {Promise<Array>}
    */
   async getServices() {
-    if (this.useLocalStorage) {
-      try {
-        return JSON.parse(localStorage.getItem('tlc_services') || '[]');
-      } catch { return []; }
-    }
     try {
       await this.ensureSupabaseReady();
       const pc = this.getPublicClient();
@@ -331,11 +329,6 @@ if (!window.supabaseConfig) {
    * @returns {Promise<Array>}
    */
   async getVehicles() {
-    if (this.useLocalStorage) {
-      try {
-        return JSON.parse(localStorage.getItem('tlc_vehicles') || '[]');
-      } catch { return []; }
-    }
     try {
       await this.ensureSupabaseReady();
       const pc = this.getPublicClient();
@@ -354,35 +347,105 @@ if (!window.supabaseConfig) {
   },
 
   /**
-   * Obtiene la lista de órdenes.
+   * Obtiene la lista de órdenes con filtros y paginación.
+   * @param {Object} filters - Filtros a aplicar (ej: { status: 'pending' }).
+   * @param {Object} options - Opciones de paginación y orden (ej: { range: [0, 19] }).
    * @returns {Promise<Array>}
    */
-  async getOrders() {
-    if (this.useLocalStorage) {
-      try { return JSON.parse(localStorage.getItem('tlc_orders') || '[]'); } catch { return []; }
-    }
-    // Intentar consulta completa con relaciones
+  async getOrders(filters = {}, options = {}) {
     const sel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions';
-    let resp = await this.withAuthRetry(() => this.client
-      .from('orders')
-      .select(sel)
-    );
+    
+    const executeQuery = async (selectStr) => {
+      let query = this.client.from('orders').select(selectStr);
+      
+      if (filters.status) {
+        if (Array.isArray(filters.status)) {
+          query = query.in('status', filters.status);
+        } else {
+          query = query.eq('status', filters.status);
+        }
+      }
+      if (filters.assigned_to) query = query.eq('assigned_to', filters.assigned_to);
+      if (options.range) query = query.range(options.range[0], options.range[1]);
+      
+      // Por defecto, lo más reciente primero
+      query = query.order('created_at', { ascending: false });
+      
+      return await query;
+    };
+
+    let resp = await this.withAuthRetry(() => executeQuery(sel));
     
     // Fallback si la consulta compleja falla
     if (resp?.error) {
       console.warn('getOrders: Fallback a consulta simple debido a:', resp.error);
-      resp = await this.withAuthRetry(() => this.client
-        .from('orders')
-        .select('id, short_id, status, created_at, assigned_to, pickup, delivery, name, phone, service:services(name), vehicle:vehicles(name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions')
-      );
+      const fallbackSel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, name, phone, service:services(name), vehicle:vehicles(name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions';
+      resp = await this.withAuthRetry(() => executeQuery(fallbackSel));
     }
     
     if (resp?.error) return [];
     return resp?.data || [];
   },
 
+  /**
+   * Se suscribe a cambios en tiempo real en la tabla de órdenes.
+   * @param {Function} callback - Función que se ejecuta cuando hay un cambio.
+   * @returns {Object} - La suscripción de Supabase.
+   */
+  subscribeToOrders(callback) {
+    if (!this.client) return null;
+    
+    return this.client
+      .channel('public:orders_channel')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'orders' 
+      }, payload => {
+        console.log('Cambio detectado en órdenes:', payload);
+        if (typeof callback === 'function') callback(payload);
+      })
+      .subscribe();
+  },
+
+  /**
+   * Obtiene un resumen ligero de las órdenes para la vista de lista.
+   * Solo descarga lo esencial: id, short_id, status, name, created_at, etc.
+   * @param {Object} filters - Filtros a aplicar.
+   * @param {Object} options - Opciones de paginación.
+   * @returns {Promise<Array>}
+   */
+  async getOrdersSummary(filters = {}, options = {}) {
+    const sel = 'id, short_id, status, created_at, name, phone, pickup, delivery, service:services(name), vehicle:vehicles(name), date, time, monto_cobrado, estimated_price, assigned_to';
+    
+    const executeQuery = async () => {
+      let query = this.client.from('orders').select(sel);
+      
+      if (filters.status) {
+        if (Array.isArray(filters.status)) {
+          query = query.in('status', filters.status);
+        } else {
+          query = query.eq('status', filters.status);
+        }
+      }
+      
+      if (options.range) query = query.range(options.range[0], options.range[1]);
+      
+      query = query.order('created_at', { ascending: false });
+      
+      return await query;
+    };
+
+    const resp = await this.withAuthRetry(() => executeQuery());
+    if (resp?.error) {
+      console.error('getOrdersSummary error:', resp.error);
+      return [];
+    }
+    return resp?.data || [];
+  },
+
   async getOrderById(orderId) {
-    const sel = 'id, short_id, status, created_at, assigned_to, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name, description), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions';
+    const sel = 'id, short_id, status, created_at, assigned_to, created_by, pickup, delivery, origin_coords, destination_coords, name, phone, email, tracking_data, evidence_photos, service:services(name, description), vehicle:vehicles(name), collaborator:profiles!assigned_to(full_name), creator:profiles!created_by(full_name), date, time, monto_cobrado, metodo_pago, rnc, empresa, service_questions';
     let resp = await this.withAuthRetry(() => this.client
       .from('orders')
       .select(sel)
@@ -418,19 +481,22 @@ if (!window.supabaseConfig) {
       }
     } catch (_) {}
 
-    const FINAL_STATES = new Set(['completed', 'cancelled', 'entregada', 'completada', 'cancelada']);
-
     try {
       const sel = `
         id,short_id,name,phone,status,
-        pickup,delivery,
+        pickup,delivery,origin_coords,destination_coords,
         service:services(name),
         vehicle:vehicles(name),
-        assigned_to
+        assigned_to,created_at,tracking_data
       `;
 
+      // Filtrar en el servidor: solo estados activos válidos del enum
       const { data, error } = await this.withAuthRetry(() =>
-        this.client.from('orders').select(sel)
+        this.client.from('orders')
+          .select(sel)
+          .in('status', ['pending', 'accepted', 'in_progress'])
+          .order('created_at', { ascending: false })
+          .limit(50)
       );
 
       if (error) {
@@ -438,11 +504,7 @@ if (!window.supabaseConfig) {
         return [];
       }
 
-      // 🧠 Filtro REAL basado en estado
-      return (data || []).filter(o => {
-        const s = String(o.status || '').toLowerCase().trim();
-        return !FINAL_STATES.has(s);
-      });
+      return data || [];
 
     } catch (e) {
       console.error('Unexpected error fetching collaborator orders:', e);
@@ -492,16 +554,6 @@ if (!window.supabaseConfig) {
     const { error } = await (this.withAuthRetry?.(() => this.client.from('vehicles').delete().eq('id', vehicleId))
       || this.client.from('vehicles').delete().eq('id', vehicleId));
     if (error) throw error;
-  },
-
-  /**
-   * Actualiza una orden por su ID.
-   * @param {string} orderId - El ID de la orden.
-   * @param {object} updates - Los campos a actualizar.
-   * @returns {Promise<object>} Los datos actualizados de la orden.
-   */
-  async updateOrder() {
-    throw new Error('updateOrder está deprecado. Usa OrderManager.actualizarEstadoPedido()');
   },
 
   /**

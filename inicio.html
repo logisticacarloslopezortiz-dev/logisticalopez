@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -134,31 +134,41 @@
       <div class="stat-card p-6 rounded-xl shadow-lg bg-primario-turquesa">
         <div class="flex items-center justify-between">
           <div>
-            <p class="opacity-80">Total pedidos</p>
-            <p class="text-3xl font-bold" id="totalPedidos">0</p>
-            <p class="text-sm opacity-80 mt-1">+<span id="pedidosHoy">0</span> hoy</p>
+            <p class="opacity-80 font-medium">Pendientes hoy</p>
+            <p class="text-3xl font-bold" id="pendientesHoy">0</p>
+            <p class="text-sm opacity-80 mt-1">Por asignar</p>
           </div>
-          <i data-lucide="package" class="w-12 h-12 opacity-50 text-white"></i>
+          <i data-lucide="clock" class="w-12 h-12 opacity-50 text-white"></i>
         </div>
       </div>
       <div class="stat-card p-6 rounded-xl shadow-lg bg-primario-oscuro">
         <div class="flex items-center justify-between">
           <div>
-            <p class="opacity-80">Completados</p>
-            <p class="text-3xl font-bold" id="pedidosCompletados">0</p>
-            <p class="text-sm opacity-80 mt-1"><span id="porcentajeCompletados">0</span>% del total</p>
+            <p class="opacity-80 font-medium">En ruta</p>
+            <p class="text-3xl font-bold" id="enRuta">0</p>
+            <p class="text-sm opacity-80 mt-1">Viajes activos</p>
+          </div>
+          <i data-lucide="truck" class="w-12 h-12 opacity-50 text-white"></i>
+        </div>
+      </div>
+      <div class="stat-card p-6 rounded-xl shadow-lg bg-green-600 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="opacity-80 font-medium">Completados hoy</p>
+            <p class="text-3xl font-bold" id="completadosHoy">0</p>
+            <p class="text-sm opacity-80 mt-1">Entregas exitosas</p>
           </div>
           <i data-lucide="check-circle" class="w-12 h-12 opacity-50 text-white"></i>
         </div>
       </div>
-      <div class="stat-card p-6 rounded-xl shadow-lg bg-acento-amarillo text-principal">
+      <div class="stat-card p-6 rounded-xl shadow-lg bg-red-600 text-white">
         <div class="flex items-center justify-between">
           <div>
-            <p class="opacity-80">Pendientes</p>
-            <p class="text-3xl font-bold" id="pedidosPendientes">0</p>
-            <p class="text-sm opacity-80 mt-1"><span id="urgentes">0</span> urgentes</p>
+            <p class="opacity-80 font-medium">Incidencias</p>
+            <p class="text-3xl font-bold" id="incidencias">0</p>
+            <p class="text-sm opacity-80 mt-1">Requieren atención</p>
           </div>
-          <i data-lucide="alert-triangle" class="w-12 h-12 opacity-50 text-gray-800"></i>
+          <i data-lucide="alert-circle" class="w-12 h-12 opacity-50 text-white"></i>
         </div>
       </div>
     </div>
@@ -390,7 +400,6 @@
    <script src="js/sidebar.js"></script>
    <script src="js/notifications.js"></script>
    <script src="js/order-manager.js?v=20260310"></script>
-   <script src="js/admin.js"></script>
    <script src="js/inicio.js"></script>
 </body>
 </html>

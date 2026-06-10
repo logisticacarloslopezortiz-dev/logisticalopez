@@ -1,4 +1,4 @@
-﻿document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
   // ✅ Sistema de Notificaciones Local
   const notifications = {
     success: (msg) => OrderManager._toast(msg, 'success'),
@@ -171,6 +171,72 @@
   let activeMap = null;
   let activePickupMarker = null;
   let activeDeliveryMarker = null;
+
+  // ── LocationManager: GPS tracking durante trabajo activo ───────────────────
+  const LocationManager = {
+    watchId: null,
+    isTracking: false,
+    lastUpdate: 0,
+    lastLat: null,
+    lastLng: null,
+    interval: 30000,
+
+    start(uid) {
+      if (this.isTracking || !uid || !navigator.geolocation) return;
+      this.isTracking = true;
+      this.watchId = navigator.geolocation.watchPosition(
+        pos => this.handlePosition(pos, uid),
+        err => console.warn('[Location] Error GPS:', err.message),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      );
+      this.heartbeat = setInterval(() => this.sendHeartbeat(uid), 60000);
+    },
+
+    stop() {
+      if (this.watchId !== null) { navigator.geolocation.clearWatch(this.watchId); this.watchId = null; }
+      if (this.heartbeat) { clearInterval(this.heartbeat); this.heartbeat = null; }
+      this.isTracking = false;
+      this.lastLat = null; this.lastLng = null;
+    },
+
+    async handlePosition(pos, uid) {
+      const now = Date.now();
+      const { latitude: lat, longitude: lng, speed, heading } = pos.coords;
+
+      // Filtro de distancia: solo actualizar si se movió >10 metros O pasaron 30s
+      const moved = this.lastLat === null ||
+        Math.abs(lat - this.lastLat) > 0.0001 || Math.abs(lng - this.lastLng) > 0.0001;
+      if (!moved && now - this.lastUpdate < this.interval) return;
+
+      this.lastLat = lat; this.lastLng = lng; this.lastUpdate = now;
+
+      // Actualizar marcador en el mapa activo si está visible
+      if (activeMap && typeof L !== 'undefined') {
+        if (!this._myMarker) {
+          this._myMarker = L.circleMarker([lat, lng], {
+            radius: 8, color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.9, weight: 2
+          }).addTo(activeMap).bindPopup('Tu ubicación');
+        } else {
+          this._myMarker.setLatLng([lat, lng]);
+        }
+      }
+
+      try {
+        await supabaseConfig.client.from('collaborator_locations').upsert({
+          collaborator_id: uid, lat, lng, speed, heading,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'collaborator_id' });
+      } catch(e) { console.warn('[Location] DB update failed:', e.message); }
+    },
+
+    async sendHeartbeat(uid) {
+      if (!uid) return;
+      try {
+        await supabaseConfig.client.from('collaborators')
+          .update({ updated_at: new Date().toISOString() }).eq('id', uid);
+      } catch(_) {}
+    }
+  };
 
   // ✅ 1. FUNCIÓN PARA LIMPIAR (OBLIGATORIA)
   function clearActiveOrder() {
@@ -460,12 +526,21 @@
       if (!uid) return null;
       const v = await supabaseConfig.validateActiveCollaborator?.(uid);
       if (v && !v.isValid) return null;
+      
+      // 🚀 MEJORA: Obtener nombre desde profiles (Join)
       const resp = await supabaseConfig.withAuthRetry(() => supabaseConfig.client
         .from('collaborators')
-        .select('id,name,matricula,status')
+        .select('id, matricula, status, profile:profiles(full_name)')
         .eq('id', uid)
         .maybeSingle());
-      return resp?.data || { id: uid };
+      
+      if (resp?.data) {
+        return {
+          ...resp.data,
+          name: resp.data.profile?.full_name || 'Colaborador'
+        };
+      }
+      return { id: uid };
     } catch (_) { return null; }
   }
 
@@ -485,9 +560,9 @@
     
     // Si mostramos el mapa activo, asegurar que se renderice bien
     if (showActive && activeMap) {
-      requestAnimationFrame(() => {
-        try { activeMap.invalidateSize(); } catch(_) {}
-      });
+      // Doble invalidate: uno inmediato y otro diferido para containers con transición
+      requestAnimationFrame(() => { try { activeMap.invalidateSize(); } catch(_){} });
+      setTimeout(() => { try { activeMap.invalidateSize(); } catch(_){} }, 300);
     }
 
     // Guardar estado de vista en localStorage para persistencia en recargas
@@ -600,44 +675,72 @@
   }
 
   function initActiveMap(order){
+    // Esperar a que Leaflet esté disponible (se carga con defer)
+    if (typeof L === 'undefined') {
+      const waitForLeaflet = (attempts = 0) => {
+        if (typeof L !== 'undefined') {
+          initActiveMap(order);
+        } else if (attempts < 20) {
+          setTimeout(() => waitForLeaflet(attempts + 1), 150);
+        } else {
+          console.warn('[Map] Leaflet no disponible después de 3s');
+        }
+      };
+      waitForLeaflet();
+      return;
+    }
     try {
-      if (!activeMapEl || typeof L === 'undefined') return;
-      
+      if (!activeMapEl) return;
+
       const defaultCenter = [18.4861, -69.9312]; // Santo Domingo
       if (!activeMap) {
-        activeMap = L.map(activeMapEl).setView(defaultCenter, 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-          attribution: '&copy; OpenStreetMap' 
+        activeMap = L.map(activeMapEl, { zoomControl: true, attributionControl: true })
+          .setView(defaultCenter, 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap',
+          maxZoom: 19
         }).addTo(activeMap);
       }
-      
+
       // Limpiar marcadores anteriores
-      if (activePickupMarker) { try { activeMap.removeLayer(activePickupMarker); } catch(_){} activePickupMarker = null; }
+      if (activePickupMarker)   { try { activeMap.removeLayer(activePickupMarker); }   catch(_){} activePickupMarker   = null; }
       if (activeDeliveryMarker) { try { activeMap.removeLayer(activeDeliveryMarker); } catch(_){} activeDeliveryMarker = null; }
-      
-      const oc = order.origin_coords;
-      const dc = order.destination_coords;
-      
+
+      const oc = order?.origin_coords;
+      const dc = order?.destination_coords;
       const bounds = [];
 
       if (oc && typeof oc.lat === 'number' && typeof oc.lng === 'number') {
-        activePickupMarker = L.marker([oc.lat, oc.lng]).addTo(activeMap).bindPopup('Origen');
+        activePickupMarker = L.marker([oc.lat, oc.lng], {
+          icon: L.divIcon({ className: '', html: '<div style="background:#2563eb;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">📍</div>', iconSize: [32,32], iconAnchor: [16,32] })
+        }).addTo(activeMap).bindPopup('<b>Origen</b><br>' + (order.pickup || ''));
         bounds.push([oc.lat, oc.lng]);
       }
-      
+
       if (dc && typeof dc.lat === 'number' && typeof dc.lng === 'number') {
-        activeDeliveryMarker = L.marker([dc.lat, dc.lng]).addTo(activeMap).bindPopup('Destino');
+        activeDeliveryMarker = L.marker([dc.lat, dc.lng], {
+          icon: L.divIcon({ className: '', html: '<div style="background:#16a34a;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">🏁</div>', iconSize: [32,32], iconAnchor: [16,32] })
+        }).addTo(activeMap).bindPopup('<b>Destino</b><br>' + (order.delivery || ''));
         bounds.push([dc.lat, dc.lng]);
       }
-      
-      if (bounds.length > 0) {
-        activeMap.fitBounds(bounds, { padding: [50, 50] });
-      } else if (oc) {
-        activeMap.setView([oc.lat, oc.lng], 14);
+
+      // Sin coordenadas: intentar geocodificar desde texto
+      if (bounds.length === 0 && (order.pickup || order.delivery)) {
+        const el = activeMapEl;
+        el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:8px;color:#64748b;font-size:13px;padding:16px;text-align:center"><span style="font-size:24px">🗺️</span><span>Sin coordenadas GPS.<br>Usa los botones de ruta para navegar.</span></div>`;
+        return;
       }
-      
+
+      if (bounds.length > 1) {
+        activeMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      } else if (bounds.length === 1) {
+        activeMap.setView(bounds[0], 14);
+      }
+
+      // Invalidar tamaño para que Leaflet renderice correctamente en containers ocultos
+      setTimeout(() => { try { activeMap.invalidateSize(); } catch(_){} }, 100);
       requestAnimationFrame(() => { try { activeMap.invalidateSize(); } catch(_){} });
-    } catch(e){ console.error("Error init map", e); }
+    } catch(e){ console.error('[Map] Error inicializando mapa:', e); }
   }
 
   // --- Trabajo Activo ---
@@ -920,56 +1023,56 @@
     if (currentOrder?.delivery) openGoogleMaps(currentOrder.delivery);
   });
 
-  // --- Evidencia ---
+  // --- Evidencia con Cola de Subida (Upload Queue) ---
 
-  async function uploadEvidence(file){
+  function uploadEvidence(file) {
     if (!currentOrder || !file) return;
     const phase = getUiStatus(currentOrder);
     if (!['loading', 'delivering'].includes(phase)) {
-      try { notifications?.warning?.('No puedes subir evidencia en este estado'); } catch(_) {}
+      notifications?.warning?.('Solo puedes subir fotos durante la carga o entrega');
       return;
     }
-    try {
-      const bucket = supabaseConfig.getEvidenceBucket ? supabaseConfig.getEvidenceBucket() : 'order-evidence';
-      // Sanitizar nombre de archivo
-      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const path = `${currentOrder.id}/${Date.now()}-${safeName}`;
-      
-      const { error: upErr } = await supabaseConfig.client.storage.from(bucket).upload(path, file, { contentType: file.type, upsert: true });
-      if (upErr) throw upErr;
 
-      const { data: pub } = supabaseConfig.client.storage.from(bucket).getPublicUrl(path);
-      const url = pub?.publicUrl || '';
-      
-      // Obtener datos frescos de la DB para evitar sobrescribir evidencia de otros colaboradores o sesiones
-      const { data: fresh, error: freshErr } = await supabaseConfig.client
-        .from('orders')
-        .select('evidence_photos')
-        .eq('id', currentOrder.id)
-        .single();
-      
-      if (freshErr) throw freshErr;
+    const bucket = supabaseConfig.getEvidenceBucket ? supabaseConfig.getEvidenceBucket() : 'order-evidence';
+    
+    // Añadir a la cola global
+    window.uploadQueue.add(file, {
+      orderId: currentOrder.id,
+      phase,
+      bucket
+    });
 
-      const prev = Array.isArray(fresh?.evidence_photos) ? fresh.evidence_photos : [];
-      const next = [...prev, { bucket, path, url }];
-      
-      const { error: updErr } = await (supabaseConfig.withAuthRetry?.(() => supabaseConfig.client.from('orders').update({ evidence_photos: next }).eq('id', currentOrder.id))
-        || supabaseConfig.client.from('orders').update({ evidence_photos: next }).eq('id', currentOrder.id));
-      if (updErr) throw updErr;
-
-      currentOrder.evidence_photos = next;
-      
-      if (evidencePreview) {
-        const img = document.createElement('img');
-        img.src = url;
-        img.className = 'w-full h-32 object-cover rounded-lg border';
-        evidencePreview.prepend(img);
-      }
-      notifications?.success?.('Evidencia subida');
-    } catch (_) {
-      notifications?.error?.('No se pudo subir evidencia');
+    // Vista previa inmediata (optimista)
+    if (evidencePreview) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const div = document.createElement('div');
+        div.className = 'relative group';
+        div.innerHTML = `
+          <img src="${e.target.result}" class="w-full h-32 object-cover rounded-lg border opacity-50">
+          <div class="absolute inset-0 flex items-center justify-center">
+            <div class="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        `;
+        evidencePreview.prepend(div);
+      };
+      reader.readAsDataURL(file);
     }
   }
+
+  // Listener para actualizaciones de la cola
+  window.uploadQueue.onUpdate(queue => {
+    const pending = window.uploadQueue.getPendingCount();
+    const indicator = document.getElementById('uploadIndicator');
+    if (indicator) {
+      if (pending > 0) {
+        indicator.classList.remove('hidden');
+        indicator.querySelector('.count').textContent = pending;
+      } else {
+        indicator.classList.add('hidden');
+      }
+    }
+  });
 
   if (evidenceInput) evidenceInput.addEventListener('change', e => {
     const files = Array.from(e.target.files || []);
@@ -1166,6 +1269,29 @@ function renderOrdersHTML() {
     if (showingEl) showingEl.textContent = String(total);
     
     if (!grid) return;
+
+    // 🚀 MEJORA: MODO VIAJE (Ocultar mercado si hay trabajo activo)
+    const activeJob = orders.find(o => ['accepted', 'in_progress', 'loading', 'delivering'].includes(o.status) && o.assigned_to === __currentUserId);
+    
+    if (activeJob) {
+      grid.innerHTML = `
+        <div class="col-span-full p-8 bg-blue-50 rounded-2xl border border-blue-200 text-center shadow-sm">
+          <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <i data-lucide="navigation" class="w-10 h-10 text-blue-600 animate-pulse"></i>
+          </div>
+          <h3 class="text-xl font-bold text-blue-900 mb-2">Viaje en curso: #${activeJob.id}</h3>
+          <p class="text-blue-700 mb-6 max-w-sm mx-auto">Tu panel está enfocado en tu entrega actual. Termina o cancela este servicio para ver nuevas órdenes.</p>
+          <button onclick="window.openActiveJob?.(${JSON.stringify(activeJob).replace(/"/g, '&quot;')})" 
+                  class="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-all flex items-center gap-2 mx-auto">
+            <i data-lucide="external-link" class="w-5 h-5"></i> Ir a mi Hoja de Ruta
+          </button>
+        </div>
+      `;
+      try { window.lucide?.createIcons(); } catch(_){}
+      // Abrir automáticamente si es la carga inicial y no está abierta
+      if (!window._currentActiveOrder) openActiveJob(activeJob);
+      return;
+    }
     
     if (total === 0) {
       grid.innerHTML = `
@@ -1362,46 +1488,6 @@ function renderOrdersHTML() {
       }
     });
   }
-
-  // ✅ ENTERPRISE: Location Manager Optimizado
-  const LocationManager = {
-    watchId: null,
-    isTracking: false,
-    
-    start(uid) {
-      if (this.isTracking || !uid || !navigator.geolocation) return;
-      
-      console.log('[LocationManager] Iniciando rastreo de alta precisión');
-      this.isTracking = true;
-      
-      this.watchId = navigator.geolocation.watchPosition(
-        async (pos) => {
-          // Debounce simple: actualizar DB
-          try {
-            await supabaseConfig.client.from('collaborator_locations').upsert({
-              collaborator_id: uid,
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              speed: pos.coords.speed,
-              heading: pos.coords.heading,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'collaborator_id' });
-          } catch (e) { console.warn('[Location] Error db update:', e); }
-        },
-        (err) => console.warn('[Location] Error:', err),
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-      );
-    },
-    
-    stop() {
-      if (this.watchId !== null) {
-        navigator.geolocation.clearWatch(this.watchId);
-        this.watchId = null;
-      }
-      this.isTracking = false;
-      console.log('[LocationManager] Rastreo detenido');
-    }
-  };
 
   const init = async () => {
     const ok = await ensureAuthOrRedirect();

@@ -9,11 +9,14 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://unpkg.com http://localhost:*; font-src 'self' data:; manifest-src 'self'; worker-src 'self'">
 
 <!-- ✅ Favicon -->
-<link rel="icon" type="image/x-icon" href="img/favicon.ico" />
-<link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
-<link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
-<link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
-
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+  <link rel="icon" type="image/png" href="img/favicon-16x16.png" sizes="16x16" />
+  <link rel="icon" type="image/png" href="img/favicon-32x32.png" sizes="32x32" />
+  <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon"/>
+  <link rel="apple-touch-icon" href="img/android-chrome-192x192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.563.0/dist/umd/lucide.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -48,10 +51,6 @@
       <a href="ganancias.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="dollar-sign" class="w-5 h-5"></i> <span class="sidebar-text">Ganancia</span></a>
       <a href="historial-solicitudes.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="history" class="w-5 h-5"></i> <span class="sidebar-text">Historial</span></a>
       <a href="mi-negocio.html" class="flex items-center gap-3 px-4 py-3 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5"></i> <span class="sidebar-text">Mi negocio</span></a>
-      <!-- Botón de rendimiento abre modal -->
-      <button id="openMetricsFromSidebar" class="flex items-center gap-3 px-4 py-3 rounded-lg">
-        <i data-lucide="bar-chart-3" class="w-5 h-5"></i> <span class="sidebar-text">Rendimiento</span>
-      </button>
       <a href="colaboradores.html" class="flex items-center gap-3 px-4 py-3 rounded-lg active"><i data-lucide="users" class="w-5 h-5"></i> <span class="sidebar-text">Colaboradores</span></a>
     </nav>
     <!-- Footer del Sidebar -->
