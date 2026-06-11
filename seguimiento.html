@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta name="theme-color" content="#2563eb" />
-  <meta name="description" content="Seguimiento de solicitud - TLC" />
+  <meta name="description" content="Seguimiento de solicitud - LLO" />
   <title>Seguimiento de Solicitud </title>
 
   <style>
@@ -16,7 +16,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-  <meta name="apple-mobile-web-app-title" content="TLC" />
+  <meta name="apple-mobile-web-app-title" content="LLO" />
   <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
 
   <!-- Favicon -->
@@ -107,7 +107,7 @@
           <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4">
               <div>
-                <h1 class="text-2xl font-bold text-primario" id="orderTitle">Orden #TLC01</h1>
+                <h1 class="text-2xl font-bold text-primario" id="orderTitle">Orden #LLO01</h1>
                 <p class="text-gray-500 text-sm mt-1" id="orderDate">Creada el 15 de enero, 2024</p>
               </div>
               <div id="orderStatus" class="status-badge status-Pendiente mt-3 sm:mt-0">
@@ -210,7 +210,7 @@
     </div>
   </div>
 
-  <!-- Modal del Juego TLC Runner -->
+  <!-- Modal del Juego LLO Runner -->
   <div id="gameModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black bg-opacity-70" id="gameOverlay"></div>
     <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-3xl flex items-center justify-center">
@@ -220,8 +220,8 @@
           <div class="flex items-center gap-3 text-white">
             <i data-lucide="truck" class="w-8 h-8"></i>
             <div>
-              <h3 class="text-2xl font-bold">TLC Runner 🚚</h3>
-              <p class="text-sm opacity-90">Salta las cajas! 📦</p>
+              <h3 class="text-2xl font-bold">LLO Runner 🚚</h3>
+              <p class="text-sm opacity-90">Salta las cajas LLO! 📦</p>
             </div>
           </div>
           <button id="closeGameBtn" class="bg-white/20 hover:bg-white/30 rounded-lg p-2 transition-all">
@@ -332,7 +332,7 @@
   </script>
   <script>try{if(window.lucide&&lucide.createIcons){lucide.createIcons();}}catch(_){}</script>
 
-  <!-- Juego TLC Runner -->
+  <!-- Juego LLO Runner -->
   <script>
     (function() {
       // Variables del juego
@@ -341,24 +341,25 @@
       let animationId;
       let score = 0;
       let gameSpeed = 5;
+      let frameCount = 0;
 
       // Jugador (camión)
       const truck = {
         x: 50,
         y: 0,
-        width: 80,
-        height: 60,
+        width: 100,
+        height: 70,
         dy: 0,
-        gravity: 0.6,
-        jumpPower: -14,
+        gravity: 0.7,
+        jumpPower: -16,
         isJumping: false,
         groundY: 0
       };
 
       // Obstáculos (cajas)
       let obstacles = [];
-      const obstacleWidths = [40, 50, 35];
-      const obstacleHeights = [50, 60, 45];
+      const obstacleWidths = [50, 60, 45];
+      const obstacleHeights = [55, 65, 50];
 
       // Elementos del DOM
       let openGameBtn, closeGameBtn, restartGameBtn;
@@ -371,8 +372,8 @@
         
         ctx = canvas.getContext('2d');
         canvas.width = canvas.offsetWidth;
-        canvas.height = 280;
-        truck.groundY = canvas.height - 80;
+        canvas.height = 320;
+        truck.groundY = canvas.height - 90;
         truck.y = truck.groundY;
         
         // Obtener elementos DOM
@@ -419,6 +420,7 @@
       function resetGame() {
         score = 0;
         gameSpeed = 5;
+        frameCount = 0;
         obstacles = [];
         truck.y = truck.groundY;
         truck.dy = 0;
@@ -461,6 +463,8 @@
       }
 
       function update() {
+        frameCount++;
+        
         // Actualizar camión
         truck.dy += truck.gravity;
         truck.y += truck.dy;
@@ -481,15 +485,36 @@
             continue;
           }
           
-          // Detección de colisiones
+          // Detección de colisiones (más precisa)
           if (checkCollision(truck, obstacles[i])) {
             endGame();
             return;
           }
         }
         
-        // Generar nuevos obstáculos
-        if (Math.random() < 0.015 + (gameSpeed / 1000)) {
+        // Generar nuevos obstáculos con espaciado inteligente
+        let spawnChance = 0;
+        let minFramesBetweenCajas = 100; // Mucho espacio al principio
+        
+        if (score < 2000) {
+          // Antes de 2000 puntos: espaciado grande
+          spawnChance = 0.008;
+          minFramesBetweenCajas = 120;
+        } else if (score < 5000) {
+          // Entre 2000 y 5000 puntos: espaciado medio
+          spawnChance = 0.015;
+          minFramesBetweenCajas = 80;
+        } else {
+          // Después de 5000 puntos: espaciado más cercano
+          spawnChance = 0.025;
+          minFramesBetweenCajas = 50;
+        }
+        
+        // Obtener la última caja para ver el espaciado
+        const lastCaja = obstacles[obstacles.length - 1];
+        const enoughDistance = !lastCaja || (canvas.width - lastCaja.x > 250);
+        
+        if (frameCount > minFramesBetweenCajas && enoughDistance && Math.random() < spawnChance) {
           const widthIndex = Math.floor(Math.random() * obstacleWidths.length);
           obstacles.push({
             x: canvas.width,
@@ -497,6 +522,7 @@
             width: obstacleWidths[widthIndex],
             height: obstacleHeights[widthIndex]
           });
+          frameCount = 0; // Reiniciar contador
         }
         
         // Aumentar puntuación y velocidad
@@ -508,7 +534,7 @@
       }
 
       function checkCollision(rect1, rect2) {
-        const padding = 10;
+        const padding = 8;
         return (
           rect1.x + padding < rect2.x + rect2.width - padding &&
           rect1.x + rect1.width - padding > rect2.x + padding &&
@@ -518,76 +544,204 @@
       }
 
       function draw() {
-        // Limpiar canvas
-        ctx.fillStyle = '#f0fdfa';
+        // Limpiar canvas con fondo agradable
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, '#e0f2fe');
+        gradient.addColorStop(0.7, '#f0fdfa');
+        gradient.addColorStop(1, '#ccfbf1');
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Dibujar suelo
-        ctx.fillStyle = '#4ade80';
+        // Dibujar nubes decorativas
+        drawClouds();
+        
+        // Dibujar suelo mejorado
+        drawGround();
+        
+        // Dibujar obstáculos (cajas LLO mejoradas)
+        obstacles.forEach(obs => {
+          drawBox(obs);
+        });
+        
+        // Dibujar camión LLO mejorado
+        drawTruck();
+      }
+
+      function drawClouds() {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        // Nube 1 (móvil)
+        const cloud1X = (frameCount * 0.3) % (canvas.width + 200) - 100;
+        drawCloud(cloud1X, 30);
+        // Nube 2 (móvil más lenta)
+        const cloud2X = (frameCount * 0.2) % (canvas.width + 150) - 75;
+        drawCloud(cloud2X, 70);
+      }
+
+      function drawCloud(x, y) {
+        ctx.beginPath();
+        ctx.arc(x, y, 20, 0, Math.PI * 2);
+        ctx.arc(x + 15, y - 10, 25, 0, Math.PI * 2);
+        ctx.arc(x + 30, y, 22, 0, Math.PI * 2);
+        ctx.arc(x + 15, y + 5, 18, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawGround() {
+        // Césped
+        ctx.fillStyle = '#22c55e';
         ctx.fillRect(0, truck.groundY + truck.height, canvas.width, canvas.height - truck.groundY - truck.height);
         
-        ctx.fillStyle = '#9ca3af';
-        ctx.fillRect(0, truck.groundY + truck.height - 10, canvas.width, 20);
+        // Textura del césped
+        ctx.strokeStyle = '#16a34a';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < canvas.width; i += 20) {
+          ctx.beginPath();
+          ctx.moveTo(i, truck.groundY + truck.height);
+          ctx.lineTo(i + 10, truck.groundY + truck.height + 8);
+          ctx.stroke();
+        }
         
-        // Dibujar líneas de la carretera
+        // Carretera
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(0, truck.groundY + truck.height - 15, canvas.width, 30);
+        
+        // Líneas de la carretera (animadas)
         ctx.strokeStyle = '#fde047';
-        ctx.lineWidth = 5;
-        ctx.setLineDash([40, 20]);
+        ctx.lineWidth = 6;
+        ctx.setLineDash([40, 30]);
+        ctx.lineDashOffset = -frameCount * gameSpeed * 0.5;
         ctx.beginPath();
         ctx.moveTo(0, truck.groundY + truck.height);
         ctx.lineTo(canvas.width, truck.groundY + truck.height);
         ctx.stroke();
         ctx.setLineDash([]);
+      }
+
+      function drawBox(obs) {
+        // Caja principal con gradiente
+        const boxGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.width, obs.y + obs.height);
+        boxGrad.addColorStop(0, '#f59e0b'); // Naranja más brillante
+        boxGrad.addColorStop(0.5, '#d97706');
+        boxGrad.addColorStop(1, '#b45309');
+        ctx.fillStyle = boxGrad;
         
-        // Dibujar obstáculos (cajas)
-        obstacles.forEach(obs => {
-          // Caja principal
-          ctx.fillStyle = '#d97706';
-          ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-          
-          // Detalles de la caja
-          ctx.fillStyle = '#92400e';
-          ctx.fillRect(obs.x + 5, obs.y + 5, 10, 10);
-          ctx.fillRect(obs.x + obs.width - 15, obs.y + 5, 10, 10);
-          ctx.fillRect(obs.x + 5, obs.y + obs.height - 15, 10, 10);
-          ctx.fillRect(obs.x + obs.width - 15, obs.y + obs.height - 15, 10, 10);
-          
-          // Logo TLC (simplificado)
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 10px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('TLC', obs.x + obs.width / 2, obs.y + obs.height / 2 + 4);
-        });
+        // Sombras para profundidad
+        ctx.shadowColor = 'rgba(0,0,0,0.2)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 4;
+        roundRect(ctx, obs.x, obs.y, obs.width, obs.height, 5); // Caja con bordes redondeados
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
         
-        // Dibujar camión
-        // Cuerpo del camión
-        ctx.fillStyle = '#2563eb';
-        ctx.fillRect(truck.x, truck.y, truck.width, truck.height);
+        // Detalles de la caja (rayas blancas)
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(obs.x + 5, obs.y + 10);
+        ctx.lineTo(obs.x + obs.width - 5, obs.y + 10);
+        ctx.moveTo(obs.x + 5, obs.y + obs.height - 10);
+        ctx.lineTo(obs.x + obs.width - 5, obs.y + obs.height - 10);
+        ctx.stroke();
         
-        // Cabina
-        ctx.fillStyle = '#1d4ed8';
-        ctx.fillRect(truck.x, truck.y, truck.width * 0.4, truck.height);
+        // Logo LLO (mejorado y más grande)
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0,0,0,0.2)';
+        ctx.shadowBlur = 2;
+        ctx.fillText('LLO', obs.x + obs.width / 2, obs.y + obs.height / 2);
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+      }
+
+      function drawTruck() {
+        // Sombra del camión
+        ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        ctx.beginPath();
+        ctx.ellipse(truck.x + truck.width/2, truck.y + truck.height + 5, truck.width/2 - 5, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
         
-        // Ventana
+        // Cuerpo del camión con gradiente
+        const truckGrad = ctx.createLinearGradient(truck.x, truck.y, truck.x, truck.y + truck.height);
+        truckGrad.addColorStop(0, '#3b82f6'); // Azul más brillante
+        truckGrad.addColorStop(0.5, '#2563eb');
+        truckGrad.addColorStop(1, '#1d4ed8');
+        ctx.fillStyle = truckGrad;
+        roundRect(ctx, truck.x, truck.y, truck.width, truck.height, 8); // Bordes redondeados
+        
+        // Cabina del camión
+        const cabGrad = ctx.createLinearGradient(truck.x, truck.y, truck.x, truck.y + truck.height);
+        cabGrad.addColorStop(0, '#2563eb');
+        cabGrad.addColorStop(1, '#1e40af');
+        ctx.fillStyle = cabGrad;
+        roundRect(ctx, truck.x, truck.y, truck.width * 0.4, truck.height, 8);
+        
+        // Ventana de la cabina
         ctx.fillStyle = '#7dd3fc';
-        ctx.fillRect(truck.x + 5, truck.y + 8, 22, 20);
+        roundRect(ctx, truck.x + 8, truck.y + 10, 28, 25, 4);
         
-        // Ruedas
+        // Resplandor en la ventana
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        roundRect(ctx, truck.x + 10, truck.y + 12, 10, 10, 2);
+        
+        // Ruedas (mejoradas)
+        drawWheel(truck.x + 25, truck.y + truck.height, 16);
+        drawWheel(truck.x + 75, truck.y + truck.height, 16);
+        
+        // Logo LLO en el camión
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('LLO', truck.x + truck.width * 0.7, truck.y + truck.height / 2);
+      }
+
+      function drawWheel(x, y, radius) {
+        // Llanta exterior
         ctx.fillStyle = '#1f2937';
         ctx.beginPath();
-        ctx.arc(truck.x + 20, truck.y + truck.height, 12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(truck.x + 60, truck.y + truck.height, 12, 0, Math.PI * 2);
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
         
-        // Detalles de las ruedas
+        // Llanta interior
         ctx.fillStyle = '#4b5563';
         ctx.beginPath();
-        ctx.arc(truck.x + 20, truck.y + truck.height, 6, 0, Math.PI * 2);
+        ctx.arc(x, y, radius - 4, 0, Math.PI * 2);
         ctx.fill();
+        
+        // Rin
+        ctx.fillStyle = '#9ca3af';
         ctx.beginPath();
-        ctx.arc(truck.x + 60, truck.y + truck.height, 6, 0, Math.PI * 2);
+        ctx.arc(x, y, radius - 8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Detalles del rin (rayos)
+        ctx.strokeStyle = '#6b7280';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 5; i++) {
+          const angle = (i * (Math.PI * 2 / 5)) + (frameCount * 0.1);
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + Math.cos(angle) * (radius - 10), y + Math.sin(angle) * (radius - 10));
+          ctx.stroke();
+        }
+      }
+
+      // Helper para dibujar rectángulos redondeados
+      function roundRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
         ctx.fill();
       }
 
@@ -622,7 +776,7 @@
       window.addEventListener('resize', () => {
         if (canvas) {
           canvas.width = canvas.offsetWidth;
-          truck.groundY = canvas.height - 80;
+          truck.groundY = canvas.height - 90;
         }
       });
     })();

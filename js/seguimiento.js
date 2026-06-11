@@ -194,6 +194,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Función para renderizar el indicador de progreso
+  function renderProgressIndicator(status) {
+    const progressIndicator = document.getElementById('progressIndicator');
+    if (!progressIndicator) return;
+
+    const steps = [
+      { key: 'created', label: 'Recibida', icon: 'check-circle' },
+      { key: 'accepted', label: 'Aceptada', icon: 'check-circle' },
+      { key: 'in_progress', label: 'En camino', icon: 'truck' },
+      { key: 'loading', label: 'Cargando', icon: 'package' },
+      { key: 'delivering', label: 'Entregando', icon: 'truck' },
+      { key: 'completed', label: 'Completada', icon: 'check' }
+    ];
+
+    // Normalizar estado para identificar el paso actual
+    let currentStepIndex = 0;
+    const s = String(status || '').toLowerCase();
+    if (s.includes('accepted') || s.includes('aceptada')) currentStepIndex = 1;
+    else if (s.includes('in_progress') || s.includes('recoger') || s.includes('en camino')) currentStepIndex = 2;
+    else if (s.includes('loading') || s.includes('cargando')) currentStepIndex = 3;
+    else if (s.includes('delivering') || s.includes('entregar')) currentStepIndex = 4;
+    else if (s.includes('completed') || s.includes('completada') || s.includes('entregada')) currentStepIndex = 5;
+
+    let html = '<div class="flex items-center justify-between">';
+    steps.forEach((step, index) => {
+      const isActive = index <= currentStepIndex;
+      const isCurrent = index === currentStepIndex;
+      html += `
+        <div class="flex flex-col items-center ${isActive ? 'text-blue-600' : 'text-gray-400'}">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center ${isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}">
+            <i data-lucide="${step.icon}" class="w-5 h-5"></i>
+          </div>
+          <span class="text-xs font-semibold mt-1">${step.label}</span>
+        </div>
+      `;
+      if (index < steps.length - 1) {
+        html += `<div class="flex-1 h-1 mx-2 ${index < currentStepIndex ? 'bg-blue-600' : 'bg-gray-200'} rounded"></div>`;
+      }
+    });
+    html += '</div>';
+
+    progressIndicator.innerHTML = html;
+
+    // Re-inicializar íconos
+    if (window.lucide) window.lucide.createIcons();
+  }
+
   // Función para renderizar toda la información de seguimiento
   function renderTrackingInfo(order) {
     // --- 1. Renderizar Título y Estado ---
@@ -373,98 +420,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (_) {}
   }
 
-  // --- LÓGICA DEL MAPA ---
-
-  // Función para inicializar el mapa de Leaflet
-  function initializeMap(order) {
-    // Coordenadas por defecto (Santo Domingo) si no hay datos
-    const defaultCoords = { lat: 18.4861, lng: -69.9312 };
-    const pickupCoords = order.origin_coords || defaultCoords;
-    const deliveryCoords = order.destination_coords;
-
-    if (!map) {
-      map = L.map('trackingMap').setView([pickupCoords.lat, pickupCoords.lng], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(map);
-    } else {
-      // Limpiar marcadores y rutas anteriores
-      if (pickupMarker) map.removeLayer(pickupMarker);
-      if (deliveryMarker) map.removeLayer(deliveryMarker);
-      if (routeLine) map.removeLayer(routeLine);
-    }
-
-    // Iconos personalizados
-    const originIcon = L.icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-
-    const destinationIcon = L.icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-
-    // Añadir marcador de origen
-    pickupMarker = L.marker([pickupCoords.lat, pickupCoords.lng], { icon: originIcon })
-      .addTo(map)
-      .bindPopup(`<b>Origen:</b><br>${order.pickup}`);
-
-    mapDetails.innerHTML = `<p><b>📍 Origen:</b> ${order.pickup}</p>`;
-
-    const bounds = [[pickupCoords.lat, pickupCoords.lng]];
-
-    // Añadir marcador de destino si existe
-    async function drawRealRoute(pu, de){
-      try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${pu.lng},${pu.lat};${de.lng},${de.lat}?overview=full&geometries=geojson`;
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (!data || !data.routes || !data.routes[0] || !data.routes[0].geometry) return null;
-        const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-        const poly = L.polyline(coords, { color: '#2563eb', weight: 5 }).addTo(map);
-        const dur = data.routes[0].duration;
-        if (typeof dur === 'number' && dur > 0) {
-          const min = Math.round(dur / 60);
-          mapDetails.innerHTML += `<p><b>⏱ ETA:</b> ${min} min aprox.</p>`;
-        }
-        return poly;
-      } catch { return null; }
-    }
-
-    if (deliveryCoords && deliveryCoords.lat && deliveryCoords.lng) {
-      deliveryMarker = L.marker([deliveryCoords.lat, deliveryCoords.lng], { icon: destinationIcon })
-        .addTo(map)
-        .bindPopup(`<b>Destino:</b><br>${order.delivery}`);
-      mapDetails.innerHTML += `<p><b>🏁 Destino:</b> ${order.delivery}</p>`;
-      bounds.push([deliveryCoords.lat, deliveryCoords.lng]);
-      drawRealRoute(pickupCoords, deliveryCoords).then(poly => {
-        routeLine = poly;
-        if (!routeLine) {
-          routeLine = L.polyline([[pickupCoords.lat, pickupCoords.lng],[deliveryCoords.lat, deliveryCoords.lng]], { color: '#2563eb', weight: 5 }).addTo(map);
-        }
-      }).catch(() => {
-        routeLine = L.polyline([[pickupCoords.lat, pickupCoords.lng],[deliveryCoords.lat, deliveryCoords.lng]], { color: '#2563eb', weight: 5 }).addTo(map);
-      });
-      if (!routeLine) {
-        routeLine = L.polyline([[pickupCoords.lat, pickupCoords.lng],[deliveryCoords.lat, deliveryCoords.lng]], { color: '#2563eb', weight: 5 }).addTo(map);
-      }
-    }
-
-    // Ajustar el zoom del mapa para mostrar todos los marcadores
-    if (bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-    }
-  }
+  // --- LÓGICA DEL MAPA (desactivada temporalmente) ---
+  // let map, pickupMarker, deliveryMarker, routeLine, mapDetails;
 
   // --- EVENT LISTENERS ---
 
