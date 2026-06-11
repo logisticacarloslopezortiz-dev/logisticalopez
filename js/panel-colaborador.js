@@ -168,9 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let orders = [];
   let currentOrder = null;
   let __iconsTimer = null;
-  let activeMap = null;
-  let activePickupMarker = null;
-  let activeDeliveryMarker = null;
 
   // ── LocationManager: GPS tracking durante trabajo activo ───────────────────
   const LocationManager = {
@@ -673,6 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
       window.open(url, '_blank');
     } catch(_){}
   }
+  window.openGoogleMaps = openGoogleMaps; // Exponer globalmente
 
   function initActiveMap(order){
     // Esperar a que Leaflet esté disponible (se carga con defer)
@@ -798,9 +796,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (evidencePreview) evidencePreview.innerHTML = '';
     
-    // 4. Actualizar botones y mapa
+    // 4. Actualizar botones
     ActiveJobUI.updateActionButtons(getUiStatus(order), order);
-    initActiveMap(order);
 
     // 5. Notificaciones Push
     try {
