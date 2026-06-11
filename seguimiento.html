@@ -244,7 +244,7 @@
 
           <!-- Canvas del Juego -->
           <div class="bg-white rounded-xl border-2 border-gray-200 shadow-inner overflow-hidden">
-            <canvas id="gameCanvas" class="w-full" style="height: 280px;"></canvas>
+            <canvas id="gameCanvas" class="w-full" style="height: 320px;"></canvas>
           </div>
 
           <!-- Pantalla de Game Over -->
@@ -401,8 +401,20 @@
       function openGame() {
         if (gameModal) {
           gameModal.classList.remove('hidden');
-          resetGame();
-          startGame();
+          
+          // Asegurar que el canvas tenga tamaño correcto después de abrir
+          setTimeout(() => {
+            if (canvas) {
+              canvas.width = canvas.offsetWidth;
+              canvas.height = 320;
+              truck.groundY = canvas.height - 90;
+              truck.y = truck.groundY;
+            }
+            resetGame();
+            startGame();
+            // Dibujar un frame inmediatamente
+            draw();
+          }, 50);
         }
         // Reinicializar íconos
         try { if (window.lucide && lucide.createIcons) lucide.createIcons(); } catch(_){}

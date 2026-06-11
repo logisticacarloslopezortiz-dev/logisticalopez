@@ -34,3 +34,30 @@
 .realtime-dot.offline { background: #f97316; box-shadow: 0 0 8px rgba(249,115,22,0.35); }
 .pulse-flash { animation: realtime-pulse 1.1s ease-in-out; }
 @keyframes realtime-pulse { 0% { transform: scale(1); box-shadow: 0 0 6px rgba(16,185,129,0.25); } 50% { transform: scale(1.35); box-shadow: 0 0 18px rgba(16,185,129,0.45); } 100% { transform: scale(1); box-shadow: 0 0 6px rgba(16,185,129,0.25); } }
+
+/* Responsive para el indicador de progreso */
+#progressIndicator {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+/* Asegurar que todo el contenido se vea bien en móviles pequeños */
+@media (max-width: 480px) {
+  #progressIndicator {
+    transform: scale(0.9);
+    transform-origin: left center;
+    width: 110%;
+  }
+
+  /* Mejorar el espaciado en el header para móviles */
+  header .max-w-5xl {
+    padding: 0.75rem;
+  }
+  
+  /* Ajustar botones para móviles */
+  #openGameBtn {
+    width: 100%;
+    padding: 0.875rem !important;
+    font-size: 1rem !important;
+  }
+}

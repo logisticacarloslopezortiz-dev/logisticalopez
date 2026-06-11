@@ -217,20 +217,20 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (s.includes('delivering') || s.includes('entregar')) currentStepIndex = 4;
     else if (s.includes('completed') || s.includes('completada') || s.includes('entregada')) currentStepIndex = 5;
 
-    let html = '<div class="flex items-center justify-between">';
+    let html = '<div class="flex items-center justify-between gap-1">';
     steps.forEach((step, index) => {
       const isActive = index <= currentStepIndex;
       const isCurrent = index === currentStepIndex;
       html += `
-        <div class="flex flex-col items-center ${isActive ? 'text-blue-600' : 'text-gray-400'}">
-          <div class="w-10 h-10 rounded-full flex items-center justify-center ${isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}">
-            <i data-lucide="${step.icon}" class="w-5 h-5"></i>
+        <div class="flex flex-col items-center flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'}">
+          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}">
+            <i data-lucide="${step.icon}" class="w-4 h-4 sm:w-5 sm:h-5"></i>
           </div>
-          <span class="text-xs font-semibold mt-1">${step.label}</span>
+          <span class="text-[0.65rem] sm:text-xs font-semibold mt-1 text-center">${step.label}</span>
         </div>
       `;
       if (index < steps.length - 1) {
-        html += `<div class="flex-1 h-1 mx-2 ${index < currentStepIndex ? 'bg-blue-600' : 'bg-gray-200'} rounded"></div>`;
+        html += `<div class="flex-1 h-1 mx-1 sm:mx-2 ${index < currentStepIndex ? 'bg-blue-600' : 'bg-gray-200'} rounded"></div>`;
       }
     });
     html += '</div>';
