@@ -91,11 +91,16 @@
       // 2. Ubicación
       if (types.includes('location') && navigator.geolocation) {
         return new Promise((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            () => { console.log('GPS permitido'); resolve(true); },
-            (err) => { console.warn('GPS denegado', err); resolve(false); },
-            { enableHighAccuracy: true, timeout: 5000 }
-          );
+          try {
+            navigator.geolocation.getCurrentPosition(
+              () => resolve(true),
+              () => resolve(false), // silencioso — el colaborador puede denegar GPS
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 }
+            );
+          } catch (e) {
+            console.warn('[PWA] Error GPS:', e);
+            resolve(false);
+          }
         });
       }
     }

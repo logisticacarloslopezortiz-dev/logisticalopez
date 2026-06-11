@@ -26,9 +26,7 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Leaflet (para el mapa) -->
-  <link rel="stylesheet" href="vendor/leaflet.css" />
-  <script src="vendor/leaflet.js" defer></script>
+
 
   <!-- Lucide Icons (CDN unificado) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
@@ -102,9 +100,9 @@
     <!-- Contenido Principal -->
     <main class="max-w-5xl mx-auto px-4 py-8 w-full flex-grow">
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Columna Izquierda: Detalles y Timeline -->
-        <div class="lg:col-span-2 space-y-8">
+      <div class="grid grid-cols-1 gap-8">
+        <!-- Columna Única: Detalles, Timeline y Progreso -->
+        <div class="space-y-8">
           <!-- Información de la Orden -->
           <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4">
@@ -114,6 +112,19 @@
               </div>
               <div id="orderStatus" class="status-badge status-Pendiente mt-3 sm:mt-0">
                 Pendiente
+              </div>
+            </div>
+
+            <!-- Indicador de Progreso -->
+            <div class="border-t border-gray-200 pt-6 mt-6">
+              <h2 class="text-xl font-bold flex items-center gap-3 mb-6 text-secundario">
+                <span class="bg-yellow-400 p-2 rounded-lg">
+                  <i data-lucide="trending-up" class="w-5 h-5 text-white"></i>
+                </span>
+                Progreso de tu Solicitud
+              </h2>
+              <div id="progressIndicator" class="relative">
+                <!-- El progreso se llenará dinámicamente -->
               </div>
             </div>
 
@@ -130,6 +141,14 @@
                 </h3>
                 <p id="scheduledTime" class="text-gray-600"></p>
             </div>
+          </div>
+
+          <!-- Botón de Juego -->
+          <div class="flex justify-center">
+            <button id="openGameBtn" class="flex items-center gap-3 px-8 py-4 rounded-xl text-white font-bold text-lg shadow-xl hover:shadow-2xl transition-all transform hover:scale-105" style="background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);">
+              <i data-lucide="gamepad-2" class="w-6 h-6"></i>
+              🎮 Jugar Mientras Esperas
+            </button>
           </div>
 
           <!-- Timeline de Estados -->
@@ -150,19 +169,7 @@
           </div>
         </div>
 
-        <!-- Columna Derecha: Mapa -->
-        <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6 space-y-4">
-          <h2 class="text-xl font-bold flex items-center gap-3 text-secundario">
-            <span class="bg-yellow-400 p-2 rounded-lg">
-              <i data-lucide="map-pin" class="w-5 h-5 text-white"></i>
-            </span>
-            Ruta del Servicio
-          </h2>
-          <div id="trackingMap" class="w-full h-80 rounded-lg border border-gray-200"></div>
-          <div id="mapDetails" class="text-sm text-gray-600 space-y-1">
-            <!-- Detalles del mapa se llenarán aquí -->
-          </div>
-        </div>
+
       </div>
 
       <!-- Galería de Fotos -->
@@ -198,6 +205,56 @@
           <button id="installPWA" class="flex-1 btn-primary text-white px-4 py-2 rounded-lg">
             Instalar
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal del Juego TLC Runner -->
+  <div id="gameModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black bg-opacity-70" id="gameOverlay"></div>
+    <div class="relative z-10 min-h-screen px-4 py-6 mx-auto max-w-3xl flex items-center justify-center">
+      <div class="w-full bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl shadow-2xl overflow-hidden">
+        <!-- Cabecera del Modal -->
+        <div class="bg-gradient-to-r from-blue-600 to-cyan-500 p-4 flex items-center justify-between">
+          <div class="flex items-center gap-3 text-white">
+            <i data-lucide="truck" class="w-8 h-8"></i>
+            <div>
+              <h3 class="text-2xl font-bold">TLC Runner 🚚</h3>
+              <p class="text-sm opacity-90">Salta las cajas! 📦</p>
+            </div>
+          </div>
+          <button id="closeGameBtn" class="bg-white/20 hover:bg-white/30 rounded-lg p-2 transition-all">
+            <i data-lucide="x" class="w-6 h-6 text-white"></i>
+          </button>
+        </div>
+
+        <!-- Área del Juego -->
+        <div class="p-4">
+          <!-- Puntuación -->
+          <div class="flex justify-between items-center mb-4 px-2">
+            <div class="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-xl border border-blue-200">
+              <i data-lucide="trophy" class="w-5 h-5 text-yellow-500"></i>
+              <span id="gameScore" class="text-xl font-bold text-blue-800">Puntuación: 0</span>
+            </div>
+            <div class="text-sm text-gray-600 font-medium">
+              Usa <kbd class="bg-gray-200 px-2 py-1 rounded text-xs">Espacio</kbd> o <kbd class="bg-gray-200 px-2 py-1 rounded text-xs">Toca la pantalla</kbd> para saltar
+            </div>
+          </div>
+
+          <!-- Canvas del Juego -->
+          <div class="bg-white rounded-xl border-2 border-gray-200 shadow-inner overflow-hidden">
+            <canvas id="gameCanvas" class="w-full" style="height: 280px;"></canvas>
+          </div>
+
+          <!-- Pantalla de Game Over -->
+          <div id="gameOverScreen" class="hidden text-center py-6">
+            <h4 class="text-3xl font-bold text-red-600 mb-2">¡Chocaste! 💥</h4>
+            <p class="text-xl text-gray-700 mb-6">Tu puntuación: <span id="finalScore" class="font-bold text-blue-600">0</span></p>
+            <button id="restartGameBtn" class="px-8 py-3 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105" style="background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);">
+              🔄 Volver a Jugar
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -274,5 +331,301 @@
     })();
   </script>
   <script>try{if(window.lucide&&lucide.createIcons){lucide.createIcons();}}catch(_){}</script>
+
+  <!-- Juego TLC Runner -->
+  <script>
+    (function() {
+      // Variables del juego
+      let canvas, ctx;
+      let gameRunning = false;
+      let animationId;
+      let score = 0;
+      let gameSpeed = 5;
+
+      // Jugador (camión)
+      const truck = {
+        x: 50,
+        y: 0,
+        width: 80,
+        height: 60,
+        dy: 0,
+        gravity: 0.6,
+        jumpPower: -14,
+        isJumping: false,
+        groundY: 0
+      };
+
+      // Obstáculos (cajas)
+      let obstacles = [];
+      const obstacleWidths = [40, 50, 35];
+      const obstacleHeights = [50, 60, 45];
+
+      // Elementos del DOM
+      let openGameBtn, closeGameBtn, restartGameBtn;
+      let gameModal, gameOverlay, gameScore, finalScore, gameOverScreen;
+
+      // Inicializar el juego
+      function initGame() {
+        canvas = document.getElementById('gameCanvas');
+        if (!canvas) return;
+        
+        ctx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 280;
+        truck.groundY = canvas.height - 80;
+        truck.y = truck.groundY;
+        
+        // Obtener elementos DOM
+        openGameBtn = document.getElementById('openGameBtn');
+        closeGameBtn = document.getElementById('closeGameBtn');
+        restartGameBtn = document.getElementById('restartGameBtn');
+        gameModal = document.getElementById('gameModal');
+        gameOverlay = document.getElementById('gameOverlay');
+        gameScore = document.getElementById('gameScore');
+        finalScore = document.getElementById('finalScore');
+        gameOverScreen = document.getElementById('gameOverScreen');
+        
+        // Event listeners
+        if (openGameBtn) openGameBtn.addEventListener('click', openGame);
+        if (closeGameBtn) closeGameBtn.addEventListener('click', closeGame);
+        if (gameOverlay) gameOverlay.addEventListener('click', closeGame);
+        if (restartGameBtn) restartGameBtn.addEventListener('click', restartGame);
+        
+        document.addEventListener('keydown', handleInput);
+        canvas.addEventListener('click', handleInput);
+        canvas.addEventListener('touchstart', handleInput, { passive: true });
+      }
+
+      // Abrir el modal del juego
+      function openGame() {
+        if (gameModal) {
+          gameModal.classList.remove('hidden');
+          resetGame();
+          startGame();
+        }
+        // Reinicializar íconos
+        try { if (window.lucide && lucide.createIcons) lucide.createIcons(); } catch(_){}
+      }
+
+      // Cerrar el modal del juego
+      function closeGame() {
+        if (gameModal) {
+          gameModal.classList.add('hidden');
+        }
+        stopGame();
+      }
+
+      // Reiniciar el juego
+      function resetGame() {
+        score = 0;
+        gameSpeed = 5;
+        obstacles = [];
+        truck.y = truck.groundY;
+        truck.dy = 0;
+        truck.isJumping = false;
+        if (gameScore) gameScore.textContent = `Puntuación: ${score}`;
+        if (gameOverScreen) gameOverScreen.classList.add('hidden');
+      }
+
+      function startGame() {
+        if (gameRunning) return;
+        gameRunning = true;
+        gameLoop();
+      }
+
+      function stopGame() {
+        gameRunning = false;
+        if (animationId) {
+          cancelAnimationFrame(animationId);
+          animationId = null;
+        }
+      }
+
+      function handleInput(e) {
+        if (!gameRunning && e && e.key === 'Escape') {
+          closeGame();
+          return;
+        }
+        
+        if (e.type === 'keydown' && e.code !== 'Space') return;
+        if (e.type === 'keydown') e.preventDefault();
+        
+        if (!truck.isJumping && gameRunning) {
+          jump();
+        }
+      }
+
+      function jump() {
+        truck.dy = truck.jumpPower;
+        truck.isJumping = true;
+      }
+
+      function update() {
+        // Actualizar camión
+        truck.dy += truck.gravity;
+        truck.y += truck.dy;
+        
+        if (truck.y >= truck.groundY) {
+          truck.y = truck.groundY;
+          truck.dy = 0;
+          truck.isJumping = false;
+        }
+        
+        // Actualizar obstáculos
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+          obstacles[i].x -= gameSpeed;
+          
+          // Eliminar obstáculos fuera de la pantalla
+          if (obstacles[i].x + obstacles[i].width < 0) {
+            obstacles.splice(i, 1);
+            continue;
+          }
+          
+          // Detección de colisiones
+          if (checkCollision(truck, obstacles[i])) {
+            endGame();
+            return;
+          }
+        }
+        
+        // Generar nuevos obstáculos
+        if (Math.random() < 0.015 + (gameSpeed / 1000)) {
+          const widthIndex = Math.floor(Math.random() * obstacleWidths.length);
+          obstacles.push({
+            x: canvas.width,
+            y: truck.groundY + truck.height - obstacleHeights[widthIndex],
+            width: obstacleWidths[widthIndex],
+            height: obstacleHeights[widthIndex]
+          });
+        }
+        
+        // Aumentar puntuación y velocidad
+        score += 1;
+        if (gameScore) gameScore.textContent = `Puntuación: ${score}`;
+        if (score % 500 === 0) {
+          gameSpeed += 0.5;
+        }
+      }
+
+      function checkCollision(rect1, rect2) {
+        const padding = 10;
+        return (
+          rect1.x + padding < rect2.x + rect2.width - padding &&
+          rect1.x + rect1.width - padding > rect2.x + padding &&
+          rect1.y + padding < rect2.y + rect2.height - padding &&
+          rect1.y + rect1.height - padding > rect2.y + padding
+        );
+      }
+
+      function draw() {
+        // Limpiar canvas
+        ctx.fillStyle = '#f0fdfa';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Dibujar suelo
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(0, truck.groundY + truck.height, canvas.width, canvas.height - truck.groundY - truck.height);
+        
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillRect(0, truck.groundY + truck.height - 10, canvas.width, 20);
+        
+        // Dibujar líneas de la carretera
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 5;
+        ctx.setLineDash([40, 20]);
+        ctx.beginPath();
+        ctx.moveTo(0, truck.groundY + truck.height);
+        ctx.lineTo(canvas.width, truck.groundY + truck.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Dibujar obstáculos (cajas)
+        obstacles.forEach(obs => {
+          // Caja principal
+          ctx.fillStyle = '#d97706';
+          ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+          
+          // Detalles de la caja
+          ctx.fillStyle = '#92400e';
+          ctx.fillRect(obs.x + 5, obs.y + 5, 10, 10);
+          ctx.fillRect(obs.x + obs.width - 15, obs.y + 5, 10, 10);
+          ctx.fillRect(obs.x + 5, obs.y + obs.height - 15, 10, 10);
+          ctx.fillRect(obs.x + obs.width - 15, obs.y + obs.height - 15, 10, 10);
+          
+          // Logo TLC (simplificado)
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('TLC', obs.x + obs.width / 2, obs.y + obs.height / 2 + 4);
+        });
+        
+        // Dibujar camión
+        // Cuerpo del camión
+        ctx.fillStyle = '#2563eb';
+        ctx.fillRect(truck.x, truck.y, truck.width, truck.height);
+        
+        // Cabina
+        ctx.fillStyle = '#1d4ed8';
+        ctx.fillRect(truck.x, truck.y, truck.width * 0.4, truck.height);
+        
+        // Ventana
+        ctx.fillStyle = '#7dd3fc';
+        ctx.fillRect(truck.x + 5, truck.y + 8, 22, 20);
+        
+        // Ruedas
+        ctx.fillStyle = '#1f2937';
+        ctx.beginPath();
+        ctx.arc(truck.x + 20, truck.y + truck.height, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(truck.x + 60, truck.y + truck.height, 12, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Detalles de las ruedas
+        ctx.fillStyle = '#4b5563';
+        ctx.beginPath();
+        ctx.arc(truck.x + 20, truck.y + truck.height, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(truck.x + 60, truck.y + truck.height, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function gameLoop() {
+        if (!gameRunning) return;
+        
+        update();
+        draw();
+        
+        animationId = requestAnimationFrame(gameLoop);
+      }
+
+      function endGame() {
+        stopGame();
+        if (gameOverScreen) gameOverScreen.classList.remove('hidden');
+        if (finalScore) finalScore.textContent = score;
+      }
+
+      function restartGame() {
+        resetGame();
+        startGame();
+      }
+
+      // Inicializar cuando el DOM esté listo
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initGame);
+      } else {
+        initGame();
+      }
+      
+      // Ajustar tamaño del canvas al cambiar la ventana
+      window.addEventListener('resize', () => {
+        if (canvas) {
+          canvas.width = canvas.offsetWidth;
+          truck.groundY = canvas.height - 80;
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

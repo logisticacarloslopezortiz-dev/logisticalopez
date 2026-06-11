@@ -17,13 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const timeline = document.getElementById('timeline');
   const photoSection = document.getElementById('photoSection');
   const photoGallery = document.getElementById('photoGallery');
-  const mapDetails = document.getElementById('mapDetails');
-
-  // Mapa de Leaflet
-  let map = null;
-  let pickupMarker = null;
-  let deliveryMarker = null;
-  let routeLine = null;
+  const progressIndicator = document.getElementById('progressIndicator');
 
   // --- LÓGICA PRINCIPAL ---
 
@@ -184,8 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
       trackingScreen.classList.remove('hidden');
       try { localStorage.setItem('tlc_tracking_order_id', id); } catch(_) {}
 
-      // Inicializar el mapa con las coordenadas de la orden
-      initializeMap(o);
+
       try {
         const isNumericId2 = /^\d+$/.test(id);
         const idForSub2 = isNumericId2 ? Number(id) : null;
@@ -222,6 +215,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusClass = `status-${(statusEs || 'Pendiente').replace(/\s+/g, '-')}`;
     orderStatus.classList.add(statusClass);
     orderStatus.textContent = statusEs;
+
+    // --- 1.5. Renderizar Indicador de Progreso ---
+    renderProgressIndicator(statusToDisplay);
 
     // --- 2. Renderizar Detalles de la Orden ---
     orderDetails.innerHTML = `
@@ -498,7 +494,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (order) {
         const o = normalizeOrder(order);
         renderTrackingInfo(o);
-        initializeMap(o);
         try { updateTimelineRealtimeIndicator(); } catch(_) {}
       }
     } catch(_) {}
@@ -526,7 +521,6 @@ document.addEventListener('DOMContentLoaded', () => {
               // ✅ Reutilizar nombre del colaborador cacheado
               await enrichWithCollaboratorName(o);
               renderTrackingInfo(o);
-              initializeMap(o);
               try { updateTimelineRealtimeIndicator(); } catch(_) {}
             }
           } catch(_){}
@@ -551,7 +545,6 @@ document.addEventListener('DOMContentLoaded', () => {
               // ✅ Reutilizar nombre del colaborador cacheado
               await enrichWithCollaboratorName(o);
               renderTrackingInfo(o);
-              initializeMap(o);
             }
           } catch (e) { console.warn('Realtime update failed', e); }
         })
@@ -571,7 +564,6 @@ document.addEventListener('DOMContentLoaded', () => {
               // ✅ Reutilizar nombre del colaborador cacheado
               await enrichWithCollaboratorName(o);
               renderTrackingInfo(o);
-              initializeMap(o);
               try { updateTimelineRealtimeIndicator(); } catch(_) {}
             }
               } catch(_){}

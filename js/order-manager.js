@@ -111,6 +111,10 @@ const OrderManager = {
     const fromKey = this._normalizeToFlowKey(from);
     const toKey   = this._normalizeToFlowKey(to);
     if (toKey === 'cancelled') return true;
+    // Permitir mantenerse en la misma fase lógica de in_progress (loading, delivering)
+    // ya que en la DB todos mapean a 'in_progress' pero en UI son fases distintas
+    const IN_PROGRESS_FAMILY = new Set(['in_progress', 'loading', 'delivering']);
+    if (IN_PROGRESS_FAMILY.has(fromKey) && IN_PROGRESS_FAMILY.has(toKey)) return true;
     return ORDER_FLOW[fromKey]?.includes(toKey) ?? false;
   },
 
@@ -216,6 +220,10 @@ const OrderManager = {
       }
 
       // Validar transición
+      if (currentPhase === flowKey) {
+        console.log('[OrderManager] Ya está en estado:', flowKey);
+        return { success: true, data: currentOrder };
+      }
       if (!this.canTransition(currentPhase, flowKey)) {
         throw new Error(`Transición no permitida: ${currentPhase} -> ${flowKey}`);
       }

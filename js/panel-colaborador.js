@@ -117,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const evidencePreview = document.getElementById('evidencePreview');
   const evidenceInput = document.getElementById('evidenceInput');
   const activeCollaborator = document.getElementById('activeCollaborator');
-  const activeMapEl = document.getElementById('activeMap');
   const backToListBtn = document.getElementById('backToListBtn');
   
   // Botones de Acción
@@ -206,17 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!moved && now - this.lastUpdate < this.interval) return;
 
       this.lastLat = lat; this.lastLng = lng; this.lastUpdate = now;
-
-      // Actualizar marcador en el mapa activo si está visible
-      if (activeMap && typeof L !== 'undefined') {
-        if (!this._myMarker) {
-          this._myMarker = L.circleMarker([lat, lng], {
-            radius: 8, color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.9, weight: 2
-          }).addTo(activeMap).bindPopup('Tu ubicación');
-        } else {
-          this._myMarker.setLatLng([lat, lng]);
-        }
-      }
 
       try {
         await supabaseConfig.client.from('collaborator_locations').upsert({
@@ -554,13 +542,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Asegurar que el contenido principal se oculte si estamos en vista activa
     const mainContent = document.getElementById('main-content');
     if (mainContent) mainContent.classList.toggle('hidden', showActive);
-    
-    // Si mostramos el mapa activo, asegurar que se renderice bien
-    if (showActive && activeMap) {
-      // Doble invalidate: uno inmediato y otro diferido para containers con transición
-      requestAnimationFrame(() => { try { activeMap.invalidateSize(); } catch(_){} });
-      setTimeout(() => { try { activeMap.invalidateSize(); } catch(_){} }, 300);
-    }
 
     // Guardar estado de vista en localStorage para persistencia en recargas
     localStorage.setItem('collab_current_view', name);
@@ -601,27 +582,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Mostrar botón de aceptar solo si es pendiente y no está asignada
     if (modalAcceptBtn) {
-        if (!__currentUserId) {
-            modalAcceptBtn.classList.add('hidden');
-        } else {
-            const isPending = String(order.status || '').toLowerCase() === 'pending' && (!order.assigned_to || order.assigned_to === __currentUserId);
-            if (isPending) {
-                modalAcceptBtn.classList.remove('hidden');
-            } else {
-                modalAcceptBtn.classList.add('hidden');
-            }
-        }
+        const isPending = __currentUserId &&
+          String(order.status || '').toLowerCase() === 'pending' &&
+          (!order.assigned_to || order.assigned_to === __currentUserId);
+        modalAcceptBtn.style.display = isPending ? 'block' : 'none';
     }
-    
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+
+    modal.style.display = 'flex';
   }
 
   function closeModal() {
-    currentOrder = null;
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-  }
+      currentOrder = null;
+      if (modal) modal.style.display = 'none';
+    }
+
 
   function openContinueModal(order){
     if (continueOrderId) continueOrderId.textContent = `#${order.id}`;
@@ -671,75 +645,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(_){}
   }
   window.openGoogleMaps = openGoogleMaps; // Exponer globalmente
-
-  function initActiveMap(order){
-    // Esperar a que Leaflet esté disponible (se carga con defer)
-    if (typeof L === 'undefined') {
-      const waitForLeaflet = (attempts = 0) => {
-        if (typeof L !== 'undefined') {
-          initActiveMap(order);
-        } else if (attempts < 20) {
-          setTimeout(() => waitForLeaflet(attempts + 1), 150);
-        } else {
-          console.warn('[Map] Leaflet no disponible después de 3s');
-        }
-      };
-      waitForLeaflet();
-      return;
-    }
-    try {
-      if (!activeMapEl) return;
-
-      const defaultCenter = [18.4861, -69.9312]; // Santo Domingo
-      if (!activeMap) {
-        activeMap = L.map(activeMapEl, { zoomControl: true, attributionControl: true })
-          .setView(defaultCenter, 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap',
-          maxZoom: 19
-        }).addTo(activeMap);
-      }
-
-      // Limpiar marcadores anteriores
-      if (activePickupMarker)   { try { activeMap.removeLayer(activePickupMarker); }   catch(_){} activePickupMarker   = null; }
-      if (activeDeliveryMarker) { try { activeMap.removeLayer(activeDeliveryMarker); } catch(_){} activeDeliveryMarker = null; }
-
-      const oc = order?.origin_coords;
-      const dc = order?.destination_coords;
-      const bounds = [];
-
-      if (oc && typeof oc.lat === 'number' && typeof oc.lng === 'number') {
-        activePickupMarker = L.marker([oc.lat, oc.lng], {
-          icon: L.divIcon({ className: '', html: '<div style="background:#2563eb;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">📍</div>', iconSize: [32,32], iconAnchor: [16,32] })
-        }).addTo(activeMap).bindPopup('<b>Origen</b><br>' + (order.pickup || ''));
-        bounds.push([oc.lat, oc.lng]);
-      }
-
-      if (dc && typeof dc.lat === 'number' && typeof dc.lng === 'number') {
-        activeDeliveryMarker = L.marker([dc.lat, dc.lng], {
-          icon: L.divIcon({ className: '', html: '<div style="background:#16a34a;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">🏁</div>', iconSize: [32,32], iconAnchor: [16,32] })
-        }).addTo(activeMap).bindPopup('<b>Destino</b><br>' + (order.delivery || ''));
-        bounds.push([dc.lat, dc.lng]);
-      }
-
-      // Sin coordenadas: intentar geocodificar desde texto
-      if (bounds.length === 0 && (order.pickup || order.delivery)) {
-        const el = activeMapEl;
-        el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:8px;color:#64748b;font-size:13px;padding:16px;text-align:center"><span style="font-size:24px">🗺️</span><span>Sin coordenadas GPS.<br>Usa los botones de ruta para navegar.</span></div>`;
-        return;
-      }
-
-      if (bounds.length > 1) {
-        activeMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
-      } else if (bounds.length === 1) {
-        activeMap.setView(bounds[0], 14);
-      }
-
-      // Invalidar tamaño para que Leaflet renderice correctamente en containers ocultos
-      setTimeout(() => { try { activeMap.invalidateSize(); } catch(_){} }, 100);
-      requestAnimationFrame(() => { try { activeMap.invalidateSize(); } catch(_){} });
-    } catch(e){ console.error('[Map] Error inicializando mapa:', e); }
-  }
 
   // --- Trabajo Activo ---
 

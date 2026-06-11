@@ -130,13 +130,17 @@ async function loadMetrics(collabId) {
       .rpc('get_collaborator_metrics', { collaborator_id: collabId }));
     const { data, error } = resp;
 
-    if (!error && data?.[0]) {
+    if (error) {
+      console.warn('[Rendimiento] Error RPC métricas (probablemente función no creada aún):', error.message);
+    } else if (data?.[0]) {
       const m = data[0];
       setText('metricAssigned', m.assigned ?? 0);
       setText('metricCompleted', m.completed ?? 0);
       setText('metricAvgTime', `${Math.round(Number(m.avg_hours || 0))}h`);
     }
-  } catch (_) {}
+  } catch (e) {
+    console.warn('[Rendimiento] Error loading metrics (fallback a datos locales):', e);
+  }
 
   /* ---------- FALLBACK LOCAL ---------- */
   try {
