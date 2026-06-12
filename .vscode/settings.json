@@ -21,6 +21,6 @@
     "http",
     "net"
   ],
-  "liveServer.settings.port": 5513,
+  "liveServer.settings.port": 5514,
   "kiroAgent.configureMCP": "Disabled"
 }

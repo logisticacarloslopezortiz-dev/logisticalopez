@@ -1058,6 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
           throw error;
       }
 
+      console.log('[fetchOrdersForCollaborator] Raw orders from DB:', data);
       const rawOrders = data || [];
       
       // Normalizar visual: tratar órdenes asignadas al colaborador en estado "accepted" como "pendiente" visual
@@ -1095,7 +1096,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (wa !== wb) return wa - wb;
         return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
       });
-      
+
+      console.log('[fetchOrdersForCollaborator] Final orders array:', orders);
 
       renderOrdersHTML();
 
@@ -1395,6 +1397,9 @@ function renderOrdersHTML() {
     const ok = await ensureAuthOrRedirect();
     if (!ok) return;
 
+    // Inicializar la vista por defecto (grid)
+    showView('grid');
+
     // ✅ Solicitud proactiva de permisos (Ubicación y Notificaciones)
     if (window.pwaManager) {
       setTimeout(() => {
@@ -1416,6 +1421,14 @@ function renderOrdersHTML() {
       const uid = session?.user?.id;
       
       if (uid) {
+        // ✅ Update last_seen_at to mark collaborator as active
+        try {
+          await supabaseConfig.client
+            .from('collaborators')
+            .update({ last_seen_at: new Date().toISOString() })
+            .eq('id', uid);
+        } catch (_) {}
+        
         // ✅ AUTOMATIZACIÓN: Registrar push al cargar
         registerCollaboratorPush(uid);
         

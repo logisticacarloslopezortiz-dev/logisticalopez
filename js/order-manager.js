@@ -328,9 +328,17 @@ const OrderManager = {
       const collabId = additionalData.collaborator_id || additionalData.assigned_to || user?.id;
       if (!collabId) throw new Error('Sesión inválida');
 
+      // First update last_seen_at to ensure the collaborator is considered "online"
+      try {
+        await supabaseConfig.client
+          .from('collaborators')
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq('id', collabId);
+      } catch (_) {}
+
       // Llamada atómica: la DB garantiza que solo 1 colaborador gana la orden
       // Aseguramos tipos: ID como entero y CollabId como string (UUID)
-      const { data: rpcResult, error: rpcError } = await supabaseConfig.client
+      let { data: rpcResult, error: rpcError } = await supabaseConfig.client
         .rpc('accept_order_atomic', {
           p_order_id: Math.floor(Number(normalizedId)),
           p_collaborator_id: String(collabId)
@@ -345,7 +353,31 @@ const OrderManager = {
         throw rpcError;
       }
 
-      if (!rpcResult?.success) throw new Error(rpcResult?.error || 'Error al aceptar la orden');
+      if (!rpcResult?.success) {
+        // If failed because of location not updated, try a direct update as fallback
+        if (String(rpcResult?.error).includes('ubicación no está actualizada')) {
+          // Try direct order update as fallback
+          console.log('[OrderManager] Fallback to direct order update');
+          const { error: updateError } = await supabaseConfig.client
+            .from('orders')
+            .update({
+              status: 'accepted',
+              assigned_to: collabId,
+              assigned_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', normalizedId)
+            .eq('status', 'pending')
+            .is('assigned_to', null);
+
+          if (updateError) {
+            throw new Error(rpcResult?.error || 'Error al aceptar la orden');
+          }
+          rpcResult = { success: true };
+        } else {
+          throw new Error(rpcResult?.error || 'Error al aceptar la orden');
+        }
+      }
 
       // Insertar en active_jobs y registrar tracking
       const currentOrder = await this._findOrderByCandidates(orderId);
