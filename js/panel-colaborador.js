@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const activeClient = document.getElementById('activeJobClient');
   const activeVehicle = document.getElementById('activeJobVehicle');
   const activePickup = document.getElementById('activeJobPickup');
-  const activeDelivery = document.getElementById('activeJobDelivery');
+  const activeDelivery = document.getElementById('activeJobDropoff');
   const activeEvidence = document.getElementById('activeEvidence');
   const evidencePreview = document.getElementById('evidencePreview');
   const evidenceInput = document.getElementById('evidenceInput');
@@ -140,8 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirmMessage) confirmMessage.textContent = msg;
     _confirmCallback = callback;
     if (confirmModal) {
-        confirmModal.classList.remove('hidden');
-        confirmModal.classList.add('flex');
+        confirmModal.style.display = 'flex'; // Use inline style instead of classes
     } else {
         // Fallback si no existe el modal en HTML
         if (confirm(msg)) callback();
@@ -150,8 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function hideConfirm() {
     if (confirmModal) {
-        confirmModal.classList.add('hidden');
-        confirmModal.classList.remove('flex');
+        confirmModal.style.display = 'none'; // Use inline style instead of classes
     }
     _confirmCallback = null;
   }
@@ -742,10 +740,78 @@ document.addEventListener('DOMContentLoaded', () => {
       this.updateProgressBar(config);
       this.updateActionButtons(config.phase, order);
       this.updateStatusText(config.label);
+      this.updateSteps(config.phase);
       
       if (activeId) activeId.textContent = `#${order.id}`;
       if (activeService) activeService.textContent = order?.service?.name || '';
       if (activeClient) activeClient.textContent = `${order.name || ''} • ${order.phone || ''}`;
+    },
+
+    updateSteps(phase) {
+      console.log('updateSteps called with phase:', phase); // Debug log
+      const step1 = document.getElementById('step1');
+      const line1 = document.getElementById('line1');
+      const step2 = document.getElementById('step2');
+      const line2 = document.getElementById('line2');
+      const step3 = document.getElementById('step3');
+      const line3 = document.getElementById('line3');
+      const step4 = document.getElementById('step4');
+      const label1 = document.getElementById('label1');
+      const label2 = document.getElementById('label2');
+      const label3 = document.getElementById('label3');
+      const label4 = document.getElementById('label4');
+
+      let step = 1;
+      if (phase === 'in_progress') step = 1;
+      if (phase === 'loading') step = 2;
+      if (phase === 'delivering') step = 3;
+      if (phase === 'completed') step = 4;
+      console.log('updateSteps determined step:', step); // Debug log
+
+      // Helper function to update a step
+      const updateStep = (element, isActive) => {
+        if (!element) return;
+        if (isActive) {
+          element.style.background = 'linear-gradient(135deg,#0C375D,#3b82f6)';
+          element.style.color = '#fff';
+        } else {
+          element.style.background = '#e2e8f0';
+          element.style.color = '#64748b';
+        }
+      };
+
+      // Helper function to update a line
+      const updateLine = (element, isActive) => {
+        if (!element) return;
+        if (isActive) {
+          element.style.background = 'linear-gradient(135deg,#0C375D,#3b82f6)';
+        } else {
+          element.style.background = '#e2e8f0';
+        }
+      };
+
+      // Helper function to update a label
+      const updateLabel = (element, isActive) => {
+        if (!element) return;
+        element.style.color = isActive ? '#1e293b' : '#64748b';
+      };
+
+      // Update steps
+      updateStep(step1, true); // Step 1 is always active once started
+      updateStep(step2, step >= 2);
+      updateStep(step3, step >= 3);
+      updateStep(step4, step >= 4);
+
+      // Update lines
+      updateLine(line1, step >= 2);
+      updateLine(line2, step >= 3);
+      updateLine(line3, step >= 4);
+
+      // Update labels
+      updateLabel(label1, true);
+      updateLabel(label2, step >= 2);
+      updateLabel(label3, step >= 3);
+      updateLabel(label4, step >= 4);
     },
 
     updateProgressBar(config) {
@@ -850,7 +916,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   if (btnComplete) btnComplete.addEventListener('click', async () => {
+    console.log('btnComplete clicked!');
+    console.log('currentOrder:', currentOrder);
     const photos = Array.isArray(currentOrder?.evidence_photos) ? currentOrder.evidence_photos : [];
+    console.log('photos:', photos);
     if (!photos.length) {
       try {
         notifications?.warning?.('Debes subir al menos una evidencia antes de completar');
@@ -860,6 +929,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const phase = getUiStatus(currentOrder);
+    console.log('current phase:', phase);
     if (phase !== 'delivering') {
       try { notifications?.warning?.('Debes estar "En camino a entregar" para completar'); } catch(_){}
       return;
@@ -919,10 +989,26 @@ document.addEventListener('DOMContentLoaded', () => {
   if (backToListBtn) backToListBtn.addEventListener('click', closeActiveJob);
 
   if (btnVerOrigen) btnVerOrigen.addEventListener('click', () => {
-    if (currentOrder?.pickup) openGoogleMaps(currentOrder.pickup);
+    if (currentOrder) {
+      const oc = currentOrder.origin_coords;
+      if (oc && typeof oc.lat === 'number' && typeof oc.lng === 'number') {
+        const url = `https://www.google.com/maps/search/?api=1&query=${oc.lat},${oc.lng}`;
+        window.open(url, '_blank');
+      } else if (currentOrder.pickup) {
+        openGoogleMaps(currentOrder.pickup);
+      }
+    }
   });
   if (btnVerDestino) btnVerDestino.addEventListener('click', () => {
-    if (currentOrder?.delivery) openGoogleMaps(currentOrder.delivery);
+    if (currentOrder) {
+      const dc = currentOrder.destination_coords;
+      if (dc && typeof dc.lat === 'number' && typeof dc.lng === 'number') {
+        const url = `https://www.google.com/maps/search/?api=1&query=${dc.lat},${dc.lng}`;
+        window.open(url, '_blank');
+      } else if (currentOrder.delivery) {
+        openGoogleMaps(currentOrder.delivery);
+      }
+    }
   });
 
   // --- Evidencia con Cola de Subida (Upload Queue) ---
@@ -972,7 +1058,36 @@ document.addEventListener('DOMContentLoaded', () => {
         indicator.querySelector('.count').textContent = pending;
       } else {
         indicator.classList.add('hidden');
+        // Clear the evidence preview when all uploads are done
+        if (evidencePreview) evidencePreview.innerHTML = '';
       }
+    }
+
+    // Refresh currentOrder if there are no pending uploads and we have a currentOrder
+    if (pending === 0 && currentOrder) {
+      // Refetch the order to get updated evidence_photos
+      supabaseConfig.client
+        .from('orders')
+        .select('id, short_id, status, tracking_data, evidence_photos, name, phone, pickup, delivery, origin_coords, destination_coords, service:services(name, description), vehicle:vehicles(name)')
+        .eq('id', currentOrder.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            currentOrder = data;
+            window._currentActiveOrder = data;
+            // Refresh the UI to enable btnComplete if there are now photos
+            ActiveJobUI.updateAll(data);
+            // Also refresh the evidence gallery
+            const photos = Array.isArray(data.evidence_photos) ? data.evidence_photos : [];
+            const activeEvidence = document.getElementById('activeEvidence');
+            if (activeEvidence) {
+              activeEvidence.innerHTML = photos.map(p => {
+                const u = typeof p === 'string' ? p : (p && (p.url || p.public_url) ? (p.url || p.public_url) : '');
+                return u ? `<img src="${escapeHtml(u)}" alt="evidencia" class="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90" onclick="window.open('${escapeHtml(u)}', '_blank')">` : '';
+              }).join('');
+            }
+          }
+        });
     }
   });
 
